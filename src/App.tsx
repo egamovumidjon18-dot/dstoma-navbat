@@ -12,6 +12,7 @@ import ClientDashboard from './components/ClientDashboard';
 import DoctorDashboard from './components/DoctorDashboard';
 import DirectorDashboard from './components/DirectorDashboard';
 import DjangoSolutions from './components/DjangoSolutions';
+import SuperAdminDashboard from './components/SuperAdminDashboard';
 import { DjangoAPI, getApiUrl } from './services/api';
 import { 
   Activity, 
@@ -29,7 +30,8 @@ import {
   Server,
   Wifi,
   WifiOff,
-  AlertCircle
+  AlertCircle,
+  Crown
 } from 'lucide-react';
 
 export default function App() {
@@ -43,11 +45,11 @@ export default function App() {
   // Master States
   const [clinics, setClinics] = useState<Clinic[]>(INITIAL_CLINICS);
   const [doctors, setDoctors] = useState<Doctor[]>(INITIAL_DOCTORS);
-  const [services] = useState<Service[]>(INITIAL_SERVICES);
+  const [services, setServices] = useState<Service[]>(INITIAL_SERVICES);
   const [queues, setQueues] = useState<QueueItem[]>(INITIAL_QUEUES);
   
   // Navigation
-  const [activeTab, setActiveTab] = useState<'bemor' | 'shifokor' | 'boshliq' | 'kod'>('bemor');
+  const [activeTab, setActiveTab] = useState<'bemor' | 'shifokor' | 'boshliq' | 'kod' | 'superadmin'>('bemor');
   const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(INITIAL_CLINICS[0]); // Starts at Samarqand
 
   // Auto queue generator simulator state
@@ -152,7 +154,7 @@ export default function App() {
     const tabParam = params.get('tab');
     const clinicParam = params.get('clinic');
 
-    if (tabParam && ['bemor', 'shifokor', 'boshliq', 'kod'].includes(tabParam)) {
+    if (tabParam && ['bemor', 'shifokor', 'boshliq', 'kod', 'superadmin'].includes(tabParam)) {
       setActiveTab(tabParam as any);
     }
     if (clinicParam) {
@@ -379,6 +381,18 @@ export default function App() {
     }
   };
 
+  const handleAddClinic = (newClinic: Clinic) => {
+    setClinics(prev => [...prev, newClinic]);
+  };
+
+  const handleAddDoctor = (newDoc: Doctor) => {
+    setDoctors(prev => [...prev, newDoc]);
+  };
+
+  const handleUpdateService = (updatedSrv: Service) => {
+    setServices(prev => prev.map(s => s.id === updatedSrv.id ? updatedSrv : s));
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 text-slate-800 antialiased font-sans transition-colors duration-500 selection:bg-cyan-600 selection:text-white pb-10">
       
@@ -479,6 +493,17 @@ export default function App() {
               <Terminal className="w-4 h-4" /> Django Kodlar Yo'riqnomasi
             </button>
 
+            <button
+              onClick={() => setActiveTab('superadmin')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+                activeTab === 'superadmin'
+                  ? 'bg-[#0f172a] text-white shadow-sm font-extrabold'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+              }`}
+            >
+              <Crown className="w-4 h-4 text-amber-500 fill-current" /> Superadmin SaaS Panel
+            </button>
+
           </div>
         </div>
       </header>
@@ -555,11 +580,57 @@ export default function App() {
                 )}
 
                 {apiError && (
-                  <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-300 rounded-xl text-xs flex items-start gap-2.5">
-                    <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-                    <div className="text-left">
-                      <p className="font-bold">Ulanish Xatoligi yuz berdi:</p>
-                      <p className="opacity-90 mt-1 select-text font-mono text-[11px]">{apiError}</p>
+                  <div className="space-y-3">
+                    <div className="p-4 bg-rose-500/10 border border-rose-500/25 text-rose-300 rounded-2xl text-xs flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5 animate-pulse" />
+                      <div className="text-left space-y-1 flex-1">
+                        <p className="font-bold text-sm text-rose-200">Tarmoq yoki API ulanish xatoligi (Failed to Fetch)</p>
+                        <p className="opacity-90 select-text font-mono text-[11px] bg-slate-950/80 p-2 rounded-lg border border-rose-950 text-rose-400 mt-1">
+                          Xato tafsiloti: {apiError}
+                        </p>
+                        <p className="text-slate-300 text-xs mt-2 leading-relaxed">
+                          Brauzerdan <code className="text-cyan-400 font-mono select-all bg-slate-950 px-1 py-0.5 rounded">{apiUrlInput}</code> domeniga yuborilgan so'rov rad etildi. Bu odatda quyidagi 3 ta sababdan biri tufayli sodir bo'ladi:
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step-by-Step Fixes */}
+                    <div className="bg-slate-950 p-4.5 rounded-2xl border border-slate-800 text-left space-y-3.5">
+                      <p className="text-xs font-bold text-indigo-400 flex items-center gap-1.5 uppercase tracking-wider">
+                        <Terminal className="w-4 h-4 text-indigo-400" /> Muammoni bartaraf etish bosqichlari (Troubleshooting):
+                      </p>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-850 space-y-1">
+                          <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-500">1-qadam: CORS Ruxsati</span>
+                          <p className="text-[11px] text-slate-300 leading-snug">
+                            Django loyihangizda brauzer so'rovlarini qabul qilish uchun <code className="text-cyan-400 font-mono">settings.py</code>-ga CORS sozlamasini kiritganingizga ishonch hosil qiling.
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            Yechim: <code className="text-emerald-400 font-mono">CORS_ALLOW_ALL_ORIGINS = True</code> qilib sozlab ko'ring.
+                          </p>
+                        </div>
+
+                        <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-850 space-y-1">
+                          <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-500">2-qadam: Web Server va Loglar</span>
+                          <p className="text-[11px] text-slate-300 leading-snug">
+                            Railway panelidagi <strong className="text-slate-100 font-bold">DStomaQueue</strong> xizmatida <strong>"Console/Logs"</strong> bo'limini tekshiring. 
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            Server faol (Onlayn) va xatoliksiz ishlayotganiga, 500 yoki crash xatolik yo'qligiga ishonch hosil qiling.
+                          </p>
+                        </div>
+
+                        <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-850 space-y-1">
+                          <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-500">3-qadam: URL va Port</span>
+                          <p className="text-[11px] text-slate-300 leading-snug">
+                            Siz kiritgan API manzili oxirida ortiqcha slashes (<code className="text-rose-450">/</code>) bo'lmasligi va domeningiz to'liq ishlayotgan bo'lishi kerak.
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            Brauzeringizda ushbu manzilni yangi tabda ochib ko'ring (masalan, <code className="text-cyan-400">.../api/clinics/</code>).
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -665,6 +736,7 @@ CORS_ALLOWED_ORIGINS = [
                 onAddQueue={handleAddQueue}
                 onCancelQueue={handleCancelQueue}
                 onUpdateDoctorRating={handleUpdateDoctorRating}
+                setActiveTab={setActiveTab}
               />
             )}
 
@@ -676,6 +748,7 @@ CORS_ALLOWED_ORIGINS = [
                 queues={queues}
                 onUpdateQueueStatus={handleUpdateQueueStatus}
                 selectedClinic={selectedClinic}
+                setActiveTab={setActiveTab}
               />
             )}
 
@@ -685,8 +758,19 @@ CORS_ALLOWED_ORIGINS = [
                 doctors={doctors}
                 services={services}
                 queues={queues}
-                onUpdateClinicSubscription={handleUpdateClinicSubscription}
-                onToggleClinicStatus={handleToggleClinicStatus}
+                setActiveTab={setActiveTab}
+                onAddDoctor={handleAddDoctor}
+                onUpdateService={handleUpdateService}
+              />
+            )}
+
+            {activeTab === 'superadmin' && (
+              <SuperAdminDashboard
+                clinics={clinics}
+                doctors={doctors}
+                queues={queues}
+                onAddClinic={handleAddClinic}
+                onToggleSubscription={handleToggleClinicStatus}
               />
             )}
 

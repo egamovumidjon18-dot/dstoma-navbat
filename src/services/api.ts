@@ -13,6 +13,24 @@ export const getApiUrl = (): string => {
   return 'https://dstomaqueue-production.up.railway.app';
 };
 
+export const mapQueueToReact = (item: any): QueueItem => {
+  return {
+    id: item.id?.toString() || '',
+    clinicId: item.clinic_id?.toString() || item.clinic?.toString() || '',
+    patientName: item.patient_name || (item.patient && typeof item.patient === 'object' ? item.patient.fullName : '') || 'Guest Patient',
+    patientPhone: item.patient_phone || (item.patient && typeof item.patient === 'object' ? item.patient.phone : '') || '',
+    doctorId: item.doctor_id?.toString() || item.doctor?.toString() || '',
+    serviceId: item.service_id?.toString() || item.service?.toString() || '',
+    number: Number(item.number) || 0,
+    status: item.is_completed ? 'completed' : (item.status === 'cancelled' ? 'cancelled' : (item.status || 'pending')),
+    rating: item.rating ? Number(item.rating) : undefined,
+    createdAt: item.created_at || item.createdAt || new Date().toISOString(),
+    hasInfection: item.has_infection ?? item.hasInfection ?? false,
+    medicalNotes: item.medical_notes ?? item.medicalNotes ?? '',
+    passportSerial: item.passport_serial ?? item.passportSerial ?? ''
+  };
+};
+
 /**
  * Django API Integration Helper
  * Allows seamless connection between our React UI and your Django + Railway Database
@@ -47,7 +65,8 @@ export const DjangoAPI = {
     const url = `${getApiUrl()}/api/queues/`;
     const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
     if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
-    return res.json();
+    const data = await res.json();
+    return Array.isArray(data) ? data.map(mapQueueToReact) : [];
   },
 
   // 5. Book a new ticket / queue on Django
@@ -57,6 +76,9 @@ export const DjangoAPI = {
     serviceId: string;
     patientName: string;
     patientPhone: string;
+    hasInfection?: boolean;
+    medicalNotes?: string;
+    passportSerial?: string;
   }): Promise<QueueItem> {
     const url = `${getApiUrl()}/api/queues/`;
     const res = await fetch(url, {
@@ -68,23 +90,32 @@ export const DjangoAPI = {
         service_id: data.serviceId,
         patient_name: data.patientName,
         patient_phone: data.patientPhone,
+        has_infection: data.hasInfection ?? false,
+        medical_notes: data.medicalNotes ?? '',
+        passport_serial: data.passportSerial ?? '',
         status: 'pending'
       }),
     });
     if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
-    return res.json();
+    const item = await res.json();
+    return mapQueueToReact(item);
   },
 
   // 6. Update Queue status (calling, completed, cancelled)
   async updateQueueStatus(queueId: string, status: QueueItem['status']): Promise<QueueItem> {
     const url = `${getApiUrl()}/api/queues/${queueId}/`;
+    const isCompleted = status === 'completed';
     const res = await fetch(url, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status })
+      body: JSON.stringify({ 
+        status,
+        is_completed: isCompleted
+      })
     });
     if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
-    return res.json();
+    const item = await res.json();
+    return mapQueueToReact(item);
   },
 
   // 7. Update Queue rating
@@ -96,7 +127,8 @@ export const DjangoAPI = {
       body: JSON.stringify({ rating })
     });
     if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
-    return res.json();
+    const item = await res.json();
+    return mapQueueToReact(item);
   },
 
   // 8. Update Clinic Tenant Subscription from CEO Landlord Panel

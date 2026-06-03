@@ -52,13 +52,11 @@ export const INITIAL_CLINICS: Clinic[] = [
 ];
 
 export const INITIAL_SERVICES: Service[] = [
-  // Samarqand Services
-  { id: 'srv_sm_1', clinicId: 'samarqand', name: 'Birlamchi Ko\'rik / Konsultatsiya', price: 50000 },
-  { id: 'srv_sm_2', clinicId: 'samarqand', name: 'Kompozit Plomba Qoyish (Badiiy)', price: 250000 },
-  { id: 'srv_sm_3', clinicId: 'samarqand', name: 'Kanal Davolash (Endodontiya)', price: 400000 },
-  { id: 'srv_sm_4', clinicId: 'samarqand', name: 'Tish Toshlarini Tozalash (Skayler)', price: 200000 },
-  { id: 'srv_sm_5', clinicId: 'samarqand', name: 'Implantat O\'rnatish (Surgical)', price: 3500000 },
-  { id: 'srv_sm_6', clinicId: 'samarqand', name: 'Breket-tizim O\'rnatish (Metal)', price: 2500000 },
+  // Samarqand Services (Matching Screenshot 1)
+  { id: 'srv_sm_1', clinicId: 'samarqand', name: 'Konsultatsiya', price: 50000 },
+  { id: 'srv_sm_2', clinicId: 'samarqand', name: 'Tish tozalash', price: 250000 },
+  { id: 'srv_sm_3', clinicId: 'samarqand', name: 'Plomba qo\'yish', price: 400000 },
+  { id: 'srv_sm_4', clinicId: 'samarqand', name: 'Tish sug\'urish', price: 150000 },
   
   // Bukhara Services
   { id: 'srv_bx_1', clinicId: 'buxoro', name: 'Birlamchi Ko\'rik / Konsultatsiya', price: 45000 },
@@ -76,26 +74,26 @@ export const INITIAL_SERVICES: Service[] = [
 ];
 
 export const INITIAL_DOCTORS: Doctor[] = [
-  // Samarqand Doctors
+  // Samarqand Doctors (Matching Screenshot 1)
   {
     id: 'doc_sm_1',
     clinicId: 'samarqand',
-    name: 'Dr. Umidjon Egamov',
-    specialty: 'Ortodont / Implantolog',
-    rating: 4.9,
-    ratingCount: 124,
+    name: 'Umidjon Egamov',
+    specialty: 'Stomatolog-ortoped',
+    rating: 4.7,
+    ratingCount: 3,
     image: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=200&auto=format&fit=crop',
     status: 'idle'
   },
   {
     id: 'doc_sm_2',
     clinicId: 'samarqand',
-    name: 'Dr. Madina Rustamova',
-    specialty: 'Terapevt-Stomatolog',
-    rating: 4.7,
-    ratingCount: 88,
-    image: 'https://images.unsplash.com/photo-1594824813573-246434e33963?q=80&w=200&auto=format&fit=crop',
-    status: 'busy'
+    name: 'Abdulaziz Nuraliyev',
+    specialty: 'Stomatolog-ortoped',
+    rating: 5.0,
+    ratingCount: 2,
+    image: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?q=80&w=200&auto=format&fit=crop',
+    status: 'idle'
   },
 
   // Bukhara Doctors

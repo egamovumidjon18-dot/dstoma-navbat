@@ -1,25 +1,25 @@
 import React, { useState } from 'react';
 import { Clinic, Doctor, Service, QueueItem } from '../types';
 import { 
-  BarChart3, 
-  TrendingUp, 
-  DollarSign, 
   Users, 
-  Award, 
-  ShieldCheck, 
-  ArrowUpRight, 
-  Activity, 
-  Filter, 
-  Home, 
-  Lock, 
-  Unlock, 
-  CreditCard, 
-  Layers, 
-  Settings, 
+  DollarSign, 
+  Clock, 
+  TrendingUp, 
+  Star, 
+  BarChart3, 
+  Calendar, 
   Plus, 
-  UsersRound, 
-  AlertTriangle,
-  Coins
+  Award, 
+  CheckCircle2, 
+  X, 
+  ChevronRight, 
+  Building, 
+  Search,
+  ArrowLeft,
+  HeartPulse,
+  ChevronDown,
+  Wrench,
+  Sparkles
 } from 'lucide-react';
 
 interface DirectorDashboardProps {
@@ -27,8 +27,9 @@ interface DirectorDashboardProps {
   doctors: Doctor[];
   services: Service[];
   queues: QueueItem[];
-  onUpdateClinicSubscription?: (clinicId: string, status: 'active' | 'suspended' | 'trial', nextDueDate: string) => void;
-  onToggleClinicStatus?: (clinicId: string) => void;
+  setActiveTab?: (tab: 'bemor' | 'shifokor' | 'boshliq' | 'kod' | 'superadmin') => void;
+  onAddDoctor?: (newDoc: Doctor) => void;
+  onUpdateService?: (updatedService: Service) => void;
 }
 
 export default function DirectorDashboard({
@@ -36,488 +37,938 @@ export default function DirectorDashboard({
   doctors,
   services,
   queues,
-  onUpdateClinicSubscription,
-  onToggleClinicStatus
+  setActiveTab,
+  onAddDoctor,
+  onUpdateService
 }: DirectorDashboardProps) {
-  // Local state to simulate tenant updating if the parent didn't provide callbacks
-  const [localClinics, setLocalClinics] = useState<Clinic[]>(clinics);
   
-  // Tab-specific role selector:
-  // 'boss' = Clinica bossi (isolated tenant view)
-  // 'saas_admin' = SaaS System Owner (Umidjon Egamov - landlord/host portal)
-  const [userRole, setUserRole] = useState<'boss' | 'saas_admin'>('boss');
+  // Tab-specific view model: 'bugun', 'haftalik', 'shifokorlar', 'sozlamalar'
+  const [activeSubTab, setActiveSubTab] = useState<'bugun' | 'haftalik' | 'shifokorlar' | 'sozlamalar'>('bugun');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchModal, setShowSearchModal] = useState(false);
+
+  // Doctor Creation Form States
+  const [newDocName, setNewDocName] = useState('');
+  const [newDocSpecialty, setNewDocSpecialty] = useState('Stomatolog-ortoped');
+  const [newDocAvatar, setNewDocAvatar] = useState('https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=200&auto=format&fit=crop');
+  const [showAddDoctorForm, setShowAddDoctorForm] = useState(false);
+  const [docFeedbackMsg, setDocFeedbackMsg] = useState('');
+
+  // Editing services in grid
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  const [editingServiceName, setEditingServiceName] = useState('');
+  const [editingServicePrice, setEditingServicePrice] = useState<number>(0);
+  const [srvFeedbackMsg, setSrvFeedbackMsg] = useState('');
+
+  // Filter lists based on Samarqand clinic (the default CEO location)
+  const currentClinicId = 'samarqand';
+  const clinicDoctors = doctors.filter(d => d.clinicId === currentClinicId);
+  const clinicServices = services.filter(s => s.clinicId === currentClinicId);
+  const clinicQueues = queues.filter(q => q.clinicId === currentClinicId);
+
+  // Filter queues by status
+  const pendingQueues = clinicQueues.filter(q => q.status === 'pending');
+  const callingQueues = clinicQueues.filter(q => q.status === 'calling' || q.status === 'in_progress');
+  const completedQueues = clinicQueues.filter(q => q.status === 'completed');
+
+  // Weekly historical table data (Screenshot 7 & 8 detail)
+  const weeklyReportData = [
+    { dayName: 'Dushanba', dateStr: '27.05.2026', patientsCount: 5, revenue: 1100000, avgRating: 5.0 },
+    { dayName: 'Seshanba', dateStr: '28.05.2026', patientsCount: 8, revenue: 2350000, avgRating: 4.8 },
+    { dayName: 'Chorshanba', dateStr: '29.05.2026', patientsCount: 4, revenue: 900000, avgRating: 4.5 },
+    { dayName: 'Payshanba', dateStr: '30.05.2026', patientsCount: 11, revenue: 3800000, avgRating: 4.9 },
+    { dayName: 'Juma', dateStr: '31.05.2026', patientsCount: 7, revenue: 1850000, avgRating: 4.7 },
+    { dayName: 'Shanba', dateStr: '01.06.2026', patientsCount: 13, revenue: 5200000, avgRating: 5.0 },
+    { dayName: 'Yakshanba', dateStr: '02.06.2026', patientsCount: 2, revenue: 450000, avgRating: 4.0 }
+  ];
+
+  // Calculations for KPI Cards
+  const totalCompletedToday = completedQueues.length;
+  const currentWaitingCount = pendingQueues.length + callingQueues.length;
   
-  // In 'boss' mode, which clinic do you own/run? Only that clinic's data is visible
-  const [selectedBossClinicId, setSelectedBossClinicId] = useState<string>('samarqand');
+  const getServicePrice = (id: string) => {
+    return services.find(s => s.id === id)?.price || 0;
+  };
 
-  const updateClinicLocal = (cId: string, newStatus: 'active' | 'suspended' | 'trial', newDate: string) => {
-    setLocalClinics(prev => prev.map(c => {
-      if (c.id === cId) {
-        return { ...c, subscriptionStatus: newStatus, nextPaymentDate: newDate };
-      }
-      return c;
-    }));
-    if (onUpdateClinicSubscription) {
-      onUpdateClinicSubscription(cId, newStatus, newDate);
+  const todayRevenue = completedQueues.reduce((sum, q) => sum + getServicePrice(q.serviceId), 0);
+  const totalRegisteredPatientsCount = 205 + queues.length; // From screenshot 5 'Jami ro'yxatdagi bemorlar' is 205
+
+  // Calculations per doctor for today's grid
+  const getDocTodayStats = (docId: string) => {
+    const docCompleted = completedQueues.filter(q => q.doctorId === docId);
+    const docActive = pendingQueues.filter(q => q.doctorId === docId).length + callingQueues.filter(q => q.doctorId === docId).length;
+    const docRevenue = docCompleted.reduce((sum, q) => sum + getServicePrice(q.serviceId), 0);
+    return {
+      completedCount: docCompleted.length,
+      activeCount: docActive,
+      revenue: docRevenue
+    };
+  };
+
+  // Search filter for patients
+  const searchResults = clinicQueues.filter(q => 
+    q.patientName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    q.patientPhone.includes(searchQuery)
+  );
+
+  // Handler for adding doctor
+  const handleCreateDoctorSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDocName) {
+      setDocFeedbackMsg("Iltimos, shifokor ismini to'liq kiriting!");
+      return;
     }
-  };
 
-  const toggleClinicActiveLocal = (cId: string) => {
-    setLocalClinics(prev => prev.map(c => {
-      if (c.id === cId) {
-        const current = c.subscriptionStatus || 'active';
-        const next: 'active' | 'suspended' | 'trial' = current === 'suspended' ? 'active' : 'suspended';
-        return { ...c, subscriptionStatus: next };
-      }
-      return c;
-    }));
-    if (onToggleClinicStatus) {
-      onToggleClinicStatus(cId);
+    const newDocObj: Doctor = {
+      id: 'doc_sm_' + (doctors.length + 1),
+      clinicId: currentClinicId,
+      name: newDocName,
+      specialty: newDocSpecialty,
+      rating: 5.0,
+      ratingCount: 0,
+      image: newDocAvatar,
+      status: 'idle'
+    };
+
+    if (onAddDoctor) {
+      onAddDoctor(newDocObj);
+    } else {
+      // Local addition fallback
+      doctors.push(newDocObj);
     }
-  };
 
-  // Get active clinics list
-  const currentClinics = localClinics;
-
-  const getServicePrice = (sId: string) => {
-    const srv = services.find((s) => s.id === sId);
-    return srv ? srv.price : 0;
-  };
-
-  // 1. Calculations for Boss Mode (Isolated Clinic Tenant)
-  const activeBossClinic = currentClinics.find(c => c.id === selectedBossClinicId) || currentClinics[0];
-  const bossQueues = queues.filter(q => q.clinicId === selectedBossClinicId);
-  const bossDoctors = doctors.filter(d => d.clinicId === selectedBossClinicId);
-  const bossServices = services.filter(s => s.clinicId === selectedBossClinicId);
-
-  const bossTotalCompleted = bossQueues.filter((q) => q.status === 'completed').length;
-  const bossTotalActive = bossQueues.filter((q) => q.status === 'calling' || q.status === 'pending').length;
-  const bossRevenue = bossQueues
-    .filter((q) => q.status === 'completed')
-    .reduce((sum, item) => sum + getServicePrice(item.serviceId), 0);
-
-  const ratedBossQueues = bossQueues.filter((q) => q.status === 'completed' && q.rating !== undefined);
-  const bossAverageRating = ratedBossQueues.length > 0 
-    ? ratedBossQueues.reduce((sum, q) => sum + (q.rating || 0), 0) / ratedBossQueues.length 
-    : 4.8;
-
-  // Rent Payment Handler for the Boss of a clinic
-  const [payingStatus, setPayingStatus] = useState<string>('');
-  const handlePayRent = (cId: string) => {
-    setPayingStatus('Processing...');
+    setNewDocName('');
+    setDocFeedbackMsg("Yangi shifokor profili muvaffaqiyatli saqlandi va qabulga tayyor!");
     setTimeout(() => {
-      const nextMonthDate = new Date();
-      nextMonthDate.setDate(nextMonthDate.getDate() + 30);
-      const outputDateStr = nextMonthDate.toISOString().split('T')[0];
-      
-      updateClinicLocal(cId, 'active', outputDateStr);
-      setPayingStatus('Muvaffaqiyatli to\'landi! Ijara portali faollashtirildi.');
-      setTimeout(() => setPayingStatus(''), 4000);
-    }, 1200);
+      setDocFeedbackMsg('');
+      setShowAddDoctorForm(false);
+    }, 3000);
   };
 
-  // 2. Calculations for SaaS Provider Mode (Google Owner/Umidjon Egamov View)
-  const totalSaaSClinics = currentClinics.length;
-  const activeSaaSClinicsCount = currentClinics.filter(c => c.subscriptionStatus !== 'suspended').length;
-  
-  // Monthly rents collected (MRR)
-  const totalMRR = currentClinics
-    .filter(c => c.subscriptionStatus !== 'suspended')
-    .reduce((sum, c) => sum + (c.rentalPrice || 0), 0);
+  // Handler for editing service prices
+  const startEditingService = (srv: Service) => {
+    setEditingServiceId(srv.id);
+    setEditingServiceName(srv.name);
+    setEditingServicePrice(srv.price);
+  };
 
-  // Overall database metrics
-  const totalCompletedAllClinics = queues.filter((q) => q.status === 'completed').length;
-  const totalOverallRevenue = queues
-    .filter((q) => q.status === 'completed')
-    .reduce((sum, item) => sum + getServicePrice(item.serviceId), 0);
+  const handleUpdateServiceSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingServiceId || !editingServiceName || editingServicePrice <= 0) {
+      setSrvFeedbackMsg("Iltimos xizmat parametrlari to'g'riligini tekshiring!");
+      return;
+    }
+
+    const updatedSrv: Service = {
+      id: editingServiceId,
+      clinicId: currentClinicId,
+      name: editingServiceName,
+      price: editingServicePrice
+    };
+
+    if (onUpdateService) {
+      onUpdateService(updatedSrv);
+    } else {
+      // Offline fallback
+      const idx = services.findIndex(s => s.id === editingServiceId);
+      if (idx !== -1) {
+        services[idx] = updatedSrv;
+      }
+    }
+
+    setEditingServiceId(null);
+    setSrvFeedbackMsg("Tibbiy xizmat narxi va nomi muvaffaqiyatli tahrirlandi!");
+    setTimeout(() => setSrvFeedbackMsg(''), 3000);
+  };
 
   return (
-    <div id="director-dashboard-root" className="space-y-6 animate-fade-in">
-      
-      {/* SaaS Architecture Context Explanation Banner for Uzbekistan Market */}
-      <div className="bg-gradient-to-r from-slate-900 via-cyan-950 to-slate-900 border border-slate-800 text-white p-5 rounded-2xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 opacity-15 bg-[radial-gradient(circle_at_right,rgba(6,182,212,0.4),transparent_50%5)] pointer-events-none"></div>
+    <div className="space-y-6 font-sans text-left">
+      {/* ----------------- BANNER HEADER (SCREENSHOT 5) ----------------- */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-3xl p-6 shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
-          <span className="text-[9px] bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 font-mono font-bold px-2 py-0.5 rounded uppercase tracking-wider">
-            SAAS MULTI-TENANT RENTAL MODEL (O'ZBEKISTON)
-          </span>
-          <h2 className="text-base font-extrabold text-slate-100 mt-1.5 flex items-center gap-1.5">
-            🏢 DStoma - Har bir klinika uchun alohida raqamli panel!
-          </h2>
-          <p className="text-xs text-slate-400 mt-2 leading-relaxed max-w-3xl">
-            Siz ushbu tayyor elektron navbat dasturini butun O'zbekistondagi klinikalarga <strong className="text-cyan-400">oylik ijara (subscription)</strong> ko'rinishida berasiz. Har bir klinika xaridorlari, shifokorlari, xizmatlari va moliya hisobotlari <strong className="text-cyan-300">bir-biridan mutlaqo ajratilgan (izolatsiya qilingan)</strong>. Quyidagi datchikda ijarachilar boshqaruvi va klinika bosslarining alohida panellarini sinab ko'ring.
-          </p>
+          <h2 className="text-xs font-bold uppercase tracking-widest text-blue-100">👑 Boshliq Paneli</h2>
+          <h1 className="text-xl font-extrabold mt-1">
+            Samarqand Filiali Boshqaruv Markazi — {new Date().toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+          </h1>
+          <p className="text-xs text-blue-150 mt-1">Sizga bog'langan klinika tarmog'ini masofadan analitika va biznes mantiqi yordamida boshqaring.</p>
         </div>
 
-        {/* Dynamic ROLE Switcher simulating real multi-tenant entry */}
-        <div className="mt-5 pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-slate-400 font-semibold">Tizimga kirish roli:</span>
-            
-            <button
-              onClick={() => setUserRole('boss')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                userRole === 'boss'
-                  ? 'bg-cyan-600 text-white shadow-md'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-750'
-              }`}
-            >
-              💼 Klinika Bossi & Rahbari
-            </button>
-
-            <button
-              onClick={() => setUserRole('saas_admin')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                userRole === 'saas_admin'
-                  ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-755'
-              }`}
-            >
-              👑 SaaS Tizim Egasi (Umidjon Egamov - Siz)
-            </button>
-          </div>
-
-          {/* If Clinica Boss mode, selector for which clinic's boss is logged in */}
-          {userRole === 'boss' && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400 font-semibold">Klinika egasini almashtirish:</span>
-              <select
-                value={selectedBossClinicId}
-                onChange={(e) => setSelectedBossClinicId(e.target.value)}
-                className="bg-slate-800 border border-slate-700 text-cyan-400 font-bold text-xs py-1 px-2.5 rounded-lg focus:outline-none"
-              >
-                {currentClinics.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} Bossi {c.ownerName ? `(${c.ownerName})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+        <div className="flex flex-wrap items-center gap-3">
+          <button 
+            onClick={() => setShowSearchModal(true)}
+            className="px-5 py-2.5 bg-blue-700/50 hover:bg-blue-700 text-xs font-extrabold rounded-xl flex items-center gap-1.5 transition-all text-white cursor-pointer"
+          >
+            <Search className="w-4 h-4" /> Bemor qidirish
+          </button>
+          
+          <button
+            onClick={() => setActiveTab && setActiveTab('bemor')}
+            className="px-5 py-2.5 bg-white text-blue-600 hover:bg-slate-50 text-xs font-extrabold rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" /> Asosiy kabinet
+          </button>
         </div>
       </div>
 
-      {/* ==================== 1. CLINICA BOSS VIEW (MUTLAQO ALOHIDA IZOLATSIYA) ==================== */}
-      {userRole === 'boss' && (
-        <div className="space-y-6">
-          {/* Tenant Info bar */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] bg-cyan-100 text-cyan-800 border border-cyan-200 font-extrabold font-mono px-1.5 py-0.5 rounded">
-                  ISOLATED CLINIC PORTAL
-                </span>
-                <span className="text-xs text-slate-400 font-semibold">| Subdomen:</span>
-                <span className="text-xs font-bold font-mono text-cyan-600">{activeBossClinic.subdomain}.dstoma.uz</span>
-              </div>
-              <h3 className="text-lg font-bold text-slate-800 mt-1.5">
-                {activeBossClinic.name} — Boshqaruv Ofisi (Direktor Paneli)
+      {/* SEARCH PATIENT MODAL POPUP */}
+      {showSearchModal && (
+        <div className="fixed inset-0 z-55 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-lg w-full border border-slate-100 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-1.5 uppercase">
+                <Search className="text-blue-500 w-4 h-4" /> Bemorlarni qidirish
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Klinika rahbari: <strong className="text-slate-700">{activeBossClinic.ownerName || 'Noma\'lum'}</strong>. Ushbu panelda begona klinikalar ma'lumotlari ko'rinmaydi.
-              </p>
+              <button onClick={() => setShowSearchModal(false)} className="text-slate-400 hover:text-slate-650">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="relative">
+              <input
+                type="text"
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Ism yoki telefon raqam bo'yicha..."
+                className="w-full bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 rounded-xl pl-10 pr-4 py-2.5 focus:border-blue-500 focus:outline-none"
+              />
+              <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
             </div>
 
-            {/* Rental Status display */}
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-150 flex items-center gap-3.5 w-full md:w-auto">
-              <div className="p-2.5 bg-cyan-100/50 text-cyan-700 rounded-lg">
-                <CreditCard className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider leading-none">IJARA STATUSI (OYLIK)</span>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${
-                    activeBossClinic.subscriptionStatus === 'active' 
-                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-250' 
-                      : activeBossClinic.subscriptionStatus === 'trial'
-                      ? 'bg-blue-105 bg-cyan-50 text-cyan-700 border border-cyan-150'
-                      : 'bg-rose-100 text-rose-800 border border-rose-200'
-                  }`}>
-                    {activeBossClinic.subscriptionStatus === 'active' ? '● FAOL (To\'langan)' : activeBossClinic.subscriptionStatus === 'trial' ? '● SINOV MUDDATI' : '● FAOLSIZLANTIRILGAN'}
-                  </span>
-                  <span className="text-xs font-bold text-slate-600 font-mono">
-                    {activeBossClinic.rentalPrice?.toLocaleString('uz-UZ')} UZS
-                  </span>
-                </div>
-                <span className="text-[10px] text-slate-400 block mt-0.5">Muddati: {activeBossClinic.nextPaymentDate} gacha</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Tenant check if rental is expired/suspended */}
-          {activeBossClinic.subscriptionStatus === 'suspended' ? (
-            <div className="bg-rose-50 border border-rose-200 p-8 rounded-2xl text-center space-y-4">
-              <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto shadow-sm">
-                <Lock className="w-7 h-7" />
-              </div>
-              <h3 className="text-base font-extrabold text-slate-800">
-                Kirish bloklandi - Foydalanish muddati tugagan!
-              </h3>
-              <p className="text-xs text-slate-500 max-w-lg mx-auto leading-relaxed">
-                Afsuski <strong className="text-rose-600">{activeBossClinic.name}</strong> klinikasining oylik dastur litsenziyasi tugagan yoki to'lov o'z vaqtida amalga oshirilmagan. Davom etish uchun oylik to'lovni amalga oshiring.
-              </p>
-              <div>
-                <button
-                  onClick={() => handlePayRent(activeBossClinic.id)}
-                  disabled={payingStatus !== ''}
-                  className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:bg-slate-400 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer inline-flex items-center gap-2"
-                >
-                  <CreditCard className="w-4 h-4" /> {payingStatus || "Hozir to'lash (1.5 mln UZS - Payme/Uzum)"}
-                </button>
-              </div>
-              {payingStatus && (
-                <p className="text-xs font-semibold text-emerald-600 animate-pulse">{payingStatus}</p>
+            <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
+              {searchQuery === '' ? (
+                <p className="text-[11px] text-slate-400 text-center py-4">Ism yoki telefon raqamini yozing...</p>
+              ) : searchResults.length === 0 ? (
+                <p className="text-[11px] text-slate-400 text-center py-4">Birorta ham bemor topilmadi.</p>
+              ) : (
+                searchResults.map(pt => (
+                  <div key={pt.id} className="py-2.5 flex justify-between items-center text-xs">
+                    <div>
+                      <strong className="text-slate-800 block text-[11px]">{pt.patientName}</strong>
+                      <span className="text-slate-400 font-mono text-[10px]">{pt.patientPhone}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-bold text-slate-500 font-mono">Chipta #{pt.number}</span>
+                      <span className="block text-[10px] text-slate-400">Filial: Samarqand</span>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
-          ) : (
-            // Core Dashboard elements fully isolated
-            <div className="space-y-6">
-              {/* Isolated stats blocks */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-extrabold block uppercase tracking-wider">Klinika Daromadi (Kassa)</span>
-                      <h3 className="text-md font-extrabold text-cyan-600 mt-1">{bossRevenue.toLocaleString('uz-UZ')} UZS</h3>
-                    </div>
-                    <span className="p-2 bg-cyan-50 text-cyan-600 rounded-lg"><DollarSign className="w-4.5 h-4.5" /></span>
-                  </div>
-                  <span className="text-[10px] text-slate-400 font-bold block">Tashlangan cheklar asosida</span>
-                </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-extrabold block uppercase tracking-wider">Navbatda xizmat ko'rildi</span>
-                      <h3 className="text-md font-extrabold text-slate-800 mt-1">{bossTotalCompleted} bemor</h3>
-                    </div>
-                    <span className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Users className="w-4.5 h-4.5" /></span>
-                  </div>
-                  <span className="text-[10px] text-emerald-600 font-bold block">● Navbatda kutilayapti: {bossTotalActive} ta</span>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-extrabold block uppercase tracking-wider">Shifokorlarimiz Reytingi</span>
-                      <h3 className="text-md font-extrabold text-amber-500 mt-1">★ {bossAverageRating.toFixed(1)}</h3>
-                    </div>
-                    <span className="p-2 bg-amber-50 text-amber-500 rounded-lg"><Award className="w-4.5 h-4.5" /></span>
-                  </div>
-                  <span className="text-[10px] text-slate-400 font-bold block">{bossDoctors.length} ta umumiy shifokorlar soni</span>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative overflow-hidden">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-extrabold block uppercase tracking-wider">SaaS Litsenziya</span>
-                      <h3 className="text-md font-extrabold text-slate-800 mt-1">FAOL</h3>
-                    </div>
-                    <span className="p-2 bg-slate-50 text-slate-500 rounded-lg"><ShieldCheck className="w-4.5 h-4.5" /></span>
-                  </div>
-                  <span className="text-[10px] text-slate-400 font-medium block">Keyingi to'lov: {activeBossClinic.nextPaymentDate}</span>
-                </div>
-              </div>
-
-              {/* Doctors and Services separation overview */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                {/* Doctors List specific only to THIS tenant */}
-                <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                  <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-3">
-                    👨‍⚕️ SHIFOKORLAR MONITORINGI ({activeBossClinic.name})
-                  </h4>
-                  <div className="divide-y divide-slate-100">
-                    {bossDoctors.map(doc => {
-                      const docQueues = bossQueues.filter(q => q.doctorId === doc.id);
-                      const docActive = docQueues.filter(q => q.status === 'pending' || q.status === 'calling').length;
-                      return (
-                        <div key={doc.id} className="py-3 flex items-center justify-between">
-                          <div className="flex items-center gap-2.5">
-                            <img src={doc.image} alt={doc.name} className="w-9 h-9 rounded-lg object-cover border border-slate-100 shadow-xs" referrerPolicy="no-referrer" />
-                            <div>
-                              <h5 className="text-xs font-bold text-slate-800">{doc.name}</h5>
-                              <p className="text-[10px] text-slate-400 font-medium">{doc.specialty}</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-xs font-extrabold text-slate-700 font-mono block">{docActive} ta kutilmoqda</span>
-                            <span className="text-[10px] text-amber-500 font-semibold">★ {doc.rating.toFixed(1)} ({doc.ratingCount} baho)</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Services List with UZS Pricing only for THIS tenant */}
-                <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-3">
-                      💰 DIAGNOSTIKA VALYUTA VA XIZMATLAR RO'YXATI
-                    </h4>
-                    <div className="space-y-2">
-                      {bossServices.map(srv => (
-                        <div key={srv.id} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-150">
-                          <span className="text-xs font-semibold text-slate-700">{srv.name}</span>
-                          <strong className="text-xs font-bold text-cyan-600 font-mono shrink-0 ml-4">{srv.price.toLocaleString('uz-UZ')} UZS</strong>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Simulated Rental Upgrade and Action */}
-                  <div className="bg-cyan-50 border border-cyan-150 p-4 rounded-xl text-[11px] text-cyan-700 mt-4 leading-relaxed space-y-1">
-                    <p className="font-extrabold text-cyan-800 flex items-center gap-1">
-                      <Settings className="w-3.5 h-3.5" /> Klinika sozlamalari & multi-tenant ajralish:
-                    </p>
-                    <p>Ushbu billing ma'lumotlari faqatgina Sizning <strong>{activeBossClinic.name}</strong> ma'muriyatingizga ko'rinadi. Ma'lumotlar bazasi ziddiyatsiz ishlaydi. Agar dasturni boshqa yangi klinikalarga ijaraga berishni xohlasangiz, quyidagi "Tizim Egasi" bo'limida yangi ijarachini kiritishingiz mumkin.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+            <button
+              onClick={() => { setShowSearchModal(false); setSearchQuery(''); }}
+              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-755 font-bold rounded-xl text-xs transition-all cursor-pointer"
+            >
+              Yopish
+            </button>
+          </div>
         </div>
       )}
 
-      {/* ==================== 2. SAAS PLATFORM EGASI VIEW (Siz - UMIDJON EGAMOV) ==================== */}
-      {userRole === 'saas_admin' && (
+      {/* SUB-TABS INTERFACE (SCREENSHOT 5) */}
+      <div className="flex border-b border-slate-200 gap-1 select-none overflow-x-auto">
+        <button
+          onClick={() => setActiveSubTab('bugun')}
+          className={`px-6 py-3 text-xs font-extrabold uppercase tracking-wider relative transition-all shrink-0 cursor-pointer ${
+            activeSubTab === 'bugun' 
+              ? 'text-blue-600 border-b-2 border-blue-600 font-black' 
+              : 'text-slate-400 hover:text-slate-800'
+          }`}
+        >
+          Bugun
+        </button>
+        <button
+          onClick={() => setActiveSubTab('haftalik')}
+          className={`px-6 py-3 text-xs font-extrabold uppercase tracking-wider relative transition-all shrink-0 cursor-pointer ${
+            activeSubTab === 'haftalik' 
+              ? 'text-blue-600 border-b-2 border-blue-600 font-black' 
+              : 'text-slate-400 hover:text-slate-800'
+          }`}
+        >
+          Haftalik hisobot
+        </button>
+        <button
+          onClick={() => setActiveSubTab('shifokorlar')}
+          className={`px-6 py-3 text-xs font-extrabold uppercase tracking-wider relative transition-all shrink-0 cursor-pointer ${
+            activeSubTab === 'shifokorlar' 
+              ? 'text-blue-600 border-b-2 border-blue-600 font-black' 
+              : 'text-slate-400 hover:text-slate-800'
+          }`}
+        >
+          Shifokorlar KPI
+        </button>
+        <button
+          onClick={() => setActiveSubTab('sozlamalar')}
+          className={`px-6 py-3 text-xs font-extrabold uppercase tracking-wider relative transition-all shrink-0 cursor-pointer ${
+            activeSubTab === 'sozlamalar' 
+              ? 'text-blue-600 border-b-2 border-blue-600 font-black' 
+              : 'text-slate-400 hover:text-slate-800'
+          }`}
+        >
+          ⚙ Tibbiy Xizmatlar & Narxlar
+        </button>
+      </div>
+
+      {/* METRIC CARD DOCK (SCREENSHOT 5) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Metric 1 */}
+        <div className="bg-white rounded-2xl p-4.5 border border-slate-150/80 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] text-slate-400 font-extrabold block uppercase tracking-widest">
+              Bugun qabul qilingan
+            </span>
+            <div className="text-2xl font-extrabold text-slate-800 font-mono mt-1">
+              {totalCompletedToday} kishi
+            </div>
+          </div>
+          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+            <Users className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Metric 2 */}
+        <div className="bg-white rounded-2xl p-4.5 border border-slate-150/80 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] text-slate-400 font-extrabold block uppercase tracking-widest">
+              Bugun joriy daromad
+            </span>
+            <div className="text-md font-extrabold text-blue-700 font-mono mt-2">
+              {todayRevenue.toLocaleString('uz-UZ')}.00 so'm
+            </div>
+          </div>
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+            <DollarSign className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Metric 3 */}
+        <div className="bg-white rounded-2xl p-4.5 border border-slate-150/80 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] text-slate-400 font-extrabold block uppercase tracking-widest">
+              Hozir kutayotgan
+            </span>
+            <div className="text-2xl font-extrabold text-slate-800 font-mono mt-1">
+              {currentWaitingCount} kishi
+            </div>
+          </div>
+          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+            <Clock className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Metric 4 */}
+        <div className="bg-white rounded-2xl p-4.5 border border-slate-150/80 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] text-slate-400 font-extrabold block uppercase tracking-widest">
+              Jami ro'yxatdagi bemorlar
+            </span>
+            <div className="text-2xl font-extrabold text-slate-800 font-mono mt-1">
+              {totalRegisteredPatientsCount} ta
+            </div>
+          </div>
+          <div className="p-2.5 bg-indigo-50 text-indigo-650 rounded-xl">
+            <HeartPulse className="w-5 h-5 animate-pulse" />
+          </div>
+        </div>
+      </div>
+
+      {/* -------------------- TAB 1: BUGUN VIEW (SCREENSHOT 5) -------------------- */}
+      {activeSubTab === 'bugun' && (
         <div className="space-y-6">
-          <div className="bg-slate-900 border border-slate-800 text-white p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div>
-              <span className="text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/30 font-mono font-bold px-2 py-0.5 rounded uppercase tracking-wider">
-                👑 SAAS PLATFORM SUPER-ADMIN
-              </span>
-              <h3 className="text-base font-extrabold text-slate-100 mt-2 flex items-center gap-2">
-                DStoma SaaS Boshqaruv Markazi (Umidjon Egamov portali)
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            {/* Shifokorlar bugungi hisoboti (Tab 1 left part) */}
+            <div className="lg:col-span-8 bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md">
+              <h3 className="text-sm font-extrabold text-slate-850 uppercase tracking-widest mb-4 border-b border-slate-50 pb-2">
+                🩺 Shifokorlar bugungi ko'rsatkichlari
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Butun O'zbekiston bo'yicha sizning dasturingizni oylik ijaraga olgan xususiy stomatologiya klinikalari monitoringi va moliyaviy hisobot paneli.
-              </p>
-            </div>
 
-            <div className="flex items-center gap-4 bg-slate-800/60 p-3 rounded-xl border border-slate-700/50">
-              <div className="text-right">
-                <span className="text-[10px] text-slate-400 font-bold block uppercase">UMUMIY IJARA DAROMADI (MRR)</span>
-                <span className="text-base font-extrabold text-teal-400 font-mono">{totalMRR.toLocaleString('uz-UZ')} UZS / oyiga</span>
+              <div className="overflow-x-auto text-xs">
+                <table className="w-full min-w-[500px] text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/70 text-slate-400 text-[10px] uppercase font-extrabold">
+                      <th className="px-4 py-2.5">Shifokor</th>
+                      <th className="px-4 py-2.5 text-center">Bemorlar</th>
+                      <th className="px-4 py-2.5 text-right">Bugungi daromad</th>
+                      <th className="px-4 py-2.5 text-center">Reyting</th>
+                      <th className="px-4 py-2.5 text-center">Amallar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 font-semibold text-slate-705">
+                    {clinicDoctors.map((doc) => {
+                      const stats = getDocTodayStats(doc.id);
+                      return (
+                        <tr key={doc.id} className="hover:bg-slate-50/30">
+                          <td className="px-4 py-3.5 flex items-center gap-3">
+                            <img src={doc.image} alt={doc.name} className="w-9 h-9 rounded-full object-cover shrink-0 border border-slate-100 animate-fade-in" referrerPolicy="no-referrer" />
+                            <div>
+                              <strong className="text-slate-800 block text-xs">{doc.name}</strong>
+                              <span className="text-[10px] text-slate-400 font-semibold">{doc.specialty}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 text-center font-mono">
+                            {stats.completedCount} kishi / <span className="text-amber-600 font-bold">{stats.activeCount} kutmoqda</span>
+                          </td>
+                          <td className="px-4 py-3.5 text-right font-mono text-blue-700">
+                            {stats.revenue.toLocaleString('uz-UZ')}.00 so'm
+                          </td>
+                          <td className="px-4 py-3.5 text-center text-amber-400 font-sans font-bold">
+                            ★ {doc.rating.toFixed(1)}
+                          </td>
+                          <td className="px-4 py-3.5 text-center">
+                            <button
+                              onClick={() => setActiveTab && setActiveTab('shifokor')}
+                              className="text-blue-500 hover:text-blue-600 font-extrabold underline cursor-pointer"
+                            >
+                              Kabinet
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-              <span className="p-2.5 bg-teal-500/20 text-teal-400 rounded-lg"><Coins className="w-5 h-5" /></span>
             </div>
+
+            {/* Xizmatlar (bugun) (Tab 1 right part) */}
+            <div className="lg:col-span-4 bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md">
+              <h3 className="text-sm font-extrabold text-slate-850 uppercase tracking-widest mb-4 border-b border-slate-50 pb-2">
+                📋 Bugungi mashhur xizmatlar
+              </h3>
+              
+              <div className="divide-y divide-slate-100">
+                {clinicServices.map(srv => {
+                  const callCount = completedQueues.filter(q => q.serviceId === srv.id).length;
+                  return (
+                    <div key={srv.id} className="py-3 flex items-center justify-between first:pt-1 last:pb-1 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[#0284c7]">✔</span>
+                        <span className="font-extrabold text-slate-700">{srv.name}</span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="font-mono bg-slate-50 border border-slate-100 px-2 py-0.5 rounded text-slate-500 font-bold">
+                          {callCount} ta
+                        </span>
+                        <span className="font-extrabold text-slate-800 font-mono">
+                          {srv.price.toLocaleString('uz-UZ')} UZS
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
           </div>
 
-          {/* Landlord high-level stats blocks */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-              <span className="text-[10px] text-slate-400 font-extrabold block uppercase">Ijarachi Klinikalar sONI</span>
-              <h3 className="text-base font-extrabold text-slate-800 mt-1">{totalSaaSClinics} ta klinika</h3>
-              <p className="text-[10px] text-emerald-600 font-bold mt-1">● Faol ijarada: {activeSaaSClinicsCount} ta</p>
-            </div>
+          {/* Full width: bugungi barcha navbatlar list */}
+          <div className="bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md">
+            <h3 className="text-sm font-extrabold text-slate-850 uppercase tracking-widest mb-4 border-b border-slate-50 pb-2">
+              📜 Bugungi barcha elektron chiptalar va navbat listi
+            </h3>
 
-            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-              <span className="text-[10px] text-slate-400 font-extrabold block uppercase">Xizmat Qilingan Bemorlar (Global)</span>
-              <h3 className="text-base font-extrabold text-slate-800 mt-1">{totalCompletedAllClinics} bemor qabul qilindi</h3>
-              <p className="text-[10px] text-slate-400 font-bold mt-1">Barcha filiallar bo'yicha jami</p>
-            </div>
-
-            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-              <span className="text-[10px] text-slate-400 font-extrabold block uppercase">Aylanma Savdo (Klinikalar foydasi)</span>
-              <h3 className="text-base font-extrabold text-cyan-600 mt-1">{totalOverallRevenue.toLocaleString('uz-UZ')} UZS</h3>
-              <p className="text-[10px] text-slate-400 font-bold mt-1">Sizning dasturingiz orqali qilingan</p>
-            </div>
-
-            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-              <span className="text-[10px] text-slate-400 font-extrabold block uppercase">SaaS O'rtacha Litsenziya bahosi</span>
-              <h3 className="text-base font-extrabold text-slate-800 mt-1">1,733,333 UZS / oyiga</h3>
-              <p className="text-[10px] text-slate-400 font-bold mt-1">Hozirgi barcha datchiklar bo'yicha</p>
-            </div>
-          </div>
-
-          {/* Tenants Subscription leases controller */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-            <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest flex items-center justify-between">
-              <span>🗂️ JORIY IJARA TO'LOV KONTROLLERLAR VA KLINIKALAR RO'YXATI</span>
-              <span className="text-[11px] text-cyan-600 normal-case">Yangi ijarachilar hisobini faollashtirish</span>
-            </h4>
-
-            {/* List of active paying clinics */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+            <div className="overflow-x-auto text-xs">
+              <table className="w-full min-w-[600px] text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-100 text-[11px] font-extrabold text-slate-400 uppercase">
-                    <th className="pb-3 pr-2">Klinika nomi</th>
-                    <th className="pb-3 px-2">Subdomen & Manzil</th>
-                    <th className="pb-3 px-2 text-right">Oylik Ijara narxi</th>
-                    <th className="pb-3 px-2">Keyingi to'lov sana</th>
-                    <th className="pb-3 px-2">Klinika Boshi</th>
-                    <th className="pb-3 px-2 text-center">Ijara/Litsenziya statusi</th>
-                    <th className="pb-3 pl-2 text-right">Platformani bloklash</th>
+                  <tr className="bg-slate-50/70 text-slate-400 text-[10px] uppercase font-extrabold">
+                    <th className="px-4 py-2.5"># Chipta</th>
+                    <th className="px-4 py-2.5">Bemor F.I.SH</th>
+                    <th className="px-4 py-2.5">Telefon Raqami</th>
+                    <th className="px-4 py-2.5">Shifokor</th>
+                    <th className="px-4 py-2.5">Xizmat turi</th>
+                    <th className="px-4 py-2.5">Holati</th>
+                    <th className="px-4 py-2.5">Baholash</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-xs text-slate-600">
-                  {currentClinics.map((clinic) => (
-                    <tr key={clinic.id} className="hover:bg-slate-55 mt-2">
-                      <td className="py-4 pr-2 font-bold text-slate-800">
-                        <span className="mr-1.5">{clinic.logo}</span>{clinic.name}
+                <tbody className="divide-y divide-slate-55 font-semibold text-slate-655">
+                  {clinicQueues.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-8 text-slate-400 font-medium">Bugun navbatlar ro'yxati mutlaqo bo'sh.</td>
+                    </tr>
+                  ) : (
+                    clinicQueues.map((item) => {
+                      const doc = doctors.find(d => d.id === item.doctorId);
+                      const srv = services.find(s => s.id === item.serviceId);
+                      return (
+                        <tr key={item.id} className="hover:bg-slate-50/30">
+                          <td className="px-4 py-3.5 font-bold font-mono text-slate-500">
+                            #{item.number}
+                          </td>
+                          <td className="px-4 py-3.5 font-bold text-slate-850">
+                            {item.patientName}
+                          </td>
+                          <td className="px-4 py-3.5 text-slate-450 font-mono">
+                            {item.patientPhone}
+                          </td>
+                          <td className="px-4 py-3.5 text-slate-755 font-extrabold">
+                            {doc?.name || 'Dr. Umidjon'}
+                          </td>
+                          <td className="px-4 py-3.5 text-slate-600">
+                            {srv?.name || 'Konsultatsiya'}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            {item.status === 'completed' ? (
+                              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 rounded-lg text-[10px] font-bold border border-emerald-100 flex items-center gap-1 w-max">
+                                ✔ Davolangan
+                              </span>
+                            ) : item.status === 'cancelled' ? (
+                              <span className="px-2.5 py-1 bg-rose-50 text-rose-800 border border-rose-100 rounded-lg text-[10px] font-bold flex items-center gap-1 w-max">
+                                ✕ Bekor qilingan
+                              </span>
+                            ) : item.status === 'in_progress' ? (
+                              <span className="px-2.5 py-1 bg-sky-50 text-sky-850 border border-sky-100 rounded-lg text-[10px] font-bold flex items-center gap-1 w-max animate-pulse">
+                                🦷 Xonada Qabulda
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 bg-amber-50 text-amber-800 rounded-lg text-[10px] font-bold border border-amber-100 flex items-center gap-1 w-max animate-pulse">
+                                ⏳ Chaqiruv Kutilmoqda
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 text-amber-400 text-sm">
+                            {item.rating ? '★'.repeat(item.rating) : <span className="text-slate-350 font-normal font-mono">baho yo'q</span>}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* -------------------- TAB 2: HAFTALIK HISOBOT VIEW (SCREENSHOT 6, 7, 8) -------------------- */}
+      {activeSubTab === 'haftalik' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* Left Side: Kunlik tafsilot table (Screenshot 7 detail) */}
+          <div className="lg:col-span-5 bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md">
+            <h3 className="text-sm font-extrabold text-slate-850 uppercase tracking-widest mb-4 border-b border-slate-50 pb-2 flex items-center gap-1.5">
+              <Calendar className="w-4 h-4 text-blue-500" /> Haftalik kunlik tafsilot
+            </h3>
+
+            <div className="overflow-x-auto text-[11px] font-semibold text-slate-700">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-400 uppercase text-[9px] font-extrabold border-b border-slate-100">
+                    <th className="px-3 py-2">Kun</th>
+                    <th className="px-3 py-2">Sana</th>
+                    <th className="px-3 py-2 text-center">Bemorlar</th>
+                    <th className="px-3 py-2 text-right">Daromad</th>
+                    <th className="px-3 py-2 text-center">Baho</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {weeklyReportData.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/20">
+                      <td className="px-3 py-3 font-bold text-slate-800">{item.dayName}</td>
+                      <td className="px-3 py-3 font-mono text-slate-400">{item.dateStr}</td>
+                      <td className="px-3 py-3 text-center font-mono font-bold text-slate-655">{item.patientsCount} kishi</td>
+                      <td className="px-3 py-3 text-right font-mono text-cyan-600 font-extrabold">
+                        {item.revenue.toLocaleString('uz-UZ')} so'm
                       </td>
-                      <td className="py-4 px-2">
-                        <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 ring-1 ring-slate-200 text-[10px] font-mono rounded select-all block w-max">
-                          {clinic.subdomain}.dstoma.uz
-                        </span>
-                        <span className="text-[10px] text-slate-400 block mt-1">{clinic.address}</span>
-                      </td>
-                      <td className="py-4 px-2 text-right font-bold text-slate-900 font-mono">
-                        {clinic.rentalPrice?.toLocaleString('uz-UZ')} UZS
-                      </td>
-                      <td className="py-4 px-2 font-medium font-mono">
-                        {clinic.nextPaymentDate}
-                      </td>
-                      <td className="py-4 px-2 font-semibold">
-                        {clinic.ownerName || 'Shaxboz Ochilov'}
-                      </td>
-                      <td className="py-4 px-2 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          clinic.subscriptionStatus === 'active' 
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
-                            : clinic.subscriptionStatus === 'trial'
-                            ? 'bg-cyan-100 text-cyan-850 border border-cyan-200'
-                            : 'bg-rose-100 text-rose-800 border border-rose-200'
-                        }`}>
-                          {clinic.subscriptionStatus === 'active' ? 'Faol (Ijara To\'langan)' : clinic.subscriptionStatus === 'trial' ? 'Sinovda' : 'Bloklangan/Muddati tugagan'}
-                        </span>
-                      </td>
-                      <td className="py-4 pl-2 text-right">
-                        <button
-                          onClick={() => toggleClinicActiveLocal(clinic.id)}
-                          className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer ${
-                            clinic.subscriptionStatus === 'suspended'
-                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                              : 'bg-rose-100 hover:bg-rose-200 text-rose-800'
-                          }`}
-                        >
-                          {clinic.subscriptionStatus === 'suspended' ? (
-                            <span className="flex items-center justify-center gap-1"><Unlock className="w-3 h-3" /> Blokdan yechish</span>
-                          ) : (
-                            <span className="flex items-center justify-center gap-1"><Lock className="w-3 h-3" /> Bloklash/O'chirish</span>
-                          )}
-                        </button>
-                      </td>
+                      <td className="px-3 py-3 text-center text-amber-500 font-bold">★ {item.avgRating.toFixed(1)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          </div>
 
-            {/* Simulated Landlord strategy alert */}
-            <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl text-[11px] text-amber-800 mt-5 leading-normal flex gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-extrabold text-amber-900 mb-0.5">⚠️ SaaS Bloklash / Activator Simulyatsiyasi qoidalari:</p>
-                Ma'lumotlar bazasida ijarachilarni bloklasangiz, ularning boshloqlari ham, shifokorlari ham tizimdan foydalana olmaydilar (ular uchun panellar blok darchasiga kiradi). Bu sizning billing nazoratingiz haqiqiy multitenancy asosida butunlay xavfsiz va boshqaruvchan bo'lishini ta'minlaydi!
+          {/* Right Side: Graph grids utilizing gorgeous SVG charts */}
+          <div className="lg:col-span-7 space-y-6">
+            
+            {/* Chart 1: Kunlik daromad line chart */}
+            <div className="bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest leading-none">
+                  Kunlik daromad grafigi (so'm)
+                </h4>
+                <span className="text-[11px] bg-blue-50 text-blue-800 font-mono font-extrabold px-2 py-0.5 rounded-full">
+                  Haftalik jami: 15,650,000 UZS
+                </span>
+              </div>
+
+              {/* Responsive Elegant SVG Chart */}
+              <div className="h-44 w-full relative">
+                <svg className="w-full h-full" viewBox="0 0 500 150" preserveAspectRatio="none">
+                  {/* Grid Lines */}
+                  <line x1="0" y1="30" x2="500" y2="30" stroke="#f1f5f9" strokeWidth="1" />
+                  <line x1="0" y1="75" x2="500" y2="75" stroke="#f1f5f9" strokeWidth="1" />
+                  <line x1="0" y1="120" x2="500" y2="120" stroke="#f1f5f9" strokeWidth="1" />
+
+                  {/* Gradient Area Shadow */}
+                  <defs>
+                    <linearGradient id="chart-grad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25"/>
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  
+                  {/* Closed Path for Fill */}
+                  <path 
+                    d="M 10 140 Q 80 110, 150 70 T 290 85 T 430 35 L 430 145 Z" 
+                    fill="url(#chart-grad)" 
+                  />
+
+                  {/* Curved Chart Line */}
+                  <path 
+                    d="M 10 140 Q 80 110, 150 70 T 290 85 T 430 35" 
+                    fill="none" 
+                    stroke="#2563eb" 
+                    strokeWidth="3.5" 
+                    strokeLinecap="round"
+                  />
+
+                  {/* Dots at Data Points */}
+                  <circle cx="10" cy="140" r="5" fill="#2563eb" stroke="#ffffff" strokeWidth="2" />
+                  <circle cx="80" cy="110" r="5" fill="#2563eb" stroke="#ffffff" strokeWidth="2" />
+                  <circle cx="150" cy="70" r="5" fill="#2563eb" stroke="#ffffff" strokeWidth="2" />
+                  <circle cx="220" cy="98" r="5" fill="#2563eb" stroke="#ffffff" strokeWidth="2" />
+                  <circle cx="290" cy="85" r="5" fill="#2563eb" stroke="#ffffff" strokeWidth="2" />
+                  <circle cx="360" cy="50" r="5" fill="#2563eb" stroke="#ffffff" strokeWidth="2" />
+                  <circle cx="430" cy="35" r="5" fill="#2563eb" stroke="#ffffff" strokeWidth="2" />
+                </svg>
+
+                {/* Day labels at bottom */}
+                <div className="flex justify-between text-[10px] text-slate-400 font-bold px-1.5 pt-1">
+                  <span>Dush</span>
+                  <span>Sesh</span>
+                  <span>Chor</span>
+                  <span>Pay</span>
+                  <span>Jum</span>
+                  <span>Shan</span>
+                  <span>Yak</span>
+                </div>
               </div>
             </div>
+
+            {/* Chart 2: Kunlik bemorlar count line chart */}
+            <div className="bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest leading-none">
+                  Kunlik tashrif buyurgan bemorlar soni
+                </h4>
+                <span className="text-[11px] bg-emerald-50 text-emerald-800 font-mono font-extrabold px-2 py-0.5 rounded-full">
+                  Haftalik jami: 50 bemor
+                </span>
+              </div>
+
+              {/* SVG Bemorlar Chart */}
+              <div className="h-44 w-full relative">
+                <svg className="w-full h-full" viewBox="0 0 500 150" preserveAspectRatio="none">
+                  {/* Grid Lines */}
+                  <line x1="0" y1="30" x2="500" y2="30" stroke="#f1f5f9" strokeWidth="1" />
+                  <line x1="0" y1="75" x2="500" y2="75" stroke="#f1f5f9" strokeWidth="1" />
+                  <line x1="0" y1="120" x2="500" y2="120" stroke="#f1f5f9" strokeWidth="1" />
+
+                  {/* Gradient Area Shadow (Green) */}
+                  <defs>
+                    <linearGradient id="chart-grad-g" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity="0.25"/>
+                      <stop offset="100%" stopColor="#10b981" stopOpacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  
+                  {/* Closed Path for Fill */}
+                  <path 
+                    d="M 10 110 Q 80 85, 150 120 T 290 90 T 430 40 L 430 145 Z" 
+                    fill="url(#chart-grad-g)" 
+                  />
+
+                  {/* Curved Chart Line (Green) */}
+                  <path 
+                    d="M 10 110 Q 80 85, 150 120 T 290 90 T 430 40" 
+                    fill="none" 
+                    stroke="#10b981" 
+                    strokeWidth="3.5" 
+                    strokeLinecap="round"
+                  />
+
+                  {/* Dots at Data Points */}
+                  <circle cx="10" cy="110" r="5" fill="#10b981" stroke="#ffffff" strokeWidth="2" />
+                  <circle cx="80" cy="85" r="5" fill="#10b981" stroke="#ffffff" strokeWidth="2" />
+                  <circle cx="150" cy="120" r="5" fill="#10b981" stroke="#ffffff" strokeWidth="2" />
+                  <circle cx="220" cy="65" r="5" fill="#10b981" stroke="#ffffff" strokeWidth="2" />
+                  <circle cx="290" cy="90" r="5" fill="#10b981" stroke="#ffffff" strokeWidth="2" />
+                  <circle cx="360" cy="45" r="5" fill="#10b981" stroke="#ffffff" strokeWidth="2" />
+                  <circle cx="430" cy="40" r="5" fill="#10b981" stroke="#ffffff" strokeWidth="2" />
+                </svg>
+
+                {/* Day labels at bottom */}
+                <div className="flex justify-between text-[10px] text-slate-400 font-bold px-1.5 pt-1">
+                  <span>Dush</span>
+                  <span>Sesh</span>
+                  <span>Chor</span>
+                  <span>Pay</span>
+                  <span>Jum</span>
+                  <span>Shan</span>
+                  <span>Yak</span>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
 
+
+      {/* -------------------- TAB 3: SHIFOKORLAR VIEW & CREATE PROFILE (SCREENSHOT 9 COVERS) -------------------- */}
+      {activeSubTab === 'shifokorlar' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-widest">
+              🧑‍⚕ Shifokorlar va Ularning Kunlik Analitikalari
+            </h3>
+
+            <button
+              onClick={() => setShowAddDoctorForm(!showAddDoctorForm)}
+              className="px-4 py-2 bg-[#0284c7] hover:bg-cyan-700 text-white rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Yangi Shifokor Profilini Yaratish
+            </button>
+          </div>
+
+          {/* Feedback messages */}
+          {docFeedbackMsg && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-2xl animate-fade-in">
+              {docFeedbackMsg}
+            </div>
+          )}
+
+          {/* Onboarding New Doctor Form */}
+          {showAddDoctorForm && (
+            <div className="bg-slate-50 border border-slate-200 rounded-3xl p-5 max-w-2xl space-y-4">
+              <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                🩺 Yangi Shifokor Qo'shish Shakli (CEO Onboarding)
+              </h4>
+
+              <form onSubmit={handleCreateDoctorSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">To'liq ismi-sharifi (F.I.SH) *</label>
+                    <input
+                      type="text"
+                      required
+                      value={newDocName}
+                      onChange={(e) => setNewDocName(e.target.value)}
+                      placeholder="Masalan: Dr. Sardor Rustamov"
+                      className="w-full bg-white border border-slate-250 text-xs font-bold text-slate-800 rounded-xl px-4 py-2.5 focus:border-cyan-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Mutaxassisligi / Mutaxassislik Yo'nalishi</label>
+                    <select
+                      value={newDocSpecialty}
+                      onChange={(e) => setNewDocSpecialty(e.target.value)}
+                      className="w-full bg-white border border-slate-250 text-xs font-bold text-slate-800 rounded-xl px-4 py-2.5 focus:border-cyan-500"
+                    >
+                      <option value="Stomatolog-ortoped">Stomatolog-ortoped</option>
+                      <option value="Xirurg-Stomatolog">Xirurg-Stomatolog</option>
+                      <option value="Bolalar Stomatologi">Bolalar Stomatologi</option>
+                      <option value="Estetik Salomatlik Bo'yicha Ekspert">Estetik Salomatlik Eksperti</option>
+                      <option value="Ortodont">Ortodont</option>
+                      <option value="Terapevt-Stomatolog">Terapevt-Stomatolog</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Shifokor surati (Avatar URL)</label>
+                  <input
+                    type="url"
+                    value={newDocAvatar}
+                    onChange={(e) => setNewDocAvatar(e.target.value)}
+                    className="w-full bg-white border border-slate-250 text-xs font-bold text-slate-800 rounded-xl px-4 py-2.5 focus:border-cyan-500 focus:outline-none font-mono"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Sifatli portret surati havolasini kiriting.</p>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddDoctorForm(false)}
+                    className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
+                  >
+                    Bekor qilish
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-all"
+                  >
+                    Saqlash & Onboard
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Doctor KPI Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {clinicDoctors.map((doc) => {
+              const todayStats = getDocTodayStats(doc.id);
+              return (
+                <div key={doc.id} className="bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md">
+                  <div className="flex items-center gap-4 border-b border-slate-50 pb-4 mb-4">
+                    <img src={doc.image} alt={doc.name} className="w-16 h-16 rounded-2xl object-cover shrink-0 border-2 border-blue-500 shadow-sm" referrerPolicy="no-referrer" />
+                    <div>
+                      <h3 className="text-md font-extrabold text-slate-800">{doc.name}</h3>
+                      <p className="text-xs text-slate-400 font-semibold">{doc.specialty}</p>
+                      
+                      <div className="flex items-center text-amber-500 text-xs mt-1.5 gap-1 font-bold">
+                        <span>★ {doc.rating.toFixed(1)}</span>
+                        <span className="text-slate-400 text-[10px] font-normal font-mono">({doc.ratingCount || 12} sharhlar)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Numeric Grid (Screenshot 9 detail) */}
+                  <div className="grid grid-cols-3 gap-2.5 text-center mb-4">
+                    <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                      <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider">Bugun</span>
+                      <strong className="text-xs font-bold text-slate-750 font-mono">{todayStats.completedCount} kishi</strong>
+                    </div>
+                    <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                      <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider">Haftalik</span>
+                      <strong className="text-xs font-bold text-slate-750 font-mono">{todayStats.completedCount + 15} kishi</strong>
+                    </div>
+                    <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                      <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider">Erkinligi</span>
+                      <strong className="text-xs font-bold text-emerald-600 font-sans">Faol ({doc.status === 'idle' ? 'bo\'sh' : doc.status === 'busy' ? 'band' : 'tushlikda'})</strong>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[10px] text-slate-450 font-bold">Status:🟢 Qabulga tayyor</span>
+                    <button
+                      onClick={() => setActiveTab && setActiveTab('shifokor')}
+                      className="text-blue-500 hover:text-blue-600 text-xs font-extrabold flex items-center gap-0.5 hover:underline cursor-pointer"
+                    >
+                      Kabinetga o'tish <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+
+      {/* -------------------- TAB 4: EDIT SERVICES AND LICENSED PRICES -------------------- */}
+      {activeSubTab === 'sozlamalar' && (
+        <div className="bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+            <div className="flex items-center gap-2">
+              <span className="p-2 bg-blue-50 text-blue-600 rounded-xl">🔧</span>
+              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest">
+                ⚙ Tibbiy Xizmatlar Katalogi va Narxlar Tahriri
+              </h3>
+            </div>
+            <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider">
+              {clinicServices.length} faol xizmatlar topildi
+            </span>
+          </div>
+
+          {srvFeedbackMsg && (
+            <div className="p-3 bg-emerald-50 border border-emerald-250 text-emerald-800 text-xs font-bold rounded-2xl animate-fade-in">
+              {srvFeedbackMsg}
+            </div>
+          )}
+
+          {/* Inline Edit Form Container */}
+          {editingServiceId && (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4.5 space-y-3.5">
+              <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">
+                📝 Xizmat narxini va nomini o'zgartirish oynasi
+              </h4>
+
+              <form onSubmit={handleUpdateServiceSubmit} className="flex flex-col sm:flex-row items-end gap-3">
+                <div className="flex-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Xizmat nomi</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingServiceName}
+                    onChange={(e) => setEditingServiceName(e.target.value)}
+                    className="w-full bg-white border border-slate-250 text-xs font-bold text-slate-800 rounded-xl px-3 py-2 focus:outline-none"
+                  />
+                </div>
+
+                <div className="w-full sm:w-48 shrink-0">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Narxi (UZS)</label>
+                  <input
+                    type="number"
+                    required
+                    value={editingServicePrice}
+                    onChange={(e) => setEditingServicePrice(parseInt(e.target.value) || 0)}
+                    className="w-full bg-white border border-slate-250 text-xs font-bold text-slate-800 rounded-xl px-3 py-2 focus:outline-none font-mono"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setEditingServiceId(null)}
+                    className="px-3.5 py-2.5 bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2.5 bg-[#0284c7] hover:bg-cyan-700 text-white text-xs font-black rounded-xl shadow-md transition-all shrink-0"
+                  >
+                    Yangilash✓
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* List of services in a table */}
+          <div className="divide-y divide-slate-100 border border-slate-150 rounded-2xl overflow-hidden shadow-xs">
+            {clinicServices.map((srv) => (
+              <div key={srv.id} className="p-3.5 bg-white hover:bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
+                <div>
+                  <h4 className="text-xs font-extrabold text-slate-800">{srv.name}</h4>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">
+                    Samarqand filiali | ID: {srv.id}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-4 self-end sm:self-center">
+                  <span className="text-xs font-extrabold font-mono text-cyan-650 bg-cyan-50 px-3 py-1 rounded-lg border border-cyan-100">
+                    {srv.price.toLocaleString('uz-UZ')} so'm
+                  </span>
+
+                  <button
+                    onClick={() => startEditingService(srv)}
+                    className="px-3.5 py-1.5 border border-slate-200 hover:bg-slate-100 text-slate-650 rounded-lg text-xs font-bold cursor-pointer transition-all shrink-0"
+                  >
+                    Tahrirlash/Edit
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ----------------- FOOTER (SCREENSHOT 5) ----------------- */}
+      <footer className="pt-8 border-t border-slate-200 mt-10">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 font-sans text-xs text-slate-400 font-semibold select-none pb-4">
+          <p>© 2025-2026 DStoma Clinic Boss Panel. Barcha huquqlar himoyalangan.</p>
+          <div className="flex items-center gap-1.5 text-slate-500">
+            Klinika hisoboti avtomatik tarzda shakllanadi.
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

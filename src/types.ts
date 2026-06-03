@@ -41,6 +41,12 @@ export interface Patient {
   passportSerial: string;
   phone: string;
   telegramChatId?: string;
+  birthDate?: string;
+  password?: string;
+  bloodGroup?: string;
+  allergies?: string;
+  chronicDiseases?: string;
+  hasInfection?: boolean;
 }
 
 export interface QueueItem {
@@ -51,9 +57,12 @@ export interface QueueItem {
   doctorId: string;
   serviceId: string;
   number: number;
-  status: 'pending' | 'calling' | 'completed' | 'cancelled';
+  status: 'pending' | 'calling' | 'in_progress' | 'completed' | 'cancelled';
   rating?: number; // feedback stars 1-5
   createdAt: string; // ISO string
+  hasInfection?: boolean; // Django models matching
+  medicalNotes?: string;  // Django models matching
+  passportSerial?: string; // Django models matching
 }
 
 export interface CodeSnippet {
