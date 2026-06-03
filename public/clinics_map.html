@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DStoma - Interactive Dental Clinics Map</title>
+    <!-- Tailwind CSS for elegant design -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #map {
+            width: 100%;
+            height: 100%;
+            min-height: 500px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 antialiased min-h-screen flex flex-col justify-between">
+
+    <!-- Header Section -->
+    <header class="bg-cyan-700 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-white/10 hover:bg-white/20 transition-colors rounded-xl flex items-center justify-center text-xl shadow-inner border border-white/20">
+                    🦷
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight">DStoma Queue System</h1>
+                    <p class="text-[10px] text-cyan-200 uppercase tracking-widest font-extrabold leading-none mt-0.5">Klinikalar Xaritasi</p>
+                </div>
+            </div>
+            <a href="/" class="text-xs bg-white text-cyan-700 px-4 py-2 font-bold rounded-xl transition-all hover:bg-cyan-50 shadow-sm cursor-pointer">
+                ⬅ Back to Queue System
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
+        <div class="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100 grid grid-cols-1 lg:grid-cols-12 min-h-[580px]">
+            
+            <!-- Left Sidebar Navigation -->
+            <div class="lg:col-span-4 p-6 bg-slate-50 border-r border-slate-100 flex flex-col justify-between">
+                <div>
+                    <h3 class="text-base font-bold text-slate-800 flex items-center gap-2 mb-1">
+                        🏢 Klinika Filiallari (Multi-Tenant)
+                    </h3>
+                    <p class="text-xs text-slate-500 mb-6 leading-relaxed">
+                        O'zingizga eng yaqin stomatologiya klinikasini bosing va to'g'ridan-to'g'ri navbat oling.
+                    </p>
+
+                    <!-- Interactive Clinic List Cards -->
+                    <div class="space-y-4" id="clinics-list">
+                        <!-- Samarqand Card -->
+                        <div onclick="focusClinic(0)" class="p-4 bg-white rounded-xl border border-slate-200 hover:border-cyan-500 hover:shadow-md cursor-pointer transition-all duration-300 group">
+                            <div class="flex items-center justify-between text-[10px] font-bold text-cyan-600 mb-1 font-mono">
+                                <span>samarqand.dstoma.uz</span>
+                                <span class="text-amber-500">★ 4.8</span>
+                            </div>
+                            <h4 class="text-sm font-bold text-slate-800 group-hover:text-cyan-700 transition-colors">DStoma Samarqand</h4>
+                            <p class="text-xs text-slate-500 mt-1 mb-2">Dahbed ko'chasi 32-uy, Samarqand shahri</p>
+                            <span class="text-[11px] font-semibold text-slate-400">📞 +998 (93) 123-45-01</span>
+                        </div>
+
+                        <!-- Buxoro Card -->
+                        <div onclick="focusClinic(1)" class="p-4 bg-white rounded-xl border border-slate-200 hover:border-cyan-500 hover:shadow-md cursor-pointer transition-all duration-300 group">
+                            <div class="flex items-center justify-between text-[10px] font-bold text-cyan-600 mb-1 font-mono">
+                                <span>buxoro.dstoma.uz</span>
+                                <span class="text-amber-500">★ 4.6</span>
+                            </div>
+                            <h4 class="text-sm font-bold text-slate-800 group-hover:text-cyan-700 transition-colors">DStoma Buxoro</h4>
+                            <p class="text-xs text-slate-500 mt-1 mb-2">Bahauddin Naqshband ko'chasi 110-uy, Buxoro shahri</p>
+                            <span class="text-[11px] font-semibold text-slate-400">📞 +998 (93) 123-45-02</span>
+                        </div>
+
+                        <!-- Toshkent Card -->
+                        <div onclick="focusClinic(2)" class="p-4 bg-white rounded-xl border border-slate-200 hover:border-cyan-500 hover:shadow-md cursor-pointer transition-all duration-300 group">
+                            <div class="flex items-center justify-between text-[10px] font-bold text-cyan-600 mb-1 font-mono">
+                                <span>toshkent.dstoma.uz</span>
+                                <span class="text-amber-500">★ 4.9</span>
+                            </div>
+                            <h4 class="text-sm font-bold text-slate-800 group-hover:text-cyan-700 transition-colors">DStoma Toshkent</h4>
+                            <p class="text-xs text-slate-500 mt-1 mb-2">Amir Temur shoh ko'chasi 45-uy, Toshkent shahri</p>
+                            <span class="text-[11px] font-semibold text-slate-400">📞 +998 (93) 123-45-03</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Django Copy Hint -->
+                <div class="mt-6 bg-cyan-50 border border-cyan-100 p-3.5 rounded-xl text-[11px] text-cyan-700 leading-normal">
+                    <p class="font-bold flex items-center gap-1 text-cyan-800 mb-1">
+                        💡 Django Dasturchi Uchun:
+                    </p>
+                    Ushbu andoza Google Maps API orqali ishlaydi. Uni serverga bog'lash uchun klinikalarni bazadan <code class="bg-white px-1 text-rose-500 font-mono text-[10px] rounded">json_script</code> filtri ko'rinishida JS datchigiga uzatishingiz kifoya.
+                </div>
+            </div>
+
+            <!-- Right Map Container -->
+            <div class="lg:col-span-8 relative bg-slate-200 min-h-[500px]">
+                <div id="map"></div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 border-t border-slate-800 py-6 text-center text-slate-400 text-xs">
+        <p>&copy; 2026 DStoma Queue. Multi-tenant electronic medical queuing architecture.</p>
+    </footer>
+
+    <!-- Hardcoded Clinics JSON Data (Acts as Django Context Data Simulator) -->
+    <script id="clinics-data" type="application/json">
+        [
+            {
+                "id": "samarqand",
+                "name": "DStoma Samarqand",
+                "subdomain": "samarqand",
+                "address": "Dahbed ko'chasi 32-uy, Samarqand shahri",
+                "phone": "+998 (93) 123-45-01",
+                "latitude": 39.6542,
+                "longitude": 66.9597
+            },
+            {
+                "id": "buxoro",
+                "name": "DStoma Buxoro",
+                "subdomain": "buxoro",
+                "address": "Bahauddin Naqshband ko'chasi 110-uy, Buxoro shahri",
+                "phone": "+998 (93) 123-45-02",
+                "latitude": 39.7747,
+                "longitude": 64.4286
+            },
+            {
+                "id": "toshkent",
+                "name": "DStoma Toshkent (Bosh Ofis)",
+                "subdomain": "toshkent",
+                "address": "Amir Temur shoh ko'chasi 45-uy, Toshkent shahri",
+                "phone": "+998 (93) 123-45-03",
+                "latitude": 41.2995,
+                "longitude": 69.2401
+            }
+        ]
+    </script>
+
+    <!-- Map Script -->
+    <script>
+        let map;
+        let markers = [];
+        let infoWindow;
+        let clinics = [];
+
+        function initMap() {
+            // Load clinic coordinates
+            const dataElement = document.getElementById('clinics-data');
+            clinics = JSON.parse(dataElement.textContent || '[]');
+
+            const defaultCoords = { lat: 39.6542, lng: 66.9597 }; // Start centered at Samarkand
+
+            // Set up Google Map canvas
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 8,
+                center: defaultCoords,
+                mapId: 'DEMO_MAP_ID' // Required for advanced element markers
+            });
+
+            infoWindow = new google.maps.InfoWindow();
+
+            // Loop and place medical clinic markers
+            clinics.forEach((clinic, index) => {
+                if (!clinic.latitude || !clinic.longitude) return;
+
+                const position = { 
+                    lat: parseFloat(clinic.latitude), 
+                    lng: parseFloat(clinic.longitude) 
+                };
+
+                // Advanced Marker Pin Styling
+                const marker = new google.maps.marker.AdvancedMarkerElement({
+                    map: map,
+                    position: position,
+                    title: clinic.name
+                });
+
+                markers.push(marker);
+
+                // Add popups/infowindows 
+                marker.addListener("gmp-click", () => {
+                    openClinicPopUp(clinic, marker);
+                });
+            });
+        }
+
+        function openClinicPopUp(clinic, anchor) {
+            const contentString = `
+                <div style="padding: 10px; font-family: sans-serif; max-width: 260px;">
+                    <span style="font-size: 10px; font-weight: bold; background-color: #e0f7fa; color: #006064; padding: 2px 6px; border-radius: 4px; font-family: monospace;">
+                        ${clinic.subdomain}.dstoma.uz
+                    </span>
+                    <h4 style="margin: 6px 0 4px 0; color: #0891b2; font-weight: bold; font-size: 14px;">${clinic.name}</h4>
+                    <p style="margin: 0 0 6px 0; font-size: 12px; color: #4b5563;">📍 ${clinic.address}</p>
+                    <p style="margin: 0 0 10px 0; font-size: 12px; font-weight: 500;">📞 Tel: <a href="tel:${clinic.phone}" style="color: #0891b2; text-decoration: underline;">${clinic.phone}</a></p>
+                    <a href="/?tab=bemor&clinic=${clinic.id}" 
+                       style="display: block; text-align: center; background-color: #0891b2; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 11px; font-weight: bold; transition: opacity 0.2s;">
+                       Onlayn Navbat Olish
+                    </a>
+                </div>
+            `;
+            infoWindow.setContent(contentString);
+            infoWindow.open({
+                anchor: anchor,
+                map: map
+            });
+        }
+
+        // Sidebar click trigger
+        function focusClinic(index) {
+            const clinic = clinics[index];
+            const marker = markers[index];
+            if (!clinic || !marker) return;
+
+            map.setZoom(13);
+            map.panTo({ lat: parseFloat(clinic.latitude), lng: parseFloat(clinic.longitude) });
+            openClinicPopUp(clinic, marker);
+        }
+    </script>
+
+    <!-- Google Maps API Bootstrapper -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=&callback=initMap&v=weekly&libraries=marker" defer></script>
+
+</body>
+</html>
