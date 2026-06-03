@@ -12,9 +12,34 @@ import ClientDashboard from './components/ClientDashboard';
 import DoctorDashboard from './components/DoctorDashboard';
 import DirectorDashboard from './components/DirectorDashboard';
 import DjangoSolutions from './components/DjangoSolutions';
-import { Activity, ShieldAlert, Cpu, HeartPulse, User, Users, FolderKanban, Terminal, ToggleLeft, ToggleRight, Sparkles } from 'lucide-react';
+import { DjangoAPI, getApiUrl } from './services/api';
+import { 
+  Activity, 
+  ShieldAlert, 
+  Cpu, 
+  HeartPulse, 
+  User, 
+  Users, 
+  FolderKanban, 
+  Terminal, 
+  ToggleLeft, 
+  ToggleRight, 
+  Sparkles,
+  Settings2,
+  Server,
+  Wifi,
+  WifiOff,
+  AlertCircle
+} from 'lucide-react';
 
 export default function App() {
+  // Live API States
+  const [isLiveAPIMode, setIsLiveAPIMode] = useState<boolean>(false);
+  const [apiUrlInput, setApiUrlInput] = useState<string>(getApiUrl());
+  const [apiLoading, setApiLoading] = useState<boolean>(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [showApiSettings, setShowApiSettings] = useState<boolean>(false);
+
   // Master States
   const [clinics, setClinics] = useState<Clinic[]>(INITIAL_CLINICS);
   const [doctors, setDoctors] = useState<Doctor[]>(INITIAL_DOCTORS);
@@ -86,6 +111,41 @@ export default function App() {
     return () => clearInterval(interval);
   }, [autoSimulationActive, clinics, doctors, services, queues]);
 
+  // Fetch real data from Django REST API when Live mode is enabled
+  useEffect(() => {
+    if (!isLiveAPIMode) {
+      // Return to local database simulation
+      setClinics(INITIAL_CLINICS);
+      setDoctors(INITIAL_DOCTORS);
+      setQueues(INITIAL_QUEUES);
+      setApiError(null);
+      return;
+    }
+
+    const loadRealData = async () => {
+      setApiLoading(true);
+      setApiError(null);
+      try {
+        const [fetchedClinics, fetchedDoctors, fetchedQueues] = await Promise.all([
+          DjangoAPI.getClinics(),
+          DjangoAPI.getDoctors(),
+          DjangoAPI.getQueues()
+        ]);
+        setClinics(fetchedClinics);
+        setDoctors(fetchedDoctors);
+        setQueues(fetchedQueues);
+        setApiLoading(false);
+      } catch (err: any) {
+        console.error("Django loading error:", err);
+        setApiError(err.toString());
+        setIsLiveAPIMode(false); // Graceful fallback
+        setApiLoading(false);
+      }
+    };
+
+    loadRealData();
+  }, [isLiveAPIMode]);
+
   // Handle URL parameters for SEO and Navigation on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -150,103 +210,173 @@ export default function App() {
   }, [activeTab, selectedClinic]);
 
   // Master Handlers
-  const handleAddQueue = (newQueue: QueueItem) => {
-    setQueues(prev => [...prev, newQueue]);
-    
-    // Increment patient counter
-    setClinics(prev => prev.map(c => {
-      if (c.id === newQueue.clinicId) {
-        return { ...c, activePatients: c.activePatients + 1 };
+  const handleAddQueue = async (newQueue: QueueItem) => {
+    if (isLiveAPIMode) {
+      try {
+        const created = await DjangoAPI.createQueueItem({
+          clinicId: newQueue.clinicId,
+          doctorId: newQueue.doctorId,
+          serviceId: newQueue.serviceId,
+          patientName: newQueue.patientName,
+          patientPhone: newQueue.patientPhone
+        });
+        setQueues(prev => [...prev, created]);
+      } catch (err: any) {
+        console.error("Django booking error:", err);
+        alert(`Django bazasiga saqlashda xatolik: ${err.message || err}`);
       }
-      return c;
-    }));
-  };
-
-  const handleCancelQueue = (id: string) => {
-    setQueues(prev => prev.map(q => {
-      if (q.id === id) {
-        return { ...q, status: 'cancelled' };
-      }
-      return q;
-    }));
-
-    // Adjust counter
-    const item = queues.find(q => q.id === id);
-    if (item) {
+    } else {
+      setQueues(prev => [...prev, newQueue]);
+      
+      // Increment patient counter
       setClinics(prev => prev.map(c => {
-        if (c.id === item.clinicId && c.activePatients > 0) {
-          return { ...c, activePatients: c.activePatients - 1 };
+        if (c.id === newQueue.clinicId) {
+          return { ...c, activePatients: c.activePatients + 1 };
         }
         return c;
       }));
     }
   };
 
-  const handleUpdateQueueStatus = (id: string, newStatus: QueueItem['status']) => {
-    setQueues(prev => prev.map(q => {
-      if (q.id === id) {
-        return { ...q, status: newStatus };
+  const handleCancelQueue = async (id: string) => {
+    if (isLiveAPIMode) {
+      try {
+        const updated = await DjangoAPI.updateQueueStatus(id, 'cancelled');
+        setQueues(prev => prev.map(q => q.id === id ? updated : q));
+      } catch (err: any) {
+        console.error("Django cancel error:", err);
+        alert(`Navbatni bekor qilishda xatolik: ${err.message || err}`);
       }
-      return q;
-    }));
+    } else {
+      setQueues(prev => prev.map(q => {
+        if (q.id === id) {
+          return { ...q, status: 'cancelled' };
+        }
+        return q;
+      }));
 
-    // If completed or cancelled, reduce the active patients count
-    const item = queues.find(q => q.id === id);
-    if (item && (newStatus === 'completed' || newStatus === 'cancelled')) {
+      // Adjust counter
+      const item = queues.find(q => q.id === id);
+      if (item) {
+        setClinics(prev => prev.map(c => {
+          if (c.id === item.clinicId && c.activePatients > 0) {
+            return { ...c, activePatients: c.activePatients - 1 };
+          }
+          return c;
+        }));
+      }
+    }
+  };
+
+  const handleUpdateQueueStatus = async (id: string, newStatus: QueueItem['status']) => {
+    if (isLiveAPIMode) {
+      try {
+        const updated = await DjangoAPI.updateQueueStatus(id, newStatus);
+        setQueues(prev => prev.map(q => q.id === id ? updated : q));
+      } catch (err: any) {
+        console.error("Django status update error:", err);
+        alert(`Statusni o'zgartirishda xatolik: ${err.message || err}`);
+      }
+    } else {
+      setQueues(prev => prev.map(q => {
+        if (q.id === id) {
+          return { ...q, status: newStatus };
+        }
+        return q;
+      }));
+
+      // If completed or cancelled, reduce the active patients count
+      const item = queues.find(q => q.id === id);
+      if (item && (newStatus === 'completed' || newStatus === 'cancelled')) {
+        setClinics(prev => prev.map(c => {
+          if (c.id === item.clinicId && c.activePatients > 0) {
+            return { ...c, activePatients: c.activePatients - 1 };
+          }
+          return c;
+        }));
+      }
+    }
+  };
+
+  const handleUpdateDoctorRating = async (id: string, rating: number) => {
+    if (isLiveAPIMode) {
+      try {
+        const updated = await DjangoAPI.rateQueueItem(id, rating);
+        setQueues(prev => prev.map(q => q.id === id ? updated : q));
+      } catch (err: any) {
+        console.error("Django rating error:", err);
+        alert(`Baholashni saqlashda xatolik: ${err.message || err}`);
+      }
+    } else {
+      // 1. Update rating in the QueueItem
+      setQueues(prev => prev.map(q => {
+        if (q.id === id) {
+          return { ...q, rating };
+        }
+        return q;
+      }));
+
+      // 2. Recalculate specific doctor rating statistics
+      const queueObj = queues.find(q => q.id === id);
+      if (!queueObj) return;
+
+      setDoctors(prev => prev.map(d => {
+        if (d.id === queueObj.doctorId) {
+          const totalRatingPoints = (d.rating * d.ratingCount) + rating;
+          const newCount = d.ratingCount + 1;
+          return {
+            ...d,
+            ratingCount: newCount,
+            rating: parseFloat((totalRatingPoints / newCount).toFixed(2))
+          };
+        }
+        return d;
+      }));
+    }
+  };
+
+  const handleUpdateClinicSubscription = async (clinicId: string, status: 'active' | 'suspended' | 'trial', nextDueDate: string) => {
+    if (isLiveAPIMode) {
+      try {
+        const updated = await DjangoAPI.updateClinicSubscription(clinicId, status, nextDueDate);
+        setClinics(prev => prev.map(c => c.id === clinicId ? updated : c));
+      } catch (err: any) {
+        console.error("Django subscription update error:", err);
+        alert(`Litsenziyani o'zgartirishda xatolik: ${err.message || err}`);
+      }
+    } else {
       setClinics(prev => prev.map(c => {
-        if (c.id === item.clinicId && c.activePatients > 0) {
-          return { ...c, activePatients: c.activePatients - 1 };
+        if (c.id === clinicId) {
+          return { ...c, subscriptionStatus: status, nextPaymentDate: nextDueDate };
         }
         return c;
       }));
     }
   };
 
-  const handleUpdateDoctorRating = (id: string, rating: number) => {
-    // 1. Update rating in the QueueItem
-    setQueues(prev => prev.map(q => {
-      if (q.id === id) {
-        return { ...q, rating };
-      }
-      return q;
-    }));
+  const handleToggleClinicStatus = async (clinicId: string) => {
+    const targetClinic = clinics.find(c => c.id === clinicId);
+    if (!targetClinic) return;
+    const current = targetClinic.subscriptionStatus || 'active';
+    const nextStatus: 'active' | 'suspended' | 'trial' = current === 'suspended' ? 'active' : 'suspended';
+    const nextDate = targetClinic.nextPaymentDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    // 2. Recalculate specific doctor rating statistics
-    const queueObj = queues.find(q => q.id === id);
-    if (!queueObj) return;
-
-    setDoctors(prev => prev.map(d => {
-      if (d.id === queueObj.doctorId) {
-        const totalRatingPoints = (d.rating * d.ratingCount) + rating;
-        const newCount = d.ratingCount + 1;
-        return {
-          ...d,
-          ratingCount: newCount,
-          rating: parseFloat((totalRatingPoints / newCount).toFixed(2))
-        };
+    if (isLiveAPIMode) {
+      try {
+        const updated = await DjangoAPI.updateClinicSubscription(clinicId, nextStatus, nextDate);
+        setClinics(prev => prev.map(c => c.id === clinicId ? updated : c));
+      } catch (err: any) {
+        console.error("Django toggle clinic status error:", err);
+        alert(`Klinika holatini o'zgartirishda xatolik: ${err.message || err}`);
       }
-      return d;
-    }));
-  };
-
-  const handleUpdateClinicSubscription = (clinicId: string, status: 'active' | 'suspended' | 'trial', nextDueDate: string) => {
-    setClinics(prev => prev.map(c => {
-      if (c.id === clinicId) {
-        return { ...c, subscriptionStatus: status, nextPaymentDate: nextDueDate };
-      }
-      return c;
-    }));
-  };
-
-  const handleToggleClinicStatus = (clinicId: string) => {
-    setClinics(prev => prev.map(c => {
-      if (c.id === clinicId) {
-        const current = c.subscriptionStatus || 'active';
-        const next: 'active' | 'suspended' | 'trial' = current === 'suspended' ? 'active' : 'suspended';
-        return { ...c, subscriptionStatus: next };
-      }
-      return c;
-    }));
+    } else {
+      setClinics(prev => prev.map(c => {
+        if (c.id === clinicId) {
+          return { ...c, subscriptionStatus: nextStatus };
+        }
+        return c;
+      }));
+    }
   };
 
   return (
@@ -352,6 +482,151 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* Django-Railway Integration Hub Panel */}
+      <div id="django-integration-banner" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+        <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-lg border border-slate-800 relative overflow-hidden">
+          {/* Ambient Glow */}
+          <div className="absolute right-0 top-0 w-64 h-64 pointer-events-none opacity-20 bg-[radial-gradient(circle,rgba(6,182,212,0.15),transparent_70%)]"></div>
+
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 relative z-10">
+            <div className="flex items-center gap-3.5">
+              <div className="p-3 bg-cyan-950 text-cyan-400 rounded-xl border border-cyan-800/50">
+                <Server className="w-6 h-6 animate-pulse" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                  Django va Railway Integratsiyasi
+                  {isLiveAPIMode ? (
+                    <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] rounded-full flex items-center gap-1 font-semibold">
+                      <Wifi className="w-3 h-3" /> Jonli API faol
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 bg-slate-800 border border-slate-750 text-slate-400 text-[10px] rounded-full flex items-center gap-1 font-semibold">
+                      <WifiOff className="w-3 h-3" /> Simulyatsiya Rejimi
+                    </span>
+                  )}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Ushbu React interfeysini o'zingizning Railway-dagi Django REST API-ingiz bilan oson birlashtiring.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => setShowApiSettings(!showApiSettings)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-705 active:scale-95 text-xs font-bold text-slate-200 rounded-xl transition-all border border-slate-700 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Settings2 className="w-4 h-4 text-cyan-400" />
+                Integratsiya Sozlamalari
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsLiveAPIMode(!isLiveAPIMode);
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center gap-2 cursor-pointer ${
+                  isLiveAPIMode
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                    : 'bg-cyan-600 hover:bg-cyan-700 text-white'
+                }`}
+              >
+                {isLiveAPIMode ? 'Simulyatsiyaga o\'tish' : 'Jonli API-ga ulanish'}
+              </button>
+            </div>
+          </div>
+
+          {/* Settings Section (CORS instructions, API url changer) */}
+          <AnimatePresence>
+            {(showApiSettings || apiError) && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="mt-5 pt-5 border-t border-slate-850 space-y-4 overflow-hidden"
+              >
+                {apiLoading && (
+                  <div className="p-3 bg-cyan-950/40 border border-cyan-800/40 text-cyan-300 rounded-xl text-xs flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin"></div>
+                    Django bazasidan ma'lumotlar yuklanmoqda...
+                  </div>
+                )}
+
+                {apiError && (
+                  <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-300 rounded-xl text-xs flex items-start gap-2.5">
+                    <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                    <div className="text-left">
+                      <p className="font-bold">Ulanish Xatoligi yuz berdi:</p>
+                      <p className="opacity-90 mt-1 select-text font-mono text-[11px]">{apiError}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-left">
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">
+                      Railway Django API Base URL:
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        value={apiUrlInput}
+                        onChange={(e) => setApiUrlInput(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500 flex-1 font-mono"
+                        placeholder="https://django-api.up.railway.app"
+                      />
+                      <button 
+                        onClick={() => {
+                          localStorage.setItem('dstoma_custom_api_url', apiUrlInput);
+                          alert('API manzili muvaffaqiyatli yangilandi!');
+                          // Restart connection if turned on
+                          if (isLiveAPIMode) {
+                            setIsLiveAPIMode(false);
+                            setTimeout(() => setIsLiveAPIMode(true), 200);
+                          }
+                        }}
+                        className="px-3 bg-cyan-600 hover:bg-cyan-700 text-xs font-extrabold rounded-xl text-white transition-all active:scale-95 cursor-pointer"
+                      >
+                        Saqlash
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-normal">
+                      Sizning Railway loyihangiz xizmat ko'rsatuvchi haqiqiy domen nomi.
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-850 text-xs text-slate-300 space-y-2 select-text">
+                    <h4 className="font-bold text-emerald-400 flex items-center gap-1">
+                      💡 Django CORS Sozlamasini Yangilash:
+                    </h4>
+                    <p className="text-[10px] leading-relaxed text-slate-400">
+                      React brauzerdan so'rov yuborganida <strong>CORS xatoligi</strong> bo'lmasligi uchun, Django <code className="text-amber-400 font-mono">settings.py</code> faylingizda quyidagi sozlamalar bo'lishi shart:
+                    </p>
+                    <pre className="text-[9px] bg-slate-900 p-2 rounded border border-slate-800 text-blue-200 overflow-x-auto font-mono">
+{`INSTALLED_APPS = [
+    ...
+    'corsheaders',
+]
+
+MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
+    ...
+]
+
+CORS_ALLOWED_ORIGINS = [
+    "https://dstoma-navbat.vercel.app",  # Sizning Vercel manzilingiz
+    "http://localhost:3000",
+]`}
+                    </pre>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
 
       {/* Main Core App Workspace with Staggered Transition */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
