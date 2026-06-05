@@ -9,11 +9,15 @@ export interface Clinic {
   logo: string;
   rating: number;
   activePatients: number;
+  mapLink?: string; // Google-Yandex Map link for full integration
   // SaaS Subscription Info
   rentalPrice?: number; // Monthly subscription fee in UZS
   nextPaymentDate?: string;
   subscriptionStatus?: 'active' | 'suspended' | 'trial';
   ownerName?: string;
+  // System owner-provided credentials
+  login?: string;
+  password?: string;
 }
 
 export interface Doctor {
@@ -25,6 +29,9 @@ export interface Doctor {
   ratingCount: number;
   image: string;
   status: 'idle' | 'busy' | 'away';
+  // System owner-provided credentials
+  login?: string;
+  password?: string;
 }
 
 export interface Service {
@@ -63,6 +70,17 @@ export interface QueueItem {
   hasInfection?: boolean; // Django models matching
   medicalNotes?: string;  // Django models matching
   passportSerial?: string; // Django models matching
+  telegramChatId?: string; // Telegram Chat ID for automated updates
+}
+
+export interface SaaSPayment {
+  id: string;
+  clinicId: string;
+  clinicName: string;
+  amount: number;
+  dueDate: string;
+  paymentDate?: string;
+  status: 'pending_approval' | 'confirmed' | 'unpaid';
 }
 
 export interface CodeSnippet {

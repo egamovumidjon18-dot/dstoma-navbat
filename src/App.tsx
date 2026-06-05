@@ -6,14 +6,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { INITIAL_CLINICS, INITIAL_DOCTORS, INITIAL_SERVICES, INITIAL_QUEUES } from './data';
-import { Clinic, Doctor, Service, QueueItem } from './types';
+import { Clinic, Doctor, Service, QueueItem, SaaSPayment } from './types';
 import ClinicMap from './components/ClinicMap';
 import ClientDashboard from './components/ClientDashboard';
 import DoctorDashboard from './components/DoctorDashboard';
 import DirectorDashboard from './components/DirectorDashboard';
-import DjangoSolutions from './components/DjangoSolutions';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
-import { DjangoAPI, getApiUrl } from './services/api';
+import { TRANSLATIONS, Language } from './translations';
+import { sendQueueCreatedNotification, sendQueueStatusNotification } from './services/telegram';
 import { 
   Activity, 
   ShieldAlert, 
@@ -35,13 +35,6 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  // Live API States
-  const [isLiveAPIMode, setIsLiveAPIMode] = useState<boolean>(false);
-  const [apiUrlInput, setApiUrlInput] = useState<string>(getApiUrl());
-  const [apiLoading, setApiLoading] = useState<boolean>(false);
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [showApiSettings, setShowApiSettings] = useState<boolean>(false);
-
   // Master States
   const [clinics, setClinics] = useState<Clinic[]>(INITIAL_CLINICS);
   const [doctors, setDoctors] = useState<Doctor[]>(INITIAL_DOCTORS);
@@ -49,104 +42,176 @@ export default function App() {
   const [queues, setQueues] = useState<QueueItem[]>(INITIAL_QUEUES);
   
   // Navigation
-  const [activeTab, setActiveTab] = useState<'bemor' | 'shifokor' | 'boshliq' | 'kod' | 'superadmin'>('bemor');
-  const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(INITIAL_CLINICS[0]); // Starts at Samarqand
+  const [activeTab, setActiveTab] = useState<'bemor' | 'shifokor' | 'boshliq' | 'superadmin'>('bemor');
+  const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null); // Starts at null (not yet selected)
 
-  // Auto queue generator simulator state
-  const [autoSimulationActive, setAutoSimulationActive] = useState<boolean>(true);
-  const [simMessage, setSimMessage] = useState<string>('');
+  // 3-Language and Auth states
+  const [language, setLanguage] = useState<Language>('uz');
+  const [currentUser, setCurrentUser] = useState<{
+    type: 'superadmin' | 'director' | 'doctor';
+    id?: string;
+    clinicId?: string;
+    name?: string;
+  } | null>(null);
 
-  // 10s auto-refresh simulator
-  useEffect(() => {
-    if (!autoSimulationActive) return;
+  // Login Form input fields
+  const [authUsername, setAuthUsername] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
 
-    const interval = setInterval(() => {
-      // Pick a random clinic
-      const randomClinic = clinics[Math.floor(Math.random() * clinics.length)];
-      const clinicDoctors = doctors.filter(d => d.clinicId === randomClinic.id);
-      if (clinicDoctors.length === 0) return;
-      const randomDoctor = clinicDoctors[Math.floor(Math.random() * clinicDoctors.length)];
-      const clinicServices = services.filter(s => s.clinicId === randomClinic.id);
-      if (clinicServices.length === 0) return;
-      const randomService = clinicServices[Math.floor(Math.random() * clinicServices.length)];
+  // Stateful Superadmin credentials
+  const [superadminLogin, setSuperadminLogin] = useState('superadmin');
+  const [superadminPassword, setSuperadminPassword] = useState('adminstoma');
 
-      // Patient names
-      const sampleNames = ['Shaxboz Ochilov', 'Dilnoza Karimova', 'Murod Ergashev', 'Nozima To\'rayeva', 'Umid Bozorov', 'Aziza Solihova', 'Bekzod Karimov'];
-      const randomName = sampleNames[Math.floor(Math.random() * sampleNames.length)];
-      const mockPhone = `+998 (97) 333-${Math.floor(10 + Math.random() * 90)}-${Math.floor(10 + Math.random() * 90)}`;
+  // Simulated email inbox (for superadmin password change alerts)
+  const [gmailInboxes, setGmailInboxes] = useState<Array<{
+    id: string;
+    from: string;
+    to: string;
+    subject: string;
+    body: string;
+    time: string;
+    read: boolean;
+  }>>([]);
 
-      // Calculate new queue ticket
-      const sameClinicQueues = queues.filter((q) => q.clinicId === randomClinic.id);
-      const startNum = randomClinic.id === 'samarqand' ? 100 : randomClinic.id === 'buxoro' ? 200 : 300;
-      const maxNum = sameClinicQueues.reduce((max, item) => (item.number > max ? item.number : max), startNum);
-      const ticketNo = maxNum + 1;
+  // Stateful SaaS Payments for Monitoring and Approval
+  const [saasPayments, setSaasPayments] = useState<SaaSPayment[]>([
+    {
+      id: 'pay_1',
+      clinicId: 'samarqand',
+      clinicName: 'DStoma Samarqand',
+      amount: 1500000,
+      dueDate: '2026-05-15',
+      paymentDate: '2026-05-14',
+      status: 'confirmed'
+    },
+    {
+      id: 'pay_2',
+      clinicId: 'toshkent',
+      clinicName: 'DStoma Toshkent',
+      amount: 2000000,
+      dueDate: '2026-05-20',
+      paymentDate: '2026-05-19',
+      status: 'confirmed'
+    },
+    {
+      id: 'pay_3',
+      clinicId: 'buxoro',
+      clinicName: 'DStoma Buxoro',
+      amount: 1200000,
+      dueDate: '2026-06-01',
+      paymentDate: '2026-05-31',
+      status: 'pending_approval'
+    },
+    {
+      id: 'pay_4',
+      clinicId: 'samarqand',
+      clinicName: 'DStoma Samarqand',
+      amount: 1500000,
+      dueDate: '2026-06-15',
+      status: 'unpaid'
+    }
+  ]);
 
-      const newSimQueue: QueueItem = {
-        id: 'sim_q_' + Math.random().toString(36).substr(2, 9),
-        clinicId: randomClinic.id,
-        patientName: randomName,
-        patientPhone: mockPhone,
-        doctorId: randomDoctor.id,
-        serviceId: randomService.id,
-        number: ticketNo,
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      };
+  const triggerGmailNotification = (subject: string, body: string) => {
+    const time = new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+    setGmailInboxes(prev => [
+      {
+        id: 'mail_' + Math.random().toString(),
+        from: 'DStoma Protection <security@dstoma.uz>',
+        to: 'egamovumidjon18@gmail.com',
+        subject,
+        body,
+        time,
+        read: false
+      },
+      ...prev
+    ]);
+  };
 
-      // Add to queues
-      setQueues(prev => [...prev, newSimQueue]);
+  const t = (key: keyof typeof TRANSLATIONS['uz']) => {
+    return TRANSLATIONS[language][key] || TRANSLATIONS['uz'][key] || String(key);
+  };
 
-      // Highlight simulation log
-      setSimMessage(`[Simulyator] Yangi bemor "${randomName}" ${randomClinic.name}ga navbat oldi! Chipta raqami: #${ticketNo}`);
-      setTimeout(() => setSimMessage(''), 6000);
+  // Credential updater callbacks used by Owner (SuperAdmin)
+  const handleUpdateClinicCreds = (clinicId: string, login: string, pass: string) => {
+    setClinics(prev => prev.map(c => c.id === clinicId ? { ...c, login, password: pass } : c));
+  };
 
-      // Increment clinic active patient counter
-      setClinics(prev => prev.map(c => {
-        if (c.id === randomClinic.id) {
-          return { ...c, activePatients: c.activePatients + 1 };
-        }
-        return c;
-      }));
+  const handleUpdateDoctorCreds = (doctorId: string, login: string, pass: string) => {
+    setDoctors(prev => prev.map(d => d.id === doctorId ? { ...d, login, password: pass } : d));
+  };
 
-    }, 20000); // Trigger every 20 seconds to be noticeable but quiet
+  const handleDeleteClinic = (clinicId: string) => {
+    setClinics(prev => prev.filter(c => c.id !== clinicId));
+    // For data integrity, purge doctors and queues linked to this clinic
+    setDoctors(prev => prev.filter(d => d.clinicId !== clinicId));
+    setQueues(prev => prev.filter(q => q.clinicId !== clinicId));
+    if (selectedClinic?.id === clinicId) {
+      setSelectedClinic(null);
+    }
+  };
 
-    return () => clearInterval(interval);
-  }, [autoSimulationActive, clinics, doctors, services, queues]);
+  const handleDeleteDoctor = (doctorId: string) => {
+    setDoctors(prev => prev.filter(d => d.id !== doctorId));
+    // Purge corresponding queues
+    setQueues(prev => prev.filter(q => q.doctorId !== doctorId));
+  };
 
-  // Fetch real data from Django REST API when Live mode is enabled
-  useEffect(() => {
-    if (!isLiveAPIMode) {
-      // Return to local database simulation
-      setClinics(INITIAL_CLINICS);
-      setDoctors(INITIAL_DOCTORS);
-      setQueues(INITIAL_QUEUES);
-      setApiError(null);
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    const userLower = authUsername.trim();
+    const passLower = authPassword.trim();
+
+    // 1. Superadmin check
+    if (userLower === superadminLogin && passLower === superadminPassword) {
+      setCurrentUser({
+        type: 'superadmin',
+        name: t('clinicOwner')
+      });
+      setAuthUsername('');
+      setAuthPassword('');
       return;
     }
 
-    const loadRealData = async () => {
-      setApiLoading(true);
-      setApiError(null);
-      try {
-        const [fetchedClinics, fetchedDoctors, fetchedQueues] = await Promise.all([
-          DjangoAPI.getClinics(),
-          DjangoAPI.getDoctors(),
-          DjangoAPI.getQueues()
-        ]);
-        setClinics(fetchedClinics);
-        setDoctors(fetchedDoctors);
-        setQueues(fetchedQueues);
-        setApiLoading(false);
-      } catch (err: any) {
-        console.error("Django loading error:", err);
-        setApiError(err.toString());
-        setIsLiveAPIMode(false); // Graceful fallback
-        setApiLoading(false);
-      }
-    };
+    // 2. Director checks
+    const matchedClinic = clinics.find(c => c.login === userLower && c.password === passLower);
+    if (matchedClinic) {
+      setCurrentUser({
+        type: 'director',
+        clinicId: matchedClinic.id,
+        name: matchedClinic.ownerName || matchedClinic.name
+      });
+      setSelectedClinic(matchedClinic); // Automatically sync the multi-tenant scope
+      setAuthUsername('');
+      setAuthPassword('');
+      return;
+    }
 
-    loadRealData();
-  }, [isLiveAPIMode]);
+    // 3. Doctor checks
+    const matchedDoctor = doctors.find(d => d.login === userLower && d.password === passLower);
+    if (matchedDoctor) {
+      setCurrentUser({
+        type: 'doctor',
+        id: matchedDoctor.id,
+        clinicId: matchedDoctor.clinicId,
+        name: matchedDoctor.name
+      });
+      setAuthUsername('');
+      setAuthPassword('');
+      return;
+    }
+
+    // Noto'g'ri kalitlar
+    setAuthError(t('credIncorrect'));
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setAuthError(null);
+    setActiveTab('bemor');
+  };
 
   // Handle URL parameters for SEO and Navigation on mount
   useEffect(() => {
@@ -154,7 +219,7 @@ export default function App() {
     const tabParam = params.get('tab');
     const clinicParam = params.get('clinic');
 
-    if (tabParam && ['bemor', 'shifokor', 'boshliq', 'kod', 'superadmin'].includes(tabParam)) {
+    if (tabParam && ['bemor', 'shifokor', 'boshliq', 'superadmin'].includes(tabParam)) {
       setActiveTab(tabParam as any);
     }
     if (clinicParam) {
@@ -213,83 +278,86 @@ export default function App() {
 
   // Master Handlers
   const handleAddQueue = async (newQueue: QueueItem) => {
-    if (isLiveAPIMode) {
-      try {
-        const created = await DjangoAPI.createQueueItem({
-          clinicId: newQueue.clinicId,
-          doctorId: newQueue.doctorId,
-          serviceId: newQueue.serviceId,
-          patientName: newQueue.patientName,
-          patientPhone: newQueue.patientPhone
-        });
-        setQueues(prev => [...prev, created]);
-      } catch (err: any) {
-        console.error("Django booking error:", err);
-        alert(`Django bazasiga saqlashda xatolik: ${err.message || err}`);
+    setQueues(prev => [...prev, newQueue]);
+    
+    // Increment patient counter
+    setClinics(prev => prev.map(c => {
+      if (c.id === newQueue.clinicId) {
+        return { ...c, activePatients: c.activePatients + 1 };
       }
-    } else {
-      setQueues(prev => [...prev, newQueue]);
+      return c;
+    }));
+
+    // Trigger Telegram Notification
+    if (newQueue.telegramChatId) {
+      const clinic = clinics.find(c => c.id === newQueue.clinicId);
+      const doctor = doctors.find(d => d.id === newQueue.doctorId);
+      const service = services.find(s => s.id === newQueue.serviceId);
       
-      // Increment patient counter
-      setClinics(prev => prev.map(c => {
-        if (c.id === newQueue.clinicId) {
-          return { ...c, activePatients: c.activePatients + 1 };
+      const clinicName = clinic ? clinic.name : 'DStoma Clinic';
+      const doctorName = doctor ? doctor.name : 'Shifokor';
+      const serviceName = service ? service.name : 'Tibbiy Xizmat';
+
+      sendQueueCreatedNotification(
+        newQueue.telegramChatId,
+        newQueue.number,
+        newQueue.patientName,
+        clinicName,
+        doctorName,
+        serviceName
+      ).then(success => {
+        if (success) {
+          console.log(`Telegram notification successfully sent for ticket #${newQueue.number}`);
         }
-        return c;
-      }));
+      });
     }
   };
 
   const handleCancelQueue = async (id: string) => {
-    if (isLiveAPIMode) {
-      try {
-        const updated = await DjangoAPI.updateQueueStatus(id, 'cancelled');
-        setQueues(prev => prev.map(q => q.id === id ? updated : q));
-      } catch (err: any) {
-        console.error("Django cancel error:", err);
-        alert(`Navbatni bekor qilishda xatolik: ${err.message || err}`);
+    setQueues(prev => prev.map(q => {
+      if (q.id === id) {
+        return { ...q, status: 'cancelled' };
       }
-    } else {
-      setQueues(prev => prev.map(q => {
-        if (q.id === id) {
-          return { ...q, status: 'cancelled' };
+      return q;
+    }));
+
+    // Adjust counter
+    const item = queues.find(q => q.id === id);
+    if (item) {
+      setClinics(prev => prev.map(c => {
+        if (c.id === item.clinicId && c.activePatients > 0) {
+          return { ...c, activePatients: c.activePatients - 1 };
         }
-        return q;
+        return c;
       }));
 
-      // Adjust counter
-      const item = queues.find(q => q.id === id);
-      if (item) {
-        setClinics(prev => prev.map(c => {
-          if (c.id === item.clinicId && c.activePatients > 0) {
-            return { ...c, activePatients: c.activePatients - 1 };
-          }
-          return c;
-        }));
+      // Trigger Telegram Notification for cancellation
+      if (item.telegramChatId) {
+        const doctor = doctors.find(d => d.id === item.doctorId);
+        const doctorName = doctor ? doctor.name : 'Shifokor';
+        sendQueueStatusNotification(
+          item.telegramChatId,
+          item.number,
+          item.patientName,
+          'cancelled',
+          doctorName
+        );
       }
     }
   };
 
   const handleUpdateQueueStatus = async (id: string, newStatus: QueueItem['status']) => {
-    if (isLiveAPIMode) {
-      try {
-        const updated = await DjangoAPI.updateQueueStatus(id, newStatus);
-        setQueues(prev => prev.map(q => q.id === id ? updated : q));
-      } catch (err: any) {
-        console.error("Django status update error:", err);
-        alert(`Statusni o'zgartirishda xatolik: ${err.message || err}`);
+    setQueues(prev => prev.map(q => {
+      if (q.id === id) {
+        return { ...q, status: newStatus };
       }
-    } else {
-      setQueues(prev => prev.map(q => {
-        if (q.id === id) {
-          return { ...q, status: newStatus };
-        }
-        return q;
-      }));
+      return q;
+    }));
 
-      // If completed or cancelled, reduce the active patients count
-      const item = queues.find(q => q.id === id);
-      if (item && (newStatus === 'completed' || newStatus === 'cancelled')) {
+    // If completed or cancelled, reduce the active patients count
+    const item = queues.find(q => q.id === id);
+    if (item) {
+      if (newStatus === 'completed' || newStatus === 'cancelled') {
         setClinics(prev => prev.map(c => {
           if (c.id === item.clinicId && c.activePatients > 0) {
             return { ...c, activePatients: c.activePatients - 1 };
@@ -297,63 +365,56 @@ export default function App() {
           return c;
         }));
       }
+
+      // Trigger Telegram live update notifications
+      if (item.telegramChatId) {
+        const doctor = doctors.find(d => d.id === item.doctorId);
+        const doctorName = doctor ? doctor.name : 'Shifokor';
+        sendQueueStatusNotification(
+          item.telegramChatId,
+          item.number,
+          item.patientName,
+          newStatus,
+          doctorName
+        );
+      }
     }
   };
 
   const handleUpdateDoctorRating = async (id: string, rating: number) => {
-    if (isLiveAPIMode) {
-      try {
-        const updated = await DjangoAPI.rateQueueItem(id, rating);
-        setQueues(prev => prev.map(q => q.id === id ? updated : q));
-      } catch (err: any) {
-        console.error("Django rating error:", err);
-        alert(`Baholashni saqlashda xatolik: ${err.message || err}`);
+    // 1. Update rating in the QueueItem
+    setQueues(prev => prev.map(q => {
+      if (q.id === id) {
+        return { ...q, rating };
       }
-    } else {
-      // 1. Update rating in the QueueItem
-      setQueues(prev => prev.map(q => {
-        if (q.id === id) {
-          return { ...q, rating };
-        }
-        return q;
-      }));
+      return q;
+    }));
 
-      // 2. Recalculate specific doctor rating statistics
-      const queueObj = queues.find(q => q.id === id);
-      if (!queueObj) return;
+    // 2. Recalculate specific doctor rating statistics
+    const queueObj = queues.find(q => q.id === id);
+    if (!queueObj) return;
 
-      setDoctors(prev => prev.map(d => {
-        if (d.id === queueObj.doctorId) {
-          const totalRatingPoints = (d.rating * d.ratingCount) + rating;
-          const newCount = d.ratingCount + 1;
-          return {
-            ...d,
-            ratingCount: newCount,
-            rating: parseFloat((totalRatingPoints / newCount).toFixed(2))
-          };
-        }
-        return d;
-      }));
-    }
+    setDoctors(prev => prev.map(d => {
+      if (d.id === queueObj.doctorId) {
+        const totalRatingPoints = (d.rating * d.ratingCount) + rating;
+        const newCount = d.ratingCount + 1;
+        return {
+          ...d,
+          ratingCount: newCount,
+          rating: parseFloat((totalRatingPoints / newCount).toFixed(2))
+        };
+      }
+      return d;
+    }));
   };
 
   const handleUpdateClinicSubscription = async (clinicId: string, status: 'active' | 'suspended' | 'trial', nextDueDate: string) => {
-    if (isLiveAPIMode) {
-      try {
-        const updated = await DjangoAPI.updateClinicSubscription(clinicId, status, nextDueDate);
-        setClinics(prev => prev.map(c => c.id === clinicId ? updated : c));
-      } catch (err: any) {
-        console.error("Django subscription update error:", err);
-        alert(`Litsenziyani o'zgartirishda xatolik: ${err.message || err}`);
+    setClinics(prev => prev.map(c => {
+      if (c.id === clinicId) {
+        return { ...c, subscriptionStatus: status, nextPaymentDate: nextDueDate };
       }
-    } else {
-      setClinics(prev => prev.map(c => {
-        if (c.id === clinicId) {
-          return { ...c, subscriptionStatus: status, nextPaymentDate: nextDueDate };
-        }
-        return c;
-      }));
-    }
+      return c;
+    }));
   };
 
   const handleToggleClinicStatus = async (clinicId: string) => {
@@ -361,28 +422,91 @@ export default function App() {
     if (!targetClinic) return;
     const current = targetClinic.subscriptionStatus || 'active';
     const nextStatus: 'active' | 'suspended' | 'trial' = current === 'suspended' ? 'active' : 'suspended';
-    const nextDate = targetClinic.nextPaymentDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    if (isLiveAPIMode) {
-      try {
-        const updated = await DjangoAPI.updateClinicSubscription(clinicId, nextStatus, nextDate);
-        setClinics(prev => prev.map(c => c.id === clinicId ? updated : c));
-      } catch (err: any) {
-        console.error("Django toggle clinic status error:", err);
-        alert(`Klinika holatini o'zgartirishda xatolik: ${err.message || err}`);
+    setClinics(prev => prev.map(c => {
+      if (c.id === clinicId) {
+        return { ...c, subscriptionStatus: nextStatus };
       }
-    } else {
-      setClinics(prev => prev.map(c => {
-        if (c.id === clinicId) {
-          return { ...c, subscriptionStatus: nextStatus };
-        }
-        return c;
-      }));
-    }
+      return c;
+    }));
+  };
+
+  const handleUpdateClinicDetails = (updatedClinic: Clinic) => {
+    setClinics(prev => prev.map(c => c.id === updatedClinic.id ? updatedClinic : c));
+  };
+
+  const handlePaySubscriptionSimulate = (clinicId: string) => {
+    const targetClinic = clinics.find(c => c.id === clinicId);
+    if (!targetClinic) return;
+
+    const newPayment: SaaSPayment = {
+      id: 'pay_' + Math.random().toString(36).substr(2, 9),
+      clinicId: clinicId,
+      clinicName: targetClinic.name,
+      amount: targetClinic.rentalPrice || 1500000,
+      dueDate: new Date().toISOString().split('T')[0],
+      status: 'pending_approval'
+    };
+
+    setSaasPayments(prev => [newPayment, ...prev]);
+  };
+
+  const handleApproveSaaSPayment = (paymentId: string) => {
+    // Finds the target payment invoice
+    const targetPay = saasPayments.find(p => p.id === paymentId);
+    if (!targetPay) return;
+
+    // 1. Mark invoice as confirmed & set paymentDate as today
+    setSaasPayments(prev => prev.map(p => {
+      if (p.id === paymentId) {
+        return {
+          ...p,
+          status: 'confirmed',
+          paymentDate: new Date().toISOString().split('T')[0]
+        };
+      }
+      return p;
+    }));
+
+    // 2. Activate the corresponding clinic subscription, extend next payment due date by 30 days
+    setClinics(prev => prev.map(c => {
+      if (c.id === targetPay.clinicId) {
+        const nextDate = new Date();
+        nextDate.setDate(nextDate.getDate() + 30);
+        return {
+          ...c,
+          subscriptionStatus: 'active',
+          nextPaymentDate: nextDate.toISOString().split('T')[0]
+        };
+      }
+      return c;
+    }));
+  };
+
+  const handleUpdateSuperadminCreds = (newLogin: string, newPass: string) => {
+    setSuperadminLogin(newLogin);
+    setSuperadminPassword(newPass);
+    // Send email copy to egamovumidjon18@gmail.com
+    triggerGmailNotification(
+      "🔑 DStoma Superadmin akkaunt ma'lumotlari muvaffaqiyatli o'zgartirildi",
+      `Hurmatli DStoma tarmog'i egasi,\n\nTizim xavfsizligi bo'limidan xabar: Sizning Superadmin boshqaruv paneliga kirish parametrlaringiz muvaffaqiyatli yangilandi!\n\nYangi Login ma'lumotlari:\n- Yangi Login: ${newLogin}\n- Yangi Parol: ${newPass}\n\nUshbu xat egamovumidjon18@gmail.com elektron pochtangizga avtomatik tarzda xavfsizlik protokoli doirasida yuborildi. Iltimos, hisob ma'lumotlarini begonalarga aslo oshkor qilmang.\n\nHurmat bilan, DStoma SaaS Security Team.`
+    );
   };
 
   const handleAddClinic = (newClinic: Clinic) => {
     setClinics(prev => [...prev, newClinic]);
+    
+    // Auto generate 1-week free trial payment invoice details!
+    const trialInvoice: SaaSPayment = {
+      id: 'pay_trial_' + Math.random().toString(36).substr(2, 9),
+      clinicId: newClinic.id,
+      clinicName: newClinic.name,
+      amount: 0, // Free trial
+      dueDate: newClinic.nextPaymentDate || new Date().toISOString().split('T')[0],
+      paymentDate: new Date().toISOString().split('T')[0],
+      status: 'confirmed' // Confirmed automatically since it is free 0 UZS
+    };
+    setSaasPayments(prev => [trialInvoice, ...prev]);
   };
 
   const handleAddDoctor = (newDoc: Doctor) => {
@@ -393,393 +517,469 @@ export default function App() {
     setServices(prev => prev.map(s => s.id === updatedSrv.id ? updatedSrv : s));
   };
 
+  const handleAddService = (newSrv: Service) => {
+    setServices(prev => [...prev, newSrv]);
+  };
+
+  // Master state for mobile menu drawer sidebar (mobile responsiveness)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 text-slate-800 antialiased font-sans transition-colors duration-500 selection:bg-cyan-600 selection:text-white pb-10">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-[#040814] text-slate-200 antialiased font-sans transition-all duration-300 selection:bg-emerald-500 selection:text-white pb-6">
       
-      {/* Simulation Log Banner */}
-      {simMessage && (
-        <div className="bg-cyan-600 text-white py-2 px-4 shadow-md text-xs font-semibold font-mono tracking-wide flex items-center justify-between gap-4 select-none relative z-50">
-          <span className="flex items-center gap-1.5 animate-pulse">
-            <HeartPulse className="w-4 h-4 text-rose-300" />
-            {simMessage}
-          </span>
-          <button onClick={() => setSimMessage('')} className="text-white bg-slate-800/40 hover:bg-slate-700/40 px-2 py-0.5 rounded text-[10px]">
-            Yopish
-          </button>
-        </div>
-      )}
-
-      {/* Main Nav-Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
-          
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 bg-cyan-600 text-white rounded-xl flex items-center justify-center text-xl shadow-md cursor-default">
-              🦷
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-md font-extrabold text-slate-900 tracking-tight leading-none">DStoma Queue</h1>
-                <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-bold rounded font-mono">v6.0 PWA</span>
+      {/* ---------------- SIDEBAR: LEFT DOCKED MEDICAL RAIL (AS SEEN IN USER PHOTO) ---------------- */}
+      <aside className="w-72 shrink-0 bg-[#0c1225] border-r border-[#1e3256]/60 p-5 flex-col justify-between sticky top-0 h-screen hidden lg:flex select-none z-40">
+        
+        {/* Top Branding Section */}
+        <div className="space-y-6">
+          <div className="flex flex-col items-center justify-center text-center p-5 bg-gradient-to-b from-[#16223f]/40 to-[#0e172e]/25 border border-[#1e3256]/30 rounded-3xl relative overflow-hidden select-none group">
+            <div className="absolute inset-0 bg-gradient-to-tr from-[#ec4899]/5 via-transparent to-[#10b981]/5 opacity-60" />
+            
+            {/* Logo Icon on TOP with pulse & bloom shadow */}
+            <div className="relative mb-3 flex items-center justify-center">
+              <div className="absolute w-16 h-16 bg-[#10b981]/20 blur-xl rounded-full animate-pulse" />
+              <div className="w-15 h-15 rounded-2xl bg-[#091124] border border-[#10b981]/50 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.2)] relative overflow-hidden transition-transform duration-500 hover:scale-105">
+                <div className="absolute inset-0 bg-[radial-gradient(#10b981_10%,transparent_90%)] opacity-20" />
+                <svg viewBox="0 0 100 65" className="w-13 h-10 drop-shadow-[0_0_6px_rgba(16,185,129,0.7)] z-10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {/* Left part: Beautiful contoured tooth */}
+                  <path d="M 32,15 C 24,15 17,18 13,23 C 9,28 9,37 11,44 C 13,51 11,61 15,65 C 18,67 21,58 26,51 C 28,48 30,48 32,51 C 37,58 40,67 43,65 C 47,61 45,51 47,44 C 49,37 49,28 45,23 C 41,18 34,15 32,15 Z" className="stroke-[#10b981] animate-pulse" strokeWidth="2.5" />
+                  {/* Right part: Interlocked D shape capital letter */}
+                  <path d="M 52,15 L 52,65" className="stroke-[#10b981]" strokeWidth="2.5" />
+                  <path d="M 52,15 C 68,15 82,24 82,40 C 82,56 68,65 52,65" className="stroke-[#10b981]" strokeWidth="2.5" />
+                  {/* Internal high-tech custom lines */}
+                  <path d="M 58,26 L 58,54" className="stroke-[#34d399]/60" strokeWidth="1.5" strokeDasharray="2 3" />
+                  <path d="M 64,26 C 70,30 70,50 64,54" className="stroke-[#34d399]" strokeWidth="1.5" />
+                  {/* Smooth connecting bridge */}
+                  <path d="M 44,40 C 47,37 49,37 52,40" className="stroke-[#10b981]" strokeWidth="2" />
+                </svg>
               </div>
-              <p className="text-[11px] text-slate-400 mt-0.5 font-medium">Stomatologiya Klinikalari uchun Elektron Navbat Boshqaruv Tizimi (Multi-Tenant)</p>
+            </div>
+
+            {/* Logo Text Centered Below */}
+            <div className="z-10">
+              <h1 className="text-sm font-bold text-white tracking-wide font-display">DStoma Queue</h1>
+              <div className="flex items-center justify-center gap-1.5 mt-0.5">
+                <span className="px-1.5 py-0.25 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[8px] font-bold rounded font-mono">v6.5 PWA</span>
+                <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">• CRM</span>
+              </div>
             </div>
           </div>
 
-          {/* SIMULATOR SWITCH */}
-          <div className="flex items-center gap-2 text-xs font-semibold bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-            <Cpu className="w-4 h-4 text-cyan-600" />
-            <span className="text-slate-600">Navbat Simulyatori (har 20 soniyada):</span>
-            <button
-              onClick={() => setAutoSimulationActive(s => !s)}
-              className="focus:outline-none transition-all hover:scale-105"
-              title="Avtomatik o'yinchi navbqtlarini simulyatsiya qilish tunikasi"
-            >
-              {autoSimulationActive ? (
-                <ToggleRight className="w-8 h-8 text-cyan-600" />
-              ) : (
-                <ToggleLeft className="w-8 h-8 text-slate-400" />
-              )}
-            </button>
-          </div>
-
-        </div>
-
-        {/* Categories Tab Navigation */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex border-t border-slate-100 overflow-x-auto gap-2 py-2">
+          {/* Sidebar Navigation Items exactly as in mockup */}
+          <nav className="space-y-2 pt-2 text-left">
+            <span className="text-[9px] font-black text-slate-500 block uppercase tracking-widest mb-3 pl-2">{t('categories')}</span>
             
             <button
               onClick={() => setActiveTab('bemor')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+              className={`w-full px-4 py-3.5 rounded-2xl text-xs font-black transition-all flex items-center gap-3 border ${
                 activeTab === 'bemor'
-                  ? 'bg-cyan-600 text-white shadow-sm font-extrabold'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/50 shadow-[inset_0_0_12px_rgba(16,185,129,0.1)]'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/35 border-transparent'
               }`}
             >
-              <User className="w-4 h-4" /> Bemor Kabineti (Mijozlar)
+              <User className={`w-4 h-4 transition-colors ${activeTab === 'bemor' ? 'text-emerald-400' : 'text-slate-400'}`} />
+              <span>{t('bemorTab')}</span>
             </button>
 
             <button
               onClick={() => setActiveTab('shifokor')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+              className={`w-full px-4 py-3.5 rounded-2xl text-xs font-black transition-all flex items-center gap-3 border ${
                 activeTab === 'shifokor'
-                  ? 'bg-cyan-600 text-white shadow-sm font-extrabold'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/50 shadow-[inset_0_0_12px_rgba(16,185,129,0.1)]'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/35 border-transparent'
               }`}
             >
-              <Users className="w-4 h-4" /> Shifokor Paneli (Konsultatsiyalar)
+              <Users className={`w-4 h-4 transition-colors ${activeTab === 'shifokor' ? 'text-emerald-400' : 'text-slate-400'}`} />
+              <span>{t('shifokorTab')}</span>
             </button>
 
             <button
               onClick={() => setActiveTab('boshliq')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+              className={`w-full px-4 py-3.5 rounded-2xl text-xs font-black transition-all flex items-center gap-3 border ${
                 activeTab === 'boshliq'
-                  ? 'bg-cyan-600 text-white shadow-sm font-extrabold'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/50 shadow-[inset_0_0_12px_rgba(16,185,129,0.1)]'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/35 border-transparent'
               }`}
             >
-              <FolderKanban className="w-4 h-4" /> Boss Dashboardi (Boshliq)
-            </button>
-
-            <button
-              onClick={() => setActiveTab('kod')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
-                activeTab === 'kod'
-                  ? 'bg-cyan-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
-              }`}
-            >
-              <Terminal className="w-4 h-4" /> Django Kodlar Yo'riqnomasi
+              <FolderKanban className={`w-4 h-4 transition-colors ${activeTab === 'boshliq' ? 'text-emerald-400' : 'text-slate-400'}`} />
+              <span>{t('boshliqTab')}</span>
             </button>
 
             <button
               onClick={() => setActiveTab('superadmin')}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+              className={`w-full px-4 py-3.5 rounded-2xl text-xs font-black transition-all flex items-center gap-3 border ${
                 activeTab === 'superadmin'
-                  ? 'bg-[#0f172a] text-white shadow-sm font-extrabold'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/50 shadow-[inset_0_0_12px_rgba(16,185,129,0.1)]'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/35 border-transparent'
               }`}
             >
-              <Crown className="w-4 h-4 text-amber-500 fill-current" /> Superadmin SaaS Panel
+              <Crown className={`w-4 h-4 transition-colors ${activeTab === 'superadmin' ? 'text-emerald-400' : 'text-amber-500 fill-current'}`} />
+              <span>{t('superadminTab')}</span>
             </button>
-
-          </div>
+          </nav>
         </div>
-      </header>
 
-      {/* Django-Railway Integration Hub Panel */}
-      <div id="django-integration-banner" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-        <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-lg border border-slate-800 relative overflow-hidden">
-          {/* Ambient Glow */}
-          <div className="absolute right-0 top-0 w-64 h-64 pointer-events-none opacity-20 bg-[radial-gradient(circle,rgba(6,182,212,0.15),transparent_70%)]"></div>
-
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 relative z-10">
-            <div className="flex items-center gap-3.5">
-              <div className="p-3 bg-cyan-950 text-cyan-400 rounded-xl border border-cyan-800/50">
-                <Server className="w-6 h-6 animate-pulse" />
-              </div>
-              <div className="text-left">
-                <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                  Django va Railway Integratsiyasi
-                  {isLiveAPIMode ? (
-                    <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] rounded-full flex items-center gap-1 font-semibold">
-                      <Wifi className="w-3 h-3" /> Jonli API faol
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 bg-slate-800 border border-slate-750 text-slate-400 text-[10px] rounded-full flex items-center gap-1 font-semibold">
-                      <WifiOff className="w-3 h-3" /> Simulyatsiya Rejimi
-                    </span>
-                  )}
-                </h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Ushbu React interfeysini o'zingizning Railway-dagi Django REST API-ingiz bilan oson birlashtiring.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
+        {/* Bottom Sidebar Settings, Lang & Simulation HUD */}
+        <div className="space-y-4 pt-4 border-t border-[#1e3256]/50">
+          
+          {/* Language Switcher and Settings Button Block exactly representing image */}
+          <div className="flex items-center justify-between gap-2.5">
+            <div className="flex items-center bg-[#070b15] p-1 rounded-xl border border-[#1e3256]/40 gap-0.5 flex-1">
               <button
-                onClick={() => setShowApiSettings(!showApiSettings)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-705 active:scale-95 text-xs font-bold text-slate-200 rounded-xl transition-all border border-slate-700 flex items-center gap-1.5 cursor-pointer"
-              >
-                <Settings2 className="w-4 h-4 text-cyan-400" />
-                Integratsiya Sozlamalari
-              </button>
-
-              <button
-                onClick={() => {
-                  setIsLiveAPIMode(!isLiveAPIMode);
-                }}
-                className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center gap-2 cursor-pointer ${
-                  isLiveAPIMode
-                    ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                    : 'bg-cyan-600 hover:bg-cyan-700 text-white'
+                onClick={() => setLanguage('uz')}
+                className={`py-1 text-[10px] font-extrabold rounded-md flex-1 transition-all ${
+                  language === 'uz' ? 'bg-emerald-500 text-[#0c1225] font-black' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                {isLiveAPIMode ? 'Simulyatsiyaga o\'tish' : 'Jonli API-ga ulanish'}
+                UZ
+              </button>
+              <button
+                onClick={() => setLanguage('ru')}
+                className={`py-1 text-[10px] font-extrabold rounded-md flex-1 transition-all ${
+                  language === 'ru' ? 'bg-emerald-500 text-[#0c1225] font-black' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                RU
+              </button>
+              <button
+                onClick={() => setLanguage('en')}
+                className={`py-1 text-[10px] font-extrabold rounded-md flex-1 transition-all ${
+                  language === 'en' ? 'bg-emerald-500 text-[#0c1225] font-black' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                EN
               </button>
             </div>
+
+            <button
+              onClick={() => {
+                const isDoc = currentUser?.type === 'doctor';
+                const isCEO = currentUser?.type === 'director';
+                const isAdmin = currentUser?.type === 'superadmin';
+                alert(`Tizim Sozlamalari: ${language === 'uz' ? 'Sizning hisobingiz' : 'Ваш аккаунт'}: ${currentUser ? currentUser.name : 'Mehmon (Public)'}. Rol: ${isAdmin ? 'SaaS Admin' : isCEO ? 'CEO' : isDoc ? 'Shifokor' : 'Soddalashtirilgan Bemor Kabineti'}`);
+              }}
+              className="p-2.5 bg-[#070b15] hover:bg-slate-800 text-slate-400 hover:text-slate-100 rounded-xl border border-[#1e3256]/40 hover:border-emerald-500/40 transition-all cursor-pointer"
+              title="Hisob Sozlamalari"
+            >
+              <Settings2 className="w-4 h-4" />
+            </button>
           </div>
 
-          {/* Settings Section (CORS instructions, API url changer) */}
-          <AnimatePresence>
-            {(showApiSettings || apiError) && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.2 }}
-                className="mt-5 pt-5 border-t border-slate-850 space-y-4 overflow-hidden"
-              >
-                {apiLoading && (
-                  <div className="p-3 bg-cyan-950/40 border border-cyan-800/40 text-cyan-300 rounded-xl text-xs flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin"></div>
-                    Django bazasidan ma'lumotlar yuklanmoqda...
-                  </div>
-                )}
-
-                {apiError && (
-                  <div className="space-y-3">
-                    <div className="p-4 bg-rose-500/10 border border-rose-500/25 text-rose-300 rounded-2xl text-xs flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5 animate-pulse" />
-                      <div className="text-left space-y-1 flex-1">
-                        <p className="font-bold text-sm text-rose-200">Tarmoq yoki API ulanish xatoligi (Failed to Fetch)</p>
-                        <p className="opacity-90 select-text font-mono text-[11px] bg-slate-950/80 p-2 rounded-lg border border-rose-950 text-rose-400 mt-1">
-                          Xato tafsiloti: {apiError}
-                        </p>
-                        <p className="text-slate-300 text-xs mt-2 leading-relaxed">
-                          Brauzerdan <code className="text-cyan-400 font-mono select-all bg-slate-950 px-1 py-0.5 rounded">{apiUrlInput}</code> domeniga yuborilgan so'rov rad etildi. Bu odatda quyidagi 3 ta sababdan biri tufayli sodir bo'ladi:
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Step-by-Step Fixes */}
-                    <div className="bg-slate-950 p-4.5 rounded-2xl border border-slate-800 text-left space-y-3.5">
-                      <p className="text-xs font-bold text-indigo-400 flex items-center gap-1.5 uppercase tracking-wider">
-                        <Terminal className="w-4 h-4 text-indigo-400" /> Muammoni bartaraf etish bosqichlari (Troubleshooting):
-                      </p>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-850 space-y-1">
-                          <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-500">1-qadam: CORS Ruxsati</span>
-                          <p className="text-[11px] text-slate-300 leading-snug">
-                            Django loyihangizda brauzer so'rovlarini qabul qilish uchun <code className="text-cyan-400 font-mono">settings.py</code>-ga CORS sozlamasini kiritganingizga ishonch hosil qiling.
-                          </p>
-                          <p className="text-[10px] text-slate-400">
-                            Yechim: <code className="text-emerald-400 font-mono">CORS_ALLOW_ALL_ORIGINS = True</code> qilib sozlab ko'ring.
-                          </p>
-                        </div>
-
-                        <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-850 space-y-1">
-                          <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-500">2-qadam: Web Server va Loglar</span>
-                          <p className="text-[11px] text-slate-300 leading-snug">
-                            Railway panelidagi <strong className="text-slate-100 font-bold">DStomaQueue</strong> xizmatida <strong>"Console/Logs"</strong> bo'limini tekshiring. 
-                          </p>
-                          <p className="text-[10px] text-slate-400">
-                            Server faol (Onlayn) va xatoliksiz ishlayotganiga, 500 yoki crash xatolik yo'qligiga ishonch hosil qiling.
-                          </p>
-                        </div>
-
-                        <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-850 space-y-1">
-                          <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-500">3-qadam: URL va Port</span>
-                          <p className="text-[11px] text-slate-300 leading-snug">
-                            Siz kiritgan API manzili oxirida ortiqcha slashes (<code className="text-rose-450">/</code>) bo'lmasligi va domeningiz to'liq ishlayotgan bo'lishi kerak.
-                          </p>
-                          <p className="text-[10px] text-slate-400">
-                            Brauzeringizda ushbu manzilni yangi tabda ochib ko'ring (masalan, <code className="text-cyan-400">.../api/clinics/</code>).
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-left">
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">
-                      Railway Django API Base URL:
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="url"
-                        value={apiUrlInput}
-                        onChange={(e) => setApiUrlInput(e.target.value)}
-                        className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500 flex-1 font-mono"
-                        placeholder="https://django-api.up.railway.app"
-                      />
-                      <button 
-                        onClick={() => {
-                          localStorage.setItem('dstoma_custom_api_url', apiUrlInput);
-                          alert('API manzili muvaffaqiyatli yangilandi!');
-                          // Restart connection if turned on
-                          if (isLiveAPIMode) {
-                            setIsLiveAPIMode(false);
-                            setTimeout(() => setIsLiveAPIMode(true), 200);
-                          }
-                        }}
-                        className="px-3 bg-cyan-600 hover:bg-cyan-700 text-xs font-extrabold rounded-xl text-white transition-all active:scale-95 cursor-pointer"
-                      >
-                        Saqlash
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-slate-400 leading-normal">
-                      Sizning Railway loyihangiz xizmat ko'rsatuvchi haqiqiy domen nomi.
-                    </p>
-                  </div>
-
-                  <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-850 text-xs text-slate-300 space-y-2 select-text">
-                    <h4 className="font-bold text-emerald-400 flex items-center gap-1">
-                      💡 Django CORS Sozlamasini Yangilash:
-                    </h4>
-                    <p className="text-[10px] leading-relaxed text-slate-400">
-                      React brauzerdan so'rov yuborganida <strong>CORS xatoligi</strong> bo'lmasligi uchun, Django <code className="text-amber-400 font-mono">settings.py</code> faylingizda quyidagi sozlamalar bo'lishi shart:
-                    </p>
-                    <pre className="text-[9px] bg-slate-900 p-2 rounded border border-slate-800 text-blue-200 overflow-x-auto font-mono">
-{`INSTALLED_APPS = [
-    ...
-    'corsheaders',
-]
-
-MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
-    ...
-]
-
-CORS_ALLOWED_ORIGINS = [
-    "https://dstoma-navbat.vercel.app",  # Sizning Vercel manzilingiz
-    "http://localhost:3000",
-]`}
-                    </pre>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
+      </aside>
+
+      {/* ---------------- MOBILE RESPONSIVE NAVIGATION TOP-BAR ---------------- */}
+      <div className="w-full lg:hidden bg-[#0c1225] border-b border-[#1e3256]/60 px-4 py-3 flex items-center justify-between sticky top-0 z-40 select-none">
+        
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 rounded-xl bg-[#081225] border border-[#10b981]/50 text-emerald-400 flex items-center justify-center font-black shadow-[0_0_10px_rgba(16,185,129,0.3)] relative overflow-hidden shrink-0">
+            <svg viewBox="0 0 100 65" className="w-7 h-5.5 drop-shadow-[0_0_4px_rgba(16,185,129,0.7)] z-10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {/* Left part: Beautiful contoured tooth */}
+              <path d="M 32,15 C 24,15 17,18 13,23 C 9,28 9,37 11,44 C 13,51 11,61 15,65 C 18,67 21,58 26,51 C 28,48 30,48 32,51 C 37,58 40,67 43,65 C 47,61 45,51 47,44 C 49,37 49,28 45,23 C 41,18 34,15 32,15 Z" className="stroke-[#10b981]" strokeWidth="2.5" />
+              {/* Right part: Interlocked D shape capital letter */}
+              <path d="M 52,15 L 52,65" className="stroke-[#10b981]" strokeWidth="2.5" />
+              <path d="M 52,15 C 68,15 82,24 82,40 C 82,56 68,65 52,65" className="stroke-[#10b981]" strokeWidth="2.5" />
+              {/* Smooth connecting bridge */}
+              <path d="M 44,40 C 47,37 49,37 52,40" className="stroke-[#10b981]" strokeWidth="2" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-xs font-black text-slate-100 tracking-wider">DSTOMA QUEUE</h1>
+            <p className="text-[9px] text-slate-500 font-semibold leading-none">v6.5 PWA</p>
+          </div>
+        </div>
+
+        {/* Mobile controls */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center bg-[#070b15] p-0.5 rounded-lg border border-[#1e3256]/40">
+            <button onClick={() => setLanguage('uz')} className={`px-1.5 py-0.5 text-[9px] font-black rounded ${language === 'uz' ? 'bg-emerald-500 text-slate-950 font-black' : 'text-slate-400'}`}>UZ</button>
+            <button onClick={() => setLanguage('ru')} className={`px-1.5 py-0.5 text-[9px] font-black rounded ${language === 'ru' ? 'bg-emerald-500 text-slate-950 font-black' : 'text-slate-400'}`}>RU</button>
+          </div>
+
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 bg-slate-800 text-slate-200 rounded-lg text-xs font-bold font-mono focus:outline-none border border-slate-700 hover:border-emerald-500"
+          >
+            {mobileMenuOpen ? (language === 'uz' ? 'YOPISH' : language === 'ru' ? 'ЗАКРЫТЬ' : 'CLOSE') : 'MENU ☰'}
+          </button>
+        </div>
+
+        {/* Mobile Drawer Dropdown */}
+        {mobileMenuOpen && (
+          <div className="absolute top-[58px] left-0 right-0 bg-[#0c1225] border-b border-[#1e3256] p-4 space-y-2 flex flex-col text-left animate-fade-in shadow-2xl">
+            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-1">
+              {language === 'uz' ? 'Tizim bo\'limlari:' : language === 'ru' ? 'Разделы системы:' : 'System Sections:'}
+            </span>
+            
+            <button
+              onClick={() => { setActiveTab('bemor'); setMobileMenuOpen(false); }}
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-extrabold text-left flex items-center gap-2.5 ${activeTab === 'bemor' ? 'bg-emerald-500' : 'text-slate-250'}`}
+            >
+              <User className="w-4 h-4" /> {t('bemorTab')}
+            </button>
+            <button
+              onClick={() => { setActiveTab('shifokor'); setMobileMenuOpen(false); }}
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-extrabold text-left flex items-center gap-2.5 ${activeTab === 'shifokor' ? 'bg-emerald-500' : 'text-slate-250'}`}
+            >
+              <Users className="w-4 h-4" /> {t('shifokorTab')}
+            </button>
+            <button
+              onClick={() => { setActiveTab('boshliq'); setMobileMenuOpen(false); }}
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-extrabold text-left flex items-center gap-2.5 ${activeTab === 'boshliq' ? 'bg-emerald-500' : 'text-slate-250'}`}
+            >
+              <FolderKanban className="w-4 h-4" /> {t('boshliqTab')}
+            </button>
+            <button
+              onClick={() => { setActiveTab('superadmin'); setMobileMenuOpen(false); }}
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-extrabold text-left flex items-center gap-2.5 ${activeTab === 'superadmin' ? 'bg-emerald-500 text-slate-950' : 'text-slate-250'}`}
+            >
+              <Crown className="w-4 h-4" /> {t('superadminTab')}
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Main Core App Workspace with Staggered Transition */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+      {/* ---------------- MAIN RIGHT WORKSPACE: CONTENT SCROLL AREA ---------------- */}
+      <div className="flex-1 min-h-screen flex flex-col overflow-y-auto px-4 sm:px-6 lg:px-8 mt-4 lg:mt-6 space-y-6">
+        
+        {/* Header telemetry HUD segment */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between py-2 border-b border-[#1b2a47]/50 gap-4 select-none">
+          <div className="text-left">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-400/25 text-[8.5px] font-black rounded font-mono uppercase tracking-wider">
+                Electronic Queue Suite
+              </span>
+              <span className="text-[10px] text-slate-500 font-bold">• Real-Time multi-tenant platform</span>
+            </div>
+            <h2 className="text-lg font-black text-white uppercase tracking-tight mt-1 font-display">
+              {activeTab === 'bemor' 
+                ? (language === 'uz' ? 'Bemor Kabineti & Monitor' : language === 'ru' ? 'Кабинет Пациента и Монитор' : 'Patient Hub & Monitor') 
+                : activeTab === 'shifokor' 
+                ? (language === 'uz' ? 'Stomatologiya Shifokor Terminali' : language === 'ru' ? 'Терминал Врача Стоматолога' : 'Dental Doctor Room Console') 
+                : activeTab === 'boshliq' 
+                ? (language === 'uz' ? 'Klinika Direktor Telemetriyasi' : language === 'ru' ? 'Панель Директора Клиники' : 'Clinic Director Telemetry') 
+                : (language === 'uz' ? 'DStoma SaaS Superadmin Konsoli' : language === 'ru' ? 'Консоль Суперадмина SaaS DStoma' : 'DStoma SaaS Superadmin Headquarters')}
+            </h2>
+            <p className="text-xs text-slate-450 font-semibold">
+              {activeTab === 'bemor' 
+                ? (language === 'uz' ? 'Onlayn smart navbat olish, tibbiy tish diagnostika tahlillari va filial monitoring' : language === 'ru' ? 'Онлайн-запись, стоматологическая диагностика и мониторинг филиалов' : 'Online smart booking, dental analytics and clinical branches monitoring') 
+                : activeTab === 'shifokor'
+                ? (language === 'uz' ? 'Klinikaga kelgan navbatdagi bemorlarni chaqirish, konsultatsiyalar o\'tkazish, elektron tibbiy kartalar va kassa oqimi' : language === 'ru' ? 'Вызов пациентов, проведение лечения, электронные медицинские карты и учет кассы' : 'Call patients, carry out treatments, maintain electronic health records and track cash flow')
+                : activeTab === 'boshliq'
+                ? (language === 'uz' ? 'Sizga biriktirilgan klinika tarmog\'ini analitika, xizmat tahrirlari va litsenziyalar orqali nazorat qiling' : language === 'ru' ? 'Контроль закрепленной филиальной сети, редактирование медицинских услуг и оплата лицензии' : 'Control assigned dental clinics through analytics tools, pricing configurations, and subscription status')
+                : (language === 'uz' ? 'Multi-tenant barcha filiallar holati, litsenziyalar, MRR va xodimlar login/parollarini nazorat qilish markazi' : language === 'ru' ? 'Глобальный контроль статуса филиалов, лицензий, MRR и управление логинами/паролями персонала' : 'Global multi-tenant controller of clinical branches, license status, CRM accounts registry, and monthly recurring analytics')}
+            </p>
+          </div>
+
+          {/* Quick User session profile pill exactly matching top right area */}
+          <div className="flex items-center gap-3 shrink-0 self-start md:self-auto">
+            {currentUser ? (
+              <div className="flex items-center gap-2.5 bg-[#0e162d]/90 border border-emerald-500/30 text-emerald-450 px-3 py-1.5 rounded-2xl text-xs font-black shadow-lg">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>{currentUser.name} ({currentUser.type === 'superadmin' ? 'Super_Admin' : currentUser.type === 'director' ? 'Clinic_CEO' : 'Dentist'})</span>
+                <button
+                  onClick={handleLogout}
+                  className="bg-slate-900 border border-slate-700 hover:border-red-500 text-slate-300 hover:text-white px-2 py-0.5 rounded text-[9px] font-black transition-all cursor-pointer uppercase tracking-wider"
+                >
+                  chiqish
+                </button>
+              </div>
+            ) : (
+              <div className="bg-[#0f172a] border border-[#233355]/40 text-slate-400 px-3 py-1.5 rounded-2xl text-[10px] font-extrabold uppercase letter-spacing flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                🔓 Public Viewer (Mehmon)
+              </div>
+            )}
+          </div>
+        </header>
+
+        {/* Master Content Workspace Panel with Staggered Visual Entry */}
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.15 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.25 }}
             className="space-y-6"
           >
-            {/* Show Map permanently inside Customer and Admin dashboards for continuous usability */}
-            {(activeTab === 'bemor' || activeTab === 'boshliq') && (
+            {/* Show Map permanently inside Customer and Superadmin dashboards for continuous usability */}
+            {(activeTab === 'bemor' || activeTab === 'superadmin') && (
               <div className="space-y-3">
-                <span className="text-xs font-extrabold text-slate-400 block uppercase tracking-widest">
-                  📍 INTERAKTIV GEOLOKATSIYA DIRECTORY (GOOGLE MAPS)
-                </span>
+                <div className="flex items-center justify-between border-b border-[#1b2a47]/30 pb-1.5">
+                  <span className="text-[10px] font-black text-slate-400 block uppercase tracking-widest pl-1">
+                    📍 INTERAKTIV FILIALLAR MONITORI VA XARITASI (VECTORS + GOOGLE MAPS)
+                  </span>
+                  {selectedClinic && (
+                    <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-400/5 px-2 py-0.5 rounded border border-emerald-500/20 uppercase">
+                      Faol filial: {selectedClinic.name}
+                    </span>
+                  )}
+                </div>
                 <ClinicMap
                   clinics={clinics}
                   selectedClinic={selectedClinic}
                   onSelectClinic={(c) => setSelectedClinic(c)}
+                  language={language}
                 />
               </div>
             )}
 
             {/* Sub Tabs views */}
-            {activeTab === 'bemor' && (
-              <ClientDashboard
-                clinics={clinics}
-                doctors={doctors}
-                services={services}
-                queues={queues}
-                selectedClinic={selectedClinic}
-                onSelectClinic={(c) => setSelectedClinic(c)}
-                onAddQueue={handleAddQueue}
-                onCancelQueue={handleCancelQueue}
-                onUpdateDoctorRating={handleUpdateDoctorRating}
-                setActiveTab={setActiveTab}
-              />
-            )}
+            {(() => {
+              const isGated = activeTab === 'shifokor' || activeTab === 'boshliq' || activeTab === 'superadmin';
+              const hasAccess = currentUser && (
+                (activeTab === 'superadmin' && currentUser.type === 'superadmin') ||
+                (activeTab === 'boshliq' && currentUser.type === 'director') ||
+                (activeTab === 'shifokor' && currentUser.type === 'doctor')
+              );
 
-            {activeTab === 'shifokor' && (
-              <DoctorDashboard
-                clinics={clinics}
-                doctors={doctors}
-                services={services}
-                queues={queues}
-                onUpdateQueueStatus={handleUpdateQueueStatus}
-                selectedClinic={selectedClinic}
-                setActiveTab={setActiveTab}
-              />
-            )}
+              if (isGated && !hasAccess) {
+                // Show gorgeous Login form
+                return (
+                  <div className="max-w-md mx-auto bg-white rounded-3xl border border-slate-100 p-6 sm:p-8 shadow-[0_20px_50px_rgba(15,23,42,0.06)] space-y-6 mt-8 relative overflow-hidden text-left animate-fade-in">
+                    <div className="absolute right-0 top-0 w-32 h-32 bg-gradient-to-br from-indigo-500/10 to-transparent rounded-full blur-2xl pointer-events-none"></div>
+                    
+                    <div className="text-center space-y-2.5">
+                      <div className="w-14 h-14 bg-indigo-50/70 text-indigo-650 rounded-2xl mx-auto flex items-center justify-center text-xl shadow-xs border border-indigo-100/50">
+                        🔒
+                      </div>
+                      <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest font-display">
+                        {activeTab === 'superadmin' ? t('loginTitleAdmin') : activeTab === 'boshliq' ? t('loginTitleDirector') : t('loginTitleDoctor')}
+                      </h3>
+                      <p className="text-[11px] text-slate-450 font-semibold max-w-[280px] mx-auto">
+                        {t('loginDesc')}
+                      </p>
+                    </div>
 
-            {activeTab === 'boshliq' && (
-              <DirectorDashboard
-                clinics={clinics}
-                doctors={doctors}
-                services={services}
-                queues={queues}
-                setActiveTab={setActiveTab}
-                onAddDoctor={handleAddDoctor}
-                onUpdateService={handleUpdateService}
-              />
-            )}
+                    {authError && (
+                      <div className="p-3 bg-rose-50 border border-rose-100/70 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2">
+                        <span className="shrink-0 text-base">⚠️</span>
+                        <span>{authError}</span>
+                      </div>
+                    )}
 
-            {activeTab === 'superadmin' && (
-              <SuperAdminDashboard
-                clinics={clinics}
-                doctors={doctors}
-                queues={queues}
-                onAddClinic={handleAddClinic}
-                onToggleSubscription={handleToggleClinicStatus}
-              />
-            )}
+                    <form onSubmit={handleLoginSubmit} className="space-y-4">
+                      <div>
+                        <label className="text-[10px] font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
+                          {t('customLogin')}
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={authUsername}
+                          onChange={(e) => setAuthUsername(e.target.value)}
+                          placeholder="Foydalanuvchi nomi..."
+                          className="w-full bg-slate-50/70 text-xs font-bold font-mono text-slate-800 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 focus:outline-none placeholder:text-slate-400 placeholder:font-sans transition-all"
+                        />
+                      </div>
 
-            {activeTab === 'kod' && (
-              <DjangoSolutions />
-            )}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-[10px] font-black text-slate-700 block uppercase tracking-wide">
+                            {t('customPass')}
+                          </label>
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          value={authPassword}
+                          onChange={(e) => setAuthPassword(e.target.value)}
+                          placeholder="Parolni yozing..."
+                          className="w-full bg-slate-50/70 text-xs font-mono text-slate-800 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 focus:outline-none transition-all"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full py-3.5 bg-gradient-to-r from-slate-900 to-indigo-950 hover:from-slate-850 hover:to-indigo-900 text-white rounded-xl text-xs font-black transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+                      >
+                        {t('signInBtn')} ➔
+                      </button>
+                    </form>
+                  </div>
+                );
+              }
+
+              // Else show appropriate dashboard
+              return (
+                <>
+                  {activeTab === 'bemor' && (
+                    <ClientDashboard
+                      clinics={clinics}
+                      doctors={doctors}
+                      services={services}
+                      queues={queues}
+                      selectedClinic={selectedClinic}
+                      onSelectClinic={(c) => setSelectedClinic(c)}
+                      onAddQueue={handleAddQueue}
+                      onCancelQueue={handleCancelQueue}
+                      onUpdateDoctorRating={handleUpdateDoctorRating}
+                      setActiveTab={setActiveTab}
+                      language={language}
+                    />
+                  )}
+
+                  {activeTab === 'shifokor' && currentUser && currentUser.type === 'doctor' && (
+                    <DoctorDashboard
+                      clinics={clinics}
+                      doctors={doctors}
+                      services={services}
+                      queues={queues}
+                      onUpdateQueueStatus={handleUpdateQueueStatus}
+                      selectedClinic={clinics.find(c => c.id === currentUser.clinicId) || selectedClinic}
+                      setActiveTab={setActiveTab}
+                      currentUser={currentUser}
+                      language={language}
+                    />
+                  )}
+
+                  {activeTab === 'boshliq' && currentUser && currentUser.type === 'director' && (
+                    <DirectorDashboard
+                      clinics={clinics}
+                      doctors={doctors}
+                      services={services}
+                      queues={queues}
+                      setActiveTab={setActiveTab}
+                      onAddDoctor={handleAddDoctor}
+                      onDeleteDoctor={handleDeleteDoctor}
+                      onUpdateService={handleUpdateService}
+                      onAddService={handleAddService}
+                      clinicId={currentUser.clinicId}
+                      onSimulatePayment={handlePaySubscriptionSimulate}
+                      saasPayments={saasPayments}
+                      language={language}
+                    />
+                  )}
+
+                  {activeTab === 'superadmin' && currentUser && currentUser.type === 'superadmin' && (
+                    <SuperAdminDashboard
+                      clinics={clinics}
+                      doctors={doctors}
+                      queues={queues}
+                      onAddClinic={handleAddClinic}
+                      onToggleSubscription={handleToggleClinicStatus}
+                      onUpdateClinicCreds={handleUpdateClinicCreds}
+                      onUpdateDoctorCreds={handleUpdateDoctorCreds}
+                      onDeleteClinic={handleDeleteClinic}
+                      onDeleteDoctor={handleDeleteDoctor}
+                      language={language}
+                      saasPayments={saasPayments}
+                      onApproveSaaSPayment={handleApproveSaaSPayment}
+                      onUpdateClinicDetails={handleUpdateClinicDetails}
+                      superadminLogin={superadminLogin}
+                      superadminPassword={superadminPassword}
+                      onUpdateSuperadminCreds={handleUpdateSuperadminCreds}
+                      gmailInboxes={gmailInboxes}
+                      onMockSendPayment={(clinicId) => handlePaySubscriptionSimulate(clinicId)}
+                    />
+                  )}
+                </>
+              );
+            })()}
           </motion.div>
         </AnimatePresence>
-      </main>
+      </div>
 
     </div>
   );

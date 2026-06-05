@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Clinic, Doctor, Service, QueueItem } from '../types';
+import { TRANSLATIONS, Language } from '../translations';
 import { 
   Check, 
   X, 
@@ -30,6 +31,13 @@ interface DoctorDashboardProps {
   onUpdateQueueStatus: (id: string, newStatus: QueueItem['status']) => void;
   selectedClinic: Clinic | null;
   setActiveTab?: (tab: 'bemor' | 'shifokor' | 'boshliq' | 'kod' | 'superadmin') => void;
+  currentUser?: {
+    type: 'superadmin' | 'director' | 'doctor';
+    id?: string;
+    clinicId?: string;
+    name?: string;
+  } | null;
+  language: Language;
 }
 
 export default function DoctorDashboard({
@@ -39,11 +47,79 @@ export default function DoctorDashboard({
   queues,
   onUpdateQueueStatus,
   selectedClinic,
-  setActiveTab
+  setActiveTab,
+  currentUser,
+  language
 }: DoctorDashboardProps) {
-  // We can switch between Umidjon Egamov and Abdulaziz Nuraliyev
-  const [activeDoctorId, setActiveDoctorId] = useState<string>('doc_sm_1');
+  // Set current doctor based on logged in user or first doctor
+  const [activeDoctorId, setActiveDoctorId] = useState<string>(currentUser?.id || 'doc_sm_1');
   const currentDoctor = doctors.find((d) => d.id === activeDoctorId) || doctors[0];
+
+  // Translation Helper
+  const t = (text: string) => {
+    if (!language) return text;
+    
+    // Look up in global configurations if text acts as a key
+    if (TRANSLATIONS[language] && text in TRANSLATIONS[language]) {
+      return TRANSLATIONS[language][text as keyof typeof TRANSLATIONS['uz']];
+    }
+
+    const dict: Record<string, { ru: string; en: string }> = {
+      "sozlamalar": { ru: "Настройки", en: "Settings" },
+      "chiqish": { ru: "Выход", en: "Log Out" },
+      "profilni tahrirlash & shaxsiy sozlamalar": { ru: "Редактировать профиль и личные настройки", en: "Edit Profile & Personal Settings" },
+      "statusni belgilash": { ru: "Выбрать статус", en: "Select Status" },
+      "yangi parol o'rnatish": { ru: "Установить новый пароль", en: "Set New Password" },
+      "parolingizni o'zgartiring": { ru: "Сменить пароль", en: "Change Password" },
+      "bekor qilish": { ru: "Отмена", en: "Cancel" },
+      "saqlash": { ru: "Сохранить", en: "Save" },
+      "bo'sh": { ru: "Свободен", en: "Idle" },
+      "band": { ru: "Занят", en: "Busy" },
+      "away": { ru: "Не в сети", en: "Away" },
+      "profil ma'lumotlari muvaffaqiyatli saqlandi! (parol yangilandi)": { ru: "Профиль успешно изменен! (Пароль обновлен)", en: "Profile saved successfully! (Password updated)" },
+      "faol / bo'sh": { ru: "активен / свободен", en: "active / idle" },
+      "tushlikda": { ru: "обед", en: "lunch break" },
+      "tizimda barcha kelayotgan navbatlarni muvaffaqiyatli qabul qiling va davolash holatini belgilang": { ru: "Успешно принимайте всех поступающих пациентов и управляйте ходом лечения", en: "Successfully admit all incoming patients and manage treatment status" },
+      "shaxsiy rasm yuklash (fayl yoki rasm)": { ru: "Загрузить фото профиля (Перетащите файл)", en: "Upload profile photo (Drag & drop)" },
+      "rasmni almashtirish": { ru: "Изменить фото", en: "Change Photo" },
+      "rasm tanlang yoki tashlang": { ru: "Выберите или перетащите фото", en: "Choose or drop photo" },
+      "png, jpg formatlari": { ru: "Форматы PNG, JPG", en: "PNG, JPG formats" },
+      "navbat kutayotganlar": { ru: "Ожидают очереди", en: "Awaiting queue" },
+      "bugun qabul qilindi": { ru: "Принято сегодня", en: "Admitted today" },
+      "bugungi daromad": { ru: "Дневной доход", en: "Daily revenue" },
+      "o'rtacha baho": { ru: "Средняя оценка", en: "Average rating" },
+      "ta chipta": { ru: "билетов", en: "tickets" },
+      "nafar": { ru: "человек", en: "people" },
+      "xonada chaqirilayotgan / davolanayotgan faol bemor": { ru: "В КЛИНИЧЕСКОЙ КОМНАТЕ / АКТИВНЫЙ ПАЦИЕНТ", en: "IN CONSULTATION ROOM / ACTIVE PATIENT" },
+      "xizmat": { ru: "Услуга", en: "Service" },
+      "telefon": { ru: "Телефон", en: "Phone" },
+      "📣 kabinetga chaqirilmoqda (signal monitorida yonmoqda)": { ru: "📣 ВЫЗЫВАЕТСЯ В КАБИНЕТ (Мигает на мониторе)", en: "📣 SUMMONING TO ROOM (Flashing on signal monitor)" },
+      "🦷 qabul rejimida (davolash ishlari faol bajarilmoqda)": { ru: "🦷 РЕЖИМ ПРИЕМА (Активно выполняется лечение)", en: "🦷 UNDER CONSULTATION (Active treatment process)" },
+      "davolashni yakunlash ✓": { ru: "Завершить работу ✓", en: "Complete treatment ✓" },
+      "📊 navbatni boshqarish paneli (smart taqsimlash)": { ru: "📊 Панель управления очередью (Умное распределение)", en: "📊 Queue Management Panel (Smart Division)" },
+      "yangi mijozlar (birlamchi ko'rik)": { ru: "Новые пациенты (Первичные)", en: "New Patients (First visit)" },
+      "doimiy bemorlar (tashrif tarixdagilar)": { ru: "Постоянные пациенты (Повторные)", en: "Regular Patients (Follow-up)" },
+      "ta": { ru: "шт", en: "items" },
+      "hozircha yangi bemorlar navbati yo'q.": { ru: "В настоящее время список новых очередей пуст.", en: "No new clinic queue items currently." },
+      "hozircha doimiy bemorlar navbati yo'q.": { ru: "В настоящее время список повторных очередей пуст.", en: "No regular clinic queue items currently." },
+      "chaqirish": { ru: "Вызвать", en: "Call" },
+      "tugatilgan qabullar ro'yxati (bugun)": { ru: "Список завершенных приемов (Сегодня)", en: "List of completed consultations (Today)" },
+      "bugun hali qabul sobiq qilinmadi.": { ru: "Сегодня приемов еще не было.", en: "No patients were admitted today yet." },
+      "kutilmoqda": { ru: "ожидание", en: "pending" }
+    };
+
+    const cleanText = text.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (dict[cleanText]) {
+      if (language === 'ru') return dict[cleanText].ru;
+      if (language === 'en') return dict[cleanText].en;
+    }
+
+    if (dict[text]) {
+      if (language === 'ru') return dict[text].ru;
+      if (language === 'en') return dict[text].en;
+    }
+    return text;
+  };
 
   // Shifokor Status ('idle' | 'busy' | 'away')
   const [docStatus, setDocStatus] = useState<'idle' | 'busy' | 'away'>('idle');
@@ -53,6 +129,17 @@ export default function DoctorDashboard({
   const [avatarUrl, setAvatarUrl] = useState(currentDoctor?.image || '');
   const [password, setPassword] = useState('123456');
   const [profileSuccessMsg, setProfileSuccessMsg] = useState('');
+
+  // Sync state if currentUser changes
+  React.useEffect(() => {
+    if (currentUser?.id) {
+      setActiveDoctorId(currentUser.id);
+      const match = doctors.find(d => d.id === currentUser.id);
+      if (match) {
+        setAvatarUrl(match.image);
+      }
+    }
+  }, [currentUser, doctors]);
 
   const handleUpdateProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,8 +181,9 @@ export default function DoctorDashboard({
   return (
     <div className="space-y-6 font-sans text-left">
       {/* HEADER SECTION */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-3xl p-6 shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
+      <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 shadow-[0_20px_50px_rgba(15,23,42,0.06)] flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+        <div className="absolute right-0 top-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="flex flex-col sm:flex-row items-center gap-4.5 z-10 text-center sm:text-left">
           <img 
             src={avatarUrl || currentDoctor?.image} 
             alt={currentDoctor?.name}
@@ -103,56 +191,44 @@ export default function DoctorDashboard({
               (e.target as HTMLImageElement).src = 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + currentDoctor?.name;
             }}
             referrerPolicy="no-referrer"
-            className="w-14 h-14 rounded-full border-2 border-white object-cover shadow-md shrink-0"
+            className="w-16 h-16 rounded-full border-2 border-white/20 object-cover shadow-xl shrink-0"
           />
           <div>
-            <h2 className="text-xs font-bold uppercase tracking-widest text-blue-100 flex items-center gap-1.5">
-              🩺 Shifokor Kabineti
-              <span className={`w-2 h-2 rounded-full inline-block ${
-                docStatus === 'idle' ? 'bg-emerald-400 animate-ping' : docStatus === 'busy' ? 'bg-rose-400' : 'bg-amber-400'
-              }`}></span>
-              <span className="text-[10px] lowercase font-semibold text-blue-150">
-                ({docStatus === 'idle' ? 'bo\'sh' : docStatus === 'busy' ? 'band' : 'tushlikda'})
+            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 flex items-center justify-center sm:justify-start gap-2">
+              🩺 {t("doctorCabinet")}
+              <span className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full inline-block ${
+                  docStatus === 'idle' ? 'bg-emerald-400 animate-pulse' : docStatus === 'busy' ? 'bg-rose-450' : 'bg-amber-400'
+                }`}></span>
+                <span className="normal-case text-[10px] font-bold text-indigo-200/80">
+                  ({docStatus === 'idle' ? t("faol / bo'sh") : docStatus === 'busy' ? t("band") : t("tushlikda")})
+                </span>
               </span>
             </h2>
-            <h1 className="text-xl font-extrabold mt-1">
-              Xush kelibsiz, {currentDoctor?.name || 'Umidjon Egamov'}
+            <h1 className="text-xl sm:text-2xl font-black mt-1.5 tracking-tight font-display">
+              {currentDoctor?.name || 'Umidjon Egamov'}
             </h1>
-            <p className="text-xs text-blue-150 mt-0.5">Stomatologiya - Navbat va qabul boshqaruv mantiqi.</p>
+            <p className="text-xs text-indigo-200/70 mt-1 font-semibold">{t("Tizimda barcha kelayotgan navbatlarni muvaffaqiyatli qabul qiling va davolash holatini belgilang")}</p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Shifokorlar almashtirgichi (Switching between doc profiles for simulation flow) */}
-          <select
-            value={activeDoctorId}
-            onChange={(e) => {
-              setActiveDoctorId(e.target.value);
-              const selectedDoc = doctors.find(d => d.id === e.target.value);
-              if (selectedDoc) {
-                setAvatarUrl(selectedDoc.image);
-              }
-            }}
-            className="bg-white/10 text-white hover:bg-white/20 px-3 py-2 border border-white/25 rounded-xl text-xs font-bold focus:outline-none"
-          >
-            <option className="text-slate-800" value="doc_sm_1">Umidjon Egamov</option>
-            <option className="text-slate-800" value="doc_sm_2">Abdulaziz Nuraliyev</option>
-          </select>
+        <div className="flex flex-wrap items-center justify-center gap-3 z-10">
+          <div className="flex gap-2 self-end mt-1 sm:mt-0">
+            <button
+              onClick={() => setShowProfileSettings(!showProfileSettings)}
+              className="px-4 py-2.5 bg-white/10 hover:bg-white/15 active:scale-95 text-xs font-black rounded-xl border border-white/10 text-white flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Settings className="w-4 h-4 text-indigo-300" />
+              {t("Sozlamalar")}
+            </button>
 
-          <button
-            onClick={() => setShowProfileSettings(!showProfileSettings)}
-            className="px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 text-xs font-bold rounded-xl border border-white/25 text-white flex items-center gap-1.5 transition-all cursor-pointer"
-          >
-            <Settings className="w-4 h-4 text-cyan-200" />
-            Profil Sozlamalari
-          </button>
-
-          <button
-            onClick={() => setActiveTab && setActiveTab('bemor')}
-            className="px-4 py-2 bg-white text-blue-600 hover:bg-slate-50 text-xs font-extrabold rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" /> Asosiy sahifa
-          </button>
+            <button
+              onClick={() => setActiveTab && setActiveTab('bemor')}
+              className="px-4 py-2.5 bg-white hover:bg-slate-50 text-indigo-950 text-xs font-black rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              <ArrowLeft className="w-4 h-4" /> {t("Chiqish")}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -161,7 +237,7 @@ export default function DoctorDashboard({
         <div className="bg-white p-5 rounded-3xl border border-slate-150/85 shadow-lg space-y-4 max-w-lg">
           <div className="flex items-center justify-between border-b border-slate-50 pb-2">
             <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest flex items-center gap-1.5">
-              🔒 Profilni Tahrirlash & Shaxsiy Sozlamalar
+              🔒 {t("Profilni Tahrirlash & Shaxsiy Sozlamalar")}
             </h3>
             <button onClick={() => setShowProfileSettings(false)} className="text-slate-400 hover:text-slate-600">
               <X className="w-4 h-4" />
@@ -170,14 +246,14 @@ export default function DoctorDashboard({
 
           {profileSuccessMsg && (
             <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-2xl">
-              {profileSuccessMsg}
+              {t(profileSuccessMsg)}
             </div>
           )}
 
           <form onSubmit={handleUpdateProfile} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-extrabold text-slate-700 block mb-1">Statusni belgilash</label>
+                <label className="text-xs font-extrabold text-slate-700 block mb-1">{t("Statusni belgilash")}</label>
                 <div className="flex gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
                   <button
                     type="button"
@@ -186,7 +262,7 @@ export default function DoctorDashboard({
                       docStatus === 'idle' ? 'bg-emerald-500 text-white shadow-xs' : 'text-slate-500 hover:bg-slate-100'
                     }`}
                   >
-                    Bo'sh
+                    {t("Bo'sh")}
                   </button>
                   <button
                     type="button"
@@ -195,7 +271,7 @@ export default function DoctorDashboard({
                       docStatus === 'busy' ? 'bg-rose-500 text-white shadow-xs' : 'text-slate-500 hover:bg-slate-100'
                     }`}
                   >
-                    Band
+                    {t("Band")}
                   </button>
                   <button
                     type="button"
@@ -204,32 +280,85 @@ export default function DoctorDashboard({
                       docStatus === 'away' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-500 hover:bg-slate-100'
                     }`}
                   >
-                    Away
+                    {t("Away")}
                   </button>
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-extrabold text-slate-700 block mb-1">Avatar Havolasi (URL)</label>
-                <input
-                  type="url"
-                  value={avatarUrl}
-                  onChange={(e) => setAvatarUrl(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700 rounded-xl px-3 py-2"
-                  placeholder="https://images.unsplash.com/..."
-                />
+                <label className="text-xs font-extrabold text-slate-700 block mb-1">
+                  {t("Shaxsiy Rasm Yuklash (Fayl yoki Rasm)")}
+                </label>
+                <div 
+                  className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-2xl p-4 text-center cursor-pointer transition-all bg-slate-50 hover:bg-slate-100/50 relative group min-h-[110px] flex flex-col justify-center items-center"
+                  onClick={() => document.getElementById('doctor-avatar-file-upload')?.click()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const file = e.dataTransfer.files?.[0];
+                    if (file && file.type.startsWith('image/')) {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        if (typeof reader.result === 'string') {
+                          setAvatarUrl(reader.result);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                >
+                  <input 
+                    type="file" 
+                    id="doctor-avatar-file-upload" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          if (typeof reader.result === 'string') {
+                            setAvatarUrl(reader.result);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  <div className="space-y-1 flex flex-col items-center">
+                    {avatarUrl ? (
+                      <div className="relative">
+                        <img 
+                          src={avatarUrl} 
+                          alt="Rasm preview" 
+                          referrerPolicy="no-referrer"
+                          className="w-12 h-12 rounded-full object-cover border-2 border-indigo-100 shadow-sm"
+                        />
+                        <span className="absolute -bottom-1 -right-1 bg-indigo-600 text-white rounded-full p-0.5 text-[8px] font-bold w-4 h-4 flex items-center justify-center">
+                          ✓
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-xl">📸</span>
+                    )}
+                    <span className="text-[10px] font-bold text-slate-600 group-hover:text-indigo-600 select-none">
+                      {avatarUrl ? t("Rasmni almashtirish") : t("Rasm tanlang yoki tashlang")}
+                    </span>
+                    <span className="text-[8px] text-slate-400 select-none">{t("PNG, JPG formatlari")}</span>
+                  </div>
+                </div>
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-extrabold text-slate-700 block mb-1">Yangi Parol o'rnatish</label>
+              <label className="text-xs font-extrabold text-slate-700 block mb-1">{t("Yangi Parol o'rnatish")}</label>
               <input
                 type="password"
                 value={password}
                 required
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700 rounded-xl px-3 py-2"
-                placeholder="Parolingizni o'zgartiring"
+                placeholder={t("Parolingizni o'zgartiring")}
               />
             </div>
 
@@ -239,13 +368,13 @@ export default function DoctorDashboard({
                 onClick={() => setShowProfileSettings(false)}
                 className="px-4 py-2 bg-slate-50 hover:bg-slate-100 font-bold rounded-xl text-xs text-slate-550 border border-slate-200"
               >
-                Bekor qilish
+                {t("Bekor qilish")}
               </button>
               <button
                 type="submit"
                 className="px-5 py-2 bg-[#0284c7] hover:bg-cyan-700 text-white font-extrabold rounded-xl text-xs"
               >
-                Saqlash
+                {t("Saqlash")}
               </button>
             </div>
           </form>
@@ -258,10 +387,10 @@ export default function DoctorDashboard({
         <div className="bg-white rounded-2xl p-4 border border-slate-150/85 shadow-xs flex items-center justify-between">
           <div className="space-y-0.5">
             <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest leading-none">
-              Navbat kutayotganlar
+              {t("Navbat kutayotganlar")}
             </h4>
             <div className="text-2xl font-extrabold text-slate-800 font-mono pt-1">
-              {pendingQueues.length} ta chipta
+              {pendingQueues.length} {t("ta chipta")}
             </div>
           </div>
           <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
@@ -273,10 +402,10 @@ export default function DoctorDashboard({
         <div className="bg-white rounded-2xl p-4 border border-slate-150/85 shadow-xs flex items-center justify-between">
           <div className="space-y-0.5">
             <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest leading-none">
-              Bugun qabul qilindi
+              {t("Bugun qabul qilindi")}
             </h4>
             <div className="text-2xl font-extrabold text-slate-800 font-mono pt-1">
-              {completedQueues.length} nafar
+              {completedQueues.length} {t("nafar")}
             </div>
           </div>
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
@@ -288,10 +417,10 @@ export default function DoctorDashboard({
         <div className="bg-white rounded-2xl p-4 border border-slate-150/85 shadow-xs flex items-center justify-between">
           <div className="space-y-0.5">
             <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest leading-none">
-              Bugungi daromad
+              {t("Bugungi daromad")}
             </h4>
             <span className="text-md font-extrabold text-blue-700 pt-2 font-mono leading-none block">
-              {dailyRevenue.toLocaleString('uz-UZ')}.00 so'm
+              {dailyRevenue.toLocaleString('uz-UZ')}.00 {language === 'en' ? 'UZS' : language === 'ru' ? 'сум' : "so'm"}
             </span>
           </div>
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
@@ -303,7 +432,7 @@ export default function DoctorDashboard({
         <div className="bg-white rounded-2xl p-4 border border-slate-150/85 shadow-xs flex items-center justify-between">
           <div className="space-y-0.5">
             <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest leading-none">
-              O'rtacha baho
+              {t("O'rtacha baho")}
             </h4>
             <div className="text-xl font-extrabold text-amber-500 flex items-center gap-1 font-sans pt-1">
               ★ {avgRating.toFixed(1)}
@@ -321,7 +450,7 @@ export default function DoctorDashboard({
           <div className="flex items-center gap-1.5 text-emerald-600 border-b border-slate-50 pb-2">
             <CircleDot className="w-4.5 h-4.5 animate-pulse text-emerald-500" />
             <span className="text-[11px] font-extrabold uppercase tracking-wide">
-              XONADA CHAQIRILAYOTGAN / DAVOLANAYOTGAN FAOL BEMOR
+              {t("XONADA CHAQIRILAYOTGAN / DAVOLANAYOTGAN FAOL BEMOR")}
             </span>
           </div>
 
@@ -339,17 +468,17 @@ export default function DoctorDashboard({
                     <div>
                       <h4 className="text-sm font-extrabold text-emerald-950">{item.patientName}</h4>
                       <p className="text-xs text-slate-500 mt-1">
-                        Xizmat: <strong className="text-slate-800">{srv?.name}</strong> | Telefon: <strong>{item.patientPhone}</strong>
+                        {t("Xizmat")}: <strong className="text-slate-800">{srv?.name}</strong> | {t("Telefon")}: <strong>{item.patientPhone}</strong>
                       </p>
                       
                       <div className="mt-2.5 flex items-center gap-2">
                         {isCalling ? (
                           <span className="px-2.5 py-0.5 bg-orange-100 border border-orange-200 text-orange-850 text-[9px] font-extrabold rounded-md animate-pulse">
-                            📣 KABINETGA CHAQIRILMOQDA (Signal monitorida yonmoqda)
+                            {t("📣 KABINETGA CHAQIRILMOQDA (Signal monitorida yonmoqda)")}
                           </span>
                         ) : (
                           <span className="px-2.5 py-0.5 bg-sky-100 border border-sky-200 text-sky-850 text-[9px] font-extrabold rounded-md">
-                            🦷 QABUL REJIMIDA (Davolash ishlari faol bajarilmoqda)
+                            {t("🦷 QABUL REJIMIDA (Davolash ishlari faol bajarilmoqda)")}
                           </span>
                         )}
                       </div>
@@ -359,26 +488,17 @@ export default function DoctorDashboard({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => onUpdateQueueStatus(item.id, 'cancelled')}
-                      className="px-4 py-2 border border-slate-200 hover:bg-rose-50 hover:text-rose-600 text-slate-500 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                      className="px-4 py-2 border border-slate-200 hover:bg-rose-50 hover:text-rose-600 text-rose-500 text-xs font-bold rounded-xl transition-all cursor-pointer"
                     >
-                      Bekor qilish
+                      {t("Bekor qilish")}
                     </button>
 
-                    {isCalling ? (
-                      <button
-                        onClick={() => onUpdateQueueStatus(item.id, 'in_progress')}
-                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-extrabold rounded-xl shadow-md transition-all cursor-pointer"
-                      >
-                        Qabulni boshlash ▶
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => onUpdateQueueStatus(item.id, 'completed')}
-                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-extrabold rounded-xl shadow-md transition-all cursor-pointer"
-                      >
-                        Davolashni yakunlash ✓
-                      </button>
-                    )}
+                    <button
+                      onClick={() => onUpdateQueueStatus(item.id, 'completed')}
+                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-extrabold rounded-xl shadow-md transition-all cursor-pointer"
+                    >
+                      {t("Davolashni yakunlash ✓")}
+                    </button>
                   </div>
                 </div>
               );
@@ -391,7 +511,7 @@ export default function DoctorDashboard({
       <div>
         <div className="border-b border-slate-100 pb-2 mb-4">
           <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest">
-            📊 Navbatni boshqarish paneli (Smart taqsimlash)
+            {t("📊 Navbatni boshqarish paneli (Smart taqsimlash)")}
           </h3>
         </div>
 
@@ -399,16 +519,16 @@ export default function DoctorDashboard({
           {/* Column 1: Yangi Mijozlar */}
           <div className="bg-white rounded-3xl p-5 border border-slate-150/70 shadow-md space-y-4">
             <h4 className="text-xs font-extrabold text-blue-600 block uppercase tracking-wider flex items-center justify-between">
-              <span>Yangi Mijozlar (Birlamchi ko'rik)</span>
+              <span>{t("Yangi Mijozlar (Birlamchi ko'rik)")}</span>
               <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-mono text-[10px] font-bold rounded-full">
-                {newPatients.length} ta
+                {newPatients.length} {t("ta")}
               </span>
             </h4>
 
             <div className="space-y-3">
               {newPatients.length === 0 ? (
                 <div className="py-12 border-2 border-dashed border-slate-100 rounded-2xl text-center text-slate-400 text-xs font-medium">
-                  Hozircha yangi bemorlar navbati yo'q.
+                  {t("Hozircha yangi bemorlar navbati yo'q.")}
                 </div>
               ) : (
                 newPatients.map((item) => {
@@ -421,15 +541,23 @@ export default function DoctorDashboard({
                           <span className="font-extrabold text-slate-800 text-xs">{item.patientName}</span>
                         </div>
                         <p className="text-[10px] text-slate-400 font-bold font-mono mt-1">📞 {item.patientPhone}</p>
-                        <p className="text-[11px] text-slate-600 mt-1">Xizmat: <strong>{srv?.name}</strong></p>
+                        <p className="text-[11px] text-slate-600 mt-1">{t("Xizmat")}: <strong>{srv?.name}</strong></p>
                       </div>
 
-                      <button
-                        onClick={() => onUpdateQueueStatus(item.id, 'calling')}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-xl transition-all flex items-center gap-1"
-                      >
-                        <Play className="w-3 h-3 fill-current" /> Chaqirish
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => onUpdateQueueStatus(item.id, 'cancelled')}
+                          className="px-2.5 py-1.5 border border-rose-250 hover:bg-rose-50 text-rose-600 text-[10px] font-extrabold rounded-xl transition-all cursor-pointer"
+                        >
+                          {t("Bekor qilish")}
+                        </button>
+                        <button
+                          onClick={() => onUpdateQueueStatus(item.id, 'in_progress')}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-xl transition-all flex items-center gap-1 active:scale-95 cursor-pointer"
+                        >
+                          <Play className="w-3 h-3 fill-current" /> {t("Chaqirish")}
+                        </button>
+                      </div>
                     </div>
                   );
                 })
@@ -440,16 +568,16 @@ export default function DoctorDashboard({
           {/* Column 2: Doimiy Mijozlar */}
           <div className="bg-white rounded-3xl p-5 border border-slate-150/70 shadow-md space-y-4">
             <h4 className="text-xs font-extrabold text-indigo-600 block uppercase tracking-wider flex items-center justify-between">
-              <span>Doimiy Bemorlar (Tashrif tarixdagilar)</span>
+              <span>{t("Doimiy Bemorlar (Tashrif tarixdagilar)")}</span>
               <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-mono text-[10px] font-bold rounded-full">
-                {regularPatients.length} ta
+                {regularPatients.length} {t("ta")}
               </span>
             </h4>
 
             <div className="space-y-3">
               {regularPatients.length === 0 ? (
                 <div className="py-12 border-2 border-dashed border-slate-100 rounded-2xl text-center text-slate-400 text-xs font-medium">
-                  Hozircha doimiy bemorlar navbati yo'q.
+                  {t("Hozircha doimiy bemorlar navbati yo'q.")}
                 </div>
               ) : (
                 regularPatients.map((item) => {
@@ -462,15 +590,23 @@ export default function DoctorDashboard({
                           <span className="font-extrabold text-slate-800 text-xs">{item.patientName}</span>
                         </div>
                         <p className="text-[10px] text-slate-400 font-bold font-mono mt-1">📞 {item.patientPhone}</p>
-                        <p className="text-[11px] text-slate-600 mt-1">Xizmat: <strong>{srv?.name}</strong></p>
+                        <p className="text-[11px] text-slate-600 mt-1">{t("Xizmat")}: <strong>{srv?.name}</strong></p>
                       </div>
 
-                      <button
-                        onClick={() => onUpdateQueueStatus(item.id, 'calling')}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-xl transition-all flex items-center gap-1"
-                      >
-                        <Play className="w-3 h-3 fill-current" /> Chaqirish
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => onUpdateQueueStatus(item.id, 'cancelled')}
+                          className="px-2.5 py-1.5 border border-rose-250 hover:bg-rose-50 text-rose-600 text-[10px] font-extrabold rounded-xl transition-all cursor-pointer"
+                        >
+                          {t("Bekor qilish")}
+                        </button>
+                        <button
+                          onClick={() => onUpdateQueueStatus(item.id, 'in_progress')}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-xl transition-all flex items-center gap-1 active:scale-95 cursor-pointer"
+                        >
+                          <Play className="w-3 h-3 fill-current" /> {t("Chaqirish")}
+                        </button>
+                      </div>
                     </div>
                   );
                 })
@@ -483,15 +619,15 @@ export default function DoctorDashboard({
       {/* COMPLETED LIST OF TODAY */}
       <div className="bg-white rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
         <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-widest flex items-center gap-1.5 border-b border-slate-50 pb-2">
-          <span>Tugatilgan qabullar ro'yxati (Bugun)</span>
+          <span>{t("Tugatilgan qabullar ro'yxati (Bugun)")}</span>
           <span className="px-2 py-0.5 bg-slate-100 text-slate-500 font-mono text-[10px] font-bold rounded-full">
-            {completedQueues.length} ta
+            {completedQueues.length} {t("ta")}
           </span>
         </h3>
 
         <div className="divide-y divide-slate-100">
           {completedQueues.length === 0 ? (
-            <p className="text-slate-400 font-semibold py-8 text-center text-xs">Bugun hali qabul sobiq qilinmadi.</p>
+            <p className="text-slate-400 font-semibold py-8 text-center text-xs">{t("Bugun hali qabul sobiq qilinmadi.")}</p>
           ) : (
             completedQueues.map((item) => {
               const srv = getServiceInfo(item.serviceId);
@@ -499,7 +635,7 @@ export default function DoctorDashboard({
                 <div key={item.id} className="py-3 flex justify-between items-center text-xs">
                   <div>
                     <h4 className="font-extrabold text-slate-800 text-xs">#{item.number} | {item.patientName}</h4>
-                    <p className="text-[10px] text-slate-400">{srv?.name} — {getServicePrice(item.serviceId).toLocaleString('uz-UZ')} so'm</p>
+                    <p className="text-[10px] text-slate-400">{srv?.name} — {getServicePrice(item.serviceId).toLocaleString('uz-UZ')} {language === 'en' ? 'UZS' : language === 'ru' ? 'сум' : "so'm"}</p>
                   </div>
                   <div className="flex items-center gap-1">
                     {item.rating ? (
@@ -509,7 +645,7 @@ export default function DoctorDashboard({
                         ))}
                       </div>
                     ) : (
-                      <span className="text-[10px] text-slate-300">kutilmoqda</span>
+                      <span className="text-[10px] text-slate-300">{t("kutilmoqda")}</span>
                     )}
                   </div>
                 </div>

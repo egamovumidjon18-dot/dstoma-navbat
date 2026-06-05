@@ -1,4 +1,4 @@
-import { Clinic, Doctor, Service, QueueItem, CodeSnippet } from './types';
+import { Clinic, Doctor, Service, QueueItem, CodeSnippet, SaaSPayment } from './types';
 
 export const INITIAL_CLINICS: Clinic[] = [
   {
@@ -15,7 +15,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     rentalPrice: 1500000,
     nextPaymentDate: '2026-07-01',
     subscriptionStatus: 'active',
-    ownerName: 'Umidjon Egamov'
+    ownerName: 'Umidjon Egamov',
+    login: 'ceo_samarqand',
+    password: 'Stoma100200',
+    mapLink: 'https://www.google.com/maps?q=39.6542,66.9597'
   },
   {
     id: 'buxoro',
@@ -31,7 +34,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     rentalPrice: 1200000,
     nextPaymentDate: '2026-06-15',
     subscriptionStatus: 'trial',
-    ownerName: 'Shaxzod Rahmonov'
+    ownerName: 'Shaxzod Rahmonov',
+    login: 'ceo_buxoro',
+    password: 'Stoma200300',
+    mapLink: 'https://www.google.com/maps?q=39.7747,64.4286'
   },
   {
     id: 'toshkent',
@@ -47,7 +53,10 @@ export const INITIAL_CLINICS: Clinic[] = [
     rentalPrice: 2500000,
     nextPaymentDate: '2026-06-25',
     subscriptionStatus: 'active',
-    ownerName: 'Farrux Alimov'
+    ownerName: 'Farrux Alimov',
+    login: 'ceo_toshkent',
+    password: 'Stoma305500',
+    mapLink: 'https://www.google.com/maps?q=41.2995,69.2401'
   }
 ];
 
@@ -83,7 +92,9 @@ export const INITIAL_DOCTORS: Doctor[] = [
     rating: 4.7,
     ratingCount: 3,
     image: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=200&auto=format&fit=crop',
-    status: 'idle'
+    status: 'idle',
+    login: 'umidjon',
+    password: 'Password1'
   },
   {
     id: 'doc_sm_2',
@@ -93,7 +104,9 @@ export const INITIAL_DOCTORS: Doctor[] = [
     rating: 5.0,
     ratingCount: 2,
     image: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?q=80&w=200&auto=format&fit=crop',
-    status: 'idle'
+    status: 'idle',
+    login: 'abdulaziz',
+    password: 'Password2'
   },
 
   // Bukhara Doctors
@@ -105,7 +118,9 @@ export const INITIAL_DOCTORS: Doctor[] = [
     rating: 4.8,
     ratingCount: 65,
     image: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?q=80&w=200&auto=format&fit=crop',
-    status: 'idle'
+    status: 'idle',
+    login: 'sherzod',
+    password: 'Password3'
   },
   {
     id: 'doc_bx_2',
@@ -115,7 +130,9 @@ export const INITIAL_DOCTORS: Doctor[] = [
     rating: 4.5,
     ratingCount: 43,
     image: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?q=80&w=200&auto=format&fit=crop',
-    status: 'away'
+    status: 'away',
+    login: 'laylo',
+    password: 'Password4'
   },
 
   // Tashkent Doctors
@@ -127,7 +144,9 @@ export const INITIAL_DOCTORS: Doctor[] = [
     rating: 4.95,
     ratingCount: 310,
     image: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?q=80&w=200&auto=format&fit=crop',
-    status: 'idle'
+    status: 'idle',
+    login: 'sardor',
+    password: 'Password5'
   },
   {
     id: 'doc_tk_2',
@@ -137,7 +156,9 @@ export const INITIAL_DOCTORS: Doctor[] = [
     rating: 4.8,
     ratingCount: 145,
     image: 'https://images.unsplash.com/photo-1527613426441-4da17471b66d?q=80&w=200&auto=format&fit=crop',
-    status: 'busy'
+    status: 'busy',
+    login: 'nigora',
+    password: 'Password6'
   },
   {
     id: 'doc_tk_3',
@@ -147,7 +168,9 @@ export const INITIAL_DOCTORS: Doctor[] = [
     rating: 4.75,
     ratingCount: 92,
     image: 'https://images.unsplash.com/photo-1612531386530-97286d97c2d2?q=80&w=200&auto=format&fit=crop',
-    status: 'idle'
+    status: 'idle',
+    login: 'dr_aziz',
+    password: 'Password7'
   }
 ];
 

@@ -27,7 +27,8 @@ export const mapQueueToReact = (item: any): QueueItem => {
     createdAt: item.created_at || item.createdAt || new Date().toISOString(),
     hasInfection: item.has_infection ?? item.hasInfection ?? false,
     medicalNotes: item.medical_notes ?? item.medicalNotes ?? '',
-    passportSerial: item.passport_serial ?? item.passportSerial ?? ''
+    passportSerial: item.passport_serial ?? item.passportSerial ?? '',
+    telegramChatId: item.telegram_chat_id ?? item.telegramChatId ?? ''
   };
 };
 
@@ -79,6 +80,7 @@ export const DjangoAPI = {
     hasInfection?: boolean;
     medicalNotes?: string;
     passportSerial?: string;
+    telegramChatId?: string;
   }): Promise<QueueItem> {
     const url = `${getApiUrl()}/api/queues/`;
     const res = await fetch(url, {
@@ -93,6 +95,7 @@ export const DjangoAPI = {
         has_infection: data.hasInfection ?? false,
         medical_notes: data.medicalNotes ?? '',
         passport_serial: data.passportSerial ?? '',
+        telegram_chat_id: data.telegramChatId || '',
         status: 'pending'
       }),
     });
