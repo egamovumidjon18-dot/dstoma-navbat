@@ -217,6 +217,57 @@ export default function ClientDashboard({
   const [selectedTooth, setSelectedTooth] = useState<number>(24);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [scannerTick, setScannerTick] = useState<number>(0);
+  const [symptomsInput, setSymptomsInput] = useState<string>('');
+  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
+  const [aiOutput, setAiOutput] = useState<{
+    toothNumber: number;
+    enamelAbrasion: string;
+    healthFactor: string;
+    recommendedTreatment: string;
+    diagnosticText: string;
+    actionPlan: string[];
+    isSimulation: boolean;
+  } | null>(null);
+
+  React.useEffect(() => {
+    // Keep it synchronized, but clear AI result on manual tooth changes
+    setAiOutput(null);
+  }, [selectedTooth]);
+
+  const handleAiDiagnostic = async () => {
+    setIsScanning(false);
+    setIsAiLoading(true);
+    try {
+      const response = await fetch('/api/ai/diagnostic', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          toothNumber: selectedTooth,
+          symptoms: symptomsInput,
+          language: language,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error('API request failed');
+      }
+      const data = await response.json();
+      setAiOutput(data);
+      setToastMsg({
+        type: 'success',
+        text: language === 'uz' ? 'AI diagnostika muvaffaqiyatli yakunlandi!' : language === 'ru' ? 'ИИ диагностика завершена успешно!' : 'AI diagnostics computed successfully!'
+      });
+    } catch (e: any) {
+      console.error('AI telemetry processing error', e);
+      setToastMsg({
+        type: 'error',
+        text: language === 'uz' ? 'AI tizimi bilan aloqa xatosi!' : language === 'ru' ? 'Ошибка связи с ИИ!' : 'Connection to AI failed!'
+      });
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
 
   // Auto-scan Tooth sweeping loop
   React.useEffect(() => {
@@ -677,48 +728,165 @@ export default function ClientDashboard({
                   </div>
 
                   {/* Right Telemetry Information output panel */}
-                  <div className="flex-1 bg-slate-950/80 border border-[#21355c]/60 rounded-2xl p-4.5 font-mono text-[10.5px] text-slate-300 space-y-2.5 max-w-full lg:max-w-xs select-all">
+                  <div className="flex-1 bg-slate-950/90 border border-[#21355c]/65 rounded-2xl p-4.5 font-mono text-[10.5px] text-slate-300 space-y-3.5 max-w-full lg:max-w-xs flex flex-col justify-start">
                     <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                      <span className="text-[9.5px] font-black text-emerald-400 uppercase tracking-widest">Tooth telemetry analysis</span>
-                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-400/20 text-[8.5px] font-bold">NODE: #{selectedTooth}</span>
+                      <span className="text-[9.5px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1">
+                        <Activity className="w-3 h-3 text-emerald-400 shrink-0" />
+                        {language === 'uz' ? 'Tish AI Telemetriyasi' : language === 'ru' ? 'ИИ Телеметрия зуба' : 'Tooth AI Telemetry'}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-400/20 text-[8.5px] font-black">NODE: #{selectedTooth}</span>
                     </div>
 
-                    {/* Data output entries based on selected Tooth index */}
-                    <div className="space-y-1 text-xs">
-                      <p><strong className="text-slate-405">Tish indeksi:</strong> <span className="text-white">#{selectedTooth} mandibular</span></p>
-                      
-                      <p>
-                        <strong className="text-slate-405">Enamel Abrasion:</strong>{' '}
-                        <span className="text-white">
-                          {selectedTooth === 19 ? '18% spot indent' : selectedTooth === 28 ? '12% normal' : selectedTooth === 30 ? '30% impacted' : '3% perfect condition'}
-                        </span>
-                      </p>
+                    {/* Quick Symptoms Inputs for clinical assessment */}
+                    <div className="space-y-2 select-none">
+                      <div className="text-left">
+                        <label className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block mb-1">
+                          {language === 'uz' ? '🦷 Xastalik alomatlari / Shikoyatlar:' : language === 'ru' ? '🦷 Жалобы и симптомы:' : '🦷 Personal Symptoms:'}
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={symptomsInput}
+                          onChange={(e) => setSymptomsInput(e.target.value)}
+                          placeholder={
+                            language === 'uz' 
+                              ? "Og'riq bormi? Sovuq-issiqqa sezasizmi? Karies bormi..." 
+                              : language === 'ru' 
+                                ? "Есть острая боль? Реакция на холодное? Кариес?" 
+                                : "Is there acute pain? Sensitivity? Describe issues..."
+                          }
+                          className="w-full text-[10px] p-2 bg-[#061025] hover:bg-[#091733] border border-[#1e3256]/80 text-white rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 font-sans resize-none transition-all placeholder-slate-500"
+                        />
+                      </div>
 
-                      <p>
-                        <strong className="text-slate-450">Tavsiya muolaja:</strong>{' '}
-                        <span className={selectedTooth === 19 ? 'text-rose-400' : selectedTooth === 28 ? 'text-amber-400 animate-pulse' : selectedTooth === 30 ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
-                          {selectedTooth === 19 
-                            ? 'Composite Plomba' 
-                            : selectedTooth === 28 
-                            ? 'Ultrasonic Cleaning' 
-                            : selectedTooth === 30 
-                            ? 'Surgerical Extraction' 
-                            : 'Muntazam gigiyena (Sog\'lom)'}
-                        </span>
-                      </p>
-
-                      <p>
-                        <strong className="text-slate-450">Health Factor:</strong>{' '}
-                        <span className={selectedTooth === 19 ? 'text-pink-400 font-bold' : selectedTooth === 30 ? 'text-[#f43] font-black' : 'text-emerald-400'}>
-                          {selectedTooth === 19 ? 'Fair (72%)' : selectedTooth === 30 ? 'Critical (40%)' : 'Excellent (98%)'}
-                        </span>
-                      </p>
+                      <button
+                        type="button"
+                        onClick={handleAiDiagnostic}
+                        disabled={isAiLoading}
+                        className={`w-full py-2 rounded-xl transition-all cursor-pointer font-black text-[9.5px] tracking-wider uppercase flex items-center justify-center gap-1.5 border ${
+                          isAiLoading
+                            ? 'bg-[#0f2d20]/30 border-emerald-500/40 text-emerald-400/80 cursor-wait'
+                            : 'bg-emerald-500 text-slate-950 font-black hover:bg-emerald-400 border-transparent shadow-[0_0_12px_rgba(16,185,129,0.25)] hover:scale-[1.02]'
+                        }`}
+                      >
+                        {isAiLoading ? (
+                          <>
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            <span>{language === 'uz' ? 'AI Hisoblamoqda...' : language === 'ru' ? 'ИИ Вычисляет...' : 'AI Computing...'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3 h-3 text-slate-950 fill-current" />
+                            <span>{language === 'uz' ? 'Klinik tahlil o\'tkazish' : language === 'ru' ? 'Запустить анализ ИИ' : 'Compute Diagnostic'}</span>
+                          </>
+                        )}
+                      </button>
                     </div>
 
-                    <div className="pt-1 select-none flex items-center gap-1.5 text-slate-450 text-[9px]">
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Sinxronizatsiya statusi: Faol</span>
-                    </div>
+                    {/* Output segment rendering either dynamic Gemini results or default baseline profile */}
+                    {isAiLoading ? (
+                      <div className="border border-[#10b981]/20 rounded-xl p-3 bg-slate-950/60 flex flex-col items-center justify-center py-6 space-y-2 select-none">
+                        <div className="relative">
+                          <div className="w-7 h-7 rounded-full border-2 border-emerald-500/10 border-t-emerald-400 animate-spin" />
+                          <Activity className="w-3.5 h-3.5 text-emerald-400 absolute inset-0 m-auto animate-pulse" />
+                        </div>
+                        <span className="text-[8px] font-bold text-slate-400 animate-pulse tracking-widest uppercase">
+                          {language === 'uz' ? 'Generatsiya qilinmoqda...' : language === 'ru' ? 'Генерация результатов...' : 'Running LLM Diagnostic...'}
+                        </span>
+                      </div>
+                    ) : aiOutput ? (
+                      <div className="space-y-2.5 text-left select-all animate-fade-in text-[10px]">
+                        <div className="space-y-1.5 border-b border-slate-900 pb-2">
+                          <p className="flex justify-between items-center bg-slate-900/50 p-1 px-1.5 rounded">
+                            <strong className="text-slate-400">{language === 'uz' ? 'Yemirilish (Abrasion):' : language === 'ru' ? 'Истирание эмали:' : 'Enamel Abrasion:'}</strong> 
+                            <span className="text-white font-bold">{aiOutput.enamelAbrasion}</span>
+                          </p>
+                          <p className="flex justify-between items-center bg-slate-900/50 p-1 px-1.5 rounded">
+                            <strong className="text-slate-400">{language === 'uz' ? 'Salomatlik koeff:' : language === 'ru' ? 'Фактор здоровья:' : 'Health Factor:'}</strong> 
+                            <span className={`font-black uppercase text-[9px] ${
+                              aiOutput.healthFactor.toLowerCase().includes('critical') || aiOutput.healthFactor.toLowerCase().includes('kritik') || aiOutput.healthFactor.toLowerCase().includes('low')
+                                ? 'text-red-400'
+                                : aiOutput.healthFactor.toLowerCase().includes('fair') || aiOutput.healthFactor.toLowerCase().includes('moderate')
+                                  ? 'text-amber-400'
+                                  : 'text-emerald-400'
+                            }`}>{aiOutput.healthFactor}</span>
+                          </p>
+                          <p className="flex flex-col bg-emerald-500/5 p-1 px-1.5 border border-emerald-500/20 rounded">
+                            <strong className="text-emerald-400 text-[8px] uppercase tracking-wider">{language === 'uz' ? 'Tavsiya muolaja:' : language === 'ru' ? 'Рекомендовано:' : 'Recommended Treatment:'}</strong> 
+                            <span className="text-white font-bold mt-0.5">{aiOutput.recommendedTreatment}</span>
+                          </p>
+                        </div>
+
+                        {/* Rationale text paragraph */}
+                        <div className="bg-[#040813] border border-[#21355c]/30 rounded-lg p-2 text-slate-350 text-[9.5px] leading-relaxed select-text font-sans">
+                          {aiOutput.diagnosticText}
+                        </div>
+
+                        {/* Bullet list actionPlan */}
+                        {aiOutput.actionPlan && aiOutput.actionPlan.length > 0 && (
+                          <div className="space-y-1 select-none">
+                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block">{language === 'uz' ? 'TAVSIYALARNING AMALIY REJASI:' : language === 'ru' ? 'ПЛАН ДЕЙСТВИЙ ДЛЯ ПАЦИЕНТА:' : 'PRACTICAL ACTION PLAN:'}</span>
+                            <ul className="list-disc pl-3 text-[9px] text-emerald-250 space-y-0.5 text-slate-300 font-sans">
+                              {aiOutput.actionPlan.map((step, idx) => (
+                                <li key={idx}>{step}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Integration type footer badge */}
+                        <div className="pt-2 border-t border-slate-900 select-none flex items-center justify-between text-[7.5px] font-bold tracking-widest uppercase">
+                          <span className="text-slate-500">DSTOMA DIAGNOSTIC v3.5</span>
+                          <span className={`px-1.5 py-0.5 rounded text-slate-950 font-black ${aiOutput.isSimulation ? 'bg-amber-400' : 'bg-emerald-400'}`}>
+                            {aiOutput.isSimulation ? '🛰️ SIMULATOR' : '⭐ NODE LIVE'}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Classical telemetry panel fallback with prompt reminder */
+                      <div className="space-y-2 text-left">
+                        <div className="space-y-1 text-xs">
+                          <p><strong className="text-slate-405">Tish indeksi:</strong> <span className="text-white">#{selectedTooth} mandibular</span></p>
+                          
+                          <p>
+                            <strong className="text-slate-405">Enamel Abrasion:</strong>{' '}
+                            <span className="text-white">
+                              {selectedTooth === 19 ? '18% spot indent' : selectedTooth === 28 ? '12% normal' : selectedTooth === 30 ? '30% impacted' : '3% perfect condition'}
+                            </span>
+                          </p>
+
+                          <p>
+                            <strong className="text-slate-450">Tavsiya muolaja:</strong>{' '}
+                            <span className={selectedTooth === 19 ? 'text-rose-400' : selectedTooth === 28 ? 'text-amber-400 animate-pulse' : selectedTooth === 30 ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+                              {selectedTooth === 19 
+                                ? 'Composite Plomba' 
+                                : selectedTooth === 28 
+                                ? 'Ultrasonic Cleaning' 
+                                : selectedTooth === 30 
+                                ? 'Surgerical Extraction' 
+                                : 'Muntazam gigiyena (Sog\'lom)'}
+                            </span>
+                          </p>
+
+                          <p>
+                            <strong className="text-slate-450">Health Factor:</strong>{' '}
+                            <span className={selectedTooth === 19 ? 'text-pink-400 font-bold' : selectedTooth === 30 ? 'text-[#f43] font-black' : 'text-emerald-400'}>
+                              {selectedTooth === 19 ? 'Fair (72%)' : selectedTooth === 30 ? 'Critical (40%)' : 'Excellent (98%)'}
+                            </span>
+                          </p>
+                        </div>
+
+                        <div className="pt-1 select-none flex items-center gap-1.5 text-slate-450 text-[8.5px] border-t border-slate-900 pt-2 text-slate-400">
+                          <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
+                          <span>
+                            {language === 'uz' 
+                              ? 'Aniqroq natija olish uchun yuqoridagi maydonga xastalik belgilarini yozib tugmani bosing.' 
+                              : language === 'ru' 
+                                ? 'Для точной диагностики напишите жалобы выше и нажмите кнопку.' 
+                                : 'Type symptoms above and click to generate live deep diagnosis.'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -21,17 +21,20 @@ const hasValidKey = Boolean(API_KEY) && API_KEY !== 'YOUR_API_KEY' && API_KEY.tr
 
 export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, language }: ClinicMapProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'vector' | 'leaflet' | 'google'>('leaflet');
+  const [activeTab, setActiveTab] = useState<'vector' | 'leaflet' | 'google' | 'yandex'>('leaflet');
   const [userLat, setUserLat] = useState<number>(39.6542); // defaults to Samarqand shahri
   const [userLng, setUserLng] = useState<number>(66.9597);
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'detecting' | 'active' | 'denied'>('idle');
   const [leafletLoaded, setLeafletLoaded] = useState<boolean>(false);
+  const [yandexLoaded, setYandexLoaded] = useState<boolean>(false);
   const [customDistanceFilter, setCustomDistanceFilter] = useState<number>(3000); // 3000km to cover all of Uzbekistan in search
 
-  // Refs for Leaflet map elements
+  // Refs for map elements
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
   const markersGroupRef = useRef<any>(null);
+  const yandexMapContainerRef = useRef<HTMLDivElement>(null);
+  const yandexMapRef = useRef<any>(null);
 
   const t = (key: string) => {
     return (TRANSLATIONS[language] as any)?.[key] || (TRANSLATIONS['uz'] as any)?.[key] || key;
@@ -65,6 +68,33 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         const interval = setInterval(() => {
           if ((window as any).L) {
             setLeafletLoaded(true);
+            clearInterval(interval);
+          }
+        }, 300);
+        return () => clearInterval(interval);
+      }
+    }
+  }, [activeTab]);
+
+  // Dynamic Yandex Maps asset loading
+  useEffect(() => {
+    if (activeTab !== 'yandex') return;
+
+    if (!document.getElementById('yandex-js')) {
+      const script = document.createElement('script');
+      script.id = 'yandex-js';
+      script.src = 'https://api-maps.yandex.ru/2.1/?lang=uz_UZ';
+      script.onload = () => {
+        setYandexLoaded(true);
+      };
+      document.body.appendChild(script);
+    } else {
+      if ((window as any).ymaps) {
+        setYandexLoaded(true);
+      } else {
+        const interval = setInterval(() => {
+          if ((window as any).ymaps) {
+            setYandexLoaded(true);
             clearInterval(interval);
           }
         }, 300);
@@ -190,12 +220,19 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
 
         const clinicMarker = L.marker([clinic.lat, clinic.lng], { icon: clinicIcon })
           .bindPopup(`
-            <div style="font-family: sans-serif; padding: 4px; color: #1e293b;">
-              <small style="color: #0891b2; font-weight: 800; text-transform: uppercase; font-size:9px;">${clinic.subdomain}.dstoma.uz</small>
-              <h4 style="margin:2px 0; font-size:12px; font-weight:bold; color: #0f172a;">${clinic.name}</h4>
-              <p style="margin:2px 0; font-size:11px; color:#64748b;">${clinic.address}</p>
-              <p style="margin:2px 0 6px 0; font-size:11px; font-weight:500;">📞 ${clinic.phone}</p>
-              <div style="color: #ea580c; font-size:10px; font-weight:bold;">★ ${clinic.rating} | ${getDistance(userLat, userLng, clinic.lat, clinic.lng)} km</div>
+            <div style="font-family: sans-serif; padding: 6px; color: #1f2937; min-width: 170px;">
+              <small style="color: #10b981; font-weight: 800; text-transform: uppercase; font-size: 8px; letter-spacing: 0.5px;">${clinic.subdomain}.dstoma.uz</small>
+              <h4 style="margin: 2px 0; font-size: 13px; font-weight: 800; color: #111827; line-height: 1.2;">${clinic.name}</h4>
+              <p style="margin: 3px 0; font-size: 11px; color: #4b5563; line-height: 1.3;">📍 ${clinic.address}</p>
+              <p style="margin: 2px 0 6px 0; font-size: 11px; font-weight: 600; color: #374151;">📞 ${clinic.phone}</p>
+              <div style="color: #f59e0b; font-size: 10px; font-weight: 800; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 5px;">
+                <span>★ ${clinic.rating}</span>
+                <span style="color: #10b981; background: #ecfdf5; padding: 1px 4px; border-radius: 4px;">${getDistance(userLat, userLng, clinic.lat, clinic.lng)} km</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 4px;">
+                <a href="https://www.google.com/maps/dir/?api=1&origin=${userLat},${userLng}&destination=${clinic.lat},${clinic.lng}&travelmode=driving" target="_blank" rel="noopener noreferrer" style="background-color: #10b981; color: white; padding: 5px; border-radius: 6px; font-size: 9px; font-weight: 900; text-decoration: none; text-align: center; display: block; filter: drop-shadow(0 1px 2px rgba(16,185,129,0.35)); transition: all 0.2s;">GOOGLE MAP</a>
+                <a href="https://yandex.com/maps/?rtext=${userLat},${userLng}~${clinic.lat},${clinic.lng}&rtt=auto" target="_blank" rel="noopener noreferrer" style="background-color: #f43f5e; color: white; padding: 5px; border-radius: 6px; font-size: 9px; font-weight: 900; text-decoration: none; text-align: center; display: block; filter: drop-shadow(0 1px 2px rgba(244,63,94,0.35)); transition: all 0.2s;">YANDEX MAP</a>
+              </div>
             </div>
           `)
           .addTo(markersGroup);
@@ -205,9 +242,25 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         });
       });
 
-      // Fit map perspective automatically to span all markers
-      if (clinics.length > 0) {
-        map.fitBounds(markersGroup.getBounds(), { padding: [50, 50] });
+      // Draw neon geodesic connection route line if a clinic is selected
+      if (selectedClinic) {
+        const polylinePoints = [
+          [userLat, userLng],
+          [selectedClinic.lat, selectedClinic.lng]
+        ];
+        L.polyline(polylinePoints, {
+          color: '#10b981',
+          weight: 3,
+          opacity: 0.85,
+          dashArray: '8, 8',
+          className: 'laser-route-line'
+        }).addTo(markersGroup);
+        
+        // Centering the view beautifully
+        map.setView([selectedClinic.lat, selectedClinic.lng], 12.5);
+      } else if (clinics.length > 0) {
+        // Fit map perspective automatically to span all markers
+        map.fitBounds(markersGroup.getBounds(), { padding: [40, 40] });
       }
 
     } catch (e) {
@@ -222,11 +275,104 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
     };
   }, [leafletLoaded, activeTab, userLat, userLng, clinics, selectedClinic]);
 
+  // Initialize and update Yandex Live map
+  useEffect(() => {
+    if (activeTab !== 'yandex' || !yandexLoaded || !yandexMapContainerRef.current) return;
+    const ymaps = (window as any).ymaps;
+    if (!ymaps) return;
+
+    // Destroy existing instance if any
+    if (yandexMapRef.current) {
+      try {
+        yandexMapRef.current.destroy();
+      } catch (err) {
+        console.warn("Yandex map destruction error:", err);
+      }
+      yandexMapRef.current = null;
+    }
+
+    ymaps.ready(() => {
+      try {
+        const map = new ymaps.Map(yandexMapContainerRef.current, {
+          center: [userLat, userLng],
+          zoom: 12,
+          controls: ['zoomControl', 'fullscreenControl']
+        });
+        
+        yandexMapRef.current = map;
+
+        // Add User Location indicator (Red Circle Dot Icon)
+        const userPlacemark = new ymaps.Placemark(
+          [userLat, userLng],
+          {
+            hintContent: t('approxLocation'),
+            balloonContent: `<b>${t('approxLocation')}</b><br/>Lat: ${userLat.toFixed(4)}, Lng: ${userLng.toFixed(4)}`
+          },
+          {
+            preset: 'islands#redCircleDotIconWithGlyph',
+            iconColor: '#f43f5e'
+          }
+        );
+        map.geoObjects.add(userPlacemark);
+
+        // Add each Clinic to Yandex Maps
+        clinics.forEach((clinic) => {
+          const isSelected = selectedClinic?.id === clinic.id;
+          const placemark = new ymaps.Placemark(
+            [clinic.lat, clinic.lng],
+            {
+              hintContent: clinic.name,
+              balloonContent: `
+                <div style="font-family: sans-serif; padding: 6px; color: #1f2937; min-width: 170px;">
+                  <small style="color: #10b981; font-weight: 800; text-transform: uppercase; font-size: 8px;">${clinic.subdomain}.dstoma.uz</small>
+                  <h4 style="margin: 2px 0; font-size: 13px; font-weight: 800; color: #111827; line-height: 1.2;">${clinic.name}</h4>
+                  <p style="margin: 3px 0; font-size: 11px; color: #4b5563; line-height: 1.3;">📍 ${clinic.address}</p>
+                  <p style="margin: 2px 0 6px 0; font-size: 11px; font-weight: 600; color: #374151;">📞 ${clinic.phone}</p>
+                  <div style="color: #f59e0b; font-size: 10px; font-weight: 850;">★ ${clinic.rating} | ${getDistance(userLat, userLng, clinic.lat, clinic.lng)} km</div>
+                </div>
+              `
+            },
+            {
+              preset: isSelected ? 'islands#greenMedicalIcon' : 'islands#blueMedicalIcon',
+              iconColor: isSelected ? '#10b981' : '#0ea5e9'
+            }
+          );
+
+          placemark.events.add('click', () => {
+            onSelectClinic(clinic);
+          });
+
+          map.geoObjects.add(placemark);
+        });
+
+        // Set viewport bounds
+        if (selectedClinic) {
+          map.setCenter([selectedClinic.lat, selectedClinic.lng], 12.5);
+        } else if (clinics.length > 0) {
+          map.setBounds(map.geoObjects.getBounds(), { checkZoomRange: true, zoomMargin: 40 });
+        }
+      } catch (err) {
+        console.error("Yandex Live map init error:", err);
+      }
+    });
+
+    return () => {
+      if (yandexMapRef.current) {
+        try {
+          yandexMapRef.current.destroy();
+        } catch (e) {
+          console.warn(e);
+        }
+        yandexMapRef.current = null;
+      }
+    };
+  }, [yandexLoaded, activeTab, userLat, userLng, clinics, selectedClinic]);
+
   return (
     <div id="clinic-map-root" className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-900 rounded-3xl overflow-hidden border border-[#233355]/50 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]">
       
-      {/* Sidebar: Search & dynamic sorted list */}
-      <div id="map-sidebar" className="lg:col-span-4 p-5 flex flex-col h-[600px] bg-[#0c1225] border-r border-[#1e3256]/60">
+      {/* Sidebar: Search & dynamic sorted list - optimized height on mobile */}
+      <div id="map-sidebar" className="lg:col-span-4 p-5 flex flex-col h-[440px] lg:h-[650px] bg-[#0c1225] border-r border-[#1e3256]/60">
         <div className="mb-4">
           <div className="flex items-center justify-between mb-1.5">
             <h3 className="text-sm font-black text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
@@ -234,15 +380,15 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
             </h3>
             {gpsStatus === 'active' ? (
               <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded-md flex items-center gap-1 animate-pulse">
-                <Wifi className="w-2.5 h-2.5" /> GPS Active
+                <Wifi className="w-2.5 h-2.5" /> {language === 'uz' ? 'GPS Faol' : language === 'ru' ? 'GPS Axтивен' : 'GPS Active'}
               </span>
             ) : gpsStatus === 'detecting' ? (
               <span className="text-[10px] font-mono text-cyan-400 font-medium bg-cyan-500/10 border border-cyan-500/25 px-1.5 py-0.5 rounded-md flex items-center gap-1">
-                <Globe className="w-2.5 h-2.5 animate-spin" /> Detecting...
+                <Globe className="w-2.5 h-2.5 animate-spin" /> {language === 'uz' ? 'Aniqlanmoqda...' : language === 'ru' ? 'Определение...' : 'Detecting...'}
               </span>
             ) : (
               <span className="text-[10px] font-mono text-slate-400 font-medium bg-slate-500/10 border border-slate-500/25 px-1.5 py-0.5 rounded-md">
-                Manual Fallback
+                {language === 'uz' ? "Qo'lda kiritish" : language === 'ru' ? "Вручную" : "Manual Fallback"}
               </span>
             )}
           </div>
@@ -273,7 +419,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 {t('manualSelect')}
               </label>
               <select
-                className="text-xs text-slate-300 bg-[#0c1225] hover:bg-[#121c35] border border-[#1e3256]/60 rounded-xl px-2.5 py-2 w-full font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="text-xs text-slate-300 bg-[#0c1225] hover:bg-[#121c35] border border-[#1e3256]/60 rounded-xl px-2.5 py-2 w-full font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
                 value={userLat === 39.6542 ? 'samarqand' : userLat === 39.7747 ? 'buxoro' : userLat === 41.2995 ? 'toshkent' : 'custom'}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -292,7 +438,34 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 <option value="samarqand">📍 {t('samarkandCity')} (M: 39.65, 66.95)</option>
                 <option value="buxoro">📍 {t('bukharaCity')} (M: 39.77, 64.42)</option>
                 <option value="toshkent">📍 {t('toshkentCity')} (M: 41.29, 69.24)</option>
-                {gpsStatus === 'active' && <option value="custom">🛰️ Real Geolocation (GPS)</option>}
+                {gpsStatus === 'active' && <option value="custom">🛰️ {language === 'uz' ? 'Real Geolokatsiya (GPS)' : language === 'ru' ? 'Реальная геолокация (GPS)' : 'Real Geolocation (GPS)'}</option>}
+              </select>
+            </div>
+
+            {/* Selection by Clinic Name */}
+            <div className="space-y-1.5 pt-2 border-t border-[#1e3256]/30 text-left mt-2">
+              <label className="text-[9px] font-bold text-slate-400 block uppercase flex items-center gap-1">
+                🏢 {language === 'uz' ? 'Klinikani tanlash (Nomi bo\'yicha):' : language === 'ru' ? 'Выбор заведения по названию:' : 'Choose Clinic by Name:'}
+              </label>
+              <select
+                className="text-xs text-slate-200 bg-[#0c1225] hover:bg-[#121c35] border border-emerald-500/40 rounded-xl px-2.5 py-2.5 w-full font-black focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer text-emerald-300"
+                value={selectedClinic ? selectedClinic.id : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const found = clinics.find(c => c.id === val);
+                  if (found) {
+                    onSelectClinic(found);
+                  } else {
+                    onSelectClinic(null as any);
+                  }
+                }}
+              >
+                <option value="" className="text-slate-400 font-normal">ℹ️ {language === 'uz' ? '-- Klinikani tanlang --' : language === 'ru' ? '-- Выберите филиал --' : '-- Choose Clinic or Branch --'}</option>
+                {clinics.map((clinic) => (
+                  <option key={clinic.id} value={clinic.id} className="text-slate-200 font-semibold bg-[#0c1225]">
+                    {clinic.name} ({clinic.subdomain}.dstoma.uz)
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -316,7 +489,11 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 scrollbar-thin">
           {filteredClinics.length === 0 ? (
             <div className="text-center py-12 text-slate-500 text-xs font-semibold">
-              Katalog bo'm-bo'sh yoki mos keladigan filial topilmadi.
+              {language === 'uz' 
+                ? "Katalog bo'sh yoki mos keladigan filial topilmadi." 
+                : language === 'ru' 
+                  ? "Каталог пуст или подходящий филиал не найден." 
+                  : "Directory is empty or no matching branch was found."}
             </div>
           ) : (
             filteredClinics.map((clinic) => {
@@ -370,6 +547,61 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                       {clinic.activePatients} {t('activeOnQueue')}
                     </span>
                   </div>
+
+                  {/* Explicit CTA Select Button to select by name/item */}
+                  <div className="mt-3 pt-2.5 border-t border-[#1e3256]/20 flex items-center justify-between">
+                    <span className="text-[9px] font-bold text-slate-550 uppercase tracking-widest text-slate-400">
+                      {isSelected 
+                        ? (language === 'uz' ? '⚡ Tanlangan' : language === 'ru' ? '⚡ Активен' : '⚡ Selected')
+                        : (language === 'uz' ? '🎯 Faol emas' : language === 'ru' ? '🎯 Не выбран' : '🎯 Click list')
+                      }
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectClinic(clinic);
+                      }}
+                      className={`text-[9.5px] font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1 shadow-md cursor-pointer ${
+                        isSelected 
+                          ? 'bg-emerald-500 text-slate-950 font-black ring-2 ring-emerald-500/20' 
+                          : 'bg-slate-900 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500 hover:text-slate-950 hover:border-transparent'
+                      }`}
+                    >
+                      {isSelected 
+                        ? (language === 'uz' ? '✓ FAOL FILIAL' : language === 'ru' ? '✓ АКТИВНЫЙ ФИЛИАЛ' : '✓ ACTIVE BRANCH')
+                        : (language === 'uz' ? '📍 TANLASH' : language === 'ru' ? '📍 ВЫБРАТЬ ФИЛИАЛ' : '📍 SELECT CLINIC')
+                      }
+                    </button>
+                  </div>
+
+                  {/* Route Navigator Shortcuts in the sidebar list when clicked */}
+                  {isSelected && (
+                    <div className="mt-3 pt-3 border-t border-[#10b981]/25 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      <p className="text-[8.5px] font-black text-slate-400 uppercase tracking-widest text-left">
+                        {language === 'uz' ? '🗺️ Marshrut navigatorlari:' : language === 'ru' ? '🗺️ Навигаторы маршрутов:' : '🗺️ Route Navigators:'}
+                      </p>
+                      <div className="grid grid-cols-2 gap-1.5 text-center">
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&origin=${userLat},${userLng}&destination=${clinic.lat},${clinic.lng}&travelmode=driving`}
+                          target="_blank"
+                          referrerPolicy="no-referrer"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-1 py-1 text-[9px] font-black text-emerald-400 bg-emerald-950/40 border border-emerald-500/20 rounded-lg hover:bg-[#10b981] hover:text-slate-950 transition-all uppercase"
+                        >
+                          Google Navigation
+                        </a>
+                        <a
+                          href={`https://yandex.com/maps/?rtext=${userLat},${userLng}~${clinic.lat},${clinic.lng}&rtt=auto`}
+                          target="_blank"
+                          referrerPolicy="no-referrer"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-1 py-1 text-[9px] font-black text-rose-450 bg-rose-950/40 border border-rose-500/20 rounded-lg hover:bg-rose-500 hover:text-white transition-all uppercase"
+                        >
+                          Yandex Navigation
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -377,66 +609,97 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         </div>
       </div>
 
-      {/* Main Map Presentation */}
-      <div id="map-canvas-container" className="lg:col-span-8 h-[600px] relative bg-[#040814] flex flex-col">
+      {/* Main Map Presentation - compact responsive height */}
+      <div id="map-canvas-container" className="lg:col-span-8 h-[440px] lg:h-[650px] relative bg-[#040814] flex flex-col">
         
-        {/* Real Dynamic Tab Choices */}
-        <div className="absolute top-4 left-20 z-40 flex gap-1 bg-slate-950/90 backdrop-blur-md p-1 rounded-xl shadow-2xl border border-[#1e3256]/50">
+        {/* Real Dynamic Tab Choices - compact responsive size on mobile */}
+        <div className="absolute top-3 left-2 sm:left-14 z-40 flex gap-1 bg-slate-950/92 backdrop-blur-md p-1 rounded-xl shadow-2xl border border-[#1e3256]/50 scale-90 sm:scale-100 origin-top-left">
           <button
             onClick={() => setActiveTab('leaflet')}
-            className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 py-1.5 text-[9px] sm:text-[10px] font-black uppercase rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
               activeTab === 'leaflet'
                 ? 'bg-emerald-500 text-slate-950 font-black shadow-lg'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            🗺️ Leaflet.js Live {leafletLoaded && <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>}
+            🗺️ <span className="hidden sm:inline">Leaflet.js Live</span><span className="inline sm:hidden">Leaflet</span> {leafletLoaded && <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>}
           </button>
           
           <button
             onClick={() => setActiveTab('vector')}
-            className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 py-1.5 text-[9px] sm:text-[10px] font-black uppercase rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
               activeTab === 'vector'
                 ? 'bg-emerald-500 text-slate-950 font-black shadow-lg'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            📟 High-Tech Vector HUD
+            📟 <span className="hidden sm:inline">High-Tech Vector HUD</span><span className="inline sm:hidden">HUD Map</span>
           </button>
           
           <button
+            onClick={() => setActiveTab('yandex')}
+            className={`px-2.5 py-1.5 text-[9px] sm:text-[10px] font-black uppercase rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+              activeTab === 'yandex'
+                ? 'bg-emerald-500 text-slate-950 font-black shadow-lg'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            🧭 <span className="hidden sm:inline">Yandex Maps Live</span><span className="inline sm:hidden">Yandex</span> {yandexLoaded && <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping"></span>}
+          </button>
+
+          <button
             onClick={() => setActiveTab('google')}
-            className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-2.5 py-1.5 text-[9px] sm:text-[10px] font-black uppercase rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
               activeTab === 'google'
                 ? 'bg-emerald-500 text-slate-950 font-black shadow-lg'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            🌐 Google Maps Live {hasValidKey && <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full"></span>}
+            🌐 <span className="hidden sm:inline">Google Maps Live</span><span className="inline sm:hidden">Google</span> {hasValidKey && <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full"></span>}
           </button>
         </div>
 
-        {/* Selected Clinic overlay hud */}
+        {/* Selected Clinic overlay hud - perfectly optimized and beautiful on mobile with Google/Yandex shortcuts */}
         {selectedClinic && (
-          <div className="absolute top-4 right-4 z-40 max-w-[280px] bg-slate-950/90 backdrop-blur-md p-4 rounded-2xl shadow-2xl border border-[#1e3256]/60 text-left">
-            <div className="flex items-center gap-1.5 mb-1 text-[9px] uppercase tracking-widest font-black text-emerald-400">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> Selected Branch Info
+          <div className="absolute top-14 sm:top-4 right-2 sm:right-4 z-40 max-w-[270px] bg-slate-950/95 backdrop-blur-md p-3 rounded-2xl shadow-2xl border border-[#1e3256]/60 text-left scale-90 sm:scale-100 origin-top-right">
+            <div className="flex items-center justify-between gap-1 mb-1.5">
+              <div className="flex items-center gap-1 text-[8.5px] uppercase tracking-wider font-slate-400 text-emerald-450 font-black leading-none">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-405 shrink-0" /> {selectedClinic.subdomain}.dstoma.uz
+              </div>
+              <button 
+                onClick={() => onSelectClinic(null as any)}
+                className="text-[9px] text-slate-400 hover:text-slate-205 bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 leading-none font-bold"
+              >
+                {language === 'uz' ? '✕ Yopish' : language === 'ru' ? '✕ Закрыть' : '✕ Close'}
+              </button>
             </div>
             <h5 className="text-xs font-black text-slate-100 leading-snug">{selectedClinic.name}</h5>
-            <p className="text-[10px] text-slate-400 mt-1 mb-2 leading-relaxed">{selectedClinic.address}</p>
-            <div className="flex items-center gap-2 pt-2 border-t border-[#1e3256]/30 text-[10px] font-semibold text-slate-300 justify-between">
-              <span className="flex items-center gap-1 text-[10px] font-bold"><Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> {selectedClinic.phone}</span>
-              {selectedClinic.mapLink && (
+            <p className="text-[10px] text-slate-400 overflow-hidden leading-relaxed mb-1.5">{selectedClinic.address}</p>
+            <div className="space-y-1.5 pt-1.5 border-t border-[#1e3256]/30">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-300">
+                <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-emerald-405 shrink-0" /> {selectedClinic.phone}</span>
+                <span className="text-emerald-450 font-black">{getDistance(userLat, userLng, selectedClinic.lat, selectedClinic.lng)} km</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 text-center">
                 <a
-                  href={selectedClinic.mapLink}
+                  href={`https://www.google.com/maps/dir/?api=1&origin=${userLat},${userLng}&destination=${selectedClinic.lat},${selectedClinic.lng}&travelmode=driving`}
                   target="_blank"
                   referrerPolicy="no-referrer"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-[9px] font-black text-slate-950 bg-emerald-400 hover:bg-emerald-500 px-2 py-1.5 rounded-lg shadow-sm transition-all uppercase"
+                  className="flex items-center justify-center gap-1 text-[9px] font-black text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl px-2 py-1.5 shadow-lg transition-all uppercase"
                 >
-                  <ExternalLink className="w-2.5 h-2.5" /> GPS Info
+                  {language === 'uz' ? '🟢 GOOGLE MARSHRUT' : language === 'ru' ? '🟢 МАРШРУТ GOOGLE' : '🟢 GOOGLE ROUTE'}
                 </a>
-              )}
+                <a
+                  href={`https://yandex.com/maps/?rtext=${userLat},${userLng}~${selectedClinic.lat},${selectedClinic.lng}&rtt=auto`}
+                  target="_blank"
+                  referrerPolicy="no-referrer"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1 text-[9px] font-black text-white bg-rose-600 hover:bg-rose-500 rounded-xl px-2 py-1.5 shadow-lg transition-all uppercase"
+                >
+                  {language === 'uz' ? '🔴 YANDEX MARSHRUT' : language === 'ru' ? '🔴 МАРШРУТ YANDEX' : '🔴 YANDEX ROUTE'}
+                </a>
+              </div>
             </div>
           </div>
         )}
@@ -444,12 +707,21 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         {/* Tab 1: Leaflet Interactive Map */}
         {activeTab === 'leaflet' && (
           <div className="w-full h-full relative z-10 bg-slate-950 flex flex-col justify-end">
-            <div ref={mapContainerRef} className="w-full h-full bg-[#111] border border-[#1b2b4d]/40 rounded-b-2xl overflow-hidden shadow-inner" style={{ minHeight: '520px' }}></div>
+            <div ref={mapContainerRef} className="w-full h-full bg-[#111] border border-[#1b2b4d]/40 rounded-b-2xl overflow-hidden shadow-inner" style={{ minHeight: '100%', height: '100%' }}></div>
             
             {/* Live alert */}
-            <div className="absolute bottom-2 left-2 right-2 z-40 flex items-center gap-2 bg-slate-950/90 border border-[#1e3256]/60 p-3 rounded-xl text-[10px] text-slate-300 shadow-xl text-left">
+            <div className="absolute bottom-2 left-2 right-2 z-40 flex items-center gap-2 bg-slate-950/90 border border-[#1e3256]/60 p-3 rounded-xl text-[10px] text-slate-300 shadow-xl text-left scale-90 sm:scale-100 origin-bottom">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span><strong>Interactive Leaflet Map Active:</strong> Shows real-time branch markers and computed Haversine metrics of nearest clinics. Drag resources freely or pinch zoom.</span>
+              <span>
+                <strong>
+                  {language === 'uz' ? 'Interaktiv Leaflet xaritasi faol:' : language === 'ru' ? 'Карта Leaflet активна:' : 'Interactive Leaflet Map Active:'}
+                </strong>{' '}
+                {language === 'uz' 
+                  ? "Real vaqt rejimida barcha filiallar va eng yaqin masofalar ko'rsatiladi. Xaritadan erkin foydalanishingiz mumkin." 
+                  : language === 'ru' 
+                    ? "Филиалы и расстояния рассчитываются в реальном времени. Карту можно двигать и масштабировать." 
+                    : "Shows real-time branch markers and computed Haversine metrics of nearest clinics. Drag resources freely or pinch zoom."}
+              </span>
             </div>
           </div>
         )}
@@ -467,17 +739,21 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                   🛸 DStoma Region Network Hub
                 </span>
                 <h4 className="text-xs font-black text-slate-100 uppercase tracking-wider font-display text-left">
-                  O'zbekiston Neon Integratsion Xaritasi
+                  {language === 'uz' ? "O'zbekiston Neon Integratsion Xaritasi" : language === 'ru' ? "Неоновая интеграционная карта Узбекистана" : "Uzbekistan Neon Integration Map"}
                 </h4>
                 <p className="text-[10px] text-slate-400 font-semibold leading-relaxed max-w-sm text-left">
-                  Toshkent (HQ), Samarqand va Buxoro optik chiziqlar orqali sinxronlangan. Shaharni bossangiz, multi-tenant unga o'tadi.
+                  {language === 'uz' 
+                    ? "Toshkent, Samarqand va Buxoro optik chiziqlar orqali sinxronlangan. Shahar tugmasini bossangiz, filiallar ro'yxatiga o'tiladi." 
+                    : language === 'ru' 
+                      ? "Ташкент (HQ), Самарканд и Бухара синхронизированы по оптическим каналам. Выберите точку для фокусировки." 
+                      : "Tashkent (HQ), Samarkand and Bukhara synchronized via optical lines. Click any node to navigate to branches."}
                 </p>
               </div>
 
               {/* Status HUD indicator */}
               <div className="bg-[#0b101e]/90 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-[9px] font-mono font-bold text-emerald-400 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                <span>SYNC: ALL NODES ONLINE</span>
+                <span>{language === 'uz' ? "SINXRON: BARCHA TIZIMLAR FAOL" : language === 'ru' ? "СИНХР: ВСЕ УЗЛЫ В СЕТИ" : "SYNC: ALL NODES ONLINE"}</span>
               </div>
             </div>
 
@@ -562,7 +838,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                     <rect x="-65" y="-12" width="130" height="15" rx="3" fill="#ef4444" fillOpacity="0.2" stroke="#ef4444" strokeWidth="0.5" />
                     <circle cx="0" cy="-4" r="3" fill="#ef4444" className="animate-ping" />
                     <text x="0" y="-1" textAnchor="middle" fill="#fca5a5" fontSize="6.5" fontWeight="black" fontFamily="monospace" letterSpacing="0.8">
-                      📍 SIZNING JOYINGIZ
+                      {language === 'uz' ? '📍 SIZNING JOYINGIZ' : language === 'ru' ? '📍 ВАШЕ МЕСТО' : '📍 YOUR LOCATION'}
                     </text>
                   </g>
                 </svg>
@@ -573,7 +849,13 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
             <div className="relative z-10 flex items-center gap-3 bg-[#0b1022]/90 p-4 border border-[#1e2e4b] rounded-2xl text-slate-300 text-[11px] shadow-md text-left">
               <span className="p-1.5 bg-slate-800/65 text-yellow-500 rounded-lg shrink-0 text-sm">⚡</span>
               <p className="font-semibold leading-relaxed">
-                <strong className="text-white text-[11.5px]">Cyber HUD:</strong> Siz joylashgan real GPS yoki tanlagan markaz oq rangli marker bilan belgilandi. Eng yaqin filial chiptasini olish uchun unga bosing.
+                <strong className="text-white text-[11.5px]">{language === 'uz' ? 'Kiber HUD:' : language === 'ru' ? 'Кибер HUD:' : 'Cyber HUD:'}</strong>{' '}
+                {language === 'uz' 
+                  ? "Siz joylashgan real GPS yoki tanlangan markaz qizil marker bilan belgilandi. Eng yaqin filial chiptasini olish uchun unga bosing."
+                  : language === 'ru' 
+                    ? "Ваше реальное местоположение или выбранный центр отмечены красным маркером. Нажмите на любой филиал для получения билета."
+                    : "Your real GPS location or selected center is highlighted by a red marker. Tap any branch to book in."
+                }
               </p>
             </div>
           </div>
@@ -584,38 +866,76 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
           <div className="w-full h-full relative">
             {!hasValidKey ? (
               <div className="w-full h-full bg-slate-950 border border-slate-900 flex items-center justify-center p-6 text-white text-center">
-                <div className="max-w-md p-6 bg-slate-900/95 rounded-3xl border border-[#1e3256]/50 shadow-2xl relative z-20 text-left">
+                <div className="max-w-md p-6 bg-slate-900/95 rounded-3xl border border-[#1e3256]/50 shadow-2xl relative z-20 text-left overflow-y-auto max-h-full">
                   <div className="w-12 h-12 bg-amber-500/20 rounded-full flex items-center justify-center mb-4 border border-amber-500/40">
                     <Info className="w-6 h-6 text-amber-500" />
                   </div>
-                  <h3 className="text-sm font-black text-slate-100 mb-2 uppercase tracking-wide">Google Maps Platform Key needed</h3>
+                  <h3 className="text-sm font-black text-slate-100 mb-2 uppercase tracking-wide">
+                    {language === 'uz' ? "Google Maps API Kaliti Talab Qilinadi" : language === 'ru' ? "Требуется API ключ Google Maps" : "Google Maps Platform Key needed"}
+                  </h3>
                   <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                    Klinikalaringizni haqiqiy Google Map interaktiv xaritasida chiqarish uchun sizning Google Maps API kalitingiz ulanishi kerak.
+                    {language === 'uz' 
+                      ? "Klinikalarni interaktiv Google Maps xaritasida ko'rsatish uchun shaxsiy Google Maps API kalitingiz bo'lishi talab etiladi." 
+                      : language === 'ru' 
+                        ? "Для показа клиник на интерактивной карте Google Maps требуется подключить ваш личный API ключ." 
+                        : "To display clinics on an interactive Google Maps canvas, a personal Google Maps API key is required."}
                   </p>
                   
                   <div className="bg-slate-950/80 border border-[#1e3256]/40 p-4 rounded-2xl text-xs mb-3 space-y-1.5 font-semibold text-slate-300">
-                    <p className="font-bold text-slate-200">API kalitni ulash yo'li:</p>
-                    <ol className="list-decimal list-inside space-y-1 text-slate-400 font-medium">
-                      <li>Google Cloud Console-dan Maps JS API kaliti oling</li>
-                      <li>AI Studio burchagidagi <span className="text-emerald-400 font-bold">Settings &gt; Secrets</span> bo'limiga kiring</li>
-                      <li>Yangi o'zgaruvchi <code className="text-pink-400 px-1 bg-slate-900 rounded font-mono">GOOGLE_MAPS_PLATFORM_KEY</code> sifatida saqlang</li>
-                    </ol>
+                    <p className="font-bold text-slate-200">
+                      {language === 'uz' ? "API kalitni ulash bo'yicha qo'llanma:" : language === 'ru' ? "Инструкция по подключению API ключа:" : "How to connect your API Key:"}
+                    </p>
+                    {language === 'uz' ? (
+                      <ol className="list-decimal list-inside space-y-1 text-slate-400 font-medium">
+                        <li>Google Cloud Console platformasidan Maps JS API kaliti oling</li>
+                        <li>AI Studio dagi <span className="text-emerald-400 font-bold">Settings &gt; Secrets</span> bo'limiga kiring</li>
+                        <li>Yangi o'zgaruvchini <code className="text-cyan-400 px-1 bg-slate-900 rounded font-mono">GOOGLE_MAPS_PLATFORM_KEY</code> nomi bilan yarating va qiymatini kiriting</li>
+                      </ol>
+                    ) : language === 'ru' ? (
+                      <ol className="list-decimal list-inside space-y-1 text-slate-400 font-medium">
+                        <li>Получите ключ Maps JS API в Google Cloud Console</li>
+                        <li>Перейдите во вкладку <span className="text-emerald-400 font-bold">Settings &gt; Secrets</span> в AI Studio</li>
+                        <li>Добавьте переменную <code className="text-cyan-400 px-1 bg-slate-900 rounded font-mono">GOOGLE_MAPS_PLATFORM_KEY</code> и вставьте ваш ключ</li>
+                      </ol>
+                    ) : (
+                      <ol className="list-decimal list-inside space-y-1 text-slate-400 font-medium">
+                        <li>Retrieve a Maps JS API key from your Google Cloud Console</li>
+                        <li>Go to the <span className="text-emerald-400 font-bold">Settings &gt; Secrets</span> segment in AI Studio</li>
+                        <li>Add a new secret variable named <code className="text-cyan-400 px-1 bg-slate-900 rounded font-mono">GOOGLE_MAPS_PLATFORM_KEY</code> and save it</li>
+                      </ol>
+                    )}
                   </div>
                   
-                  <div className="text-[10px] text-slate-500 font-medium">
-                    Hozircha, chap tarafdagi <button onClick={() => setActiveTab('leaflet')} className="text-emerald-400 underline font-bold hover:text-emerald-450 focus:outline-none uppercase">Leaflet.js Live</button> rejimidan foydalanishni davom ettiring. U barcha haqiqiy koordinatalarni va xaritalarni bepul va to'liq yuklab ko'rsatadi.
+                  <div className="text-[10px] text-slate-500 font-semibold leading-relaxed">
+                    {language === 'uz' 
+                      ? <>Hozircha, chap tarafdagi <button onClick={() => setActiveTab('leaflet')} className="text-emerald-400 underline font-bold hover:text-emerald-450 focus:outline-none uppercase cursor-pointer">Leaflet.js Live</button> yoki <button onClick={() => setActiveTab('yandex')} className="text-rose-400 underline font-bold hover:text-rose-450 focus:outline-none uppercase cursor-pointer">Yandex Maps Live</button> rejimlaridan foydalanishni dadil davom ettiring. Ular barcha filiallar joylashuvlarini mutlaqo bepul ko'rsatadi.</>
+                      : language === 'ru'
+                        ? <>Тем временем вы можете использовать карту <button onClick={() => setActiveTab('leaflet')} className="text-emerald-400 underline font-bold hover:text-emerald-450 focus:outline-none uppercase cursor-pointer">Leaflet.js Live</button> или <button onClick={() => setActiveTab('yandex')} className="text-rose-400 underline font-bold hover:text-rose-450 focus:outline-none uppercase cursor-pointer">Yandex Maps Live</button>. Они работают бесплатно и без ограничений.</>
+                        : <>Meanwhile, you can continue to use <button onClick={() => setActiveTab('leaflet')} className="text-emerald-400 underline font-bold hover:text-emerald-450 focus:outline-none uppercase cursor-pointer">Leaflet.js Live</button> or <button onClick={() => setActiveTab('yandex')} className="text-rose-400 underline font-bold hover:text-rose-450 focus:outline-none uppercase cursor-pointer">Yandex Maps Live</button> - they render all clinic locations completely free.</>
+                    }
                   </div>
                 </div>
               </div>
             ) : (
               <APIProvider apiKey={API_KEY} version="weekly">
                 <Map
-                  defaultCenter={{ lat: userLat, lng: userLng }} 
-                  defaultZoom={11}
+                  center={{ lat: selectedClinic ? selectedClinic.lat : userLat, lng: selectedClinic ? selectedClinic.lng : userLng }} 
+                  zoom={selectedClinic ? 13 : 11}
                   mapId="DEMO_MAP_ID"
                   internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
                   style={{ width: '100%', height: '100%' }}
                 >
+                  {/* Real Patient's Active Location marker on Google Maps */}
+                  <AdvancedMarker
+                    position={{ lat: userLat, lng: userLng }}
+                    title={t('approxLocation')}
+                  >
+                    <div className="relative flex items-center justify-center">
+                      <div className="absolute w-5 h-5 rounded-full bg-rose-500/40 animate-ping"></div>
+                      <div className="w-3.5 h-3.5 rounded-full bg-rose-500 border-2 border-white shadow-md"></div>
+                    </div>
+                  </AdvancedMarker>
+
                   {clinics.map((clinic) => (
                     <AdvancedMarker
                       key={clinic.id}
@@ -633,6 +953,28 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 </Map>
               </APIProvider>
             )}
+          </div>
+        )}
+
+        {/* Tab 4: Yandex Interactive Map */}
+        {activeTab === 'yandex' && (
+          <div className="w-full h-full relative z-10 bg-slate-950 flex flex-col justify-end">
+            <div ref={yandexMapContainerRef} className="w-full h-full bg-[#111] border border-[#1b2b4d]/40 rounded-b-2xl overflow-hidden shadow-inner" style={{ minHeight: '100%', height: '100%' }}></div>
+            
+            {/* Live alert */}
+            <div className="absolute bottom-2 left-2 right-2 z-40 flex items-center gap-2 bg-slate-950/90 border border-[#1e3256]/60 p-3 rounded-xl text-[10px] text-slate-300 shadow-xl text-left scale-90 sm:scale-100 origin-bottom">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+              <span>
+                <strong>
+                  {language === 'uz' ? 'Yandex Maps faol:' : language === 'ru' ? 'Карта Yandex активна:' : 'Yandex Maps Live Active:'}
+                </strong>{' '}
+                {language === 'uz' 
+                  ? "Bemorning aniq koordinatasi (qizil nuqta) hamda barcha filiallar reytinglari va masofalari xaritada ko'rsatildi. Marshrut olish uchun pastdagi tugmalarni bosing."
+                  : language === 'ru' 
+                    ? "Точное местоположение пациента (красная метка), филиалы стоматологии и расстояния успешно нанесены на карту." 
+                    : "Patient's exact coordinates (red marker) and all branch ratings & distances are successfully plotted onto the map."}
+              </span>
+            </div>
           </div>
         )}
       </div>
