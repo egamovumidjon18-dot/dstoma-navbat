@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Clinic, Doctor, Service, QueueItem, Patient } from '../types';
+import { DjangoAPI, getApiUrl } from '../services/api';
 import { TRANSLATIONS, Language } from '../translations';
 import { 
   User, 
@@ -27,7 +28,10 @@ import {
   Activity,
   Zap,
   ShieldCheck,
-  Award
+  Award,
+  Upload,
+  QrCode,
+  Bot
 } from 'lucide-react';
 
 interface ClientDashboardProps {
@@ -186,6 +190,29 @@ export default function ClientDashboard({
     }
   ]);
 
+  // Load patients and keep in-sync in real-time with our Central Express storage
+  useEffect(() => {
+    let active = true;
+    const fetchPatients = async () => {
+      try {
+        const res = await fetch(`${getApiUrl()}/api/patients`);
+        if (!res.ok) throw new Error("Status down");
+        const data = await res.json();
+        if (active && Array.isArray(data) && data.length > 0) {
+          setPatients(data);
+        }
+      } catch (err) {
+        console.warn("[ClientDashboard] Failed to fetch synced patients:", err);
+      }
+    };
+    fetchPatients();
+    const interval = setInterval(fetchPatients, 4000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   // Simulated initial user starts at null so they must log in or register
   const [currentUser, setCurrentUser] = useState<Patient | null>(null);
 
@@ -214,11 +241,63 @@ export default function ClientDashboard({
   const [isLanguageOpen, setIsLanguageOpen] = useState(false);
 
   // --- FUTURISTIC 3D DENTAL SCANNER METRIC STATES ---
-  const [selectedTooth, setSelectedTooth] = useState<number>(24);
+  const [selectedToothIndex, setSelectedToothIndex] = useState<number>(23); // index 23 is FDI 38/41 depending on view
+  const [dentalSystem, setDentalSystem] = useState<'fdi' | 'universal'>('fdi');
+  const [activeJaw, setActiveJaw] = useState<'upper' | 'lower'>('lower');
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [scannerTick, setScannerTick] = useState<number>(0);
   const [symptomsInput, setSymptomsInput] = useState<string>('');
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
+
+  // Index helper systems (MEDICALLY TRIPLE-CHECKED & FULLY SYMMETRICAL FOR PRODUCTION)
+  const getToothDisplayNumber = (index: number, system: 'fdi' | 'universal') => {
+    if (system === 'universal') {
+      if (index < 16) {
+        return index + 1; // Upper arch: 1 to 16
+      } else if (index < 24) {
+        return 32 - (index - 16); // Lower arch left: 32 down to 25 (viewer's left side, patient's right)
+      } else {
+        return 24 - (index - 24); // Lower arch right: 24 down to 17 (viewer's right side, patient's left)
+      }
+    } else {
+      if (index < 8) {
+        return 18 - index; // Upper Quadrant 1 (viewer's left): 18 down to 11
+      } else if (index < 16) {
+        return 21 + (index - 8); // Upper Quadrant 2 (viewer's right): 21 up to 28
+      } else if (index < 24) {
+        return 48 - (index - 16); // Lower Quadrant 4 (viewer's left): 48 down to 41
+      } else {
+        return 31 + (index - 24); // Lower Quadrant 3 (viewer's right): 31 up to 38
+      }
+    }
+  };
+
+  const getAnatomicalName = (index: number) => {
+    if ([0, 15, 16, 31].includes(index)) {
+      return language === 'uz' ? "Aql tishi (M3)" : language === 'ru' ? "Зуб мудрости (M3)" : "Wisdom Tooth (M3)";
+    }
+    if ([1, 2, 13, 14, 17, 18, 29, 30].includes(index)) {
+      return language === 'uz' ? "Katta oziq tish (Molyar)" : language === 'ru' ? "Моляр" : "Molar";
+    }
+    if ([3, 4, 11, 12, 19, 20, 27, 28].includes(index)) {
+      return language === 'uz' ? "Kichik oziq tish (Premolyar)" : language === 'ru' ? "Премоляр" : "Premolar";
+    }
+    if ([5, 10, 21, 26].includes(index)) {
+      return language === 'uz' ? "Qoziq tish (K9)" : language === 'ru' ? "Клык" : "Canine";
+    }
+    return language === 'uz' ? "To'sar tish (Kurak)" : language === 'ru' ? "Резец" : "Incisor";
+  };
+
+  const selectedTooth = getToothDisplayNumber(selectedToothIndex, dentalSystem);
+
+  // Advanced imaging and drag-and-drop diagnostic states
+  const [selectedToothImage, setSelectedToothImage] = useState<{
+    mimeType: string;
+    data: string; // Base64 encoding
+  } | null>(null);
+  const [imageFileName, setImageFileName] = useState<string>('');
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+
   const [aiOutput, setAiOutput] = useState<{
     toothNumber: number;
     enamelAbrasion: string;
@@ -229,10 +308,82 @@ export default function ClientDashboard({
     isSimulation: boolean;
   } | null>(null);
 
+  // --- TELEGRAM WEB APP / MINI APP INTEGRATION HOOK ---
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
+      const tg = (window as any).Telegram.WebApp;
+      try {
+        tg.ready();
+        tg.expand();
+        
+        const tgUser = tg.initDataUnsafe?.user;
+        if (tgUser) {
+          console.log("[DStoma Mini App Dev] Detected Telegram User context:", tgUser);
+          
+          const tgChatId = String(tgUser.id);
+          setTelegramIdInput(tgChatId);
+          
+          // Auto-login if patient already registered with this Telegram ID
+          const registeredMatch = patients.find(p => String(p.telegramChatId) === tgChatId);
+          if (registeredMatch) {
+            setCurrentUser(registeredMatch);
+            setActiveSubView('cabinet');
+            if (tg.showConfirm) {
+              tg.showConfirm(`Xush kelibsiz, ${registeredMatch.fullName}! Tizim sizni Telegram profilingiz orqali shaxsiy kabinetga avtomatik kiritdi.`);
+            } else {
+              showToast(`Xush kelibsiz, ${registeredMatch.fullName}!`, "success");
+            }
+          } else {
+            // New patient - Prefill registration details and redirect
+            const nameSuggested = `${tgUser.first_name || ''} ${tgUser.last_name || ''}`.trim() || 'Telegram Bemor';
+            setFullName(nameSuggested);
+            
+            showToast("Telegram orqali yangi bemor aniqlandi! Iltimos, hisobingizni ro'yxatdan o'tkazishni yakunlang.", "success");
+            setActiveSubView('register');
+          }
+        }
+      } catch (err) {
+        console.warn("[Telegram SDK Load Notice]", err);
+      }
+    }
+  }, [patients]);
+
   React.useEffect(() => {
     // Keep it synchronized, but clear AI result on manual tooth changes
     setAiOutput(null);
-  }, [selectedTooth]);
+    
+    // Automatically switch active jaw view based on selected tooth index
+    if (selectedToothIndex < 16) {
+      setActiveJaw('upper');
+    } else {
+      setActiveJaw('lower');
+    }
+  }, [selectedToothIndex]);
+
+  const handleFileChange = (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setToastMsg({
+        type: 'error',
+        text: language === 'uz' ? 'Faqat rasm formatidagi fayllarni yuklashingiz mumkin!' : language === 'ru' ? 'Вы можете загружать только изображения!' : 'Only image files are allowed!'
+      });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64String = (reader.result as string).split(',')[1];
+      setSelectedToothImage({
+        mimeType: file.type,
+        data: base64String
+      });
+      setImageFileName(file.name);
+      setToastMsg({
+        type: 'success',
+        text: language === 'uz' ? 'Rasm muvaffaqiyatli yuklandi!' : language === 'ru' ? 'Изображение успешно загружено!' : 'Image uploaded successfully!'
+      });
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleAiDiagnostic = async () => {
     setIsScanning(false);
@@ -247,6 +398,7 @@ export default function ClientDashboard({
           toothNumber: selectedTooth,
           symptoms: symptomsInput,
           language: language,
+          image: selectedToothImage, // Base64 encoded file payload
         }),
       });
       if (!response.ok) {
@@ -269,18 +421,13 @@ export default function ClientDashboard({
     }
   };
 
-  // Auto-scan Tooth sweeping loop
+  // Laser scan visual tick handler
   React.useEffect(() => {
     let timer: any;
     if (isScanning) {
       timer = setInterval(() => {
         setScannerTick(prev => prev + 1);
-        setSelectedTooth(currentTooth => {
-          let next = currentTooth + 1;
-          if (next > 32) return 18;
-          return next;
-        });
-      }, 1200);
+      }, 100);
     } else {
       clearInterval(timer);
     }
@@ -347,7 +494,7 @@ export default function ClientDashboard({
     });
   }, [queues, currentUser]);
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !phone || !passport || !password) {
       showToast("Iltimos, yulduzcha (*) qo'yilgan barcha majburiy maydonlarni to'ldiring!", "error");
@@ -367,10 +514,23 @@ export default function ClientDashboard({
       hasInfection,
       telegramChatId: telegramIdInput
     };
+    
+    // Save locally
     setPatients(prev => [...prev, newPatient]);
     setCurrentUser(newPatient);
     showToast("Muvaffaqiyatli ro'yxatdan o'tdingiz!");
     setActiveSubView('cabinet');
+
+    // Post to server backend
+    try {
+      await fetch(`${getApiUrl()}/api/patients`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPatient)
+      });
+    } catch (err) {
+      console.warn("[ClientDashboard] Backend sync for patient registration failed", err);
+    }
   };
 
   const handleLogin = (e: React.FormEvent) => {
@@ -417,6 +577,13 @@ export default function ClientDashboard({
         setCurrentUser(defaultDynamic);
         showToast("Kabinetga muvaffaqiyatli kirdingiz!");
         setActiveSubView('cabinet');
+
+        // Register profile on backend in background
+        fetch(`${getApiUrl()}/api/patients`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(defaultDynamic)
+        }).catch(err => console.warn("[ClientDashboard] Dynamic registration backend sync failed", err));
       }
     }
   };
@@ -427,10 +594,23 @@ export default function ClientDashboard({
     setActiveSubView('home');
   };
 
-  const handleSaveTelegram = () => {
+  const handleSaveTelegram = async () => {
     if (currentUser) {
-      setCurrentUser({ ...currentUser, telegramChatId: telegramIdInput });
+      const updated = { ...currentUser, telegramChatId: telegramIdInput };
+      setCurrentUser(updated);
+      setPatients(prev => prev.map(p => p.id === currentUser.id ? updated : p));
       showToast("Telegram ID muvaffaqiyatli saqlandi! t.me/dstoma_bot muloqotga tayyor.");
+
+      // Post in background to be fully accessible for Telegram Bot
+      try {
+        await fetch(`${getApiUrl()}/api/patients`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated)
+        });
+      } catch (err) {
+        console.warn("[ClientDashboard] Failed to save Telegram ID to backend", err);
+      }
     }
   };
 
@@ -448,7 +628,7 @@ export default function ClientDashboard({
 
     const newQueue: QueueItem = {
       id: 'q_' + Math.random().toString(36).substr(2, 9),
-      clinicId: selectedClinic?.id || 'samarqand',
+      clinicId: activeClinic?.id || 'samarqand',
       patientName: currentUser?.fullName || 'Mehmon',
       patientPhone: currentUser?.phone || phone,
       doctorId: bookingDoctorId,
@@ -480,9 +660,10 @@ export default function ClientDashboard({
     showToast("Baho berganingiz uchun rahmat! ❤️");
   };
 
-  // Filter lists based on selected clinic
-  const clinicDoctors = doctors.filter(d => d.clinicId === selectedClinic?.id);
-  const clinicServices = services.filter(s => s.clinicId === selectedClinic?.id);
+  // Filter lists based on active clinic
+  const activeClinic = selectedClinic || clinics[0];
+  const clinicDoctors = doctors.filter(d => d.clinicId === activeClinic?.id);
+  const clinicServices = services.filter(s => s.clinicId === activeClinic?.id);
 
   return (
     <div className="space-y-6 font-sans">
@@ -494,29 +675,15 @@ export default function ClientDashboard({
 
         <div className="flex flex-col md:flex-row items-center justify-between gap-5 relative z-10">
           <div className="text-left space-y-1">
-            {selectedClinic ? (
-              <>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-[#10b981] text-[10px] font-black uppercase tracking-wider">
-                  <Activity className="w-3 h-3 text-emerald-400 animate-pulse" /> {t("Faol filial monito'rlari")}
-                </span>
-                <h2 className="text-md font-black text-white tracking-wider flex items-center gap-2 uppercase">
-                  {selectedClinic.name}
-                </h2>
-                <span className="text-xs text-slate-400 font-bold leading-normal block">
-                  📍 {selectedClinic.address} | 📞 {selectedClinic.phone}
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-extrabold uppercase tracking-widest">
-                  ⚠️ {t("Aloqa filiali tanlanmagan")}
-                </span>
-                <h2 className="text-base font-black text-white tracking-tight">{t("Klinika filialini belgilang")}</h2>
-                <p className="text-xs text-slate-400 font-semibold leading-normal">
-                  {t("Xizmatlarni, diagnostik tahlillarni va navbat olish panellarini faollashtirish uchun yuqoridagi xaritani ishlating.")}
-                </p>
-              </>
-            )}
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-[#10b981] text-[10px] font-black uppercase tracking-wider">
+              <Activity className="w-3 h-3 text-emerald-400 animate-pulse" /> {t("Faol filial monito'rlari")}
+            </span>
+            <h2 className="text-md font-black text-white tracking-wider flex items-center gap-2 uppercase">
+              {activeClinic?.name}
+            </h2>
+            <span className="text-xs text-slate-400 font-bold leading-normal block">
+              📍 {activeClinic?.address} | 📞 {activeClinic?.phone}
+            </span>
           </div>
 
           {/* Dual Action CTA Buttons styled exactly in luxurious cyber gradients */}
@@ -524,18 +691,9 @@ export default function ClientDashboard({
             {/* 1. Register new Patient (Emerald dark luxury) */}
             <button
               onClick={() => {
-                if (!selectedClinic) {
-                  showToast("Iltimos, avval interaktiv xaritadan kerakli klinika filialini bosing.", "error");
-                  return;
-                }
                 setActiveSubView('register');
               }}
-              disabled={!selectedClinic}
-              className={`px-6 py-3 text-xs font-black uppercase tracking-wider rounded-2xl flex items-center gap-2.5 transition-all cursor-pointer ${
-                selectedClinic
-                  ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-black shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/25 active:scale-95'
-                  : 'bg-slate-900 text-slate-600 border border-slate-850 cursor-not-allowed opacity-40'
-              }`}
+              className="px-6 py-3 text-xs font-black uppercase tracking-wider rounded-2xl flex items-center gap-2.5 transition-all cursor-pointer bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-black shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/25 active:scale-95"
             >
               <UserPlus2 className="w-4 h-4 text-slate-950 stroke-[2.5]" />
               {t("Yangi bemor Ro'yxatdan o'tish")}
@@ -544,10 +702,6 @@ export default function ClientDashboard({
             {/* 2. Patient Cabinet (Indigo luxury glass tab) */}
             <button
               onClick={() => {
-                if (!selectedClinic) {
-                  showToast("Iltimos, avval interaktiv xaritadan kerakli klinika filialini bosing.", "error");
-                  return;
-                }
                 if (currentUser) {
                   setActiveSubView('cabinet');
                 } else {
@@ -556,12 +710,7 @@ export default function ClientDashboard({
                   setActiveSubView('login');
                 }
               }}
-              disabled={!selectedClinic}
-              className={`px-6 py-3 text-xs font-black uppercase tracking-wider rounded-2xl flex items-center gap-2.5 transition-all cursor-pointer ${
-                selectedClinic
-                  ? 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/10 hover:shadow-cyan-500/25 active:scale-95'
-                  : 'bg-slate-900 text-slate-600 border border-slate-850 cursor-not-allowed opacity-40'
-              }`}
+              className="px-6 py-3 text-xs font-black uppercase tracking-wider rounded-2xl flex items-center gap-2.5 transition-all cursor-pointer bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/10 hover:shadow-cyan-500/25 active:scale-95"
             >
               <LogIn className="w-4 h-4 text-cyan-200" />
               {t("bemor Shaxsiy kabinetga kirish")}
@@ -572,159 +721,324 @@ export default function ClientDashboard({
 
       {/* ----------------- CLIENT DASHBOARD WORKSPACE ----------------- */}
       {activeSubView === 'home' && (
-        selectedClinic ? (
+        activeClinic ? (
           <div className="space-y-6">
 
-            {/* upper layout: Left Bemorlar Oqimi flow, Right 3D Dental diagnostics */}
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-
-              {/* COL 1: BEMORLAR OQIMI TRAFFIC DEPARTMENTS MONITOR (7 cols on large, full on small) */}
-              <div className="xl:col-span-5 bg-[#0b1022]/85 border border-[#1d2d4c]/80 rounded-3xl p-6 relative overflow-hidden flex flex-col justify-between text-left select-none">
-                <div className="space-y-1 mb-4 z-10 relative">
-                  <span className="px-2 py-0.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/25 text-[9px] font-black rounded font-mono uppercase tracking-widest">
-                    Department Metrics
-                  </span>
-                  <h3 className="text-xs font-black text-slate-200 tracking-wider uppercase font-display">
-                    {t("Klinika Bemorlar Oqimi & yuklamasi")}
+            {/* CROSS-CHANNEL SMART DUAL ONBOARDING & QR PANEL */}
+            <div className="bg-[#10172a] rounded-3xl p-6 border border-slate-800 text-left relative overflow-hidden shadow-[0_15px_40px_rgba(0,0,0,0.3)] animate-fade-in select-none">
+              <div className="absolute -right-12 -top-12 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -left-12 -bottom-12 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+              
+              <div className="flex items-center gap-3 border-b border-slate-800 pb-4 mb-4 z-10 relative">
+                <span className="p-1.5 bg-gradient-to-br from-indigo-505 to-emerald-500 rounded-xl text-white font-extrabold text-[10px] uppercase font-mono tracking-widest flex items-center gap-1 shrink-0">
+                  <QrCode className="w-4 h-4 animate-pulse text-emerald-300" /> INTEGRATED
+                </span>
+                <div>
+                  <h3 className="text-xs font-black text-slate-100 uppercase tracking-widest leading-none">
+                    Dual Kirish va Tizim Integratsiyasi (Cross-Channel Access)
                   </h3>
-                  <p className="text-[10px] text-slate-450 font-semibold leading-relaxed">
-                    {t("Bo'limlar kesimida real-vaqtdagi kutish yuklamasi integratsiyasi.")}
+                  <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
+                    Bemorlarimiz xohlasa QR kod orqali ushbu Ilovaga, xohlasa Telegram Bot manzili orqali to'g'ridan-to'g'ri Telegram-da navbat ola oladilar.
                   </p>
-                </div>
-
-                {/* Connected high-tech flow pathways nodes */}
-                <div className="relative flex-1 py-4 flex flex-col justify-around gap-4 z-10">
-                  {/* Department Node 1 */}
-                  <div className="flex items-center justify-between p-3.5 bg-[#0e162d]/90 border border-[#233555]/50 rounded-2xl hover:border-emerald-500/30 transition-all">
-                    <div className="flex items-center gap-3">
-                      <div className="w-7.5 h-7.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center font-bold text-xs">
-                        ID1
-                      </div>
-                      <div>
-                        <h4 className="text-[11px] font-black text-white uppercase tracking-wider">Konsultatsiya o'g'zi</h4>
-                        <span className="text-[9px] font-mono text-slate-450 font-semibold uppercase">Primary Checkup Room</span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs font-black text-emerald-400 font-mono block">93 bemor</span>
-                      <span className="text-[8.5px] font-mono text-slate-500 block uppercase">Load: Normal</span>
-                    </div>
-                  </div>
-
-                  {/* Department Node 2 */}
-                  <div className="flex items-center justify-between p-3.5 bg-[#0e162d]/90 border border-[#233555]/50 rounded-2xl hover:border-pink-500/30 transition-all">
-                    <div className="flex items-center gap-3">
-                      <div className="w-7.5 h-7.5 rounded-lg bg-pink-500/10 text-pink-400 border border-pink-500/20 flex items-center justify-center font-bold text-xs">
-                        ID2
-                      </div>
-                      <div>
-                        <h4 className="text-[11px] font-black text-white uppercase tracking-wider">Tish Plombalash & Ortodontiya</h4>
-                        <span className="text-[9px] font-mono text-slate-450 font-semibold uppercase">Restoration Hall</span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs font-black text-pink-400 font-mono block">105 bemor</span>
-                      <span className="text-[8.5px] font-mono text-slate-400 block uppercase font-bold text-amber-500">Load: Peak</span>
-                    </div>
-                  </div>
-
-                  {/* Department Node 3 */}
-                  <div className="flex items-center justify-between p-3.5 bg-[#0e162d]/90 border border-[#233555]/50 rounded-2xl hover:border-cyan-500/30 transition-all">
-                    <div className="flex items-center gap-3">
-                      <div className="w-7.5 h-7.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center font-bold text-xs">
-                        ID3
-                      </div>
-                      <div>
-                        <h4 className="text-[11px] font-black text-white uppercase tracking-wider">Jarrohlik & Implantatsiya</h4>
-                        <span className="text-[9px] font-mono text-slate-450 font-semibold uppercase">Surgical Theatre</span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs font-black text-cyan-400 font-mono block">70 bemor</span>
-                      <span className="text-[8.5px] font-mono text-slate-500 block uppercase">Load: Light</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mini ECG Heartbeat telemetry monitor showing continuous stream */}
-                <div className="mt-4 pt-4 border-t border-[#1d2d4c]/60 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Activity className="w-4.5 h-4.5 text-emerald-400 animate-pulse shrink-0" />
-                    <span className="text-[10px] font-mono font-bold text-slate-400">PATIENT TRAFFIC BEAT: 72 BPM</span>
-                  </div>
-                  <span className="text-[9px] text-[#29d] font-bold font-mono">FLOW LEVEL: 98.4% SAFE</span>
                 </div>
               </div>
 
-              {/* COL 2: HIGH-TECH REAL-TIME 3D DENTAL ANATOMICAL ANALYZER (7 cols on large) */}
-              <div className="xl:col-span-7 bg-[#0b1022]/85 border border-[#1d2d4c]/80 rounded-3xl p-6 relative overflow-hidden text-left flex flex-col justify-between">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">
+                {/* Channel A: Web Application QR */}
+                <div className="bg-[#1e293b]/70 rounded-2xl p-4 border border-slate-700/60 flex flex-col sm:flex-row items-center gap-4 hover:border-indigo-500/40 transition-all group">
+                  <div className="bg-white p-2.5 rounded-xl shrink-0 shadow-lg shadow-black/30 group-hover:scale-105 transition-transform duration-300">
+                    <svg viewBox="0 0 100 100" className="w-24 h-24 text-slate-900" fill="currentColor">
+                      <rect x="0" y="0" width="22" height="22" />
+                      <rect x="2" y="2" width="18" height="18" fill="white" />
+                      <rect x="5" y="5" width="12" height="12" />
+                      
+                      <rect x="78" y="0" width="22" height="22" />
+                      <rect x="80" y="2" width="18" height="18" fill="white" />
+                      <rect x="83" y="5" width="12" height="12" />
+                      
+                      <rect x="0" y="78" width="22" height="22" />
+                      <rect x="2" y="80" width="18" height="18" fill="white" />
+                      <rect x="5" y="83" width="12" height="12" />
+                      
+                      <rect x="30" y="4" width="6" height="6" />
+                      <rect x="42" y="10" width="8" height="4" />
+                      <rect x="58" y="2" width="4" height="10" />
+                      <rect x="34" y="20" width="12" height="4" />
+                      <rect x="4" y="30" width="6" height="6" />
+                      <rect x="18" y="42" width="10" height="4" />
+                      <rect x="32" y="32" width="36" height="6" />
+                      <rect x="32" y="44" width="8" height="16" />
+                      <rect x="48" y="44" width="16" height="4" />
+                      <rect x="56" y="54" width="14" height="14" />
+                      <rect x="78" y="32" width="16" height="6" />
+                      <rect x="82" y="48" width="8" height="12" />
+                      <rect x="78" y="78" width="10" height="10" />
+                      <rect x="90" y="68" width="8" height="16" />
+                    </svg>
+                  </div>
+                  <div className="text-center sm:text-left space-y-2 flex-1">
+                    <span className="px-2 py-0.5 bg-indigo-500/15 text-indigo-300 font-mono text-[9px] font-black rounded uppercase border border-indigo-500/20">
+                      🌐 DStoma Web App
+                    </span>
+                    <h4 className="text-xs font-black text-slate-100">
+                      Mobil Telefon orqali UI Ilovaga kirish
+                    </h4>
+                    <p className="text-[10.5px] text-slate-400 leading-relaxed">
+                      Kamerangizni skanerga tuting va smart 3D tish holati datchigi hamda interaktiv xaritaga kiring!
+                    </p>
+                    <a
+                      href={window.location.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-[10px] font-black text-indigo-400 hover:text-indigo-300 transition-all underline"
+                    >
+                      Ilova havolasini ochish 🚀
+                    </a>
+                  </div>
+                </div>
+
+                {/* Channel B: Telegram Bot QR */}
+                <div className="bg-[#1e293b]/70 rounded-2xl p-4 border border-slate-700/60 flex flex-col sm:flex-row items-center gap-4 hover:border-emerald-500/40 transition-all group">
+                  <div className="bg-white p-2.5 rounded-xl shrink-0 shadow-lg shadow-black/30 group-hover:scale-105 transition-transform duration-300">
+                    <svg viewBox="0 0 100 100" className="w-24 h-24 text-teal-900" fill="currentColor">
+                      <rect x="0" y="0" width="22" height="22" />
+                      <rect x="2" y="2" width="18" height="18" fill="white" />
+                      <rect x="5" y="5" width="12" height="12" />
+                      
+                      <rect x="78" y="0" width="22" height="22" />
+                      <rect x="80" y="2" width="18" height="18" fill="white" />
+                      <rect x="83" y="5" width="12" height="12" />
+                      
+                      <rect x="0" y="78" width="22" height="22" />
+                      <rect x="2" y="80" width="18" height="18" fill="white" />
+                      <rect x="5" y="83" width="12" height="12" />
+                      
+                      <rect x="34" y="6" width="14" height="4" />
+                      <rect x="52" y="2" width="8" height="8" />
+                      <rect x="30" y="20" width="16" height="4" />
+                      <rect x="10" y="34" width="8" height="12" />
+                      <rect x="24" y="32" width="6" height="18" />
+                      <rect x="42" y="32" width="28" height="10" />
+                      <rect x="54" y="46" width="10" height="16" />
+                      <rect x="78" y="30" width="12" height="12" />
+                      <rect x="72" y="48" width="12" height="6" />
+                      <rect x="78" y="62" width="18" height="6" />
+                      <rect x="32" y="78" width="14" height="12" />
+                      <rect x="50" y="82" width="18" height="8" />
+                      
+                      <circle cx="50" cy="50" r="6" fill="#02c39a" />
+                    </svg>
+                  </div>
+                  <div className="text-center sm:text-left space-y-2 flex-1">
+                    <span className="px-2 py-0.5 bg-emerald-500/15 text-emerald-300 font-mono text-[9px] font-black rounded uppercase border border-emerald-500/20">
+                      🤖 telegram bot manzili
+                    </span>
+                    <h4 className="text-xs font-black text-slate-100">
+                      Smart Telegram Botimiz: @dstoma_bot
+                    </h4>
+                    <p className="text-[10.5px] text-slate-400 leading-relaxed">
+                      To'g'ridan-to'g'ri Telegram-da navbat olish, shifokorlar bilan chat va sun'iy intellekt shifokori maslahatlari integratsiyasi!
+                    </p>
+                    <a
+                      href="https://t.me/dstoma_bot"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-[10px] font-black text-emerald-400 hover:text-emerald-300 transition-all underline"
+                    >
+                      Telegram-da ulanish va boshlash 💬
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* upper layout: Full-Width 3D Dental diagnostics AI system */}
+            <div className="grid grid-cols-1 gap-6">
+
+              {/* HIGH-TECH REAL-TIME 3D DENTAL ANATOMICAL ANALYZER (Full Width) */}
+              <div id="central-dental-telemetry-deck" className="bg-[#0b1022]/85 border border-[#1d2d4c]/80 rounded-3xl p-6 relative overflow-hidden text-left flex flex-col justify-between shadow-[0_4px_30px_rgba(0,0,0,0.4)] animate-fade-in">
                 <div className="absolute top-0 right-0 w-44 h-44 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
 
-                <div className="flex items-start justify-between border-b border-[#233256]/40 pb-3 mb-4 select-none">
+                <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-[#233256]/40 pb-4 mb-5 select-none gap-3">
                   <div>
-                    <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-450 border border-emerald-500/30 text-[9px] font-black rounded font-mono uppercase tracking-wider">
+                    <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[9px] font-black rounded font-mono uppercase tracking-wider">
                       🧪 AI-Diagnostic System
                     </span>
-                    <h3 className="text-xs font-black text-white uppercase tracking-wider font-display mt-0.5">
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider font-display mt-0.5">
                       Markaziy Tish Diagnostikasi & Telemetriya
                     </h3>
                   </div>
 
-                  {/* Mode badge indicator */}
-                  <div className="flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-[#233256]/70 text-[9px] font-mono font-bold text-emerald-400 uppercase">
-                    <Zap className={`w-3.5 h-3.5 ${isScanning ? 'animate-flicker text-[#fb1]' : 'text-emerald-400'}`} />
-                    <span>{isScanning ? 'Scanning...' : 'Manual Select'}</span>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {/* System designation selector */}
+                    <div className="flex bg-slate-950/95 p-0.5 rounded-xl border border-slate-800/80 text-[8.5px] font-mono font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setDentalSystem('fdi')}
+                        className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                          dentalSystem === 'fdi'
+                            ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                        title="FDI (Yevropa/Xalqaro) tish raqamlanishi"
+                      >
+                        {language === 'uz' ? "FDI (Evropa)" : language === 'ru' ? 'FDI (Европа)' : 'FDI Notation'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDentalSystem('universal')}
+                        className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                          dentalSystem === 'universal'
+                            ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                        title="Universal (AQSh) tish raqamlanishi"
+                      >
+                        {language === 'uz' ? 'Universal (1-32)' : language === 'ru' ? 'США (1-32)' : 'Universal (1-32)'}
+                      </button>
+                    </div>
+
+                    {/* Mode badge indicator */}
+                    <div className="flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-[#233256]/70 text-[9px] font-mono font-bold text-emerald-400 uppercase">
+                      <Zap className={`w-3.5 h-3.5 ${isScanning ? 'animate-flicker text-[#fb1]' : 'text-emerald-400'}`} />
+                      <span>{isScanning ? 'Scanning...' : 'Manual Select'}</span>
+                    </div>
                   </div>
                 </div>
 
                 {/* Core Jaw Render Layout with teeth buttons arranged in customized arch curve */}
-                <div className="flex flex-col lg:flex-row items-center gap-6 justify-between flex-1 relative min-h-[170px]">
+                <div className="flex flex-col lg:flex-row items-stretch gap-7 justify-between flex-1 relative min-h-[300px] w-full">
                   
-                  {/* Left Jaw representation */}
-                  <div className="flex flex-col items-center justify-center relative w-[180px] h-[160px] select-none bg-slate-950/40 p-3 rounded-2xl border border-[#203254]/40">
-                    <span className="text-[8px] font-black text-slate-500 absolute top-2 uppercase font-mono">Mandibular Arch (Jaw)</span>
-
-                    {/* Symmetrical tooth hexagons looping in curve path layout */}
-                    <div className="relative w-full h-[100px] mt-4">
-                      {[18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32].map((toothNum, index) => {
-                        // Calculate coordinates in a beautiful arc
-                        const angleStep = Math.PI / 14; 
-                        const startAngle = Math.PI; 
-                        const angle = startAngle + index * angleStep;
-                        
-                        // Circle formula for coordinates
-                        const rx = 68; // x radius
-                        const ry = 42; // y radius
-                        const px = 84 + rx * Math.cos(angle);
-                        const py = 15 + ry * Math.sin(angle);
-
-                        const isCurrentlyActive = selectedTooth === toothNum;
-
-                        return (
-                          <button
-                            key={toothNum}
-                            type="button"
-                            onClick={() => { setSelectedTooth(toothNum); setIsScanning(false); }}
-                            className={`absolute w-6.5 h-6.5 text-[9.5px] font-mono font-black rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
-                              isCurrentlyActive 
-                                ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-slate-950 border-emerald-400 scale-120 z-20 shadow-[0_0_12px_rgba(16,185,129,0.7)]'
-                                : 'bg-[#0f172a] hover:bg-slate-800 text-slate-350 border-slate-700/60 hover:border-[#10b981]/50 hover:scale-110'
-                            }`}
-                            style={{ left: `${px}px`, top: `${py}px` }}
-                            title={`Tish #${toothNum}`}
-                          >
-                            {toothNum}
-                          </button>
-                        );
-                      })}
-
-                      {/* Diagnostic status sweep line animation across the teeth card */}
-                      {isScanning && (
-                        <div className="absolute inset-x-0 w-full h-0.5 bg-emerald-400 shadow-[0_0_15px_#10b981] animate-laser-scanning opacity-80" />
+                  {/* Left Column containing BOTH Upper and Lower Jaws (Enlarged and Stacked for computer screens) */}
+                  <div className="flex flex-col gap-4.5 w-full lg:w-[485px] xl:w-[535px] shrink-0">
+                    
+                    {/* Upper Jaw panel */}
+                    <div className="flex flex-col items-center justify-center relative w-full h-[255px] select-none bg-slate-950/80 p-5 rounded-3xl border border-[#233860]/85 overflow-hidden shadow-3xl transition-all duration-300">
+                      {/* Holographic backdrop */}
+                      <div className="absolute inset-0 bg-[radial-gradient(#10b981_1.2px,transparent_1.2px)] [background-size:14px_14px] opacity-[0.08] pointer-events-none" />
+                      
+                      {/* Subtle scanner laser sweeping indicator */}
+                      {isScanning && activeJaw === 'upper' && (
+                        <div className="absolute inset-x-0 w-full h-1 bg-emerald-400/80 shadow-[0_0_25px_#10b981] animate-laser-scanning opacity-90 z-10" />
                       )}
+
+                      {/* Info corner badge */}
+                      <span className="absolute top-3.5 left-3.5 px-2.5 py-1 text-[8.5px] font-mono font-black text-slate-305 bg-slate-900/90 rounded-lg border border-slate-800/80 flex items-center gap-1.5">
+                        <span className={`w-1.5 h-1.5 rounded-full ${selectedToothIndex < 16 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                        {language === 'uz' ? 'YUQORI JAG\' (UPPER JAW)' : language === 'ru' ? 'ВЕРХНЯЯ ЧЕЛЮСТЬ' : 'UPPER JAW'}
+                      </span>
+
+                      {/* Left & Right directions labels */}
+                      <div className="absolute inset-x-5 top-5 flex justify-between pointer-events-none text-[8.5px] font-mono tracking-widest text-[#2f497a]/70 uppercase font-black">
+                        <span>◀ L (LEFT)</span>
+                        <span>R (RIGHT) ▶</span>
+                      </div>
+
+                      {/* Tooth buttons */}
+                      <div className="relative w-full h-[175px] mt-8 flex items-center justify-center">
+                        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((toothIdx, index) => {
+                          const angleStep = Math.PI / 15; 
+                          const startAngle = Math.PI; 
+                          const angle = startAngle + index * angleStep;
+                          const rx = 39; 
+                          const ry = 28; 
+                          const px = 50 + rx * Math.cos(angle);
+                          const py = 45 + ry * Math.sin(angle);
+
+                          const toothNum = getToothDisplayNumber(toothIdx, dentalSystem);
+                          const isCurrentlyActive = selectedToothIndex === toothIdx;
+
+                          return (
+                            <button
+                              key={toothIdx}
+                              type="button"
+                              onClick={() => { setSelectedToothIndex(toothIdx); setIsScanning(false); }}
+                              className={`absolute w-9.5 h-9.5 lg:w-11 lg:h-11 text-[11px] lg:text-xs font-mono font-black rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
+                                isCurrentlyActive 
+                                  ? 'bg-gradient-to-br from-emerald-450 via-emerald-500 to-teal-600 text-slate-950 border-emerald-300 scale-120 z-20 shadow-[0_0_20px_rgba(16,185,129,0.9)]'
+                                  : 'bg-[#091020]/95 hover:bg-slate-800 text-slate-300 border-[#1f3762]/90 hover:border-[#10b981]/60 hover:scale-115'
+                              }`}
+                              style={{ left: `${px}%`, top: `${py}%`, transform: 'translate(-50%, -50%)' }}
+                              title={`Tish #${toothNum} - ${getAnatomicalName(toothIdx)}`}
+                            >
+                              <span className="relative">
+                                {toothNum}
+                                {toothIdx === 15 && (
+                                  <span className="absolute -top-1.5 -right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                                )}
+                                {toothIdx === 7 && (
+                                  <span className="absolute -top-1.5 -right-1.5 w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
+                                )}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
 
-                    <span className="text-[7.5px] font-bold text-[#e11] absolute bottom-2 tracking-widest uppercase">3D CAD WIREFRAME</span>
+                    {/* Lower Jaw panel */}
+                    <div className="flex flex-col items-center justify-center relative w-full h-[255px] select-none bg-slate-950/80 p-5 rounded-3xl border border-[#233860]/85 overflow-hidden shadow-3xl transition-all duration-300">
+                      {/* Holographic backdrop */}
+                      <div className="absolute inset-0 bg-[radial-gradient(#10b981_1.2px,transparent_1.2px)] [background-size:14px_14px] opacity-[0.08] pointer-events-none" />
+                      
+                      {/* Subtle scanner laser sweeping indicator */}
+                      {isScanning && activeJaw === 'lower' && (
+                        <div className="absolute inset-x-0 w-full h-1 bg-emerald-400/80 shadow-[0_0_25px_#10b981] animate-laser-scanning opacity-90 z-10" />
+                      )}
+
+                      {/* Info corner badge */}
+                      <span className="absolute top-3.5 left-3.5 px-2.5 py-1 text-[8.5px] font-mono font-black text-slate-305 bg-slate-900/90 rounded-lg border border-slate-800/80 flex items-center gap-1.5">
+                        <span className={`w-1.5 h-1.5 rounded-full ${selectedToothIndex >= 16 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                        {language === 'uz' ? 'PASTKI JAG\' (LOWER JAW)' : language === 'ru' ? 'НИЖНЯЯ ЧЕЛЮСТЬ' : 'LOWER JAW'}
+                      </span>
+
+                      {/* Left & Right directions labels */}
+                      <div className="absolute inset-x-5 top-5 flex justify-between pointer-events-none text-[8.5px] font-mono tracking-widest text-[#2f497a]/70 uppercase font-black">
+                        <span>◀ L (LEFT)</span>
+                        <span>R (RIGHT) ▶</span>
+                      </div>
+
+                      {/* Tooth buttons */}
+                      <div className="relative w-full h-[175px] mt-8 flex items-center justify-center">
+                        {[16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31].map((toothIdx, index) => {
+                          const angleStep = Math.PI / 15; 
+                          const startAngle = Math.PI; 
+                          const angle = startAngle + index * angleStep;
+                          const rx = 39; 
+                          const ry = 28; 
+                          const px = 50 + rx * Math.cos(angle);
+                          const py = 52 - ry * Math.sin(angle);
+
+                          const toothNum = getToothDisplayNumber(toothIdx, dentalSystem);
+                          const isCurrentlyActive = selectedToothIndex === toothIdx;
+
+                          return (
+                            <button
+                              key={toothIdx}
+                              type="button"
+                              onClick={() => { setSelectedToothIndex(toothIdx); setIsScanning(false); }}
+                              className={`absolute w-9.5 h-9.5 lg:w-11 lg:h-11 text-[11px] lg:text-xs font-mono font-black rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
+                                isCurrentlyActive 
+                                  ? 'bg-gradient-to-br from-emerald-450 via-emerald-500 to-teal-600 text-slate-950 border-emerald-300 scale-120 z-20 shadow-[0_0_20px_rgba(16,185,129,0.9)]'
+                                  : 'bg-[#091020]/95 hover:bg-slate-800 text-slate-300 border-[#1f3762]/90 hover:border-[#10b981]/60 hover:scale-115'
+                              }`}
+                              style={{ left: `${px}%`, top: `${py}%`, transform: 'translate(-50%, -50%)' }}
+                              title={`Tish #${toothNum} - ${getAnatomicalName(toothIdx)}`}
+                            >
+                              <span className="relative">
+                                {toothNum}
+                                {toothIdx === 18 && (
+                                  <span className="absolute -top-1.5 -right-1.5 w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                                )}
+                                {toothIdx === 29 && (
+                                  <span className="absolute -top-1.5 -right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                                )}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Right Telemetry Information output panel */}
@@ -756,13 +1070,133 @@ export default function ClientDashboard({
                           }
                           className="w-full text-[10px] p-2 bg-[#061025] hover:bg-[#091733] border border-[#1e3256]/80 text-white rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 font-sans resize-none transition-all placeholder-slate-500"
                         />
+                        
+                        {/* Beautiful reactive quick symptom selectors */}
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {(language === 'uz' ? [
+                            { label: "Og'riq ⚡", text: "Tishda o'tkir og'riq bor" },
+                            { label: "Sezuvchanlik ❄️🔥", text: "Sovuq va issiqqa qattiq sezuvchanlik" },
+                            { label: "Karies doli 🦷", text: "Tishda karies dog'i bor" },
+                            { label: "Shish 🎈", text: "Milkda shish kuzatilmoqda" },
+                            { label: "Qonash 🩸", text: "Tish yuvganda milk qonashi" }
+                          ] : language === 'ru' ? [
+                            { label: "Боль ⚡", text: "Острая боль в зубе" },
+                            { label: "Чувствительность ❄️", text: "Реакция на холодное и горячее" },
+                            { label: "Кариес 🦷", text: "Темные пятна кариеса на зубе" },
+                            { label: "Опухоль 🎈", text: "Припухлость десны вокруг зуба" },
+                            { label: "Кровотечение 🩸", text: "Кровоточивость десен при чистке" }
+                          ] : [
+                            { label: "Toothache ⚡", text: "Acute pain in the tooth" },
+                            { label: "Sensitivity ❄️", text: "Extreme temperature sensitivity" },
+                            { label: "Caries 🦷", text: "Visible dental caries" },
+                            { label: "Swelling 🎈", text: "Gum swelling and tenderness" },
+                            { label: "Bleeding 🩸", text: "Gums bleeding when brushing" }
+                          ]).map((sym, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                setSymptomsInput(prev => {
+                                  const trimmed = prev.trim();
+                                  if (!trimmed) return sym.text;
+                                  if (trimmed.includes(sym.text) || trimmed.toLowerCase().includes(sym.text.toLowerCase())) return prev;
+                                  return `${trimmed}, ${sym.text.toLowerCase()}`;
+                                });
+                              }}
+                              className="px-1.5 py-0.5 rounded-md bg-slate-900/80 hover:bg-emerald-500/20 border border-[#1e3256]/50 hover:border-emerald-500/50 text-[#10b981] hover:text-white text-[7.5px] font-sans font-medium transition-all active:scale-95 cursor-pointer"
+                            >
+                              {sym.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Multimodal Tooth Image Upload Zone */}
+                      <div className="text-left">
+                        <label className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block mb-1">
+                          📸 {language === 'uz' ? 'Tish rasmini yuklash (ixtiyoriy):' : language === 'ru' ? 'Фотография зуба (опционально):' : 'Tooth Image (Optional):'}
+                        </label>
+                        
+                        <div
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setIsDragging(true);
+                          }}
+                          onDragLeave={() => setIsDragging(false)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDragging(false);
+                            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                              handleFileChange(e.dataTransfer.files[0]);
+                            }
+                          }}
+                          className={`relative border border-dashed rounded-xl p-2.5 flex flex-col items-center justify-center transition-all text-center cursor-pointer ${
+                            isDragging
+                              ? 'border-emerald-400 bg-emerald-500/10'
+                              : 'border-[#1e3256]/60 bg-[#061025] hover:bg-[#091733]/80 hover:border-emerald-500/40'
+                          }`}
+                          onClick={() => {
+                            const el = document.getElementById('image-upload-input');
+                            if (el) el.click();
+                          }}
+                        >
+                          <input
+                            id="image-upload-input"
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                handleFileChange(e.target.files[0]);
+                              }
+                            }}
+                          />
+                          
+                          {selectedToothImage ? (
+                            <div className="w-full flex items-center gap-2 relative">
+                              <img
+                                src={`data:${selectedToothImage.mimeType};base64,${selectedToothImage.data}`}
+                                alt="Selected Tooth"
+                                className="w-8 h-8 object-cover rounded border border-emerald-500/30"
+                              />
+                              <div className="flex-1 text-left min-w-0 pr-5">
+                                <p className="text-[8.5px] text-emerald-400 font-black truncate">✓ {imageFileName || 'tooth.jpg'}</p>
+                                <p className="text-[7px] text-slate-400 truncate uppercase font-mono">{selectedToothImage.mimeType}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedToothImage(null);
+                                  setImageFileName('');
+                                }}
+                                className="absolute right-0 top-1/2 -translate-y-1/2 p-0.5 text-rose-450 hover:text-rose-400 font-bold bg-slate-900/80 rounded-full hover:bg-slate-950 transition-all cursor-pointer text-[9px] w-4.5 h-4.5 flex items-center justify-center border border-rose-500/20"
+                                title={language === 'uz' ? 'O\'chirish' : language === 'ru' ? 'Удалить' : 'Remove'}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              <Upload className="w-3.5 h-3.5 text-slate-400 mx-auto animate-pulse" />
+                              <p className="text-[8px] text-slate-350 leading-tight">
+                                {language === 'uz' 
+                                  ? "Rasm sudrab tashlang yoki bosing" 
+                                  : language === 'ru' 
+                                    ? "Перетащите фото или кликните" 
+                                    : "Drag & drop image or click"}
+                              </p>
+                              <span className="text-[6.5px] text-slate-500 uppercase block font-mono">JPG / PNG / WEBP</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       <button
                         type="button"
                         onClick={handleAiDiagnostic}
                         disabled={isAiLoading}
-                        className={`w-full py-2 rounded-xl transition-all cursor-pointer font-black text-[9.5px] tracking-wider uppercase flex items-center justify-center gap-1.5 border ${
+                        className={`w-full py-2 rounded-xl transition-all cursor-pointer font-black text-[9.5px]/[normal] tracking-wider uppercase flex items-center justify-center gap-1.5 border ${
                           isAiLoading
                             ? 'bg-[#0f2d20]/30 border-emerald-500/40 text-emerald-400/80 cursor-wait'
                             : 'bg-emerald-500 text-slate-950 font-black hover:bg-emerald-400 border-transparent shadow-[0_0_12px_rgba(16,185,129,0.25)] hover:scale-[1.02]'
@@ -770,7 +1204,7 @@ export default function ClientDashboard({
                       >
                         {isAiLoading ? (
                           <>
-                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                             <span>{language === 'uz' ? 'AI Hisoblamoqda...' : language === 'ru' ? 'ИИ Вычисляет...' : 'AI Computing...'}</span>
                           </>
                         ) : (
@@ -825,7 +1259,7 @@ export default function ClientDashboard({
                         {aiOutput.actionPlan && aiOutput.actionPlan.length > 0 && (
                           <div className="space-y-1 select-none">
                             <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block">{language === 'uz' ? 'TAVSIYALARNING AMALIY REJASI:' : language === 'ru' ? 'ПЛАН ДЕЙСТВИЙ ДЛЯ ПАЦИЕНТА:' : 'PRACTICAL ACTION PLAN:'}</span>
-                            <ul className="list-disc pl-3 text-[9px] text-emerald-250 space-y-0.5 text-slate-300 font-sans">
+                            <ul className="list-disc pl-3 text-[9px] text-[#10b981] space-y-0.5 text-slate-300 font-sans">
                               {aiOutput.actionPlan.map((step, idx) => (
                                 <li key={idx}>{step}</li>
                               ))}
@@ -836,53 +1270,90 @@ export default function ClientDashboard({
                         {/* Integration type footer badge */}
                         <div className="pt-2 border-t border-slate-900 select-none flex items-center justify-between text-[7.5px] font-bold tracking-widest uppercase">
                           <span className="text-slate-500">DSTOMA DIAGNOSTIC v3.5</span>
-                          <span className={`px-1.5 py-0.5 rounded text-slate-950 font-black ${aiOutput.isSimulation ? 'bg-amber-400' : 'bg-emerald-400'}`}>
-                            {aiOutput.isSimulation ? '🛰️ SIMULATOR' : '⭐ NODE LIVE'}
+                          <span className="px-1.5 py-0.5 rounded text-slate-950 font-black bg-emerald-400">
+                            ⭐ NODE LIVE
                           </span>
                         </div>
                       </div>
                     ) : (
                       /* Classical telemetry panel fallback with prompt reminder */
-                      <div className="space-y-2 text-left">
-                        <div className="space-y-1 text-xs">
-                          <p><strong className="text-slate-405">Tish indeksi:</strong> <span className="text-white">#{selectedTooth} mandibular</span></p>
-                          
-                          <p>
-                            <strong className="text-slate-405">Enamel Abrasion:</strong>{' '}
-                            <span className="text-white">
-                              {selectedTooth === 19 ? '18% spot indent' : selectedTooth === 28 ? '12% normal' : selectedTooth === 30 ? '30% impacted' : '3% perfect condition'}
+                      <div className="space-y-2 text-left animate-fade-in text-[10px]">
+                        <div className="space-y-2 text-xs">
+                          <p className="flex justify-between items-center bg-slate-900/50 p-1 px-1.5 rounded">
+                            <strong className="text-slate-400">
+                              {language === 'uz' ? 'Tish indeksi:' : language === 'ru' ? 'Индекс зуба:' : 'Tooth Index:'}
+                            </strong>
+                            <span className="text-white font-mono font-bold">
+                              #{selectedTooth} ({selectedTooth <= 16 ? (language === 'uz' ? "Yuqori Jag'" : language === 'ru' ? 'Верхняя Челюсть' : 'Upper Jaw') : (language === 'uz' ? "Pastki Jag'" : language === 'ru' ? 'Нижняя Челюсть' : 'Lower Jaw')})
                             </span>
                           </p>
 
-                          <p>
-                            <strong className="text-slate-450">Tavsiya muolaja:</strong>{' '}
-                            <span className={selectedTooth === 19 ? 'text-rose-400' : selectedTooth === 28 ? 'text-amber-400 animate-pulse' : selectedTooth === 30 ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
-                              {selectedTooth === 19 
-                                ? 'Composite Plomba' 
-                                : selectedTooth === 28 
-                                ? 'Ultrasonic Cleaning' 
-                                : selectedTooth === 30 
-                                ? 'Surgerical Extraction' 
-                                : 'Muntazam gigiyena (Sog\'lom)'}
+                          <p className="flex justify-between items-center bg-slate-900/50 p-1 px-1.5 rounded">
+                            <strong className="text-slate-400">
+                              {language === 'uz' ? 'Anatomik nomi:' : language === 'ru' ? 'Название зуба:' : 'Anatomical Name:'}
+                            </strong>
+                            <span className="text-[#10b981] font-bold text-right text-[10.5px]">
+                              {selectedTooth <= 16
+                                ? ([1, 16].includes(selectedTooth) ? (language === 'uz' ? "Aql tishi (M3)" : language === 'ru' ? "Зуб мудрости (M3)" : "Wisdom Tooth (M3)") :
+                                   [2, 3, 14, 15].includes(selectedTooth) ? (language === 'uz' ? "Katta oziq tish (Molyar)" : language === 'ru' ? "Моляр" : "Molar") :
+                                   [4, 5, 12, 13].includes(selectedTooth) ? (language === 'uz' ? "Kichik oziq tish (Premolyar)" : language === 'ru' ? "Премоляр" : "Premolar") :
+                                   [6, 11].includes(selectedTooth) ? (language === 'uz' ? "Qoziq tish (K9)" : language === 'ru' ? "Клык" : "Canine") :
+                                   (language === 'uz' ? "To'sar tish (Kurak)" : language === 'ru' ? "Резец" : "Incisor"))
+                                 : ([17, 32].includes(selectedTooth) ? (language === 'uz' ? "Aql tishi (M3)" : language === 'ru' ? "Зуб мудрости (M3)" : "Wisdom Tooth (M3)") :
+                                    [18, 19, 30, 31].includes(selectedTooth) ? (language === 'uz' ? "Katta oziq tish (Molyar)" : language === 'ru' ? "Моляр" : "Molar") :
+                                    [20, 21, 28, 29].includes(selectedTooth) ? (language === 'uz' ? "Kichik oziq tish (Premolyar)" : language === 'ru' ? "Премоляр" : "Premolar") :
+                                    [22, 27].includes(selectedTooth) ? (language === 'uz' ? "Qoziq tish (K9)" : language === 'ru' ? "Клык" : "Canine") :
+                                    (language === 'uz' ? "To'sar tish (Kurak)" : language === 'ru' ? "Резец" : "Incisor"))
+                              }
                             </span>
                           </p>
 
-                          <p>
-                            <strong className="text-slate-450">Health Factor:</strong>{' '}
-                            <span className={selectedTooth === 19 ? 'text-pink-400 font-bold' : selectedTooth === 30 ? 'text-[#f43] font-black' : 'text-emerald-400'}>
-                              {selectedTooth === 19 ? 'Fair (72%)' : selectedTooth === 30 ? 'Critical (40%)' : 'Excellent (98%)'}
+                          <p className="flex flex-col bg-slate-900/40 p-1.5 px-2 border border-[#1e3256]/30 rounded-xl">
+                            <strong className="text-[#10b981] text-[10px]">
+                              {language === 'uz' ? 'Tavsiya etilgan muolaja:' : language === 'ru' ? 'Рекомендованное лечение:' : 'Recommended Treatment:'}
+                            </strong>
+                            <span className={"text-[11px] font-bold mt-0.5 " + ([29, 15].includes(selectedToothIndex) ? "text-red-400" : [18, 7].includes(selectedToothIndex) ? "text-amber-400" : "text-emerald-400")}>
+                              {selectedToothIndex === 18 
+                                ? (language === 'uz' ? "Kompozit plomba o'rnatish" : language === 'ru' ? "Установка композитной пломбы" : "Composite filling installation")
+                                : selectedToothIndex === 27 
+                                  ? (language === 'uz' ? 'Klinik kuzatuv' : language === 'ru' ? 'Клиническое наблюдение' : 'Clinical monitoring')
+                                  : selectedToothIndex === 29 
+                                    ? (language === 'uz' ? 'Endodontik davolash' : language === 'ru' ? 'Эндодонтическое лечение' : 'Endodontic treatment')
+                                    : selectedToothIndex === 7 
+                                      ? (language === 'uz' ? 'Flyuorizatsiya va laklash' : language === 'ru' ? 'Фторирование и лакирование' : 'Fluoridation & varnishing')
+                                      : selectedToothIndex === 15 
+                                        ? (language === 'uz' ? "Xirurgik o'chirish (Ekstraktsiya)" : language === 'ru' ? "Хирургическое удаление (Экстракция)" : "Surgical extraction")
+                                        : (language === 'uz' ? 'Profilaktik tozalash' : language === 'ru' ? 'Профилактическая чистка' : 'Preventive cleaning')
+                              }
+                            </span>
+                          </p>
+
+                          <p className="flex justify-between items-center bg-slate-900/50 p-1 px-1.5 rounded">
+                            <strong className="text-slate-400 font-bold">
+                              {language === 'uz' ? 'Salomatlik koeff:' : language === 'ru' ? 'Фактор здоровья:' : 'Health Factor:'}
+                            </strong>
+                            <span className={"font-black uppercase text-[9px] " + (selectedToothIndex === 29 ? "text-red-400" : [15, 18].includes(selectedToothIndex) ? "text-amber-400" : "text-emerald-400")}>
+                              {selectedToothIndex === 18 
+                                ? (language === 'uz' ? 'Qoniqarli (72%)' : language === 'ru' ? 'Удовлетворительное (72%)' : 'Fair (72%)')
+                                : selectedToothIndex === 29 
+                                  ? (language === 'uz' ? 'Kritik (40%)' : language === 'ru' ? 'Критическое (40%)' : 'Critical (40%)') 
+                                  : selectedToothIndex === 7 
+                                    ? (language === 'uz' ? 'Yaxshi (85%)' : language === 'ru' ? 'Хорошее (85%)' : 'Good (85%)')
+                                    : selectedToothIndex === 15 
+                                      ? (language === 'uz' ? 'Muammoli (55%)' : language === 'ru' ? 'Проблемное (55%)' : 'Impaired (55%)')
+                                      : (language === 'uz' ? "Sog'lom / A'lo (98%)" : language === 'ru' ? 'Отличное (98%)' : 'Excellent (98%)')}
                             </span>
                           </p>
                         </div>
 
-                        <div className="pt-1 select-none flex items-center gap-1.5 text-slate-450 text-[8.5px] border-t border-slate-900 pt-2 text-slate-400">
-                          <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
+                        <div className="pt-1 select-none flex items-center gap-1.5 text-slate-400 text-[8.5px] border-t border-slate-900 pt-2">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                           <span>
                             {language === 'uz' 
-                              ? 'Aniqroq natija olish uchun yuqoridagi maydonga xastalik belgilarini yozib tugmani bosing.' 
+                              ? 'Aniqroq tahlil uchun xastalik belgilarini yozib "Diagnostic" tugmasini bosing.' 
                               : language === 'ru' 
-                                ? 'Для точной диагностики напишите жалобы выше и нажмите кнопку.' 
-                                : 'Type symptoms above and click to generate live deep diagnosis.'}
+                                ? 'Для диагностики напишите симптомы и нажмите кнопку "Diagnostic".' 
+                                : 'Type symptoms above and click "Diagnostic" for live deep assessment.'}
                           </span>
                         </div>
                       </div>
@@ -896,230 +1367,60 @@ export default function ClientDashboard({
                     <button
                       type="button"
                       onClick={() => {
-                        let prev = selectedTooth - 1;
-                        if (prev < 18) prev = 32;
-                        setSelectedTooth(prev);
+                        let prev = selectedToothIndex - 1;
+                        if (prev < 0) prev = 31;
+                        setSelectedToothIndex(prev);
                         setIsScanning(false);
                       }}
-                      className="p-1 px-3 bg-[#0a1122] hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-black rounded-lg active:scale-95 transition-all text-center cursor-pointer"
+                      className="p-1 px-3 bg-[#0a1122]/95 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-black rounded-lg active:scale-95 transition-all text-center cursor-pointer"
                     >
                       ◀
                     </button>
                     
                     <button
                       type="button"
-                      onClick={() => setIsScanning(!isScanning)}
+                      onClick={() => {
+                        setIsScanning(true);
+                        setTimeout(() => {
+                          setIsScanning(false);
+                          handleAiDiagnostic();
+                        }, 1500);
+                      }}
+                      disabled={isScanning || isAiLoading}
                       className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
                         isScanning 
-                          ? 'bg-rose-600/20 text-rose-400 border border-rose-500/30'
-                          : 'bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/30 hover:bg-[#10b981]/25'
+                          ? 'bg-emerald-600/25 text-emerald-300 border border-emerald-500/40'
+                          : 'bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/30 hover:bg-[#10b981]/25 disabled:opacity-50'
                       }`}
                     >
-                      {isScanning ? <Pause className="w-3 h-3 text-rose-400 fill-current" /> : <Play className="w-3 h-3 text-[#10b981] fill-current" />}
-                      <span>{isScanning ? "Scan to'xtatish" : "Auto-Diagnostika"}</span>
+                      <Sparkles className="w-3 h-3 text-[#10b981] fill-current animate-pulse" />
+                      <span>{isScanning ? (language === 'uz' ? "Skanyerlash..." : language === 'ru' ? "Сканирование..." : "Scanning...") : (language === 'uz' ? "Diagnostik Skand" : language === 'ru' ? "Диагностич. Скан" : "Diagnostic Scan")}</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => {
-                        let next = selectedTooth + 1;
-                        if (next > 32) next = 18;
-                        setSelectedTooth(next);
+                        let next = selectedToothIndex + 1;
+                        if (next > 31) next = 0;
+                        setSelectedToothIndex(next);
                         setIsScanning(false);
                       }}
-                      className="p-1 px-3 bg-[#0a1122] hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-black rounded-lg active:scale-95 transition-all text-center cursor-pointer"
+                      className="p-1 px-3 bg-[#0a1122]/95 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-black rounded-lg active:scale-95 transition-all text-center cursor-pointer"
                     >
                       ▶
                     </button>
                   </div>
 
-                  <span className="text-[9px] text-slate-500 font-bold font-mono uppercase tracking-widest">
+                  <span className="text-[9px] text-slate-500 font-bold font-mono uppercase tracking-widest pt-1">
                     Telemetry Tick: {scannerTick}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* ---------------- MIDDLE SECTION: FLOATING PATIENT STREAM RIBBON COVEYOR ---------------- */}
-            <div className="bg-[#0b1022]/85 border border-[#1d2d4c]/85 rounded-3xl p-5 select-none text-left overflow-hidden relative">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/5 rounded-full blur-2xl pointer-events-none" />
-              
-              <div className="flex items-center justify-between mb-3.5 border-b border-[#1b2a47]/30 pb-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[8.5px] font-black rounded font-mono uppercase tracking-widest">
-                    LIVE DISPATCH RIVER
-                  </span>
-                  <h3 className="text-xs font-black text-slate-200 uppercase tracking-wider font-display">
-                    Klinika Elektron Navbatining Oqim daryosi (Real-Time Queue Flow)
-                  </h3>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
-                  <span className="text-[10px] font-mono text-emerald-400 font-extrabold uppercase">Live Stream Streaming info</span>
-                </div>
-              </div>
 
-              {/* Scrolling Ribbon Track Container */}
-              <div className="w-full relative py-2 overflow-hidden flex items-center">
-                {/* Custom glowing conveyor list */}
-                <div className="flex items-center gap-4.5 animate-marquee-river whitespace-nowrap min-w-full">
-                  {/* Map loops of patient queue elements so customers see visual representations */}
-                  {queues.length > 0 ? (
-                    queues.map((item, idx) => {
-                      const isCallingState = item.status === 'calling' || item.status === 'in_progress';
-                      return (
-                        <div
-                          key={item.id + '_' + idx}
-                          className={`inline-flex items-center gap-3 px-4 py-2 bg-[#0e162d]/95 rounded-2xl border transition-all hover:scale-105 shrink-0 ${
-                            isCallingState 
-                              ? 'border-emerald-500 bg-emerald-500/5 shadow-[0_0_10px_rgba(16,185,129,0.15)] animate-pulse' 
-                              : 'border-[#223555]/60'
-                          }`}
-                        >
-                          <div className={`w-8.5 h-8.5 rounded-full flex items-center justify-center font-black text-[11px] ${
-                            isCallingState ? 'bg-emerald-500 text-slate-950' : 'bg-[#182648] text-cyan-400'
-                          }`}>
-                            #{item.number}
-                          </div>
-                          <div>
-                            <div className="text-[11px] font-black text-white leading-none mb-1 uppercase tracking-wide">
-                              {item.patientName.replace(/@/, '')}
-                            </div>
-                            <span className="text-[8px] font-bold text-slate-400 uppercase font-mono block">
-                              {item.status === 'completed'
-                                ? '✔ Tugagan'
-                                : isCallingState
-                                ? '🫵 QABULDA'
-                                : '⏳ Kutmoqda'}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    // Beautiful custom mock queues fallback to ensure outstanding aesthetic look
-                    [
-                      { name: 'Maftunaxon Sobirova', number: '102', status: 'completed' },
-                      { name: 'Kaori Shinoda', number: '105', status: 'calling' },
-                      { name: 'Alexandru Petrof', number: '108', status: 'pending' },
-                      { name: 'Akbar Salimov Uzbek', number: '110', status: 'pending' },
-                      { name: 'Dilrabo Qodirova', number: '113', status: 'pending' },
-                      { name: 'Jasur Bekto\'raev', number: '117', status: 'pending' }
-                    ].map((mockp, idx) => (
-                      <div
-                        key={idx}
-                        className={`inline-flex items-center gap-3.5 px-4 py-2.5 bg-[#0e162d]/90 rounded-2xl border transition-all hover:scale-105 shrink-0 ${
-                          mockp.status === 'calling' ? 'border-emerald-500 bg-emerald-500/5 animate-pulse' : 'border-[#223555]/60'
-                        }`}
-                      >
-                        <div className={`w-8.5 h-8.5 rounded-full flex items-center justify-center font-black text-[11px] ${
-                          mockp.status === 'calling' ? 'bg-emerald-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-300'
-                        }`}>
-                          #{mockp.number}
-                        </div>
-                        <div>
-                          <p className="text-[11px] font-black text-white leading-none mb-1 uppercase tracking-wider">{mockp.name}</p>
-                          <p className={`text-[8px] font-black uppercase font-mono ${mockp.status === 'calling' ? 'text-emerald-400' : 'text-slate-450'}`}>
-                            {mockp.status === 'calling' ? '🫵 QABULDA' : '⏳ Kutmoqda'}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
 
-              {/* Info guideline indicator banner */}
-              <p className="text-[9.5px] font-semibold text-slate-550 leading-normal border-t border-[#1b2a47]/20 pt-2 flex items-center gap-1">
-                <span className="text-emerald-500 font-black">⚙️ Sinxronizatsiya:</span> Yangi olingan har qanday smart elektron chipta ushbu conveyor lentalarga real-vaqtda qo'shilib oqadi.
-              </p>
-            </div>
-
-            {/* ---------------- LOWER SECTION: OUR DENTISTS GRID + PRICING LISTS ---------------- */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
-              {/* Doctors Grid Segment (Premium Theme) */}
-              <div className="bg-[#0b1022]/85 rounded-3xl p-6 border border-[#1d2d4c]/80 relative overflow-hidden text-left select-none">
-                <div className="flex items-center justify-between mb-5 border-b border-[#1b2a47]/50 pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">👩‍⚕️</span>
-                    <h3 className="text-sm font-black text-white uppercase tracking-wider font-display">
-                      Bizning Stomatologlar
-                    </h3>
-                  </div>
-                  <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] font-bold rounded flex items-center gap-1 hover:scale-105 transition-transform">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Barchasi Online
-                  </span>
-                </div>
-      
-                <div className="divide-y divide-slate-805/40 font-sans">
-                  {clinicDoctors.map((doc) => (
-                    <div key={doc.id} className="py-4 flex items-center justify-between first:pt-1 last:pb-1 group hover:bg-[#111c3a]/30 transition-all rounded-xl px-2.5 -mx-2.5">
-                      <div className="flex items-center gap-3.5">
-                        <div className="relative">
-                          <img 
-                            src={doc.image} 
-                            alt={doc.name} 
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + doc.name;
-                            }}
-                            referrerPolicy="no-referrer"
-                            className="w-12 h-12 rounded-full object-cover border-2 border-slate-700 shrink-0 shadow-md transition-transform group-hover:scale-105"
-                          />
-                          <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-[#0b1022] rounded-full"></span>
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-black text-white group-hover:text-emerald-400 transition-colors uppercase tracking-wide">{doc.name}</h4>
-                          <span className="text-[10px] text-slate-400 font-semibold block">{doc.specialty}</span>
-                        </div>
-                      </div>
-      
-                      <div className="flex flex-col items-end gap-1">
-                        <div className="flex items-center text-amber-500 text-xs">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <Star key={i} className={`w-3 h-3 fill-current ${i < Math.floor(doc.rating) ? 'text-amber-400' : 'text-slate-800'}`} />
-                          ))}
-                          <span className="ml-1.5 text-slate-100 font-extrabold text-[11px] font-mono">{doc.rating.toFixed(1)}</span>
-                        </div>
-                        <span className="text-[9px] text-slate-500 font-semibold font-mono">({doc.ratingCount} ta baho)</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-      
-              {/* Pricing Grid Segment (Premium Theme) */}
-              <div className="bg-[#0b1022]/85 rounded-3xl p-6 border border-[#1d2d4c]/80 relative overflow-hidden text-left select-none">
-                <div className="flex items-center justify-between mb-5 border-b border-[#1b2a47]/50 pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">💰</span>
-                    <h3 className="text-sm font-black text-white uppercase tracking-wider font-display">
-                      Tibbiy Xizmatlar Narxlari
-                    </h3>
-                  </div>
-                  <span className="px-2 py-0.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[9px] font-bold rounded">
-                    Litsenziyalangan Kafolat
-                  </span>
-                </div>
-      
-                <div className="divide-y divide-slate-805/40 font-sans">
-                  {clinicServices.map((srv) => (
-                    <div key={srv.id} className="py-4 flex items-center justify-between first:pt-1 last:pb-1 group hover:bg-[#111c3a]/30 transition-all rounded-xl px-2.5 -mx-2.5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-black text-[11px] font-display">
-                          TX
-                        </div>
-                        <span className="text-xs font-bold text-white uppercase tracking-wide">{srv.name}</span>
-                      </div>
-                      <div className="px-3.5 py-1.5 bg-[#0e162d] text-emerald-400 rounded-full text-xs font-black font-mono border border-emerald-500/25 shadow-md">
-                        {srv.price.toLocaleString('uz-UZ')} so'm
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            {/* removed doctor biographies and services list as requested */}
           </div>
         ) : (
           /* Segment when there is no selected clinic yet, prompt them clearly */

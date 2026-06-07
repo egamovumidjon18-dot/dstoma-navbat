@@ -9,8 +9,8 @@ export const getApiUrl = (): string => {
   const envUrl = (import.meta as any).env?.VITE_API_URL;
   if (envUrl) return envUrl.replace(/\/$/, ''); // strip trailing slash
   
-  // Safe default: use your Railway backend domain displayed in your project screenshot
-  return 'https://dstomaqueue-production.up.railway.app';
+  // Safe default: use relative URL/current origin so the local Express backend is used!
+  return typeof window !== 'undefined' ? window.location.origin : '';
 };
 
 export const mapQueueToReact = (item: any): QueueItem => {

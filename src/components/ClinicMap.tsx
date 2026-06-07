@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { APIProvider, Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
 import { Clinic } from '../types';
 import { MapPin, Navigation, Search, Phone, ExternalLink, Info, ShieldCheck, Activity, Globe, Wifi } from 'lucide-react';
 import { TRANSLATIONS, Language } from '../translations';
@@ -11,17 +10,9 @@ interface ClinicMapProps {
   language: Language;
 }
 
-const API_KEY =
-  process.env.GOOGLE_MAPS_PLATFORM_KEY ||
-  (import.meta as any).env?.VITE_GOOGLE_MAPS_PLATFORM_KEY ||
-  (globalThis as any).GOOGLE_MAPS_PLATFORM_KEY ||
-  '';
-
-const hasValidKey = Boolean(API_KEY) && API_KEY !== 'YOUR_API_KEY' && API_KEY.trim() !== '';
-
 export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, language }: ClinicMapProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'vector' | 'leaflet' | 'google' | 'yandex'>('leaflet');
+  const [activeTab, setActiveTab] = useState<'vector' | 'leaflet' | 'yandex'>('leaflet');
   const [userLat, setUserLat] = useState<number>(39.6542); // defaults to Samarqand shahri
   const [userLng, setUserLng] = useState<number>(66.9597);
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'detecting' | 'active' | 'denied'>('idle');
@@ -263,6 +254,13 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         map.fitBounds(markersGroup.getBounds(), { padding: [40, 40] });
       }
 
+      // Invalidate size in timeout to cure any race conditions with mounting animation constraints
+      setTimeout(() => {
+        if (map) {
+          map.invalidateSize();
+        }
+      }, 150);
+
     } catch (e) {
       console.error("Leaflet initialization issue: ", e);
     }
@@ -372,7 +370,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
     <div id="clinic-map-root" className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-900 rounded-3xl overflow-hidden border border-[#233355]/50 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]">
       
       {/* Sidebar: Search & dynamic sorted list - optimized height on mobile */}
-      <div id="map-sidebar" className="lg:col-span-4 p-5 flex flex-col h-[440px] lg:h-[650px] bg-[#0c1225] border-r border-[#1e3256]/60">
+      <div id="map-sidebar" className="lg:col-span-4 p-5 flex flex-col h-[280px] sm:h-[350px] lg:h-[650px] bg-[#0c1225] border-r border-[#1e3256]/60">
         <div className="mb-4">
           <div className="flex items-center justify-between mb-1.5">
             <h3 className="text-sm font-black text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
@@ -610,7 +608,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
       </div>
 
       {/* Main Map Presentation - compact responsive height */}
-      <div id="map-canvas-container" className="lg:col-span-8 h-[440px] lg:h-[650px] relative bg-[#040814] flex flex-col">
+      <div id="map-canvas-container" className="lg:col-span-8 h-[280px] sm:h-[385px] lg:h-[650px] relative bg-[#040814] flex flex-col">
         
         {/* Real Dynamic Tab Choices - compact responsive size on mobile */}
         <div className="absolute top-3 left-2 sm:left-14 z-40 flex gap-1 bg-slate-950/92 backdrop-blur-md p-1 rounded-xl shadow-2xl border border-[#1e3256]/50 scale-90 sm:scale-100 origin-top-left">
@@ -645,17 +643,6 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
             }`}
           >
             🧭 <span className="hidden sm:inline">Yandex Maps Live</span><span className="inline sm:hidden">Yandex</span> {yandexLoaded && <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping"></span>}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('google')}
-            className={`px-2.5 py-1.5 text-[9px] sm:text-[10px] font-black uppercase rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
-              activeTab === 'google'
-                ? 'bg-emerald-500 text-slate-950 font-black shadow-lg'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            🌐 <span className="hidden sm:inline">Google Maps Live</span><span className="inline sm:hidden">Google</span> {hasValidKey && <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full"></span>}
           </button>
         </div>
 
@@ -858,101 +845,6 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 }
               </p>
             </div>
-          </div>
-        )}
-
-        {/* Tab 3: Google Maps Live component */}
-        {activeTab === 'google' && (
-          <div className="w-full h-full relative">
-            {!hasValidKey ? (
-              <div className="w-full h-full bg-slate-950 border border-slate-900 flex items-center justify-center p-6 text-white text-center">
-                <div className="max-w-md p-6 bg-slate-900/95 rounded-3xl border border-[#1e3256]/50 shadow-2xl relative z-20 text-left overflow-y-auto max-h-full">
-                  <div className="w-12 h-12 bg-amber-500/20 rounded-full flex items-center justify-center mb-4 border border-amber-500/40">
-                    <Info className="w-6 h-6 text-amber-500" />
-                  </div>
-                  <h3 className="text-sm font-black text-slate-100 mb-2 uppercase tracking-wide">
-                    {language === 'uz' ? "Google Maps API Kaliti Talab Qilinadi" : language === 'ru' ? "Требуется API ключ Google Maps" : "Google Maps Platform Key needed"}
-                  </h3>
-                  <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                    {language === 'uz' 
-                      ? "Klinikalarni interaktiv Google Maps xaritasida ko'rsatish uchun shaxsiy Google Maps API kalitingiz bo'lishi talab etiladi." 
-                      : language === 'ru' 
-                        ? "Для показа клиник на интерактивной карте Google Maps требуется подключить ваш личный API ключ." 
-                        : "To display clinics on an interactive Google Maps canvas, a personal Google Maps API key is required."}
-                  </p>
-                  
-                  <div className="bg-slate-950/80 border border-[#1e3256]/40 p-4 rounded-2xl text-xs mb-3 space-y-1.5 font-semibold text-slate-300">
-                    <p className="font-bold text-slate-200">
-                      {language === 'uz' ? "API kalitni ulash bo'yicha qo'llanma:" : language === 'ru' ? "Инструкция по подключению API ключа:" : "How to connect your API Key:"}
-                    </p>
-                    {language === 'uz' ? (
-                      <ol className="list-decimal list-inside space-y-1 text-slate-400 font-medium">
-                        <li>Google Cloud Console platformasidan Maps JS API kaliti oling</li>
-                        <li>AI Studio dagi <span className="text-emerald-400 font-bold">Settings &gt; Secrets</span> bo'limiga kiring</li>
-                        <li>Yangi o'zgaruvchini <code className="text-cyan-400 px-1 bg-slate-900 rounded font-mono">GOOGLE_MAPS_PLATFORM_KEY</code> nomi bilan yarating va qiymatini kiriting</li>
-                      </ol>
-                    ) : language === 'ru' ? (
-                      <ol className="list-decimal list-inside space-y-1 text-slate-400 font-medium">
-                        <li>Получите ключ Maps JS API в Google Cloud Console</li>
-                        <li>Перейдите во вкладку <span className="text-emerald-400 font-bold">Settings &gt; Secrets</span> в AI Studio</li>
-                        <li>Добавьте переменную <code className="text-cyan-400 px-1 bg-slate-900 rounded font-mono">GOOGLE_MAPS_PLATFORM_KEY</code> и вставьте ваш ключ</li>
-                      </ol>
-                    ) : (
-                      <ol className="list-decimal list-inside space-y-1 text-slate-400 font-medium">
-                        <li>Retrieve a Maps JS API key from your Google Cloud Console</li>
-                        <li>Go to the <span className="text-emerald-400 font-bold">Settings &gt; Secrets</span> segment in AI Studio</li>
-                        <li>Add a new secret variable named <code className="text-cyan-400 px-1 bg-slate-900 rounded font-mono">GOOGLE_MAPS_PLATFORM_KEY</code> and save it</li>
-                      </ol>
-                    )}
-                  </div>
-                  
-                  <div className="text-[10px] text-slate-500 font-semibold leading-relaxed">
-                    {language === 'uz' 
-                      ? <>Hozircha, chap tarafdagi <button onClick={() => setActiveTab('leaflet')} className="text-emerald-400 underline font-bold hover:text-emerald-450 focus:outline-none uppercase cursor-pointer">Leaflet.js Live</button> yoki <button onClick={() => setActiveTab('yandex')} className="text-rose-400 underline font-bold hover:text-rose-450 focus:outline-none uppercase cursor-pointer">Yandex Maps Live</button> rejimlaridan foydalanishni dadil davom ettiring. Ular barcha filiallar joylashuvlarini mutlaqo bepul ko'rsatadi.</>
-                      : language === 'ru'
-                        ? <>Тем временем вы можете использовать карту <button onClick={() => setActiveTab('leaflet')} className="text-emerald-400 underline font-bold hover:text-emerald-450 focus:outline-none uppercase cursor-pointer">Leaflet.js Live</button> или <button onClick={() => setActiveTab('yandex')} className="text-rose-400 underline font-bold hover:text-rose-450 focus:outline-none uppercase cursor-pointer">Yandex Maps Live</button>. Они работают бесплатно и без ограничений.</>
-                        : <>Meanwhile, you can continue to use <button onClick={() => setActiveTab('leaflet')} className="text-emerald-400 underline font-bold hover:text-emerald-450 focus:outline-none uppercase cursor-pointer">Leaflet.js Live</button> or <button onClick={() => setActiveTab('yandex')} className="text-rose-400 underline font-bold hover:text-rose-450 focus:outline-none uppercase cursor-pointer">Yandex Maps Live</button> - they render all clinic locations completely free.</>
-                    }
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <APIProvider apiKey={API_KEY} version="weekly">
-                <Map
-                  center={{ lat: selectedClinic ? selectedClinic.lat : userLat, lng: selectedClinic ? selectedClinic.lng : userLng }} 
-                  zoom={selectedClinic ? 13 : 11}
-                  mapId="DEMO_MAP_ID"
-                  internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-                  style={{ width: '100%', height: '100%' }}
-                >
-                  {/* Real Patient's Active Location marker on Google Maps */}
-                  <AdvancedMarker
-                    position={{ lat: userLat, lng: userLng }}
-                    title={t('approxLocation')}
-                  >
-                    <div className="relative flex items-center justify-center">
-                      <div className="absolute w-5 h-5 rounded-full bg-rose-500/40 animate-ping"></div>
-                      <div className="w-3.5 h-3.5 rounded-full bg-rose-500 border-2 border-white shadow-md"></div>
-                    </div>
-                  </AdvancedMarker>
-
-                  {clinics.map((clinic) => (
-                    <AdvancedMarker
-                      key={clinic.id}
-                      position={{ lat: clinic.lat, lng: clinic.lng }}
-                      title={clinic.name}
-                      onClick={() => onSelectClinic(clinic)}
-                    >
-                      <Pin
-                        background={selectedClinic?.id === clinic.id ? '#10b981' : '#0891b2'}
-                        borderColor="#ffffff"
-                        glyphColor="#ffffff"
-                      />
-                    </AdvancedMarker>
-                  ))}
-                </Map>
-              </APIProvider>
-            )}
           </div>
         )}
 

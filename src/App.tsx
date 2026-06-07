@@ -14,6 +14,7 @@ import DirectorDashboard from './components/DirectorDashboard';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import { TRANSLATIONS, Language } from './translations';
 import { sendQueueCreatedNotification, sendQueueStatusNotification } from './services/telegram';
+import { DjangoAPI } from './services/api';
 import { 
   Activity, 
   ShieldAlert, 
@@ -43,7 +44,7 @@ export default function App() {
   
   // Navigation
   const [activeTab, setActiveTab] = useState<'bemor' | 'shifokor' | 'boshliq' | 'superadmin'>('bemor');
-  const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null); // Starts at null (not yet selected)
+  const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(INITIAL_CLINICS[0] || null); // Pre-selected first clinic to make central panels always open
 
   // 3-Language and Auth states
   const [language, setLanguage] = useState<Language>('uz');
@@ -276,6 +277,29 @@ export default function App() {
     window.history.replaceState({}, '', newUrl.toString());
   }, [activeTab, selectedClinic]);
 
+  // Synchronize queues from local Express server database in real-time
+  useEffect(() => {
+    let active = true;
+    const fetchQueues = async () => {
+      try {
+        const data = await DjangoAPI.getQueues();
+        if (active && data && data.length > 0) {
+          setQueues(data);
+        }
+      } catch (err) {
+        console.warn("[App.tsx DB Poll Notice] Central server offline or resolving:", err);
+      }
+    };
+
+    fetchQueues();
+    const interval = setInterval(fetchQueues, 4000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   // Master Handlers
   const handleAddQueue = async (newQueue: QueueItem) => {
     setQueues(prev => [...prev, newQueue]);
@@ -287,6 +311,25 @@ export default function App() {
       }
       return c;
     }));
+
+    // Post to Express backend
+    try {
+      const saved = await DjangoAPI.createQueueItem({
+        clinicId: newQueue.clinicId,
+        doctorId: newQueue.doctorId,
+        serviceId: newQueue.serviceId,
+        patientName: newQueue.patientName,
+        patientPhone: newQueue.patientPhone,
+        hasInfection: newQueue.hasInfection,
+        medicalNotes: newQueue.medicalNotes,
+        passportSerial: newQueue.passportSerial,
+        telegramChatId: newQueue.telegramChatId
+      });
+      // Update state with confirmed values
+      setQueues(prev => prev.map(q => q.id === newQueue.id ? saved : q));
+    } catch (err) {
+      console.warn("[App.tsx] Backend queue sync failed, preserving offline state", err);
+    }
 
     // Trigger Telegram Notification
     if (newQueue.telegramChatId) {
@@ -321,6 +364,12 @@ export default function App() {
       return q;
     }));
 
+    try {
+      await DjangoAPI.updateQueueStatus(id, 'cancelled');
+    } catch (err) {
+      console.warn("[App.tsx] Backend queue cancellation sync failed", err);
+    }
+
     // Adjust counter
     const item = queues.find(q => q.id === id);
     if (item) {
@@ -353,6 +402,12 @@ export default function App() {
       }
       return q;
     }));
+
+    try {
+      await DjangoAPI.updateQueueStatus(id, newStatus);
+    } catch (err) {
+      console.warn("[App.tsx] Backend status change sync failed", err);
+    }
 
     // If completed or cancelled, reduce the active patients count
     const item = queues.find(q => q.id === id);
