@@ -2,7 +2,6 @@ import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
-import { createServer as createViteServer } from "vite";
 
 dotenv.config();
 
@@ -102,7 +101,7 @@ let queuesDb: QueueItem[] = [
 // Telegram Webhook receiver endpoint for serverless architectures (like Vercel)
 app.post("/api/telegram-webhook", async (req, res) => {
   try {
-    const token = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+    const token = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
     if (!token) {
       return res.status(500).json({ error: "Telegram bot token is not configured on the server." });
     }
@@ -113,6 +112,57 @@ app.post("/api/telegram-webhook", async (req, res) => {
     res.json({ ok: true });
   } catch (err: any) {
     console.error("[Telegram Webhook Error]:", err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Setup Telegram webhook dynamically for serverless architectures (like Vercel)
+app.get("/api/telegram-webhook-setup", async (req, res) => {
+  try {
+    const token = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
+    if (!token) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: "Telegram bot token is not configured in environment variables. Please check the Vercel Settings or .env file." 
+      });
+    }
+
+    // Determine domain from query or host header
+    let domainVal = req.query.domain as string;
+    if (!domainVal) {
+      const protocol = req.headers['x-forwarded-proto'] || 'https';
+      const host = req.headers.host;
+      domainVal = `${protocol}://${host}`;
+    }
+
+    // Remove trailing slash
+    if (domainVal.endsWith('/')) {
+      domainVal = domainVal.slice(0, -1);
+    }
+
+    const webhookUrl = `${domainVal}/api/telegram-webhook`;
+    console.log(`[Telegram Webhook Setup] Directing Telegram to webhook URL: ${webhookUrl}`);
+
+    // Call Telegram setWebhook
+    const tgRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`);
+    const tgData = await tgRes.json();
+
+    if (tgData.ok) {
+      return res.json({
+        ok: true,
+        message: "Webhook successfully verified & set with Telegram!",
+        webhook_url: webhookUrl,
+        telegram_response: tgData
+      });
+    } else {
+      return res.status(400).json({
+        ok: false,
+        error: tgData.description || "Telegram declined setting Webhook.",
+        telegram_response: tgData
+      });
+    }
+  } catch (err: any) {
+    console.error("[Telegram Setup Error]:", err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
@@ -273,7 +323,9 @@ app.get("/api/doctors", (req, res) => {
 // Initialize the GoogleGenAI helper supporting lazy on-demand resolution (critical for serverless setups like Vercel)
 function getGoogleGenAI() {
   const activeKey = process.env.GEMINI_API_KEY;
-  if (!activeKey) return null;
+  if (!activeKey || activeKey === "undefined" || activeKey === "null" || activeKey.startsWith("YOUR_") || activeKey.trim() === "") {
+    return null;
+  }
   return new GoogleGenAI({
     apiKey: activeKey,
     httpOptions: {
@@ -544,7 +596,7 @@ const botSessions: Record<number, {
 }> = {};
 
 async function startTelegramBot() {
-  const token = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+  const token = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
   if (!token) {
     console.log("[Telegram Bot] VITE_TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_TOKEN is absent. Telegram Smart Polling Bot is on standby. Add it inside Settings > Secrets to activate.");
     return;
@@ -1442,6 +1494,7 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
 // Boot Express Server integrated with Vite
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

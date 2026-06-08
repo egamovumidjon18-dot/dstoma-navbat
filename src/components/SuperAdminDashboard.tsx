@@ -965,6 +965,45 @@ export default function SuperAdminDashboard({
               </div>
             </form>
 
+            {/* Vercel Webhook Setup Section */}
+            <div className="bg-[#f0f9ff] rounded-2xl p-4 border border-blue-150 space-y-3">
+              <strong className="text-[10px] uppercase font-black tracking-widest text-blue-600 block">🧭 Vercel (Serverless) Webhook Sozlash</strong>
+              <p className="text-[11px] text-slate-600 leading-relaxed font-semibold">
+                Agarda platformangiz Vercel serverless tizimida bo'lsa, Telegram bot yangiliklarni qabul qilishi uchun unga saytning webhook manzilini yuklash kerak:
+              </p>
+              <button
+                type="button"
+                onClick={async () => {
+                  const activeToken = telegramToken || getTelegramBotToken();
+                  if (!activeToken) {
+                    triggerToast("Iltimos, avval Telegram API tokenini yuqorida saqlang!");
+                    return;
+                  }
+                  triggerToast("Webhook Telegram serverida ro'yxatdan o'tkazilmoqda...");
+                  try {
+                    const domain = window.location.origin;
+                    const response = await fetch(`/api/telegram-webhook-setup?domain=${encodeURIComponent(domain)}`);
+                    const data = await response.json();
+                    
+                    if (data.ok) {
+                      triggerToast("Webhook muvaffaqiyatli bog'landi! Telegram bot faollashdi. 🎉✅");
+                      addLog(`Telegram Webhook muvaffaqiyatli bog'landi: ${data.webhook_url}`, 'success');
+                    } else {
+                      triggerToast(`Xatolik: ${data.error || 'Webhook sozlanmadi'}`);
+                    }
+                  } catch (err: any) {
+                    triggerToast("Server / Webhook bilan bog'lanishda xatolik yuz berdi!");
+                  }
+                }}
+                className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs tracking-wider rounded-xl transition-all shadow-sm shrink-0 uppercase cursor-pointer"
+              >
+                Telegram Webhook-ni Avtomatik Sozlash ⚡
+              </button>
+              <p className="text-[9px] text-slate-400 font-semibold leading-normal">
+                Faol Vercel Webhook havolasi: <code className="bg-white/80 px-1 border border-slate-150 rounded font-mono text-[9px] text-[#2563eb]">{window.location.origin}/api/telegram-webhook</code>
+              </p>
+            </div>
+
             {/* Test Notification Section */}
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-150 space-y-3">
               <strong className="text-[10px] uppercase font-black tracking-widest text-slate-500 block">⚡ Bot Integratsiyasini Test Qilish</strong>

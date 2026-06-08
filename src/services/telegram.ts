@@ -8,7 +8,7 @@ export const getTelegramBotToken = (): string => {
     const saved = localStorage.getItem('dstoma_telegram_token');
     if (saved) return saved;
   }
-  return (import.meta as any).env?.VITE_TELEGRAM_BOT_TOKEN || '';
+  return (import.meta as any).env?.VITE_TELEGRAM_BOT_TOKEN || '8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc';
 };
 
 export const setTelegramBotToken = (token: string) => {
