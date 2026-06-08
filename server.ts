@@ -270,21 +270,21 @@ app.get("/api/doctors", (req, res) => {
   ]);
 });
 
-// Initialize the GoogleGenAI client (using recommended modern SDK structure)
-const apiKey = process.env.GEMINI_API_KEY;
-const ai = new GoogleGenAI({
-  apiKey: apiKey,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+// Initialize the GoogleGenAI helper supporting lazy on-demand resolution (critical for serverless setups like Vercel)
+function getGoogleGenAI() {
+  const activeKey = process.env.GEMINI_API_KEY;
+  if (!activeKey) return null;
+  return new GoogleGenAI({
+    apiKey: activeKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
     }
-  }
-});
+  });
+}
 
 console.log("[DStoma Core] Booting Production-Ready Full-Stack Web App...");
-if (!apiKey) {
-  console.warn("[DStoma Warning] GEMINI_API_KEY environment variable is absent. AI Diagnostic will operate in robust simulation modes.");
-}
 
 /**
  * Endpoint for Real-time AI Dental Diagnostics and Telemetry
@@ -299,8 +299,9 @@ app.post("/api/ai/diagnostic", async (req, res) => {
     }
 
     const requestedLang = language || 'uz';
+    const aiInstance = getGoogleGenAI();
 
-    if (!apiKey) {
+    if (!aiInstance) {
       // Robust offline-first smart simulated path when credentials are being prepared
       const simulatedData = getSimulatedDiagnosis(Number(toothNumber), symptoms || '', requestedLang, !!image);
       return res.json({
@@ -343,7 +344,7 @@ Return the JSON response adhering strictly to this schema:
     }
     parts.push({ text: promptText });
 
-    const response = await ai.models.generateContent({
+    const response = await aiInstance.models.generateContent({
       model: "gemini-2.5-flash",
       contents: { parts: parts },
       config: {
@@ -864,7 +865,8 @@ async function handleBotDiagnosticMessage(token: string, chatId: number, message
     const userPrompt = text ? text : "Diagnose this uploaded tooth/mouth photo and give preventative dental advice.";
 
     let response;
-    if (apiKey) {
+    const aiInstance = getGoogleGenAI();
+    if (aiInstance) {
       const parts: any[] = [];
       if (imagePart) {
         parts.push(imagePart);
@@ -873,7 +875,7 @@ async function handleBotDiagnosticMessage(token: string, chatId: number, message
         parts.push({ text: `Analyze this question: "${userPrompt}"\n\nSystem Instruction: ${systemPrompt}` });
       }
 
-      response = await ai.models.generateContent({
+      response = await aiInstance.models.generateContent({
         model: "gemini-2.5-flash",
         contents: { parts: parts }
       });
@@ -1462,4 +1464,9 @@ async function startServer() {
   });
 }
 
-startServer();
+// Guard server execution when deploying to serverless platforms (like Vercel)
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;

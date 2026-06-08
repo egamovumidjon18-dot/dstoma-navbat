@@ -389,7 +389,7 @@ export default function ClientDashboard({
     setIsScanning(false);
     setIsAiLoading(true);
     try {
-      const response = await fetch('/api/ai/diagnostic', {
+      const response = await fetch(`${getApiUrl()}/api/ai/diagnostic`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -953,7 +953,7 @@ export default function ClientDashboard({
                               key={toothIdx}
                               type="button"
                               onClick={() => { setSelectedToothIndex(toothIdx); setIsScanning(false); }}
-                              className={`absolute w-9.5 h-9.5 lg:w-11 lg:h-11 text-[11px] lg:text-xs font-mono font-black rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
+                              className={`absolute w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 text-[10px] sm:text-xs font-mono font-black rounded-xl md:rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
                                 isCurrentlyActive 
                                   ? 'bg-gradient-to-br from-emerald-450 via-emerald-500 to-teal-600 text-slate-950 border-emerald-300 scale-120 z-20 shadow-[0_0_20px_rgba(16,185,129,0.9)]'
                                   : 'bg-[#091020]/95 hover:bg-slate-800 text-slate-300 border-[#1f3762]/90 hover:border-[#10b981]/60 hover:scale-115'
@@ -1017,7 +1017,7 @@ export default function ClientDashboard({
                               key={toothIdx}
                               type="button"
                               onClick={() => { setSelectedToothIndex(toothIdx); setIsScanning(false); }}
-                              className={`absolute w-9.5 h-9.5 lg:w-11 lg:h-11 text-[11px] lg:text-xs font-mono font-black rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
+                              className={`absolute w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 text-[10px] sm:text-xs font-mono font-black rounded-xl md:rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
                                 isCurrentlyActive 
                                   ? 'bg-gradient-to-br from-emerald-450 via-emerald-500 to-teal-600 text-slate-950 border-emerald-300 scale-120 z-20 shadow-[0_0_20px_rgba(16,185,129,0.9)]'
                                   : 'bg-[#091020]/95 hover:bg-slate-800 text-slate-300 border-[#1f3762]/90 hover:border-[#10b981]/60 hover:scale-115'
