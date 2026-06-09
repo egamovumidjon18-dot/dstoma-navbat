@@ -984,9 +984,38 @@ export default function SuperAdminDashboard({
                     return;
                   }
                   triggerToast("Webhook Telegram serverida ro'yxatdan o'tkazilmoqda...");
+                  
+                  // Clean token to avoid whitespace issues
+                  const cleanToken = activeToken.trim();
+                  const domain = window.location.origin;
+                  const webhookUrl = `${domain}/api/telegram-webhook?token=${encodeURIComponent(cleanToken)}`;
+
                   try {
-                    const domain = window.location.origin;
-                    const response = await fetch(`/api/telegram-webhook-setup?domain=${encodeURIComponent(domain)}&token=${encodeURIComponent(activeToken)}`);
+                    addLog(`Telegram API orqali bevosita webhook o'rnatilmoqda: ${webhookUrl}`, 'info');
+                    
+                    // Direct CORS-friendly request from browser to Telegram API to establish immediate hookup
+                    const tgDirectUrl = `https://api.telegram.org/bot${cleanToken}/setWebhook?url=${encodeURIComponent(webhookUrl)}`;
+                    const directRes = await fetch(tgDirectUrl);
+                    
+                    if (directRes.ok) {
+                      const directData = await directRes.json();
+                      if (directData.ok) {
+                        triggerToast("Webhook muvaffaqiyatli bog'landi! Telegram bot faollashdi. 🎉✅");
+                        addLog(`Telegram Webhook muvaffaqiyatli bog'landi (Brauzer orqali): ${webhookUrl}`, 'success');
+                        return; // Done! Direct path succeeded
+                      } else {
+                        addLog(`Brauzer orqali sozlab bo'lmadi: ${directData.description || "noma'lum xato"}. Server-side sinab ko'rilmoqda...`, 'warn');
+                      }
+                    } else {
+                      addLog(`Brauzer orqali sozlashda xato statusi: ${directRes.status}. Server-side sinab ko'rilmoqda...`, 'warn');
+                    }
+                  } catch (clientErr: any) {
+                    addLog(`Brauzer orqali bog'lanishda xato: ${clientErr.message || clientErr}. Server-side sinab ko'rilmoqda...`, 'warn');
+                  }
+
+                  // Server-side fallback path
+                  try {
+                    const response = await fetch(`/api/telegram-webhook-setup?domain=${encodeURIComponent(domain)}&token=${encodeURIComponent(cleanToken)}`);
                     
                     if (!response.ok) {
                       const text = await response.text();

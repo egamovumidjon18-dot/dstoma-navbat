@@ -1506,7 +1506,8 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
 // Boot Express Server integrated with Vite
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
+    const viteModule = "vite";
+    const { createServer: createViteServer } = await import(viteModule);
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
