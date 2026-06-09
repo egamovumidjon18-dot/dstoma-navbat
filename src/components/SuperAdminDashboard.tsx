@@ -986,7 +986,7 @@ export default function SuperAdminDashboard({
                   triggerToast("Webhook Telegram serverida ro'yxatdan o'tkazilmoqda...");
                   try {
                     const domain = window.location.origin;
-                    const response = await fetch(`/api/telegram-webhook-setup?domain=${encodeURIComponent(domain)}`);
+                    const response = await fetch(`/api/telegram-webhook-setup?domain=${encodeURIComponent(domain)}&token=${encodeURIComponent(activeToken)}`);
                     const data = await response.json();
                     
                     if (data.ok) {
@@ -1004,7 +1004,7 @@ export default function SuperAdminDashboard({
                 Telegram Webhook-ni Avtomatik Sozlash ⚡
               </button>
               <p className="text-[9px] text-slate-400 font-semibold leading-normal">
-                Faol Vercel Webhook havolasi: <code className="bg-white/80 px-1 border border-slate-150 rounded font-mono text-[9px] text-[#2563eb]">{window.location.origin}/api/telegram-webhook</code>
+                Faol Vercel Webhook havolasi: <code className="bg-white/80 px-1 border border-slate-150 rounded font-mono text-[9px] text-[#2563eb]">{window.location.origin}/api/telegram-webhook?token={telegramToken ? telegramToken.slice(0, 15) + "..." : "TOKEN"}</code>
               </p>
             </div>
 

@@ -108,7 +108,8 @@ app.get("/api/telegram-config", (req, res) => {
 // Telegram Webhook receiver endpoint for serverless architectures (like Vercel)
 app.post("/api/telegram-webhook", async (req, res) => {
   try {
-    const token = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
+    const queryToken = req.query.token as string;
+    const token = queryToken || process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
     if (!token) {
       return res.status(500).json({ error: "Telegram bot token is not configured on the server." });
     }
@@ -126,11 +127,12 @@ app.post("/api/telegram-webhook", async (req, res) => {
 // Setup Telegram webhook dynamically for serverless architectures (like Vercel)
 app.get("/api/telegram-webhook-setup", async (req, res) => {
   try {
-    const token = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
+    const queryToken = req.query.token as string;
+    const token = queryToken || process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
     if (!token) {
       return res.status(400).json({ 
         ok: false, 
-        error: "Telegram bot token is not configured in environment variables. Please check the Vercel Settings or .env file." 
+        error: "Telegram bot token is not configured in environment variables or query params. Please supply a token or set Vercel env." 
       });
     }
 
@@ -147,7 +149,8 @@ app.get("/api/telegram-webhook-setup", async (req, res) => {
       domainVal = domainVal.slice(0, -1);
     }
 
-    const webhookUrl = `${domainVal}/api/telegram-webhook`;
+    // Dynamically append the token as a query parameter so when Telegram executes POST webhook updates, we know exactly what bot token it belongs to!
+    const webhookUrl = `${domainVal}/api/telegram-webhook?token=${encodeURIComponent(token)}`;
     console.log(`[Telegram Webhook Setup] Directing Telegram to webhook URL: ${webhookUrl}`);
 
     // Call Telegram setWebhook
