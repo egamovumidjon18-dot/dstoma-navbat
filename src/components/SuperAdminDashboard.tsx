@@ -987,8 +987,22 @@ export default function SuperAdminDashboard({
                   try {
                     const domain = window.location.origin;
                     const response = await fetch(`/api/telegram-webhook-setup?domain=${encodeURIComponent(domain)}&token=${encodeURIComponent(activeToken)}`);
-                    const data = await response.json();
                     
+                    if (!response.ok) {
+                      const text = await response.text();
+                      let errMsg = `Server xatosi (Status ${response.status}): `;
+                      try {
+                        const errJson = JSON.parse(text);
+                        errMsg += errJson.error || response.statusText;
+                      } catch {
+                        errMsg += text.substring(0, 100) || response.statusText;
+                      }
+                      triggerToast(errMsg);
+                      addLog(`Webhook-ni sozlash xatosi (${response.status}): ${text.substring(0, 200)}`, 'warn');
+                      return;
+                    }
+
+                    const data = await response.json();
                     if (data.ok) {
                       triggerToast("Webhook muvaffaqiyatli bog'landi! Telegram bot faollashdi. 🎉✅");
                       addLog(`Telegram Webhook muvaffaqiyatli bog'landi: ${data.webhook_url}`, 'success');
@@ -996,7 +1010,7 @@ export default function SuperAdminDashboard({
                       triggerToast(`Xatolik: ${data.error || 'Webhook sozlanmadi'}`);
                     }
                   } catch (err: any) {
-                    triggerToast("Server / Webhook bilan bog'lanishda xatolik yuz berdi!");
+                    triggerToast(`Bog'lanishda xatolik yuz berdi: ${err.message || err}`);
                   }
                 }}
                 className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs tracking-wider rounded-xl transition-all shadow-sm shrink-0 uppercase cursor-pointer"

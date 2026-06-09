@@ -6,14 +6,14 @@
 export const getTelegramBotToken = (): string => {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('dstoma_telegram_token');
-    if (saved) return saved;
+    if (saved) return saved.trim();
   }
-  return (import.meta as any).env?.VITE_TELEGRAM_BOT_TOKEN || '8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc';
+  return ((import.meta as any).env?.VITE_TELEGRAM_BOT_TOKEN || '8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc').trim();
 };
 
 export const setTelegramBotToken = (token: string) => {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('dstoma_telegram_token', token);
+    localStorage.setItem('dstoma_telegram_token', (token || '').trim());
   }
 };
 

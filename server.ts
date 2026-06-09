@@ -109,10 +109,11 @@ app.get("/api/telegram-config", (req, res) => {
 app.post("/api/telegram-webhook", async (req, res) => {
   try {
     const queryToken = req.query.token as string;
-    const token = queryToken || process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
-    if (!token) {
+    const rawToken = queryToken || process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
+    if (!rawToken) {
       return res.status(500).json({ error: "Telegram bot token is not configured on the server." });
     }
+    const token = rawToken.trim();
     const update = req.body;
     if (update && (update.message || update.callback_query)) {
       await handleTelegramUpdate(token, update);
@@ -128,13 +129,14 @@ app.post("/api/telegram-webhook", async (req, res) => {
 app.get("/api/telegram-webhook-setup", async (req, res) => {
   try {
     const queryToken = req.query.token as string;
-    const token = queryToken || process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
-    if (!token) {
+    const rawToken = queryToken || process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
+    if (!rawToken) {
       return res.status(400).json({ 
         ok: false, 
         error: "Telegram bot token is not configured in environment variables or query params. Please supply a token or set Vercel env." 
       });
     }
+    const token = rawToken.trim();
 
     // Determine domain from query or host header
     let domainVal = req.query.domain as string;
