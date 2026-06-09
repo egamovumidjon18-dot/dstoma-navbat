@@ -278,15 +278,19 @@ export default function SuperAdminDashboard({
     }
   };
 
-  const filteredDoctors = doctors.filter(doc => 
-    doc.name.toLowerCase().includes(searchDoctorTerm.toLowerCase()) || 
-    doc.specialty.toLowerCase().includes(searchDoctorTerm.toLowerCase()) ||
-    (doc.login && doc.login.toLowerCase().includes(searchDoctorTerm.toLowerCase()))
+  const filteredDoctors = (doctors || []).filter(doc => 
+    doc && (
+      (doc.name || '').toLowerCase().includes((searchDoctorTerm || '').toLowerCase()) || 
+      (doc.specialty || '').toLowerCase().includes((searchDoctorTerm || '').toLowerCase()) ||
+      (doc.login && doc.login.toLowerCase().includes((searchDoctorTerm || '').toLowerCase()))
+    )
   );
 
-  const filteredClinics = clinics.filter(c => 
-    c.name.toLowerCase().includes(searchClinicTerm.toLowerCase()) || 
-    c.ownerName?.toLowerCase().includes(searchClinicTerm.toLowerCase())
+  const filteredClinics = (clinics || []).filter(c => 
+    c && (
+      (c.name || '').toLowerCase().includes((searchClinicTerm || '').toLowerCase()) || 
+      (c.ownerName || '').toLowerCase().includes((searchClinicTerm || '').toLowerCase())
+    )
   );
 
   return (

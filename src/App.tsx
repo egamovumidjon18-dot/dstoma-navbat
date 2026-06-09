@@ -60,9 +60,21 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Stateful Superadmin credentials
-  const [superadminLogin, setSuperadminLogin] = useState('superadmin');
-  const [superadminPassword, setSuperadminPassword] = useState('adminstoma');
+  // Stateful Superadmin credentials with persistent LocalStorage syncing
+  const [superadminLogin, setSuperadminLogin] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dstoma_sa_login');
+      if (saved) return saved;
+    }
+    return 'superadmin';
+  });
+  const [superadminPassword, setSuperadminPassword] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dstoma_sa_password');
+      if (saved) return saved;
+    }
+    return 'adminstoma';
+  });
 
   // Simulated email inbox (for superadmin password change alerts)
   const [gmailInboxes, setGmailInboxes] = useState<Array<{
@@ -214,7 +226,7 @@ export default function App() {
     setActiveTab('bemor');
   };
 
-  // Handle URL parameters for SEO and Navigation on mount
+  // Handle URL parameters for SEO and Navigation on mount + sync modern Telegram Bot token set in Vercel Env
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
@@ -224,11 +236,28 @@ export default function App() {
       setActiveTab(tabParam as any);
     }
     if (clinicParam) {
-      const foundClinic = clinics.find(c => c.id === clinicParam || c.subdomain === clinicParam);
+      const foundClinic = clinics.find(c => c && (c.id === clinicParam || c.subdomain === clinicParam));
       if (foundClinic) {
         setSelectedClinic(foundClinic);
       }
     }
+
+    // Fetch current Telegram Bot token dynamically to prevent desync between Vite build bundle and Vercel dashboard environment keys
+    const syncTelegramConfig = async () => {
+      try {
+        const response = await fetch('/api/telegram-config');
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.token) {
+            localStorage.setItem('dstoma_telegram_token', data.token);
+            console.log("[DStoma SaaS Core] Synchronized dynamic Telegram token:", data.token.slice(0, 10) + "...");
+          }
+        }
+      } catch (err) {
+        console.warn("[DStoma SaaS Core] Active serverless API offline. Falling back to local/default configs.", err);
+      }
+    };
+    syncTelegramConfig();
   }, []);
 
   // Update URL search parameters, document title, and description meta tag dynamically for excellent search indexing
@@ -541,6 +570,10 @@ export default function App() {
   const handleUpdateSuperadminCreds = (newLogin: string, newPass: string) => {
     setSuperadminLogin(newLogin);
     setSuperadminPassword(newPass);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dstoma_sa_login', newLogin);
+      localStorage.setItem('dstoma_sa_password', newPass);
+    }
     // Send email copy to egamovumidjon18@gmail.com
     triggerGmailNotification(
       "🔑 DStoma Superadmin akkaunt ma'lumotlari muvaffaqiyatli o'zgartirildi",

@@ -98,6 +98,13 @@ let queuesDb: QueueItem[] = [
   }
 ];
 
+
+// GET active Telegram Bot Config dynamically to synchronize with Vercel Env changes
+app.get("/api/telegram-config", (req, res) => {
+  const token = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
+  res.json({ token });
+});
+
 // Telegram Webhook receiver endpoint for serverless architectures (like Vercel)
 app.post("/api/telegram-webhook", async (req, res) => {
   try {
@@ -397,7 +404,7 @@ Return the JSON response adhering strictly to this schema:
     parts.push({ text: promptText });
 
     const response = await aiInstance.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.5-flash",
       contents: { parts: parts },
       config: {
         responseMimeType: "application/json",
@@ -928,7 +935,7 @@ async function handleBotDiagnosticMessage(token: string, chatId: number, message
       }
 
       response = await aiInstance.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.5-flash",
         contents: { parts: parts }
       });
     }

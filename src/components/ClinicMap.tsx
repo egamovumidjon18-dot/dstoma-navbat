@@ -47,6 +47,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
       const script = document.createElement('script');
       script.id = 'leaflet-js';
       script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.crossOrigin = 'anonymous';
       script.onload = () => {
         setLeafletLoaded(true);
       };
@@ -75,6 +76,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
       const script = document.createElement('script');
       script.id = 'yandex-js';
       script.src = 'https://api-maps.yandex.ru/2.1/?lang=uz_UZ';
+      script.crossOrigin = 'anonymous';
       script.onload = () => {
         setYandexLoaded(true);
       };
@@ -117,13 +119,17 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
 
   // Haversine formula to compute distance in km
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const l1 = Number(lat1) || 0;
+    const ln1 = Number(lon1) || 0;
+    const l2 = Number(lat2) || 0;
+    const ln2 = Number(lon2) || 0;
     const R = 6371; // Radius of the Earth in km
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const dLat = ((l2 - l1) * Math.PI) / 180;
+    const dLon = ((ln2 - ln1) * Math.PI) / 180;
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
+      Math.cos((l1 * Math.PI) / 180) *
+        Math.cos((l2 * Math.PI) / 180) *
         Math.sin(dLon / 2) *
         Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
@@ -131,18 +137,19 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
   };
 
   // Get and sort clinics list dynamically based on exact GPS coordinates
-  const filteredClinics = clinics
+  const filteredClinics = (clinics || [])
     .map((c) => ({
       ...c,
-      distance: getDistance(userLat, userLng, c.lat, c.lng)
+      distance: getDistance(userLat, userLng, c ? c.lat : 0, c ? c.lng : 0)
     }))
     .filter((c) => {
-      const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            c.address.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesDistance = c.distance <= customDistanceFilter;
+      if (!c) return false;
+      const matchesSearch = (c.name || '').toLowerCase().includes((searchQuery || '').toLowerCase()) || 
+                            (c.address || '').toLowerCase().includes((searchQuery || '').toLowerCase());
+      const matchesDistance = (c.distance || 0) <= customDistanceFilter;
       return matchesSearch && matchesDistance;
     })
-    .sort((a, b) => a.distance - b.distance);
+    .sort((a, b) => (a.distance || 0) - (b.distance || 0));
 
   // Initialize and update Leaflet Live map
   useEffect(() => {
@@ -152,8 +159,17 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
 
     // Check if map container is already initialized by leaflet
     if (leafletMapRef.current) {
-      leafletMapRef.current.remove();
+      try {
+        leafletMapRef.current.remove();
+      } catch (err) {
+        console.warn("Leaflet map removal error:", err);
+      }
       leafletMapRef.current = null;
+    }
+
+    // Explicitly reset the internal leaflet container ID descriptor to completely immunize against container reuse collision
+    if (mapContainerRef.current && (mapContainerRef.current as any)._leaflet_id) {
+      (mapContainerRef.current as any)._leaflet_id = null;
     }
 
     try {
