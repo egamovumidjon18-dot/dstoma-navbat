@@ -57,7 +57,7 @@ if (!g._patientsDb) {
       passportSerial: 'AA1234567',
       phone: '+998 (90) 123-45-67',
       birthDate: '1998-05-12',
-      password: 'demo123',
+      password: '123456',
       bloodGroup: 'II+',
       allergies: "Yo'q",
       chronicDiseases: "Mavjud emas (Sog'lom)",

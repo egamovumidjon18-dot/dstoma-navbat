@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Clinic, Doctor, Service, QueueItem, Patient } from '../types';
 import { DjangoAPI, getApiUrl } from '../services/api';
 import { TRANSLATIONS, Language } from '../translations';
@@ -837,7 +838,33 @@ export default function ClientDashboard({
   const clinicServices = services.filter(s => s.clinicId === activeClinic?.id);
 
   return (
-    <div className="space-y-6 font-sans">
+    <div className="space-y-6 font-sans relative">
+      {/* Toast Notification overlay */}
+      <AnimatePresence>
+        {toastMsg && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, x: "-50%", scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, x: "-50%", scale: 1 }}
+            exit={{ opacity: 0, y: -20, x: "-50%", scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="fixed top-24 left-1/2 z-50 pointer-events-none"
+          >
+            <div className={`px-5 py-3.5 rounded-2xl shadow-xl flex items-center gap-2.5 backdrop-blur-md border ${
+              toastMsg.type === 'success' 
+                ? 'bg-emerald-500/95 border-emerald-400 text-white shadow-emerald-950/20' 
+                : 'bg-rose-500/95 border-rose-400 text-white shadow-rose-950/20'
+            }`}>
+              {toastMsg.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-100 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-100 flex-shrink-0" />
+              )}
+              <span className="text-xs font-black tracking-wide leading-tight">{toastMsg.text}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ----------------- ACTION HUB CONTROL CARD (PREMIUM DARK GLASS DESIGN) ----------------- */}
       <div className="bg-[#0b1022]/85 rounded-3xl p-6 border border-[#203254]/80 shadow-2xl relative overflow-hidden backdrop-blur-3xl">
         {/* Decorative corner glows */}
