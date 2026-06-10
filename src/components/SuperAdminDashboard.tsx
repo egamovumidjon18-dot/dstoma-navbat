@@ -83,7 +83,7 @@ export default function SuperAdminDashboard({
   onApproveSaaSPayment,
   onUpdateClinicDetails,
   superadminLogin = 'superadmin',
-  superadminPassword = 'adminstoma',
+  superadminPassword = 'demo123',
   onUpdateSuperadminCreds,
   gmailInboxes = [],
   onMockSendPayment
@@ -125,6 +125,47 @@ export default function SuperAdminDashboard({
 
   // Telegram Bot Token Setting state
   const [telegramToken, setTelegramToken] = useState(getTelegramBotToken());
+  const [webhookStatus, setWebhookStatus] = useState<any>(null);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<any[]>([]);
+  const [fetchingDebug, setFetchingDebug] = useState(false);
+
+  const fetchDebugLogsFunc = async () => {
+    setFetchingDebug(true);
+    try {
+      const res = await fetch('/api/telegram-debug-logs');
+      if (res.ok) {
+        const data = await res.json();
+        setDebugLogs(data.logs || []);
+        addLog(`Telegram Webhook qabul loglari yangilandi (${(data.logs || []).length} ta).`, 'info');
+      }
+    } catch (err: any) {
+      addLog(`Loglarni yuklashda xatolik: ${err.message || err}`, 'warn');
+    } finally {
+      setFetchingDebug(false);
+    }
+  };
+
+  const checkWebhookStatusFunc = async (activeToken: string) => {
+    if (!activeToken) return;
+    setCheckingStatus(true);
+    try {
+      const cleanToken = activeToken.trim();
+      const tgUrl = `https://api.telegram.org/bot${cleanToken}/getWebhookInfo`;
+      const res = await fetch(tgUrl);
+      if (res.ok) {
+        const data = await res.json();
+        setWebhookStatus(data);
+        addLog(`Telegram Webhook holati olindi: ${data.ok ? 'Tayyor' : 'Muammo'}`, 'success');
+      } else {
+        triggerToast(`Telegram Api error: ${res.status}`);
+      }
+    } catch (err: any) {
+      addLog(`Telegram ulanish xatosi: ${err.message || err}`, 'warn');
+    } finally {
+      setCheckingStatus(false);
+    }
+  };
 
   // Generated credentials storage
   const [generatedCreds, setGeneratedCreds] = useState<{
@@ -940,9 +981,26 @@ export default function SuperAdminDashboard({
               Bemorlar navbat olganda yoki shifokor qabulga chaqirganda real vaqtda telegram xabarini yuborish uchun <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700 font-mono text-[10px]">@dstoma_bot</code> API tokenini integratsiya qiling.
             </p>
 
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               setTelegramBotToken(telegramToken);
+              
+              // Synchronize token with the main Express server as well
+              try {
+                const srvRes = await fetch('/api/telegram-config', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ token: telegramToken })
+                });
+                if (srvRes.ok) {
+                  addLog("Telegram Bot Token server tizimida muvaffaqiyatli sinxronlandi! ⚡", 'success');
+                } else {
+                  console.warn("Server failed updating Telegram Bot Token");
+                }
+              } catch (srvErr) {
+                console.warn("Could not reach Express server to save dynamic token:", srvErr);
+              }
+
               triggerToast("Telegram Bot Token muvaffaqiyatli saqlandi! ⚡");
               addLog(`Telegram Bot Token yangilandi!`, 'success');
             }} className="space-y-3.5 pt-1">
@@ -1035,6 +1093,7 @@ export default function SuperAdminDashboard({
                     if (data.ok) {
                       triggerToast("Webhook muvaffaqiyatli bog'landi! Telegram bot faollashdi. 🎉✅");
                       addLog(`Telegram Webhook muvaffaqiyatli bog'landi: ${data.webhook_url}`, 'success');
+                      setTimeout(() => checkWebhookStatusFunc(cleanToken), 1000);
                     } else {
                       triggerToast(`Xatolik: ${data.error || 'Webhook sozlanmadi'}`);
                     }
@@ -1046,6 +1105,117 @@ export default function SuperAdminDashboard({
               >
                 Telegram Webhook-ni Avtomatik Sozlash ⚡
               </button>
+
+              {/* Webhook Status Diagnostic Area */}
+              <div className="bg-slate-100 rounded-xl p-3 border border-slate-200 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black tracking-wider text-slate-500 uppercase">🔍 Webhook Diagnostikasi</span>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={fetchDebugLogsFunc}
+                      type="button"
+                      disabled={fetchingDebug}
+                      className="px-2 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded text-[9px] font-black transition cursor-pointer"
+                    >
+                      {fetchingDebug ? "Yuklanmoqda..." : "Kiruvchi Loglar 📜"}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const activeToken = telegramToken || getTelegramBotToken();
+                        if (!activeToken) {
+                          triggerToast("Iltimos, avval token-ni kiriting va saqlang!");
+                          return;
+                        }
+                        await checkWebhookStatusFunc(activeToken.trim());
+                      }}
+                      type="button"
+                      disabled={checkingStatus}
+                      className="px-2 py-1 bg-slate-200 hover:bg-slate-300 rounded text-[9px] font-bold text-slate-700 transition cursor-pointer"
+                    >
+                      {checkingStatus ? "Tekshirilmoqda..." : "Holatni Yangilash 🔄"}
+                    </button>
+                  </div>
+                </div>
+
+                {webhookStatus ? (
+                  <div className="text-[10px] space-y-1 bg-white p-2 rounded border border-slate-150 font-mono text-slate-700 leading-normal">
+                    <div className="flex justify-between border-b pb-1 font-sans font-bold">
+                      <span>Telegram Holati:</span>
+                      <span className={webhookStatus.ok ? "text-green-600" : "text-rose-600"}>
+                        {webhookStatus.ok ? "Ulangan 🟢" : "Muammo bor 🔴"}
+                      </span>
+                    </div>
+                    {webhookStatus.result ? (
+                      <>
+                        <div className="break-all font-semibold"><span className="text-slate-400">Webhook URL:</span> <span className="text-blue-600">{webhookStatus.result.url || "O'RNATILMAGAN ❌"}</span></div>
+                        <div><span className="text-slate-400">Kutilayotgan xabarlar (Pending):</span> <span className="font-bold text-amber-600">{webhookStatus.result.pending_update_count} ta</span></div>
+                        {webhookStatus.result.last_error_message ? (
+                          <div className="bg-rose-50 text-rose-600 p-1.5 rounded border border-rose-150 mt-1 font-sans text-[10px]">
+                            <div className="font-bold flex items-center gap-1">⚠️ Telegram xabar yubora olmadi:</div>
+                            <div className="mt-0.5 whitespace-pre-wrap leading-relaxed break-words font-mono text-[9px] font-semibold">{webhookStatus.result.last_error_message}</div>
+                            {webhookStatus.result.last_error_date && (
+                              <div className="text-[8px] text-rose-400 mt-1">Sana: {new Date(webhookStatus.result.last_error_date * 1000).toLocaleString('uz-UZ')}</div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-green-600 font-sans font-bold text-[9px] flex items-center gap-1 mt-1">✅ Hech qanday xatolik qayd etilmagan (Telegram muvaffaqiyatli bog'landi).</div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-rose-500 font-bold">{webhookStatus.description || "Tafsilotlar olinmadi"}</div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[9px] text-slate-400 font-semibold italic text-center">So'nggi diagnostika ma'lumotlarini olish uchun "Holatni Yangilash" tugmasini bosing</p>
+                )}
+
+                {/* Webhook live incoming stream logs */}
+                {debugLogs.length > 0 ? (
+                  <div className="space-y-1.5 pt-2 border-t border-slate-200">
+                    <strong className="text-[9px] text-[#4f46e5] font-extrabold uppercase tracking-wide block">📥 Serverga kelgan so'nggi Telegram so'rovlari:</strong>
+                    <div className="max-h-48 overflow-y-auto space-y-1.5">
+                      {debugLogs.map((log: any, idx: number) => (
+                        <div key={idx} className="bg-white p-2 rounded-lg border border-slate-200 font-mono text-[9px] space-y-1">
+                          <div className="flex justify-between items-center text-[8px] text-slate-400 font-sans">
+                            <span>{new Date(log.timestamp).toLocaleTimeString('uz-UZ')}</span>
+                            <span className={`px-1 rounded font-bold uppercase ${log.success ? "bg-green-50 text-green-600" : "bg-rose-50 text-rose-600"}`}>
+                              {log.success ? "Muvaffaqiyatli" : "Xato"}
+                            </span>
+                          </div>
+                          {log.error && (
+                            <div className="text-rose-600 font-sans font-bold text-[9px] bg-rose-50 p-1 rounded">
+                              ⚠️ Muammo: {log.error}
+                            </div>
+                          )}
+                          {log.tokenProcessed && (
+                            <div className="text-[8px] text-slate-400">
+                              <span className="font-bold font-sans">Ishlatilgan Token:</span> {log.tokenProcessed}
+                            </div>
+                          )}
+                          {log.body ? (
+                            <div className="bg-slate-50 p-1 rounded overflow-x-auto text-[8px] leading-relaxed select-text text-slate-600 max-w-full whitespace-pre-wrap break-all">
+                              <span className="font-bold font-sans text-slate-400">Payload:</span> {JSON.stringify(log.body, null, 1)}
+                            </div>
+                          ) : (
+                            <div className="text-slate-400">[Bo'sh tana / Body empty]</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-1 text-center">
+                    <button
+                      onClick={fetchDebugLogsFunc}
+                      type="button"
+                      className="text-[9px] text-indigo-600 font-bold hover:underline"
+                    >
+                      📥 Serverdagi kiruvchi so'rovlar logini yuklash
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <p className="text-[9px] text-slate-400 font-semibold leading-normal">
                 Faol Vercel Webhook havolasi: <code className="bg-white/80 px-1 border border-slate-150 rounded font-mono text-[9px] text-[#2563eb]">{window.location.origin}/api/telegram-webhook?token={telegramToken ? telegramToken.slice(0, 15) + "..." : "TOKEN"}</code>
               </p>

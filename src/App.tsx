@@ -53,14 +53,26 @@ export default function App() {
     id?: string;
     clinicId?: string;
     name?: string;
-  } | null>(null);
+  } | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dstoma_user_session');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          return null;
+        }
+      }
+    }
+    return null;
+  });
 
   // Login Form input fields
   const [authUsername, setAuthUsername] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Stateful Superadmin credentials with persistent LocalStorage syncing
+  // Stateful Superadmin credentials - password is no longer saved to LocalStorage for safety
   const [superadminLogin, setSuperadminLogin] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('dstoma_sa_login');
@@ -68,13 +80,7 @@ export default function App() {
     }
     return 'superadmin';
   });
-  const [superadminPassword, setSuperadminPassword] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('dstoma_sa_password');
-      if (saved) return saved;
-    }
-    return 'adminstoma';
-  });
+  const [superadminPassword, setSuperadminPassword] = useState('demo123');
 
   // Simulated email inbox (for superadmin password change alerts)
   const [gmailInboxes, setGmailInboxes] = useState<Array<{
@@ -171,46 +177,84 @@ export default function App() {
     setQueues(prev => prev.filter(q => q.doctorId !== doctorId));
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
     const userLower = authUsername.trim();
     const passLower = authPassword.trim();
 
-    // 1. Superadmin check
-    if (userLower === superadminLogin && passLower === superadminPassword) {
-      setCurrentUser({
-        type: 'superadmin',
-        name: t('clinicOwner')
+    // 1. Superadmin check (case-insensitive for login) via server API /api/admin-login
+    try {
+      const adminLoginRes = await fetch('/api/admin-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: userLower, password: passLower })
       });
+      if (adminLoginRes.ok) {
+        const session = {
+          type: 'superadmin' as const,
+          name: t('clinicOwner')
+        };
+        setCurrentUser(session);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('dstoma_user_session', JSON.stringify(session));
+          localStorage.setItem('dstoma_sa_login', userLower);
+        }
+        setAuthUsername('');
+        setAuthPassword('');
+        return;
+      }
+    } catch (err) {
+      console.warn("Backend auth failed, falling back to client-side logic:", err);
+    }
+
+    // Direct client fallback if API failed or offline
+    if (userLower.toLowerCase() === superadminLogin.toLowerCase() && passLower === superadminPassword) {
+      const session = {
+        type: 'superadmin' as const,
+        name: t('clinicOwner')
+      };
+      setCurrentUser(session);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('dstoma_user_session', JSON.stringify(session));
+        localStorage.setItem('dstoma_sa_login', userLower);
+      }
       setAuthUsername('');
       setAuthPassword('');
       return;
     }
 
-    // 2. Director checks
-    const matchedClinic = clinics.find(c => c.login === userLower && c.password === passLower);
+    // 2. Director checks (case-insensitive for login)
+    const matchedClinic = clinics.find(c => c && c.login && c.login.toLowerCase() === userLower.toLowerCase() && c.password === passLower);
     if (matchedClinic) {
-      setCurrentUser({
-        type: 'director',
+      const session = {
+        type: 'director' as const,
         clinicId: matchedClinic.id,
         name: matchedClinic.ownerName || matchedClinic.name
-      });
+      };
+      setCurrentUser(session);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('dstoma_user_session', JSON.stringify(session));
+      }
       setSelectedClinic(matchedClinic); // Automatically sync the multi-tenant scope
       setAuthUsername('');
       setAuthPassword('');
       return;
     }
 
-    // 3. Doctor checks
-    const matchedDoctor = doctors.find(d => d.login === userLower && d.password === passLower);
+    // 3. Doctor checks (case-insensitive for login)
+    const matchedDoctor = doctors.find(d => d && d.login && d.login.toLowerCase() === userLower.toLowerCase() && d.password === passLower);
     if (matchedDoctor) {
-      setCurrentUser({
-        type: 'doctor',
+      const session = {
+        type: 'doctor' as const,
         id: matchedDoctor.id,
         clinicId: matchedDoctor.clinicId,
         name: matchedDoctor.name
-      });
+      };
+      setCurrentUser(session);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('dstoma_user_session', JSON.stringify(session));
+      }
       setAuthUsername('');
       setAuthPassword('');
       return;
@@ -224,6 +268,9 @@ export default function App() {
     setCurrentUser(null);
     setAuthError(null);
     setActiveTab('bemor');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('dstoma_user_session');
+    }
   };
 
   // Handle URL parameters for SEO and Navigation on mount + sync modern Telegram Bot token set in Vercel Env
@@ -567,13 +614,25 @@ export default function App() {
     }));
   };
 
-  const handleUpdateSuperadminCreds = (newLogin: string, newPass: string) => {
+  const handleUpdateSuperadminCreds = async (newLogin: string, newPass: string) => {
     setSuperadminLogin(newLogin);
     setSuperadminPassword(newPass);
     if (typeof window !== 'undefined') {
       localStorage.setItem('dstoma_sa_login', newLogin);
-      localStorage.setItem('dstoma_sa_password', newPass);
+      localStorage.removeItem('dstoma_sa_password'); // No longer store password
     }
+    
+    // Sync credentials with Express back-end
+    try {
+      await fetch('/api/admin-update-creds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newLogin, newPassword: newPass })
+      });
+    } catch (err) {
+      console.warn("Could not sync updated superadmin credentials to the Express backend", err);
+    }
+
     // Send email copy to egamovumidjon18@gmail.com
     triggerGmailNotification(
       "🔑 DStoma Superadmin akkaunt ma'lumotlari muvaffaqiyatli o'zgartirildi",
@@ -985,6 +1044,38 @@ export default function App() {
                         {t('signInBtn')} ➔
                       </button>
                     </form>
+
+                    {activeTab === 'superadmin' && (
+                      <div className="pt-4 border-t border-slate-100 text-center space-y-2">
+                        <p className="text-[10px] text-slate-400 font-semibold leading-normal">
+                          Kalitlarni esdan chiqardingizmi? Defolt hisob ma'lumotlarini tiklash va kiritish uchun quyidagi tugmani bosing:
+                        </p>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setSuperadminLogin('superadmin');
+                            setSuperadminPassword('demo123');
+                            if (typeof window !== 'undefined') {
+                              localStorage.setItem('dstoma_sa_login', 'superadmin');
+                              localStorage.removeItem('dstoma_sa_password');
+                            }
+                            setAuthUsername('superadmin');
+                            setAuthPassword('demo123');
+                            setAuthError(null);
+                            try {
+                              await fetch('/api/admin-update-creds', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ newLogin: 'superadmin', newPassword: 'demo123' })
+                              });
+                            } catch (e) {}
+                          }}
+                          className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-black rounded-lg transition-colors cursor-pointer"
+                        >
+                          ⚡ Avto-tiklash va to'ldirish (superadmin / demo123)
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               }

@@ -6,9 +6,10 @@
 export const getTelegramBotToken = (): string => {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('dstoma_telegram_token');
-    if (saved) return saved.trim();
+    if (saved && saved.trim()) return saved.trim();
   }
-  return ((import.meta as any).env?.VITE_TELEGRAM_BOT_TOKEN || '8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc').trim();
+  const envToken = (import.meta as any).env?.VITE_TELEGRAM_BOT_TOKEN;
+  return (envToken || '').trim();
 };
 
 export const setTelegramBotToken = (token: string) => {
@@ -24,6 +25,9 @@ export async function sendTelegramMessage(chatId: string, text: string): Promise
   const token = getTelegramBotToken();
   if (!token) {
     console.warn("Telegram Bot Token is not configured. Please supply VITE_TELEGRAM_BOT_TOKEN or set it in SuperAdmin panel.");
+    if (typeof window !== 'undefined') {
+      alert("⚠️ Telegram Bot Token sozlanmagan! Iltimos, SuperAdmin panelidan token kiritib saqlang.");
+    }
     return false;
   }
 

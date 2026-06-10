@@ -1,3 +1,6 @@
+// DIQQAT: Bu faqat development uchun mock ma'lumotlar.
+// Production da real database ishlatiladi.
+
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
@@ -44,83 +47,213 @@ interface QueueItem {
   telegramChatId?: string;
 }
 
-let patientsDb: Patient[] = [
-  {
-    id: 'pat_test_2',
-    clinicId: 'samarqand',
-    fullName: 'Test Bemor 2',
-    passportSerial: 'AA1234567',
-    phone: '+998 (90) 123-45-67',
-    birthDate: '1998-05-12',
-    password: '123456',
-    bloodGroup: 'II+',
-    allergies: "Yo'q",
-    chronicDiseases: "Mavjud emas (Sog'lom)",
-    hasInfection: false,
-    telegramChatId: '57896431'
-  }
-];
+const g = globalThis as any;
+if (!g._patientsDb) {
+  g._patientsDb = [
+    {
+      id: 'pat_test_2',
+      clinicId: 'samarqand',
+      fullName: 'Test Bemor 2',
+      passportSerial: 'AA1234567',
+      phone: '+998 (90) 123-45-67',
+      birthDate: '1998-05-12',
+      password: 'demo123',
+      bloodGroup: 'II+',
+      allergies: "Yo'q",
+      chronicDiseases: "Mavjud emas (Sog'lom)",
+      hasInfection: false,
+      telegramChatId: '57896431'
+    }
+  ];
+}
+if (!g._queuesDb) {
+  g._queuesDb = [
+    {
+      id: 'q_1',
+      clinicId: 'samarqand',
+      patientName: 'Anvar Alimov',
+      patientPhone: '+998 (99) 441-23-45',
+      doctorId: 'doc_sm_1',
+      serviceId: 'srv_sm_1',
+      number: 101,
+      status: 'completed',
+      rating: 5,
+      createdAt: '2026-06-03T10:15:00Z'
+    },
+    {
+      id: 'q_2',
+      clinicId: 'samarqand',
+      patientName: 'Malika Sobirova',
+      patientPhone: '+998 (90) 789-11-22',
+      doctorId: 'doc_sm_2',
+      serviceId: 'srv_sm_2',
+      number: 102,
+      status: 'calling',
+      createdAt: '2026-06-03T15:10:00Z'
+    },
+    {
+      id: 'q_3',
+      clinicId: 'samarqand',
+      patientName: 'Sherzod Tojiyev',
+      patientPhone: '+998 (91) 440-55-66',
+      doctorId: 'doc_sm_1',
+      serviceId: 'srv_sm_3',
+      number: 103,
+      status: 'pending',
+      createdAt: '2026-06-03T15:15:00Z'
+    }
+  ];
+}
 
-let queuesDb: QueueItem[] = [
-  {
-    id: 'q_1',
-    clinicId: 'samarqand',
-    patientName: 'Anvar Alimov',
-    patientPhone: '+998 (99) 441-23-45',
-    doctorId: 'doc_sm_1',
-    serviceId: 'srv_sm_1',
-    number: 101,
-    status: 'completed',
-    rating: 5,
-    createdAt: '2026-06-03T10:15:00Z'
-  },
-  {
-    id: 'q_2',
-    clinicId: 'samarqand',
-    patientName: 'Malika Sobirova',
-    patientPhone: '+998 (90) 789-11-22',
-    doctorId: 'doc_sm_2',
-    serviceId: 'srv_sm_2',
-    number: 102,
-    status: 'calling',
-    createdAt: '2026-06-03T15:10:00Z'
-  },
-  {
-    id: 'q_3',
-    clinicId: 'samarqand',
-    patientName: 'Sherzod Tojiyev',
-    patientPhone: '+998 (91) 440-55-66',
-    doctorId: 'doc_sm_1',
-    serviceId: 'srv_sm_3',
-    number: 103,
-    status: 'pending',
-    createdAt: '2026-06-03T15:15:00Z'
-  }
-];
+let patientsDb: Patient[] = g._patientsDb;
+let queuesDb: QueueItem[] = g._queuesDb;
 
+
+// Dynamic variable to hold the active Telegram Bot Token in memory for cross-client synchrony
+let activeTelegramToken = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
 
 // GET active Telegram Bot Config dynamically to synchronize with Vercel Env changes
 app.get("/api/telegram-config", (req, res) => {
-  const token = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
-  res.json({ token });
+  res.json({ token: activeTelegramToken });
+});
+
+const gAdmin = globalThis as any;
+if (!gAdmin.superadminLogin) gAdmin.superadminLogin = "superadmin";
+if (!gAdmin.superadminPassword) gAdmin.superadminPassword = "demo123";
+
+// POST endpoint for secure superadmin login to prevent plain text password on client-side
+app.post("/api/admin-login", (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ ok: false, error: "Username and password are required" });
+  }
+  if (username.toLowerCase() === gAdmin.superadminLogin.toLowerCase() && password === gAdmin.superadminPassword) {
+    return res.json({ ok: true, name: "SuperAdmin" });
+  }
+  return res.status(401).json({ ok: false, error: "Incorrect credentials" });
+});
+
+// POST endpoint to update admin credentials dynamically
+app.post("/api/admin-update-creds", (req, res) => {
+  const { newLogin, newPassword } = req.body;
+  if (newLogin && newLogin.trim() && newPassword && newPassword.trim()) {
+    gAdmin.superadminLogin = newLogin.trim();
+    gAdmin.superadminPassword = newPassword.trim();
+    return res.json({ ok: true });
+  }
+  return res.status(400).json({ ok: false, error: "Invalid login or password" });
+});
+
+// POST to update the active Telegram Bot Token dynamically across all doctor & patient devices
+app.post("/api/telegram-config", (req, res) => {
+  const { token } = req.body;
+  if (token && token.trim()) {
+    activeTelegramToken = token.trim();
+    console.log(`[DStoma Server] Dynamically updated active Telegram Bot Token: ${activeTelegramToken.slice(0, 10)}...`);
+    res.json({ ok: true, message: "Server token updated successfully." });
+  } else {
+    res.status(400).json({ ok: false, error: "Token is required." });
+  }
+});
+
+// Live memory logs for diagnosing Telegram webhook delivery within the SuperAdmin dashboard
+const webhookDebugLogs: any[] = [];
+
+app.get("/api/telegram-debug-logs", (req, res) => {
+  res.json({ logs: webhookDebugLogs });
 });
 
 // Telegram Webhook receiver endpoint for serverless architectures (like Vercel)
 app.post("/api/telegram-webhook", async (req, res) => {
+  const logEntry: any = {
+    timestamp: new Date().toISOString(),
+    query: req.query,
+    url: req.url,
+    headers: {
+      host: req.headers.host,
+      "user-agent": req.headers["user-agent"],
+      "x-forwarded-proto": req.headers["x-forwarded-proto"]
+    },
+    body: null,
+    success: false,
+    error: null,
+    tokenProcessed: null
+  };
+  
+  // Keep logs at a reasonable size of 50 records
+  webhookDebugLogs.unshift(logEntry);
+  if (webhookDebugLogs.length > 50) {
+    webhookDebugLogs.pop();
+  }
+
   try {
-    const queryToken = req.query.token as string;
-    const rawToken = queryToken || process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
+    // Capture domain dynamically to keep our web_app links aligned with active deployments
+    const host = req.headers.host;
+    if (host) {
+      const protocol = req.headers['x-forwarded-proto'] || 'https';
+      lastActiveDomain = `${protocol}://${host}`;
+    }
+
+    // Fail-safe manual token extraction from URL search parameters if Express req.query is unavailable
+    let queryToken = req.query.token as string;
+    if (!queryToken && req.url) {
+      try {
+        const urlObj = new URL(req.url, 'http://localhost');
+        queryToken = urlObj.searchParams.get('token') || '';
+      } catch (urlErr) {
+        // Safe to ignore
+      }
+    }
+
+    const rawToken = queryToken || activeTelegramToken;
     if (!rawToken) {
+      logEntry.error = "Token was absent";
       return res.status(500).json({ error: "Telegram bot token is not configured on the server." });
     }
     const token = rawToken.trim();
-    const update = req.body;
+    logEntry.tokenProcessed = token.slice(0, 10) + "...";
+    
+    // Fail-safe request body decoder (reads raw stream chunks if body parsing was bypassed or delayed in Vercel)
+    let update = req.body;
+    if (!update || Object.keys(update).length === 0) {
+      try {
+        const buffers: Buffer[] = [];
+        for await (const chunk of req) {
+          buffers.push(chunk as Buffer);
+        }
+        const data = Buffer.concat(buffers).toString();
+        if (data) {
+          update = JSON.parse(data);
+        }
+      } catch (streamErr: any) {
+        console.error("[Webhook Fallback Stream Parser Error]:", streamErr);
+        logEntry.error = `Stream parsing failed: ${streamErr.message}`;
+      }
+    }
+
+    // Further fail-safe in case body is parsed as string
+    if (update && typeof update === 'string') {
+      try {
+        update = JSON.parse(update);
+      } catch (err: any) {
+        console.error("[Webhook String Body Parser Error]:", err);
+        logEntry.error = `JSON string format invalid: ${err.message}`;
+      }
+    }
+
+    logEntry.body = update;
+
     if (update && (update.message || update.callback_query)) {
       await handleTelegramUpdate(token, update);
+      logEntry.success = true;
+    } else {
+      logEntry.error = "Update package has no valid .message or .callback_query elements";
     }
+    
     res.json({ ok: true });
   } catch (err: any) {
     console.error("[Telegram Webhook Error]:", err);
+    logEntry.error = err.message || String(err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
@@ -129,7 +262,7 @@ app.post("/api/telegram-webhook", async (req, res) => {
 app.get("/api/telegram-webhook-setup", async (req, res) => {
   try {
     const queryToken = req.query.token as string;
-    const rawToken = queryToken || process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
+    const rawToken = queryToken || activeTelegramToken;
     if (!rawToken) {
       return res.status(400).json({ 
         ok: false, 
@@ -137,6 +270,7 @@ app.get("/api/telegram-webhook-setup", async (req, res) => {
       });
     }
     const token = rawToken.trim();
+    activeTelegramToken = token; // Synchronize setWebhook token to live memory state
 
     // Determine domain from query or host header
     let domainVal = req.query.domain as string;
@@ -150,6 +284,8 @@ app.get("/api/telegram-webhook-setup", async (req, res) => {
     if (domainVal.endsWith('/')) {
       domainVal = domainVal.slice(0, -1);
     }
+
+    lastActiveDomain = domainVal;
 
     // Dynamically append the token as a query parameter so when Telegram executes POST webhook updates, we know exactly what bot token it belongs to!
     const webhookUrl = `${domainVal}/api/telegram-webhook?token=${encodeURIComponent(token)}`;
@@ -585,7 +721,24 @@ async function tgApi(token: string, method: string, payload: any) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    return await response.json();
+    const result = await response.json();
+    
+    // Auto-retry fallback if formatting parse fails
+    if (!result.ok && payload && payload.parse_mode && 
+        result.description && 
+        (result.description.toLowerCase().includes("parse") || result.description.toLowerCase().includes("entity") || result.description.toLowerCase().includes("entities"))) {
+      console.warn(`[Telegram API Warning] Retry without formatting parse_mode because: ${result.description}`);
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.parse_mode;
+      const retryResponse = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fallbackPayload),
+      });
+      return await retryResponse.json();
+    }
+    
+    return result;
   } catch (error) {
     console.error(`[Telegram API Error] Failed to call ${method}:`, error);
     return null;
@@ -593,6 +746,10 @@ async function tgApi(token: string, method: string, payload: any) {
 }
 
 // Active conversational sessions state mapper for Telegram registration
+const gSessions = globalThis as any;
+if (!gSessions._botSessions) {
+  gSessions._botSessions = {};
+}
 const botSessions: Record<number, {
   step?: 'register_name' | 'register_phone' | 'register_passport' | 'register_password' | 'register_blood';
   tempUser?: {
@@ -605,31 +762,19 @@ const botSessions: Record<number, {
     bloodGroup?: string;
     telegramChatId?: string;
   };
-}> = {};
+}> = gSessions._botSessions;
 
 async function startTelegramBot() {
-  const token = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
-  if (!token) {
-    console.log("[Telegram Bot] VITE_TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_TOKEN is absent. Telegram Smart Polling Bot is on standby. Add it inside Settings > Secrets to activate.");
-    return;
-  }
-
   console.log("[Telegram Bot] Launching Smart Polling Bot Service...");
   let offset = 0;
 
-  // Clear pending old updates on start to avoid backlog spikes
-  try {
-    const clearRes = await fetch(`https://api.telegram.org/bot${token}/getUpdates?offset=-1&timeout=0`);
-    const clearData = await clearRes.json();
-    if (clearData.ok && clearData.result && clearData.result.length > 0) {
-      offset = clearData.result[0].update_id + 1;
-    }
-  } catch (err) {
-    console.warn("[Telegram Bot] Initial offset clear issue:", err);
-  }
-
   // Active secure sequential polling loop to prevent race conditions
   async function poll() {
+    const token = activeTelegramToken;
+    if (!token) {
+      setTimeout(poll, 4000);
+      return;
+    }
     try {
       const response = await fetch(`https://api.telegram.org/bot${token}/getUpdates?offset=${offset}&timeout=5`);
       if (response.ok) {
@@ -690,17 +835,32 @@ async function handleTelegramUpdate(token: string, update: any) {
   }
 }
 
+let lastActiveDomain = "https://dstoma-queue.uz";
+
+function getSecureWebAppUrl() {
+  let url = process.env.APP_URL || lastActiveDomain || "https://dstoma-queue.uz";
+  url = url.trim();
+  if (url.startsWith("http://")) {
+    url = url.replace("http://", "https://");
+  }
+  if (!url.startsWith("https://")) {
+    url = "https://" + url;
+  }
+  return url;
+}
+
 async function sendWelcomeMessage(token: string, chatId: number, firstName: string) {
-  const text = `🦷 *DStoma Elektron Navbat Tizimiga xush kelibsiz!* 🦷\n\n` +
-    `Assalomu alaykum, *${firstName}*! Ushbu rasmiy yordamchi bot orqali siz:\n` +
+  const text = `🦷 <b>DStoma Elektron Navbat Tizimiga xush kelibsiz!</b> 🦷\n\n` +
+    `Assalomu alaykum, <b>${firstName}</b>! Ushbu rasmiy yordamchi bot orqali siz:\n` +
     `• Klinikalarda olingan navbatingiz holatini real vaqtda kuzatib borishingiz;\n` +
     `• Shifokor sizni chaqirganda bevosita telegramda tezkor xabar olishingiz;\n` +
     `• To'g'ridan-to'g'ri Telegram-da navbatga yozilishingiz mumkin.\n\n` +
-    `🆔 Sizning Telegram *Chat ID* raqamingiz: \`${chatId}\`\n` +
-    `_(Ushbu ID raqamni DStoma platformasida navbat olayotib kiriting)_\n\n` +
+    `🆔 Sizning Telegram <b>Chat ID</b> raqamingiz: <code>${chatId}</code>\n` +
+    `<i>(Ushbu ID raqamni DStoma platformasida navbat olayotib kiriting)</i>\n\n` +
     `👇 Quyidagi tugmalardan birini tanlang yoki savolingiz bo'lsa bizga yozib yuboring (Gemini AI shifokorimiz javob beradi!):`;
 
-  const webAppUrl = process.env.APP_URL || "https://dstoma-queue.uz/";
+  // Dynamically resolve the Mini App Web URL (guaranteed secure HTTPS)
+  const webAppUrl = getSecureWebAppUrl();
 
   const replyMarkup = {
     inline_keyboard: [
@@ -731,7 +891,7 @@ async function sendWelcomeMessage(token: string, chatId: number, firstName: stri
   await tgApi(token, 'sendMessage', {
     chat_id: chatId,
     text: text,
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
     reply_markup: replyMarkup
   });
 }
@@ -954,7 +1114,7 @@ async function handleBotDiagnosticMessage(token: string, chatId: number, message
       reply_markup: {
         inline_keyboard: [
           [
-            { text: "📱 Mini App-ni ochish", web_app: { url: process.env.APP_URL || "https://dstoma-queue.uz/" } }
+            { text: "📱 Mini App-ni ochish", web_app: { url: getSecureWebAppUrl() } }
           ],
           [
             { text: "📝 Bot orqali Navbat Olish", callback_data: "book_queue" },
@@ -974,7 +1134,7 @@ async function handleBotDiagnosticMessage(token: string, chatId: number, message
       reply_markup: {
         inline_keyboard: [
           [
-            { text: "📱 Mini App-ni ochish", web_app: { url: process.env.APP_URL || "https://dstoma-queue.uz/" } }
+            { text: "📱 Mini App-ni ochish", web_app: { url: getSecureWebAppUrl() } }
           ]
         ]
       }
@@ -1071,8 +1231,8 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
         `👤 *Ism, Familiya:* ${finalPatient.fullName}\n` +
         `📞 *Telefon:* ${finalPatient.phone}\n` +
         `📇 *Pasport:* ${finalPatient.passportSerial}\n` +
-        `🩸 *Qon guruhi:* ${finalPatient.bloodGroup}\n` +
-        `🔑 *Parolingiz:* \`${finalPatient.password}\`\n\n` +
+        `🩸 *Qon guruhi:* ${finalPatient.bloodGroup}\n\n` +
+        `✅ Ro'yxatdan o'tish muvaffaqiyatli yakunlandi!\n\n` +
         `🔒 *Ushbu Telegram profil avtomatik ravishda DStoma tizimi bilan integratsiya qilindi!* Endi veb/mobil ilovada 'Kabinet' sahifasiga kirganingizda ushbu ma'lumotlar foydalanuvchini tizimga kiritadi. Rahmat!`;
 
       await tgApi(token, 'sendMessage', {
@@ -1472,7 +1632,7 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
-            [{ text: "📱 DStoma Mini App-ni ochish", web_app: { url: process.env.APP_URL || "https://dstoma-queue.uz/" } }],
+            [{ text: "📱 DStoma Mini App-ni ochish", web_app: { url: getSecureWebAppUrl() } }],
             [{ text: "🎟 Chiptalarim ro'yxati", callback_data: "my_queue" }]
           ]
         }
@@ -1495,7 +1655,7 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
-            [{ text: "📱 DStoma Mini App-ni ochish", web_app: { url: process.env.APP_URL || "https://dstoma-queue.uz/" } }]
+            [{ text: "📱 DStoma Mini App-ni ochish", web_app: { url: getSecureWebAppUrl() } }]
           ]
         }
       });
