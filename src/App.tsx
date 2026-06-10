@@ -1045,37 +1045,7 @@ export default function App() {
                       </button>
                     </form>
 
-                    {activeTab === 'superadmin' && (
-                      <div className="pt-4 border-t border-slate-100 text-center space-y-2">
-                        <p className="text-[10px] text-slate-400 font-semibold leading-normal">
-                          Kalitlarni esdan chiqardingizmi? Defolt hisob ma'lumotlarini tiklash va kiritish uchun quyidagi tugmani bosing:
-                        </p>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            setSuperadminLogin('superadmin');
-                            setSuperadminPassword('demo123');
-                            if (typeof window !== 'undefined') {
-                              localStorage.setItem('dstoma_sa_login', 'superadmin');
-                              localStorage.removeItem('dstoma_sa_password');
-                            }
-                            setAuthUsername('superadmin');
-                            setAuthPassword('demo123');
-                            setAuthError(null);
-                            try {
-                              await fetch('/api/admin-update-creds', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ newLogin: 'superadmin', newPassword: 'demo123' })
-                              });
-                            } catch (e) {}
-                          }}
-                          className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-black rounded-lg transition-colors cursor-pointer"
-                        >
-                          ⚡ Avto-tiklash va to'ldirish (superadmin / demo123)
-                        </button>
-                      </div>
-                    )}
+                    {/* Superadmin restore button block removed for production security */}
                   </div>
                 );
               }
