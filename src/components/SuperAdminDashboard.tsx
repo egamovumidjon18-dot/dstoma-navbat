@@ -232,7 +232,21 @@ export default function SuperAdminDashboard({
     .filter(c => c.subscriptionStatus === 'active')
     .reduce((sum, c) => sum + (c.rentalPrice || 1500000), 0);
 
-  const totalPatients = 142 + queues.length;
+  const [patientsCount, setPatientsCount] = React.useState(0);
+  
+  React.useEffect(() => {
+    const fetchPatients = () => {
+      fetch('/api/patients')
+        .then(r => r.json())
+        .then(data => setPatientsCount(data.length || 0))
+        .catch(e => console.warn(e));
+    };
+    fetchPatients();
+    const interval = setInterval(fetchPatients, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const totalPatients = patientsCount + queues.length;
 
   const handleCreateClinicSubmit = (e: React.FormEvent) => {
     e.preventDefault();

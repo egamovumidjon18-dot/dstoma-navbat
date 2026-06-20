@@ -320,6 +320,16 @@ export function useAppState() {
       } catch (err) {
         console.warn("[AppState Hook] Error loading services from server:", err);
       }
+
+      try {
+        const qRes = await fetch('/api/queues');
+        if (qRes.ok) {
+          const qList = await qRes.json();
+          if (active) setQueues(qList);
+        }
+      } catch (err) {
+        console.warn("[AppState Hook] Error loading queues from server:", err);
+      }
     };
     loadServerData();
     const clInt = setInterval(loadServerData, 4000);

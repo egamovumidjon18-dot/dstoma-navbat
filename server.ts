@@ -124,18 +124,16 @@ if (!g._serverServices) {
 // FIREBASE INIT
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
-import fs from 'fs';
+import firebaseConfig from './firebase-applet-config.json';
 
 let fDb: any = null;
 try {
-  const cfgPath = path.join(process.cwd(), 'firebase-applet-config.json');
-  if (fs.existsSync(cfgPath)) {
-    const firebaseConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-    const firebaseApp = initializeApp(firebaseConfig);
-    fDb = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+  if (firebaseConfig && firebaseConfig.projectId) {
+    const firebaseApp = initializeApp(firebaseConfig as any);
+    fDb = getFirestore(firebaseApp, (firebaseConfig as any).firestoreDatabaseId);
     console.log("🔥 Connected to Firebase Firestore");
   } else {
-    console.log("Firebase config not found at", cfgPath);
+    console.log("Firebase config not found or missing projectId");
   }
 } catch (error) {
   console.log("Firebase config init error", error);
@@ -444,6 +442,7 @@ app.get("/api/telegram-webhook-setup", async (req, res) => {
 
 // Centralized API Routes for patients and queues
 app.get("/api/patients", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.json(await getPatients());
 });
 
@@ -479,6 +478,7 @@ app.post("/api/patients", rateLimiter(30, 60 * 1000), async (req, res) => {
 });
 
 app.get("/api/queues", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.json(await getQueues());
 });
 
@@ -602,6 +602,9 @@ app.post("/api/queues/:id/rate", async (req, res) => {
 });
 
 app.get("/api/clinics", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   res.json(await getClinics());
 });
 
@@ -619,6 +622,9 @@ app.delete("/api/clinics/:id", async (req, res) => {
 });
 
 app.get("/api/doctors", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   const docs = await getDoctors();
   const mapped = docs.map((d: any) => ({
     id: d.id,
@@ -650,6 +656,7 @@ app.delete("/api/doctors/:id", async (req, res) => {
 });
 
 app.get("/api/services", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.json(await getServices());
 });
 
