@@ -268,34 +268,11 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 1. Initialize Leaflet Map (Once)
+  // 1. Initialize Leaflet Map
   useEffect(() => {
     if ((activeTab !== 'leaflet' && activeTab !== 'google') || !leafletLoaded || !mapContainerRef.current) return;
     const L = (window as any).L;
     if (!L) return;
-
-    if (leafletMapRef.current) {
-        // Just update the tile layer if it changed
-        const isGoogle = activeTab === 'google';
-        const tileUrl = isGoogle 
-          ? 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'
-          : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-        const attribution = isGoogle
-          ? '&copy; <a href="https://www.google.com/maps">Google Maps</a>'
-          : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-          
-        let existingLayer: any = null;
-        leafletMapRef.current.eachLayer((layer: any) => {
-            if (layer instanceof L.TileLayer) {
-                existingLayer = layer;
-            }
-        });
-        
-        if (existingLayer) {
-            existingLayer.setUrl(tileUrl);
-        }
-        return;
-    }
 
     // Explicitly reset the internal leaflet container ID descriptor to completely immunize against container reuse collision
     if (mapContainerRef.current && (mapContainerRef.current as any)._leaflet_id) {
@@ -337,7 +314,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
     }
 
     return () => {
-      if (leafletMapRef.current && (activeTab !== 'leaflet' && activeTab !== 'google')) {
+      if (leafletMapRef.current) {
         try {
           leafletMapRef.current.remove();
         } catch (err) {
@@ -345,6 +322,9 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         }
         leafletMapRef.current = null;
         markersGroupRef.current = null;
+        if (mapContainerRef.current) {
+           (mapContainerRef.current as any)._leaflet_id = null;
+        }
       }
     };
   }, [leafletLoaded, activeTab]);
