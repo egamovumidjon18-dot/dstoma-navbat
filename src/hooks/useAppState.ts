@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Clinic, Doctor, Service, QueueItem, SaaSPayment } from '../types';
 import { INITIAL_CLINICS, INITIAL_DOCTORS, INITIAL_SERVICES, INITIAL_QUEUES } from '../data';
 import { TRANSLATIONS, Language } from '../translations';
@@ -15,6 +15,11 @@ export function useAppState() {
   // Navigation
   const [activeTab, setActiveTab] = useState<'bemor' | 'shifokor' | 'boshliq' | 'superadmin'>('bemor');
   const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(INITIAL_CLINICS[0] || null); // Pre-selected first clinic by default so dental model is loaded immediately
+  const selectedClinicRef = useRef<Clinic | null>(selectedClinic);
+
+  useEffect(() => {
+    selectedClinicRef.current = selectedClinic;
+  }, [selectedClinic]);
 
   // 3-Language and Auth states
   const [language, setLanguage] = useState<Language>('uz');
@@ -280,20 +285,21 @@ export function useAppState() {
   // Set up continuous client-side sync of clinics, doctors, and services from express server
   useEffect(() => {
     let active = true;
+    let isInitialLoad = true;
     const loadServerData = async () => {
       try {
         const clRes = await fetch('/api/clinics');
         if (clRes.ok) {
           const clList = await clRes.json();
           if (active) {
-            setClinics(clList);
+            setClinics(prev => JSON.stringify(prev) === JSON.stringify(clList) ? prev : clList);
             const params = new URLSearchParams(window.location.search);
             const clinicParam = params.get('clinic');
-            if (clinicParam) {
+            
+            // Only auto-select from URL once, or don't aggressively force the first clinic when user closed it
+            if (isInitialLoad && clinicParam && !selectedClinicRef.current) {
               const found = clList.find((c: any) => c.id === clinicParam || c.subdomain === clinicParam);
               if (found) setSelectedClinic(found);
-            } else if (clList.length > 0 && !selectedClinic) {
-              setSelectedClinic(clList[0]);
             }
           }
         }
@@ -305,7 +311,7 @@ export function useAppState() {
         const docRes = await fetch('/api/doctors');
         if (docRes.ok) {
           const docList = await docRes.json();
-          if (active) setDoctors(docList);
+          if (active) setDoctors(prev => JSON.stringify(prev) === JSON.stringify(docList) ? prev : docList);
         }
       } catch (err) {
         console.warn("[AppState Hook] Error loading doctors from server:", err);
@@ -315,7 +321,7 @@ export function useAppState() {
         const srvRes = await fetch('/api/services');
         if (srvRes.ok) {
           const srvList = await srvRes.json();
-          if (active) setServices(srvList);
+          if (active) setServices(prev => JSON.stringify(prev) === JSON.stringify(srvList) ? prev : srvList);
         }
       } catch (err) {
         console.warn("[AppState Hook] Error loading services from server:", err);
@@ -325,11 +331,12 @@ export function useAppState() {
         const qRes = await fetch('/api/queues');
         if (qRes.ok) {
           const qList = await qRes.json();
-          if (active) setQueues(qList);
+          if (active) setQueues(prev => JSON.stringify(prev) === JSON.stringify(qList) ? prev : qList);
         }
       } catch (err) {
         console.warn("[AppState Hook] Error loading queues from server:", err);
       }
+      isInitialLoad = false;
     };
     loadServerData();
     const clInt = setInterval(loadServerData, 4000);
@@ -337,7 +344,7 @@ export function useAppState() {
       active = false;
       clearInterval(clInt);
     };
-  }, [selectedClinic]);
+  }, []);
 
   // Update URL metadata
   useEffect(() => {

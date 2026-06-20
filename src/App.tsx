@@ -1,4 +1,5 @@
 import React from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { useAppState } from './hooks/useAppState';
 import ClientDashboard from './components/ClientDashboard';
 import DoctorDashboard from './components/DoctorDashboard';
@@ -55,7 +56,7 @@ export default function App() {
   // Determine if user has permission to view a protected tab
   const hasAccess = (tab: 'shifokor' | 'boshliq' | 'superadmin') => {
     if (!currentUser) return false;
-    if (currentUser.type === 'superadmin') return true; // Superadmin can access everything
+    if (currentUser.type === 'superadmin' && tab === 'superadmin') return true;
     if (tab === 'shifokor' && currentUser.type === 'doctor') return true;
     if (tab === 'boshliq' && currentUser.type === 'director') return true;
     return false;
@@ -296,6 +297,7 @@ export default function App() {
       <footer className="py-6 border-t border-slate-900 bg-[#020712] text-center text-xs text-slate-500 font-mono">
         <p>© 2026 DStoma SaaS Technologies Inc. All Rights Reserved. Dynamic Multi-Tenant Network.</p>
       </footer>
+      <Analytics />
     </div>
   );
 }

@@ -336,16 +336,53 @@ export default function DirectorDashboard({
   const callingQueues = clinicQueues.filter(q => q.status === 'calling' || q.status === 'in_progress');
   const completedQueues = clinicQueues.filter(q => q.status === 'completed');
 
-  // Weekly historical table data (Screenshot 7 & 8 detail)
-  const weeklyReportData = [
-    { dayName: 'Dushanba', dateStr: '27.05.2026', patientsCount: 5, revenue: 1100000, avgRating: 5.0 },
-    { dayName: 'Seshanba', dateStr: '28.05.2026', patientsCount: 8, revenue: 2350000, avgRating: 4.8 },
-    { dayName: 'Chorshanba', dateStr: '29.05.2026', patientsCount: 4, revenue: 900000, avgRating: 4.5 },
-    { dayName: 'Payshanba', dateStr: '30.05.2026', patientsCount: 11, revenue: 3800000, avgRating: 4.9 },
-    { dayName: 'Juma', dateStr: '31.05.2026', patientsCount: 7, revenue: 1850000, avgRating: 4.7 },
-    { dayName: 'Shanba', dateStr: '01.06.2026', patientsCount: 13, revenue: 5200000, avgRating: 5.0 },
-    { dayName: 'Yakshanba', dateStr: '02.06.2026', patientsCount: 2, revenue: 450000, avgRating: 4.0 }
-  ];
+  // Weekly historical table data dynamically calculated
+  const getDailyStats = () => {
+    const reportList = [];
+    const today = new Date();
+    // Generate data for the last 7 days (including today)
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const isToday = i === 0;
+      
+      const dayNameUz = ['Yakshanba', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'][d.getDay()];
+      const dayNameRu = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'][d.getDay()];
+      const dayNameEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()];
+      
+      let dayName = language === 'ru' ? dayNameRu : language === 'en' ? dayNameEn : dayNameUz;
+      if (isToday) {
+         dayName = language === 'ru' ? 'Сегодня' : language === 'en' ? 'Today' : 'Bugun';
+      }
+
+      const dateStr = d.toLocaleDateString('ru-RU');
+      
+      // Filter completed queues for this specific day
+      const dayQueues = clinicQueues.filter(q => {
+        if (q.status !== 'completed') return false;
+        // fallback to today if createdAt doesn't exist, though it should
+        const qDate = q.createdAt ? new Date(q.createdAt) : new Date();
+        return qDate.getDate() === d.getDate() && qDate.getMonth() === d.getMonth() && qDate.getFullYear() === d.getFullYear();
+      });
+
+      const getPrice = (id: string) => {
+        return services.find(s => s.id === id)?.price || 0;
+      };
+
+      const patientsCount = dayQueues.length;
+      const revenue = dayQueues.reduce((sum, q) => sum + getPrice(q.serviceId), 0);
+      const avgRating = dayQueues.filter(q => q.rating).length > 0 
+        ? dayQueues.reduce((sum, q) => sum + (q.rating || 5), 0) / dayQueues.filter(q => q.rating).length 
+        : 5.0;
+
+      reportList.push({ dayName, dateStr, patientsCount, revenue, avgRating });
+    }
+    return reportList;
+  };
+
+  const weeklyReportData = getDailyStats();
+  const weeklyTotalRevenue = weeklyReportData.reduce((sum, d) => sum + d.revenue, 0);
+  const weeklyTotalPatients = weeklyReportData.reduce((sum, d) => sum + d.patientsCount, 0);
 
   // Calculations for KPI Cards
   const totalCompletedToday = completedQueues.length;
@@ -1077,7 +1114,7 @@ export default function DirectorDashboard({
                   Kunlik daromad grafigi (so'm)
                 </h4>
                 <span className="text-[11px] bg-blue-50 text-blue-800 font-mono font-extrabold px-2 py-0.5 rounded-full">
-                  Haftalik jami: 15,650,000 UZS
+                  Haftalik jami: {weeklyTotalRevenue.toLocaleString('uz-UZ')} UZS
                 </span>
               </div>
 
@@ -1098,10 +1135,12 @@ export default function DirectorDashboard({
                   </defs>
                   
                   {(() => {
-                    const maxRevenue = 5500000;
+                    const maxRevenue = Math.max(...weeklyReportData.map(d => d.revenue), 1000000);
                     const points = weeklyReportData.map((d, index) => {
                       const x = 40 + index * 70;
-                      const y = 130 - (d.revenue / maxRevenue) * 105;
+                      // ensure y doesn't break if maxRevenue is 0
+                      const yOffset = maxRevenue > 0 ? (d.revenue / maxRevenue) * 105 : 0;
+                      const y = 130 - yOffset;
                       return { x, y, day: d.dayName, val: d.revenue };
                     });
                     
@@ -1130,13 +1169,9 @@ export default function DirectorDashboard({
 
                 {/* Day labels at bottom */}
                 <div className="flex justify-between text-[10px] text-slate-400 font-bold px-10 pt-1 select-none">
-                  <span>Dush</span>
-                  <span>Sesh</span>
-                  <span>Chor</span>
-                  <span>Pay</span>
-                  <span>Jum</span>
-                  <span>Shan</span>
-                  <span>Yak</span>
+                  {weeklyReportData.map((d, idx) => (
+                    <span key={idx}>{language === 'uz' ? d.dayName.substring(0, 3) : language === 'ru' ? d.dayName.substring(0, 2) : d.dayName.substring(0, 3)}</span>
+                  ))}
                 </div>
               </div>
             </div>
@@ -1148,7 +1183,7 @@ export default function DirectorDashboard({
                   Kunlik tashrif buyurgan bemorlar soni
                 </h4>
                 <span className="text-[11px] bg-emerald-50 text-emerald-800 font-mono font-extrabold px-2 py-0.5 rounded-full">
-                  Haftalik jami: 50 bemor
+                  Haftalik jami: {weeklyTotalPatients} bemor
                 </span>
               </div>
 
@@ -1169,10 +1204,11 @@ export default function DirectorDashboard({
                   </defs>
                   
                   {(() => {
-                    const maxPatients = 15;
+                    const maxPatients = Math.max(...weeklyReportData.map(d => d.patientsCount), 5);
                     const points = weeklyReportData.map((d, index) => {
                       const x = 40 + index * 70;
-                      const y = 130 - (d.patientsCount / maxPatients) * 105;
+                      const yOffset = maxPatients > 0 ? (d.patientsCount / maxPatients) * 105 : 0;
+                      const y = 130 - yOffset;
                       return { x, y, day: d.dayName, val: d.patientsCount };
                     });
                     
@@ -1201,13 +1237,9 @@ export default function DirectorDashboard({
 
                 {/* Day labels at bottom */}
                 <div className="flex justify-between text-[10px] text-slate-400 font-bold px-10 pt-1 select-none">
-                  <span>Dush</span>
-                  <span>Sesh</span>
-                  <span>Chor</span>
-                  <span>Pay</span>
-                  <span>Jum</span>
-                  <span>Shan</span>
-                  <span>Yak</span>
+                  {weeklyReportData.map((d, idx) => (
+                    <span key={idx}>{language === 'uz' ? d.dayName.substring(0, 3) : language === 'ru' ? d.dayName.substring(0, 2) : d.dayName.substring(0, 3)}</span>
+                  ))}
                 </div>
               </div>
             </div>

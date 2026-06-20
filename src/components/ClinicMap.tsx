@@ -12,7 +12,7 @@ interface ClinicMapProps {
 
 export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, language }: ClinicMapProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'vector' | 'leaflet' | 'yandex'>('leaflet');
+  const [activeTab, setActiveTab] = useState<'google' | 'vector' | 'leaflet' | 'yandex'>('google');
   const [userLat, setUserLat] = useState<number>(39.6542); // defaults to Samarqand shahri
   const [userLng, setUserLng] = useState<number>(66.9597);
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'detecting' | 'active' | 'denied'>('idle');
@@ -31,9 +31,36 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
     return (TRANSLATIONS[language] as any)?.[key] || (TRANSLATIONS['uz'] as any)?.[key] || key;
   };
 
+  const locateUserExact = () => {
+    if (navigator.geolocation) {
+      setGpsStatus('detecting');
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLat(position.coords.latitude);
+          setUserLng(position.coords.longitude);
+          setGpsStatus('active');
+          
+          if (leafletMapRef.current && (activeTab === 'leaflet' || activeTab === 'google')) {
+            leafletMapRef.current.setView([position.coords.latitude, position.coords.longitude], 14);
+          } else if (yandexMapRef.current && activeTab === 'yandex') {
+            yandexMapRef.current.setCenter([position.coords.latitude, position.coords.longitude], 14);
+          }
+        },
+        (error) => {
+          console.warn('Geolocation failed:', error);
+          setGpsStatus('denied');
+          alert(language === 'uz' ? 'Joylashuvni aniqlashga ruxsat etilmagan yoki xatolik yuz berdi.' : 'Location access denied or failed.');
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    } else {
+      setGpsStatus('denied');
+    }
+  };
+
   // Dynamic Leaflet asset loading
   useEffect(() => {
-    if (activeTab !== 'leaflet') return;
+    if (activeTab !== 'leaflet' && activeTab !== 'google') return;
 
     if (!document.getElementById('leaflet-css')) {
       const link = document.createElement('link');
@@ -96,9 +123,8 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
     }
   }, [activeTab]);
 
-  // Real Geolocation loader with real-time tracking
+  // Geolocation loader
   useEffect(() => {
-    let watchId: number | null = null;
     if (navigator.geolocation) {
       setGpsStatus('detecting');
       
@@ -115,28 +141,9 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         },
         { enableHighAccuracy: true, timeout: 8050 }
       );
-
-      // Start watching position in real-time
-      watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          setUserLat(position.coords.latitude);
-          setUserLng(position.coords.longitude);
-          setGpsStatus('active');
-        },
-        (error) => {
-          console.warn('Real-time geolocation tracking update failed:', error);
-        },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
-      );
     } else {
       setGpsStatus('denied');
     }
-
-    return () => {
-      if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId);
-      }
-    };
   }, []);
 
   // Haversine formula to compute distance in km
@@ -173,13 +180,40 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
     })
     .sort((a, b) => (a.distance || 0) - (b.distance || 0));
 
+  // Attempt automatic geolocation if supported
+  useEffect(() => {
+    // locateUserExact() was being called here redundantly, causing parallel conflicts
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 1. Initialize Leaflet Map (Once)
   useEffect(() => {
-    if (activeTab !== 'leaflet' || !leafletLoaded || !mapContainerRef.current) return;
+    if ((activeTab !== 'leaflet' && activeTab !== 'google') || !leafletLoaded || !mapContainerRef.current) return;
     const L = (window as any).L;
     if (!L) return;
 
-    if (leafletMapRef.current) return;
+    if (leafletMapRef.current) {
+        // Just update the tile layer if it changed
+        const isGoogle = activeTab === 'google';
+        const tileUrl = isGoogle 
+          ? 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'
+          : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+        const attribution = isGoogle
+          ? '&copy; <a href="https://www.google.com/maps">Google Maps</a>'
+          : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+          
+        let existingLayer: any = null;
+        leafletMapRef.current.eachLayer((layer: any) => {
+            if (layer instanceof L.TileLayer) {
+                existingLayer = layer;
+            }
+        });
+        
+        if (existingLayer) {
+            existingLayer.setUrl(tileUrl);
+        }
+        return;
+    }
 
     // Explicitly reset the internal leaflet container ID descriptor to completely immunize against container reuse collision
     if (mapContainerRef.current && (mapContainerRef.current as any)._leaflet_id) {
@@ -194,8 +228,16 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
       
       leafletMapRef.current = map;
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      const isGoogle = activeTab === 'google';
+      const tileUrl = isGoogle 
+        ? 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'
+        : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+      const attribution = isGoogle
+        ? '&copy; <a href="https://www.google.com/maps">Google Maps</a>'
+        : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+      L.tileLayer(tileUrl, {
+        attribution: attribution
       }).addTo(map);
 
       const markersGroup = L.featureGroup().addTo(map);
@@ -213,7 +255,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
     }
 
     return () => {
-      if (leafletMapRef.current) {
+      if (leafletMapRef.current && (activeTab !== 'leaflet' && activeTab !== 'google')) {
         try {
           leafletMapRef.current.remove();
         } catch (err) {
@@ -227,7 +269,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
 
   // 1b. Update Leaflet Markers & Route Line
   useEffect(() => {
-    if (activeTab !== 'leaflet' || !leafletLoaded || !leafletMapRef.current || !markersGroupRef.current) return;
+    if ((activeTab !== 'leaflet' && activeTab !== 'google') || !leafletLoaded || !leafletMapRef.current || !markersGroupRef.current) return;
     const L = (window as any).L;
     if (!L) return;
 
@@ -312,14 +354,25 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
           dashArray: '8, 8',
           className: 'laser-route-line'
         }).addTo(markersGroup);
-        
-        // Centering the view beautifully
-        map.setView([selectedClinic.lat, selectedClinic.lng], 12.5);
+      }
+      
+      // Control centering logic: do NOT constantly recenter if user is panning. 
+      // Only do it when the selected clinic ACTUALLY changes to a new one, 
+      // or if there is no selection and bounds haven't been fitted yet.
+      const mapState = map as any;
+      if (selectedClinic) {
+         if (mapState._lastSelectedId !== selectedClinic.id) {
+           map.setView([selectedClinic.lat, selectedClinic.lng], 12.5);
+           mapState._lastSelectedId = selectedClinic.id;
+         }
       } else if (clinics.length > 0) {
-        // Fit map perspective automatically to span all markers
-        const bounds = markersGroup.getBounds();
-        if (bounds.isValid()) {
-          map.fitBounds(bounds, { padding: [40, 40] });
+        // Fit map perspective automatically to span all markers on initial load
+        if (!mapState._hasFittedInitialBounds) {
+          const bounds = markersGroup.getBounds();
+          if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [40, 40] });
+            mapState._hasFittedInitialBounds = true;
+          }
         }
       }
 
@@ -417,13 +470,20 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         map.geoObjects.add(placemark);
       });
 
-      // Set viewport bounds
+      // Set viewport bounds safely to prevent panning cutoff
+      const yMapState = map as any;
       if (selectedClinic) {
-        map.setCenter([selectedClinic.lat, selectedClinic.lng], 12.5);
+        if (yMapState._lastSelectedId !== selectedClinic.id) {
+          map.setCenter([selectedClinic.lat, selectedClinic.lng], 12.5);
+          yMapState._lastSelectedId = selectedClinic.id;
+        }
       } else if (clinics.length > 0) {
-        const bounds = map.geoObjects.getBounds();
-        if (bounds) {
-          map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 40 });
+        if (!yMapState._hasFittedInitialBounds) {
+          const bounds = map.geoObjects.getBounds();
+          if (bounds) {
+            map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 40 });
+            yMapState._hasFittedInitialBounds = true;
+          }
         }
       }
     } catch (err) {
@@ -476,10 +536,10 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
               </span>
             </div>
 
-            {/* Manual Choice override drop-down (Alternative Option) */}
+            {/* Location tools */}
             <div className="space-y-1.5 pt-1.5 border-t border-[#1e3256]/30 text-left">
               <label className="text-[9px] font-bold text-slate-500 block uppercase">
-                {t('manualSelect')}
+                {language === 'uz' ? "JOYLAShUVNI QO'LDA TANLASH (MUQOBIL):" : language === 'ru' ? "ВЫБОР ПОЛОЖЕНИЯ ВРУЧНУЮ (АЛЬТЕРНАТИВА):" : "MANUAL LOCATION OVERRIDE (ALTERNATIVE):"}
               </label>
               <select
                 className="text-xs text-slate-300 bg-[#0c1225] hover:bg-[#121c35] border border-[#1e3256]/60 rounded-xl px-2.5 py-2 w-full font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
@@ -489,12 +549,15 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                   if (val === 'samarqand') {
                     setUserLat(39.6542);
                     setUserLng(66.9597);
+                    setGpsStatus('idle');
                   } else if (val === 'buxoro') {
                     setUserLat(39.7747);
                     setUserLng(64.4286);
+                    setGpsStatus('idle');
                   } else if (val === 'toshkent') {
                     setUserLat(41.2995);
                     setUserLng(69.2401);
+                    setGpsStatus('idle');
                   }
                 }}
               >
@@ -503,6 +566,13 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 <option value="toshkent">📍 {t('toshkentCity')} (M: 41.29, 69.24)</option>
                 {gpsStatus === 'active' && <option value="custom">🛰️ {language === 'uz' ? 'Real Geolokatsiya (GPS)' : language === 'ru' ? 'Реальная геолокация (GPS)' : 'Real Geolocation (GPS)'}</option>}
               </select>
+
+              <button
+                onClick={locateUserExact}
+                className="w-full mt-1.5 flex items-center justify-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl px-3 py-2 text-[11px] font-bold uppercase transition-all"
+              >
+                📍 {language === 'uz' ? 'Haqiqiy Joylashuvni Yangilash (GPS)' : language === 'ru' ? 'Обновить Реальное Положение' : 'Update Real Location'}
+              </button>
             </div>
 
             {/* Selection by Clinic Name */}
@@ -711,7 +781,27 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
       <div id="map-canvas-container" className="lg:col-span-8 h-[280px] sm:h-[385px] lg:h-[650px] relative bg-[#040814] flex flex-col">
         
         {/* Real Dynamic Tab Choices - compact responsive size on mobile */}
-        <div className="absolute top-3 left-2 sm:left-14 z-40 flex gap-1 bg-slate-950/92 backdrop-blur-md p-1 rounded-xl shadow-2xl border border-[#1e3256]/50 scale-90 sm:scale-100 origin-top-left">
+        <div className="absolute top-3 left-2 sm:left-14 z-40 flex flex-wrap gap-1 bg-slate-950/92 backdrop-blur-md p-1 rounded-xl shadow-2xl border border-[#1e3256]/50 origin-top-left">
+          
+          <button
+            onClick={locateUserExact}
+            className={`px-2.5 py-1.5 text-[9px] sm:text-[10px] font-black uppercase rounded-lg transition-all flex items-center gap-1 cursor-pointer bg-slate-900 border border-[#1e3256]/70 text-cyan-400 hover:bg-cyan-500 hover:text-slate-950`}
+            title={t('approxLocation')}
+          >
+            📍 <span className="hidden sm:inline">{language === 'uz' ? 'Joylashuvim' : language === 'ru' ? 'Моё место' : 'My Location'}</span>
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('google')}
+            className={`px-2.5 py-1.5 text-[9px] sm:text-[10px] font-black uppercase rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+              activeTab === 'google'
+                ? 'bg-emerald-500 text-slate-950 font-black shadow-lg'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            🌎 <span className="hidden sm:inline">Google Maps</span><span className="inline sm:hidden">Google</span> {leafletLoaded && activeTab === 'google' && <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>}
+          </button>
+
           <button
             onClick={() => setActiveTab('leaflet')}
             className={`px-2.5 py-1.5 text-[9px] sm:text-[10px] font-black uppercase rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
@@ -720,7 +810,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            🗺️ <span className="hidden sm:inline">Leaflet.js Live</span><span className="inline sm:hidden">Leaflet</span> {leafletLoaded && <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>}
+            🗺️ <span className="hidden sm:inline">OSM Map</span><span className="inline sm:hidden">OSM</span> {leafletLoaded && activeTab === 'leaflet' && <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>}
           </button>
           
           <button
@@ -731,7 +821,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            📟 <span className="hidden sm:inline">High-Tech Vector HUD</span><span className="inline sm:hidden">HUD Map</span>
+            📟 <span className="hidden sm:inline">High-Tech HUD</span><span className="inline sm:hidden">HUD Map</span>
           </button>
           
           <button
@@ -742,7 +832,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            🧭 <span className="hidden sm:inline">Yandex Maps Live</span><span className="inline sm:hidden">Yandex</span> {yandexLoaded && <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping"></span>}
+            🧭 <span className="hidden sm:inline">Yandex Live</span><span className="inline sm:hidden">Yandex</span> {yandexLoaded && activeTab === 'yandex' && <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping"></span>}
           </button>
         </div>
 
@@ -754,7 +844,11 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-405 shrink-0" /> {selectedClinic.subdomain}.dstoma-navbat-lk2p.vercel.app
               </div>
               <button 
-                onClick={() => onSelectClinic(null as any)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onSelectClinic(null as any);
+                }}
                 className="text-[9px] text-slate-400 hover:text-slate-205 bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 leading-none font-bold"
               >
                 {language === 'uz' ? '✕ Yopish' : language === 'ru' ? '✕ Закрыть' : '✕ Close'}
@@ -791,17 +885,17 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
           </div>
         )}
 
-        {/* Tab 1: Leaflet Interactive Map */}
-        {activeTab === 'leaflet' && (
+        {/* Tab 1: Leaflet Interactive Map (Also used for Google Tiles) */}
+        {(activeTab === 'leaflet' || activeTab === 'google') && (
           <div className="w-full h-full relative z-10 bg-slate-950 flex flex-col justify-end">
             <div ref={mapContainerRef} className="w-full h-full bg-[#111] border border-[#1b2b4d]/40 rounded-b-2xl overflow-hidden shadow-inner" style={{ minHeight: '100%', height: '100%' }}></div>
             
             {/* Live alert */}
-            <div className="absolute bottom-2 left-2 right-2 z-40 flex items-center gap-2 bg-slate-950/90 border border-[#1e3256]/60 p-3 rounded-xl text-[10px] text-slate-300 shadow-xl text-left scale-90 sm:scale-100 origin-bottom">
+            <div className="absolute bottom-2 left-2 right-2 z-40 flex items-center gap-2 bg-slate-950/90 border border-[#1e3256]/60 p-3 rounded-xl text-[10px] text-slate-300 shadow-xl text-left scale-90 sm:scale-100 origin-bottom pointer-events-none">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <span>
                 <strong>
-                  {language === 'uz' ? 'Interaktiv Leaflet xaritasi faol:' : language === 'ru' ? 'Карта Leaflet активна:' : 'Interactive Leaflet Map Active:'}
+                  {language === 'uz' ? `Interaktiv ${activeTab === 'google' ? 'Google' : 'OSM'} xaritasi faol:` : language === 'ru' ? `Интерактивная карта ${activeTab === 'google' ? 'Google' : 'OSM'} активна:` : `Interactive ${activeTab === 'google' ? 'Google' : 'OSM'} Map Active:`}
                 </strong>{' '}
                 {language === 'uz' 
                   ? "Real vaqt rejimida barcha filiallar va eng yaqin masofalar ko'rsatiladi. Xaritadan erkin foydalanishingiz mumkin." 
@@ -921,7 +1015,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                   </g>
 
                   {/* Real user tracking location indicator overlay */}
-                  <g transform={`translate(${userLat === 39.6542 ? 260 : userLat === 39.7747 ? 130 : 405}, ${userLat === 39.6542 ? 250 : userLat === 39.7747 ? 215 : 155})`}>
+                  <g transform={`translate(${((userLng - 56) / (73.1 - 56)) * 600}, ${((45.5 - userLat) / (45.5 - 37.1)) * 300})`}>
                     <rect x="-65" y="-12" width="130" height="15" rx="3" fill="#ef4444" fillOpacity="0.2" stroke="#ef4444" strokeWidth="0.5" />
                     <circle cx="0" cy="-4" r="3" fill="#ef4444" className="animate-ping" />
                     <text x="0" y="-1" textAnchor="middle" fill="#fca5a5" fontSize="6.5" fontWeight="black" fontFamily="monospace" letterSpacing="0.8">
@@ -954,7 +1048,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
             <div ref={yandexMapContainerRef} className="w-full h-full bg-[#111] border border-[#1b2b4d]/40 rounded-b-2xl overflow-hidden shadow-inner" style={{ minHeight: '100%', height: '100%' }}></div>
             
             {/* Live alert */}
-            <div className="absolute bottom-2 left-2 right-2 z-40 flex items-center gap-2 bg-slate-950/90 border border-[#1e3256]/60 p-3 rounded-xl text-[10px] text-slate-300 shadow-xl text-left scale-90 sm:scale-100 origin-bottom">
+            <div className="absolute bottom-2 left-2 right-2 z-40 flex items-center gap-2 bg-slate-950/90 border border-[#1e3256]/60 p-3 rounded-xl text-[10px] text-slate-300 shadow-xl text-left scale-90 sm:scale-100 origin-bottom pointer-events-none">
               <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
               <span>
                 <strong>

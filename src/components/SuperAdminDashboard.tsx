@@ -107,6 +107,8 @@ export default function SuperAdminDashboard({
   const [newClinicFee, setNewClinicFee] = useState<number>(1500000);
   const [newClinicOwner, setNewClinicOwner] = useState('');
   const [newClinicMapLink, setNewClinicMapLink] = useState('');
+  const [newClinicLat, setNewClinicLat] = useState<number | ''>(41.311081);
+  const [newClinicLng, setNewClinicLng] = useState<number | ''>(69.240562);
 
   // Editing credentials state
   const [editingClinicId, setEditingClinicId] = useState<string | null>(null);
@@ -272,8 +274,8 @@ export default function SuperAdminDashboard({
       subdomain: cleanSubdomain,
       address: newClinicAddress || "Kiritilmagan",
       phone: newClinicPhone,
-      lat: 41.311081,
-      lng: 69.240562,
+      lat: Number(newClinicLat) || 41.311081,
+      lng: Number(newClinicLng) || 69.240562,
       logo: '🦷',
       rating: 5.0,
       activePatients: 0,
@@ -608,6 +610,37 @@ export default function SuperAdminDashboard({
                   <p className="text-[9px] text-slate-400 font-semibold leading-normal">
                     ℹ️ Istalgan Google Maps, Yandex Maps yoki OpenStreetMap havolasini kiriting. Ushbu havola mijoz xaritasida navigatsiya tugmasi bilan bog'lanib, to'liq integratsiyani amalga oshiradi.
                   </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="text-[10px] font-black text-slate-600 block mb-1 uppercase tracking-wide">
+                    Latitude (Kenglik) *
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    value={newClinicLat}
+                    onChange={(e) => setNewClinicLat(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="Masalan: 41.311081"
+                    className="w-full bg-slate-50 text-xs font-semibold text-slate-800 border border-slate-200 rounded-xl px-4 py-2.5 focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-600 block mb-1 uppercase tracking-wide">
+                    Longitude (Uzunlik) *
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    value={newClinicLng}
+                    onChange={(e) => setNewClinicLng(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="Masalan: 69.240562"
+                    className="w-full bg-slate-50 text-xs font-semibold text-slate-800 border border-slate-200 rounded-xl px-4 py-2.5 focus:border-cyan-500 focus:outline-none"
+                  />
                 </div>
               </div>
 
@@ -1843,6 +1876,35 @@ export default function SuperAdminDashboard({
                   onChange={(e) => setClinicToEdit({ ...clinicToEdit, mapLink: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] text-slate-850 font-bold focus:outline-none focus:border-cyan-500"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3.5">
+                <div>
+                  <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
+                    Latitude (Kenglik) *
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    value={clinicToEdit.lat || ""}
+                    onChange={(e) => setClinicToEdit({ ...clinicToEdit, lat: Number(e.target.value) })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold font-mono focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
+                    Longitude (Uzunlik) *
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    value={clinicToEdit.lng || ""}
+                    onChange={(e) => setClinicToEdit({ ...clinicToEdit, lng: Number(e.target.value) })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold font-mono focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3.5">
