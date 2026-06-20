@@ -344,11 +344,11 @@ export default function SuperAdminDashboard({
       id: 'doc_' + Math.random().toString(36).substr(2, 9),
       name: newDoctorName,
       specialty: newDoctorSpecialty,
-      roomInfo: "1-xona",
       status: "idle",
       clinicId: newDoctorClinicId,
       image: 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + newDoctorName,
       rating: 5,
+      ratingCount: 0,
       login,
       password: pass
     };
@@ -1621,7 +1621,7 @@ export default function SuperAdminDashboard({
                           <div className="flex justify-end gap-1 px-1 mt-1">
                             <button
                               onClick={() => {
-                                const defaultLog = doc.name.split(' ')[0].toLowerCase() + Math.floor(10 + Math.random() * 90);
+                                const defaultLog = (doc.name || 'Doc').split(' ')[0].toLowerCase() + Math.floor(10 + Math.random() * 90);
                                 const defaultPass = `Doc${Math.floor(1000 + Math.random() * 9000)}`;
                                 setDoctorLoginVal(defaultLog);
                                 setDoctorPassVal(defaultPass);
@@ -1644,7 +1644,7 @@ export default function SuperAdminDashboard({
                             <div className="flex items-center gap-1.5">
                               <span className="text-[10px] text-slate-400 font-extrabold uppercase font-mono">{t('customLogin')}:</span>
                               <code className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-bold font-mono text-[11px] select-all">
-                                {doc.login || doc.name.split(' ')[0].toLowerCase()}
+                                {doc.login || (doc.name || 'Doc').split(' ')[0].toLowerCase()}
                               </code>
                             </div>
                             <div className="flex items-center gap-1.5">
@@ -1657,7 +1657,7 @@ export default function SuperAdminDashboard({
 
                           <div className="flex items-center gap-1">
                             <button 
-                              onClick={() => handleCopyGeneric(`Shifokor: ${doc.name} | Login: ${doc.login || doc.name.split(' ')[0].toLowerCase()} | Password: ${doc.password || 'Password123'}`)}
+                              onClick={() => handleCopyGeneric(`Shifokor: ${doc.name} | Login: ${doc.login || (doc.name || 'Doc').split(' ')[0].toLowerCase()} | Password: ${doc.password || 'Password123'}`)}
                               className="p-1 text-slate-400 hover:text-slate-600 bg-white border border-slate-150 rounded"
                             >
                               <Copy className="w-3.5 h-3.5" />
