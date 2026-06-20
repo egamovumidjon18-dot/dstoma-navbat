@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Clinic } from '../types';
-import { MapPin, Navigation, Search, Phone, ExternalLink, Info, ShieldCheck, Activity, Globe, Wifi } from 'lucide-react';
+import { MapPin, Navigation, Search, Phone, ExternalLink, Info, ShieldCheck, Activity, Globe, Wifi, Sparkles } from 'lucide-react';
 import { TRANSLATIONS, Language } from '../translations';
 
 interface ClinicMapProps {
@@ -96,10 +96,13 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
     }
   }, [activeTab]);
 
-  // Real Geolocation loader
+  // Real Geolocation loader with real-time tracking
   useEffect(() => {
+    let watchId: number | null = null;
     if (navigator.geolocation) {
       setGpsStatus('detecting');
+      
+      // Get initial position
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setUserLat(position.coords.latitude);
@@ -112,9 +115,28 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         },
         { enableHighAccuracy: true, timeout: 8050 }
       );
+
+      // Start watching position in real-time
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          setUserLat(position.coords.latitude);
+          setUserLng(position.coords.longitude);
+          setGpsStatus('active');
+        },
+        (error) => {
+          console.warn('Real-time geolocation tracking update failed:', error);
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+      );
     } else {
       setGpsStatus('denied');
     }
+
+    return () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
   }, []);
 
   // Haversine formula to compute distance in km
@@ -151,21 +173,13 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
     })
     .sort((a, b) => (a.distance || 0) - (b.distance || 0));
 
-  // Initialize and update Leaflet Live map
+  // 1. Initialize Leaflet Map (Once)
   useEffect(() => {
     if (activeTab !== 'leaflet' || !leafletLoaded || !mapContainerRef.current) return;
     const L = (window as any).L;
     if (!L) return;
 
-    // Check if map container is already initialized by leaflet
-    if (leafletMapRef.current) {
-      try {
-        leafletMapRef.current.remove();
-      } catch (err) {
-        console.warn("Leaflet map removal error:", err);
-      }
-      leafletMapRef.current = null;
-    }
+    if (leafletMapRef.current) return;
 
     // Explicitly reset the internal leaflet container ID descriptor to completely immunize against container reuse collision
     if (mapContainerRef.current && (mapContainerRef.current as any)._leaflet_id) {
@@ -186,6 +200,42 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
 
       const markersGroup = L.featureGroup().addTo(map);
       markersGroupRef.current = markersGroup;
+
+      // Invalidate size in timeout to cure any race conditions with mounting animation constraints
+      setTimeout(() => {
+        if (map) {
+          map.invalidateSize();
+        }
+      }, 150);
+
+    } catch (e) {
+      console.error("Leaflet initialization issue: ", e);
+    }
+
+    return () => {
+      if (leafletMapRef.current) {
+        try {
+          leafletMapRef.current.remove();
+        } catch (err) {
+          console.warn("Leaflet map removal error on unmount:", err);
+        }
+        leafletMapRef.current = null;
+        markersGroupRef.current = null;
+      }
+    };
+  }, [leafletLoaded, activeTab]);
+
+  // 1b. Update Leaflet Markers & Route Line
+  useEffect(() => {
+    if (activeTab !== 'leaflet' || !leafletLoaded || !leafletMapRef.current || !markersGroupRef.current) return;
+    const L = (window as any).L;
+    if (!L) return;
+
+    const map = leafletMapRef.current;
+    const markersGroup = markersGroupRef.current;
+
+    try {
+      markersGroup.clearLayers();
 
       // User pin (pulsing neon/emerald ring)
       const userHtml = `<div class="relative flex items-center justify-center">
@@ -267,43 +317,24 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         map.setView([selectedClinic.lat, selectedClinic.lng], 12.5);
       } else if (clinics.length > 0) {
         // Fit map perspective automatically to span all markers
-        map.fitBounds(markersGroup.getBounds(), { padding: [40, 40] });
-      }
-
-      // Invalidate size in timeout to cure any race conditions with mounting animation constraints
-      setTimeout(() => {
-        if (map) {
-          map.invalidateSize();
+        const bounds = markersGroup.getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [40, 40] });
         }
-      }, 150);
+      }
 
     } catch (e) {
-      console.error("Leaflet initialization issue: ", e);
+      console.warn("Leaflet overlay update issue: ", e);
     }
-
-    return () => {
-      if (leafletMapRef.current) {
-        leafletMapRef.current.remove();
-        leafletMapRef.current = null;
-      }
-    };
   }, [leafletLoaded, activeTab, userLat, userLng, clinics, selectedClinic]);
 
-  // Initialize and update Yandex Live map
+  // 2. Initialize Yandex Map (Once)
   useEffect(() => {
     if (activeTab !== 'yandex' || !yandexLoaded || !yandexMapContainerRef.current) return;
     const ymaps = (window as any).ymaps;
     if (!ymaps) return;
 
-    // Destroy existing instance if any
-    if (yandexMapRef.current) {
-      try {
-        yandexMapRef.current.destroy();
-      } catch (err) {
-        console.warn("Yandex map destruction error:", err);
-      }
-      yandexMapRef.current = null;
-    }
+    if (yandexMapRef.current) return;
 
     ymaps.ready(() => {
       try {
@@ -314,57 +345,6 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         });
         
         yandexMapRef.current = map;
-
-        // Add User Location indicator (Red Circle Dot Icon)
-        const userPlacemark = new ymaps.Placemark(
-          [userLat, userLng],
-          {
-            hintContent: t('approxLocation'),
-            balloonContent: `<b>${t('approxLocation')}</b><br/>Lat: ${userLat.toFixed(4)}, Lng: ${userLng.toFixed(4)}`
-          },
-          {
-            preset: 'islands#redCircleDotIconWithGlyph',
-            iconColor: '#f43f5e'
-          }
-        );
-        map.geoObjects.add(userPlacemark);
-
-        // Add each Clinic to Yandex Maps
-        clinics.forEach((clinic) => {
-          const isSelected = selectedClinic?.id === clinic.id;
-          const placemark = new ymaps.Placemark(
-            [clinic.lat, clinic.lng],
-            {
-              hintContent: clinic.name,
-              balloonContent: `
-                <div style="font-family: sans-serif; padding: 6px; color: #1f2937; min-width: 170px;">
-                  <small style="color: #10b981; font-weight: 800; text-transform: uppercase; font-size: 8px;">${clinic.subdomain}.dstoma.uz</small>
-                  <h4 style="margin: 2px 0; font-size: 13px; font-weight: 800; color: #111827; line-height: 1.2;">${clinic.name}</h4>
-                  <p style="margin: 3px 0; font-size: 11px; color: #4b5563; line-height: 1.3;">📍 ${clinic.address}</p>
-                  <p style="margin: 2px 0 6px 0; font-size: 11px; font-weight: 600; color: #374151;">📞 ${clinic.phone}</p>
-                  <div style="color: #f59e0b; font-size: 10px; font-weight: 850;">★ ${clinic.rating} | ${getDistance(userLat, userLng, clinic.lat, clinic.lng)} km</div>
-                </div>
-              `
-            },
-            {
-              preset: isSelected ? 'islands#greenMedicalIcon' : 'islands#blueMedicalIcon',
-              iconColor: isSelected ? '#10b981' : '#0ea5e9'
-            }
-          );
-
-          placemark.events.add('click', () => {
-            onSelectClinic(clinic);
-          });
-
-          map.geoObjects.add(placemark);
-        });
-
-        // Set viewport bounds
-        if (selectedClinic) {
-          map.setCenter([selectedClinic.lat, selectedClinic.lng], 12.5);
-        } else if (clinics.length > 0) {
-          map.setBounds(map.geoObjects.getBounds(), { checkZoomRange: true, zoomMargin: 40 });
-        }
       } catch (err) {
         console.error("Yandex Live map init error:", err);
       }
@@ -380,6 +360,75 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         yandexMapRef.current = null;
       }
     };
+  }, [yandexLoaded, activeTab]);
+
+  // 2b. Update Yandex Map Objects
+  useEffect(() => {
+    if (activeTab !== 'yandex' || !yandexLoaded || !yandexMapRef.current) return;
+    const map = yandexMapRef.current;
+
+    try {
+      map.geoObjects.removeAll();
+
+      const ymaps = (window as any).ymaps;
+      if (!ymaps) return;
+
+      // Add User Location indicator (Red Circle Dot Icon)
+      const userPlacemark = new ymaps.Placemark(
+        [userLat, userLng],
+        {
+          hintContent: t('approxLocation'),
+          balloonContent: `<b>${t('approxLocation')}</b><br/>Lat: ${userLat.toFixed(4)}, Lng: ${userLng.toFixed(4)}`
+        },
+        {
+          preset: 'islands#redCircleDotIconWithGlyph',
+          iconColor: '#f43f5e'
+        }
+      );
+      map.geoObjects.add(userPlacemark);
+
+      // Add each Clinic to Yandex Maps
+      clinics.forEach((clinic) => {
+        const isSelected = selectedClinic?.id === clinic.id;
+        const placemark = new ymaps.Placemark(
+          [clinic.lat, clinic.lng],
+          {
+            hintContent: clinic.name,
+            balloonContent: `
+              <div style="font-family: sans-serif; padding: 6px; color: #1f2937; min-width: 170px;">
+                <small style="color: #10b981; font-weight: 800; text-transform: uppercase; font-size: 8px;">${clinic.subdomain}.dstoma.uz</small>
+                <h4 style="margin: 2px 0; font-size: 13px; font-weight: 800; color: #111827; line-height: 1.2;">${clinic.name}</h4>
+                <p style="margin: 3px 0; font-size: 11px; color: #4b5563; line-height: 1.3;">📍 ${clinic.address}</p>
+                <p style="margin: 2px 0 6px 0; font-size: 11px; font-weight: 600; color: #374151;">📞 ${clinic.phone}</p>
+                <div style="color: #f59e0b; font-size: 10px; font-weight: 850;">★ ${clinic.rating} | ${getDistance(userLat, userLng, clinic.lat, clinic.lng)} km</div>
+              </div>
+            `
+          },
+          {
+            preset: isSelected ? 'islands#greenMedicalIcon' : 'islands#blueMedicalIcon',
+            iconColor: isSelected ? '#10b981' : '#0ea5e9'
+          }
+        );
+
+        placemark.events.add('click', () => {
+          onSelectClinic(clinic);
+        });
+
+        map.geoObjects.add(placemark);
+      });
+
+      // Set viewport bounds
+      if (selectedClinic) {
+        map.setCenter([selectedClinic.lat, selectedClinic.lng], 12.5);
+      } else if (clinics.length > 0) {
+        const bounds = map.geoObjects.getBounds();
+        if (bounds) {
+          map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 40 });
+        }
+      }
+    } catch (err) {
+      console.warn("Yandex overlay update issue:", err);
+    }
   }, [yandexLoaded, activeTab, userLat, userLng, clinics, selectedClinic]);
 
   return (
@@ -501,6 +550,28 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
 
         {/* Sorted list of Clinics based on Geolocation closeness */}
         <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 scrollbar-thin">
+          {!selectedClinic && filteredClinics.length > 0 && (
+            <div className="p-3.5 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 text-emerald-350 text-[11px] leading-relaxed relative overflow-hidden flex flex-col gap-1 shadow-sm text-left animate-fade-in mb-1">
+              <div className="flex items-center gap-1.5 font-black uppercase text-[10px] text-emerald-400">
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                {language === 'uz' ? 'Tavsiya etiladi' : language === 'ru' ? 'Рекомендуется' : 'Recommendation'}
+              </div>
+              <p className="font-semibold text-slate-300">
+                {language === 'uz' 
+                  ? `Sizga eng yaqin klinika aniqlandi: ` 
+                  : language === 'ru' 
+                    ? `Найдена ближайшая к вам клиника: ` 
+                    : `We found the nearest clinic for you: `}
+                <span className="text-emerald-400 font-extrabold">{filteredClinics[0].name}</span>.
+                {language === 'uz'
+                  ? ` Tizim avtomatik belgilamaydi. Iltimos, pastdan o'zingiz xohlagan klinika filialini tanlang.`
+                  : language === 'ru'
+                    ? ` Система не выбирает её автоматически. Пожалуйста, выберите нужный вам филиал вручную ниже.`
+                    : ` The system does not automatically select it. Please manually select your preferred branch below.`}
+              </p>
+            </div>
+          )}
+
           {filteredClinics.length === 0 ? (
             <div className="text-center py-12 text-slate-500 text-xs font-semibold">
               {language === 'uz' 
@@ -512,6 +583,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
           ) : (
             filteredClinics.map((clinic) => {
               const isSelected = selectedClinic?.id === clinic.id;
+              const isNearest = filteredClinics[0]?.id === clinic.id;
               return (
                 <div
                   key={clinic.id}
@@ -519,7 +591,9 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                   className={`p-4 rounded-2xl cursor-pointer transition-all border text-left ${
                     isSelected
                       ? 'bg-[#10b981]/10 border-[#10b981]/50 shadow-[inset_0_0_12px_rgba(16,185,129,0.15)] scale-[1.01]'
-                      : 'bg-[#080d1a]/50 border-[#1e3256]/40 hover:border-[#1e3256]/80 hover:bg-[#0c1225]'
+                      : isNearest
+                        ? 'bg-[#10b981]/5 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.05)] hover:border-emerald-500/60'
+                        : 'bg-[#080d1a]/50 border-[#1e3256]/40 hover:border-[#1e3256]/80 hover:bg-[#0c1225]'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -530,6 +604,16 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                       ★ {clinic.rating}
                     </span>
                   </div>
+                  {isNearest && (
+                    <div className="mb-2 px-2.5 py-1 rounded-xl bg-gradient-to-r from-emerald-500/20 to-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 w-max">
+                      <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" />
+                      {language === 'uz' 
+                        ? '✨ TAVSIYA ETILADI (Sizga eng yaqin)' 
+                        : language === 'ru' 
+                          ? '✨ РЕКОМЕНДУЕТСЯ (Ближайший к вам)' 
+                          : '✨ RECOMMENDED (Nearest to you)'}
+                    </div>
+                  )}
                   <h4 className="text-xs font-black text-slate-100 leading-tight mb-1 flex items-center justify-between gap-1">
                     <span>{clinic.name}</span>
                     {clinic.mapLink && (

@@ -40,9 +40,11 @@ interface SuperAdminDashboardProps {
   queues: QueueItem[];
   doctors: Doctor[];
   onAddClinic: (newClinic: Clinic) => void;
+  onAddDoctor?: (newDoctor: Doctor) => void;
   onToggleSubscription: (clinicId: string) => void;
   onUpdateClinicCreds?: (clinicId: string, login: string, pass: string) => void;
   onUpdateDoctorCreds?: (doctorId: string, login: string, pass: string) => void;
+  onUpdateDoctorDetails?: (doctorId: string, updates: Partial<Doctor>) => void;
   onDeleteClinic?: (clinicId: string) => void;
   onDeleteDoctor?: (doctorId: string) => void;
   language: Language;
@@ -73,17 +75,19 @@ export default function SuperAdminDashboard({
   queues,
   doctors,
   onAddClinic,
+  onAddDoctor,
   onToggleSubscription,
   onUpdateClinicCreds,
   onUpdateDoctorCreds,
+  onUpdateDoctorDetails,
   onDeleteClinic,
   onDeleteDoctor,
   language,
   saasPayments = [],
   onApproveSaaSPayment,
   onUpdateClinicDetails,
-  superadminLogin = 'superadmin',
-  superadminPassword = 'demo123',
+  superadminLogin = '',
+  superadminPassword = '',
   onUpdateSuperadminCreds,
   gmailInboxes = [],
   onMockSendPayment
@@ -129,6 +133,15 @@ export default function SuperAdminDashboard({
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [debugLogs, setDebugLogs] = useState<any[]>([]);
   const [fetchingDebug, setFetchingDebug] = useState(false);
+  const [clinicToDelete, setClinicToDelete] = useState<Clinic | null>(null);
+  const [doctorToDelete, setDoctorToDelete] = useState<Doctor | null>(null);
+
+  // Doctor Details Management State
+  const [doctorToEditDetails, setDoctorToEditDetails] = useState<Doctor | null>(null);
+  const [showAddDoctorModal, setShowAddDoctorModal] = useState(false);
+  const [newDoctorName, setNewDoctorName] = useState('');
+  const [newDoctorSpecialty, setNewDoctorSpecialty] = useState('');
+  const [newDoctorClinicId, setNewDoctorClinicId] = useState('');
 
   const fetchDebugLogsFunc = async () => {
     setFetchingDebug(true);
@@ -319,6 +332,36 @@ export default function SuperAdminDashboard({
     }
   };
 
+  const handleCreateDoctorSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDoctorName || !newDoctorSpecialty || !newDoctorClinicId) {
+      triggerToast(language === 'uz' ? "Majburiy maydonlarni to'ldiring!" : "Please fill required fields!");
+      return;
+    }
+    const login = newDoctorName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const pass = `Doc${Math.floor(1000 + Math.random() * 9000)}`;
+    const newDoc: Doctor = {
+      id: 'doc_' + Math.random().toString(36).substr(2, 9),
+      name: newDoctorName,
+      specialty: newDoctorSpecialty,
+      roomInfo: "1-xona",
+      status: "idle",
+      clinicId: newDoctorClinicId,
+      image: 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + newDoctorName,
+      rating: 5,
+      login,
+      password: pass
+    };
+    if (onAddDoctor) {
+      onAddDoctor(newDoc);
+      setShowAddDoctorModal(false);
+      setNewDoctorName('');
+      setNewDoctorSpecialty('');
+      setNewDoctorClinicId('');
+      triggerToast(language === 'uz' ? "Yangi shifokor muvaffaqiyatli qo'shildi!" : "New doctor added successfully!");
+    }
+  };
+
   const filteredDoctors = (doctors || []).filter(doc => 
     doc && (
       (doc.name || '').toLowerCase().includes((searchDoctorTerm || '').toLowerCase()) || 
@@ -377,7 +420,7 @@ export default function SuperAdminDashboard({
       </div>
 
       {/* METRICS ROW */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-slate-800">
         <div className="bg-white rounded-2xl p-4.5 border border-slate-150/80 shadow-xs flex items-center justify-between transition-all hover:shadow-md">
           <div>
             <span className="text-[11px] text-slate-400 font-extrabold block uppercase tracking-widest leading-none">
@@ -439,7 +482,7 @@ export default function SuperAdminDashboard({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* LEFT COLUMN: ONBOARD CLINIC */}
         <div className="lg:col-span-5 space-y-6">
-          <div className="bg-white rounded-3xl p-5 border border-slate-150 shadow-md relative overflow-hidden">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md relative overflow-hidden">
             <div className="absolute right-0 top-0 w-24 h-24 pointer-events-none opacity-20 bg-[radial-gradient(circle,rgba(99,102,241,0.1),transparent_70%)]"></div>
             
             <div className="flex items-center gap-2.5 mb-4 border-b border-slate-100 pb-3">
@@ -641,7 +684,7 @@ export default function SuperAdminDashboard({
           </div>
 
           {/* SAAS PREMIUM FINANCIAL FORECAST CALCULATOR */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
               <span className="text-xl">📊</span>
               <div>
@@ -681,16 +724,16 @@ export default function SuperAdminDashboard({
                   +{clinics.filter(c => c.subscriptionStatus === 'trial').reduce((sum, c) => sum + (c.rentalPrice || 1200000), 0).toLocaleString('uz-UZ')} s/oy
                 </strong>
               </div>
-
-              {/* Dynamic Simulation Inputs */}
               <div className="border-t border-slate-100 pt-3 space-y-3">
                 <span className="text-[10px] text-slate-500 font-black uppercase tracking-wider block">
-                  📈 Kelgusi Davr Rejalashtirish Simulyatori
+                  {language === 'uz' ? '📈 Kelgusi Davr Rejalashtirish Kalkulyatori' : language === 'ru' ? '📈 Калькулятор Планирования Будущих Периодов' : '📈 Future Planning Forecast Calculator'}
                 </span>
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="text-slate-600">Yangi kutilayotgan filiallar soni:</span>
+                    <span className="text-slate-600">
+                      {language === 'uz' ? 'Yangi kutilayotgan filiallar soni:' : language === 'ru' ? 'Количество новых филиалов:' : 'Number of new branches:'}
+                    </span>
                     <span className="text-slate-800 font-mono bg-slate-100 px-2 py-0.5 rounded">{simAddedClinics} ta</span>
                   </div>
                   <input
@@ -705,7 +748,9 @@ export default function SuperAdminDashboard({
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="text-slate-600">Oylik tarmoq to'lovi (xar bitta):</span>
+                    <span className="text-slate-600">
+                      {language === 'uz' ? 'Oylik tarmoq to\'lovi (xar bitta):' : language === 'ru' ? 'Ежемесячный платеж (за каждый):' : 'Monthly fee (per clinic):'}
+                    </span>
                     <span className="text-cyan-600 font-mono bg-cyan-50 px-2 py-0.5 rounded">
                       {simPricePerClinic.toLocaleString('uz-UZ')} UZS
                     </span>
@@ -724,7 +769,9 @@ export default function SuperAdminDashboard({
 
               {/* Forecast calculations box */}
               <div className="bg-gradient-to-br from-slate-905 to-slate-950 text-white p-4 rounded-2xl border border-slate-800 space-y-2.5">
-                <span className="text-[9px] font-black uppercase tracking-widest text-[#06b6d4] block">SIMULATION OUTPUT</span>
+                <span className="text-[9px] font-black uppercase tracking-widest text-[#06b6d4] block">
+                  {language === 'uz' ? 'PROGNOZ NATIJASI' : language === 'ru' ? 'РЕЗУЛЬТАТ ПРОГНОЗА' : 'FORECAST ACCUMULATION'}
+                </span>
                 
                 <div className="flex items-center justify-between border-b border-slate-800/60 pb-1.5 text-xs">
                   <span className="text-slate-300 font-medium">Rejalashtirilayotgan Qo'shimcha MRR:</span>
@@ -751,7 +798,7 @@ export default function SuperAdminDashboard({
           </div>
 
           {/* ==================== 1. SaaS OYLIK TO'LOVLARNI TASDIQLASH BOARD (USER REQUESTED) ==================== */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3 font-sans">
               <div className="flex items-center gap-1.5">
                 <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">💵</span>
@@ -852,7 +899,7 @@ export default function SuperAdminDashboard({
           </div>
 
           {/* ==================== 2. SUPERADMIN PASSWORD UPDATE FORMS (GMAIL SECURED) ==================== */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-150 shadow-md space-y-4 font-sans text-left">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4 font-sans text-left">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
               <div className="flex items-center gap-1.5">
                 <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">🛡️</span>
@@ -959,7 +1006,7 @@ export default function SuperAdminDashboard({
           </div>
 
           {/* ==================== TELEGRAM BOT CONFIGURATION (USER INTEGRATION) ==================== */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-150 shadow-md space-y-4 font-sans text-left">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4 font-sans text-left">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
               <div className="flex items-center gap-1.5">
                 <span className="p-1.5 bg-blue-50 text-[#2563eb] rounded-lg">🤖</span>
@@ -1280,7 +1327,7 @@ export default function SuperAdminDashboard({
         <div className="lg:col-span-7 space-y-6">
           
           {/* SECTION 1: CLINIC CREDENTIALS & LICENSING BILLING BOX */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <span className="text-xl">🏢</span>
@@ -1451,18 +1498,7 @@ export default function SuperAdminDashboard({
                               {t('resetCreds')}
                             </button>
                             <button
-                              onClick={() => {
-                                const confirmText = language === 'uz' 
-                                  ? `"${clinic.name}" klinikasini butunlay o'chirishni tasdiqlaysizmi? Barcha bog'liq shifokorlar va navbatlar ham o'chib ketishi mumkin.` 
-                                  : language === 'ru' 
-                                  ? `Вы действительно хотите удалить клинику "${clinic.name}"? Все врачи и очереди этой клиники тоже могут быть удалены.` 
-                                  : `Are you sure you want to completely delete "${clinic.name}" clinic? All associated doctors and queues may also be deleted.`;
-                                if (window.confirm(confirmText)) {
-                                  onDeleteClinic?.(clinic.id);
-                                  addLog(`Clinic "${clinic.name}" has been permanently purged.`, 'warn');
-                                  triggerToast(language === 'uz' ? "Klinika o'chirib tashlandi!" : language === 'ru' ? "Клиника полностью удалена!" : "Clinic successfully purged!");
-                                }
-                              }}
+                              onClick={() => setClinicToDelete(clinic)}
                               className="px-2.5 py-1 text-rose-600 hover:text-rose-800 rounded bg-rose-50 hover:bg-rose-100 text-[10px] font-black cursor-pointer flex items-center gap-1"
                               title="Klinikani butunlay o'chirish"
                             >
@@ -1479,7 +1515,7 @@ export default function SuperAdminDashboard({
           </div>
 
           {/* SECTION 2: DOCTOR CREDENTIALS HUB (EXPLICITLY GIVEN BY OWNER) */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <span className="text-xl">👨‍⚕</span>
@@ -1488,15 +1524,24 @@ export default function SuperAdminDashboard({
                 </h2>
               </div>
               
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Shifokor qidirish..."
-                  value={searchDoctorTerm}
-                  onChange={(e) => setSearchDoctorTerm(e.target.value)}
-                  className="bg-slate-50 text-[11px] border border-slate-200 rounded-lg pl-7 pr-3 py-1 text-slate-700 font-medium focus:outline-none focus:border-cyan-500"
-                />
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1.5" />
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Shifokor qidirish..."
+                    value={searchDoctorTerm}
+                    onChange={(e) => setSearchDoctorTerm(e.target.value)}
+                    className="bg-slate-50 text-[11px] border border-slate-200 rounded-lg pl-7 pr-3 py-1 text-slate-700 font-medium focus:outline-none focus:border-cyan-500"
+                  />
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1.5" />
+                </div>
+                <button
+                  onClick={() => setShowAddDoctorModal(true)}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wide flex items-center gap-1 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Qo'shish
+                </button>
               </div>
             </div>
 
@@ -1618,24 +1663,19 @@ export default function SuperAdminDashboard({
                               <Copy className="w-3.5 h-3.5" />
                             </button>
                             <button
+                              onClick={() => setDoctorToEditDetails(doc)}
+                              className="p-1 px-2 text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded text-[10px] font-black cursor-pointer transition-colors"
+                            >
+                              {language === 'uz' ? "Tahrirlash" : "Edit"}
+                            </button>
+                            <button
                               onClick={() => handleUpdateDoctorCredsClick(doc)}
                               className="p-1 px-2.5 bg-cyan-50 hover:bg-cyan-100 text-cyan-700 text-[10px] font-black rounded"
                             >
                               {t('resetCreds')}
                             </button>
                             <button
-                              onClick={() => {
-                                const confirmText = language === 'uz' 
-                                  ? `"${doc.name}" shifokor profilini o'chirishni tasdiqlaysizmi?` 
-                                  : language === 'ru' 
-                                  ? `Вы действительно хотите удалить профиль врача "${doc.name}"?` 
-                                  : `Are you sure you want to completely delete "${doc.name}" doctor profile?`;
-                                if (window.confirm(confirmText)) {
-                                  onDeleteDoctor?.(doc.id);
-                                  addLog(`Doctor "${doc.name}" credentials have been deleted.`, 'warn');
-                                  triggerToast(language === 'uz' ? "Shifokor o'chirildi!" : language === 'ru' ? "Врач успешно удален!" : "Doctor successfully removed!");
-                                }
-                              }}
+                              onClick={() => setDoctorToDelete(doc)}
                               className="px-2.5 py-1 text-rose-600 hover:text-rose-800 rounded bg-rose-50 hover:bg-rose-100 text-[10px] font-black cursor-pointer flex items-center gap-1 animate-fade-in"
                               title="Shifokorni butunlay o'chirish"
                             >
@@ -1656,7 +1696,7 @@ export default function SuperAdminDashboard({
       {/* DETAILED CLINIC EDITING MODAL (USER REQUIREMENT) */}
       {clinicToEdit && (
         <div className="fixed inset-0 z-55 flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-lg w-full border border-slate-100 shadow-2xl space-y-4 font-sans text-left">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-lg w-full border border-slate-100 shadow-2xl space-y-4 font-sans text-left">
             {/* Modal Header */}
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
               <h3 className="text-xs font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
@@ -1799,6 +1839,236 @@ export default function SuperAdminDashboard({
                   className="px-5 py-2.5 bg-[#0284c7] hover:bg-cyan-700 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer active:scale-95 flex items-center gap-1"
                 >
                   <Save className="w-4 h-4 text-cyan-200" /> Saqlash ✓
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CLINIC CONFIRMATION MODAL */}
+      {clinicToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl space-y-4 text-center">
+            <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-2">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
+              {language === 'uz' ? "Diqqat!" : language === 'ru' ? "Внимание!" : "Warning!"}
+            </h3>
+            <p className="text-xs text-slate-600 font-medium">
+              {language === 'uz' 
+                ? `"${clinicToDelete.name}" klinikasini butunlay o'chirishni tasdiqlaysizmi? Barcha bog'liq shifokorlar va navbatlar ham o'chib ketadi.` 
+                : language === 'ru' 
+                ? `Вы действительно хотите удалить клинику "${clinicToDelete.name}"? Все врачи и очереди этой клиники тоже будут удалены.` 
+                : `Are you sure you want to completely delete "${clinicToDelete.name}" clinic? All associated doctors and queues will also be deleted.`
+              }
+            </p>
+            <div className="flex justify-center gap-3 pt-3">
+              <button
+                onClick={() => setClinicToDelete(null)}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer"
+              >
+                {language === 'uz' ? "Bekor qilish" : language === 'ru' ? "Отмена" : "Cancel"}
+              </button>
+              <button
+                onClick={() => {
+                  onDeleteClinic?.(clinicToDelete.id);
+                  addLog(`Clinic "${clinicToDelete.name}" has been permanently purged.`, 'warn');
+                  triggerToast(language === 'uz' ? "Klinika o'chirib tashlandi!" : language === 'ru' ? "Клиника полностью удалена!" : "Clinic successfully purged!");
+                  setClinicToDelete(null);
+                }}
+                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-md"
+              >
+                {language === 'uz' ? "O'chirish" : language === 'ru' ? "Удалить" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE DOCTOR CONFIRMATION MODAL */}
+      {doctorToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl space-y-4 text-center">
+            <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-2">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
+              {language === 'uz' ? "Shifokorni o'chirish" : language === 'ru' ? "Удалить врача" : "Delete Doctor"}
+            </h3>
+            <p className="text-xs text-slate-600 font-medium">
+              {language === 'uz' 
+                ? `"${doctorToDelete.name}" shifokor profilini o'chirishni tasdiqlaysizmi?` 
+                : language === 'ru' 
+                ? `Вы действительно хотите удалить профиль врача "${doctorToDelete.name}"?` 
+                : `Are you sure you want to completely delete "${doctorToDelete.name}" doctor profile?`
+              }
+            </p>
+            <div className="flex justify-center gap-3 pt-3">
+              <button
+                onClick={() => setDoctorToDelete(null)}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer"
+              >
+                {language === 'uz' ? "Bekor qilish" : language === 'ru' ? "Отмена" : "Cancel"}
+              </button>
+              <button
+                onClick={() => {
+                  onDeleteDoctor?.(doctorToDelete.id);
+                  addLog(`Doctor "${doctorToDelete.name}" credentials have been deleted.`, 'warn');
+                  triggerToast(language === 'uz' ? "Shifokor o'chirildi!" : language === 'ru' ? "Врач успешно удален!" : "Doctor successfully removed!");
+                  setDoctorToDelete(null);
+                }}
+                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-md"
+              >
+                {language === 'uz' ? "O'chirish" : language === 'ru' ? "Удалить" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD DOCTOR MODAL */}
+      {showAddDoctorModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl space-y-4">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest text-center border-b border-slate-100 pb-2">
+              {language === 'uz' ? "Yangi Shifokor Qo'shish" : "Add New Doctor"}
+            </h3>
+            <form onSubmit={handleCreateDoctorSubmit} className="space-y-4">
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">
+                  Ism Familiya *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newDoctorName}
+                  onChange={(e) => setNewDoctorName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">
+                  Mutaxassislik *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newDoctorSpecialty}
+                  placeholder="masalan: Stomatolog-Terapevt"
+                  onChange={(e) => setNewDoctorSpecialty(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">
+                  Klinika / Filial *
+                </label>
+                <select
+                  required
+                  value={newDoctorClinicId}
+                  onChange={(e) => setNewDoctorClinicId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="" disabled>Klinikani tanlang</option>
+                  {clinics.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddDoctorModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer"
+                >
+                  {language === 'uz' ? "Bekor qilish" : "Cancel"}
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-md"
+                >
+                  {language === 'uz' ? "Qo'shish" : "Add"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT DOCTOR DETAILS MODAL */}
+      {doctorToEditDetails && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl space-y-4">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest text-center border-b border-slate-100 pb-2">
+              {language === 'uz' ? "Shifokorni Tahrirlash" : "Edit Doctor"}
+            </h3>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (onUpdateDoctorDetails) {
+                onUpdateDoctorDetails(doctorToEditDetails.id, {
+                  name: doctorToEditDetails.name,
+                  specialty: doctorToEditDetails.specialty,
+                  clinicId: doctorToEditDetails.clinicId
+                });
+                triggerToast(language === 'uz' ? "Shifokor ma'lumotlari yangilandi!" : "Doctor details updated!");
+              }
+              setDoctorToEditDetails(null);
+            }} className="space-y-4">
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">
+                  Ism Familiya *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={doctorToEditDetails.name}
+                  onChange={(e) => setDoctorToEditDetails({ ...doctorToEditDetails, name: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">
+                  Mutaxassislik *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={doctorToEditDetails.specialty}
+                  onChange={(e) => setDoctorToEditDetails({ ...doctorToEditDetails, specialty: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">
+                  Klinika / Filial *
+                </label>
+                <select
+                  required
+                  value={doctorToEditDetails.clinicId}
+                  onChange={(e) => setDoctorToEditDetails({ ...doctorToEditDetails, clinicId: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="" disabled>Klinikani tanlang</option>
+                  {clinics.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDoctorToEditDetails(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer"
+                >
+                  {language === 'uz' ? "Bekor qilish" : "Cancel"}
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-md"
+                >
+                  {language === 'uz' ? "Saqlash" : "Save"}
                 </button>
               </div>
             </form>

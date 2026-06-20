@@ -33,11 +33,173 @@ interface DirectorDashboardProps {
   onDeleteDoctor?: (doctorId: string) => void;
   onUpdateService?: (updatedService: Service) => void;
   onAddService?: (newService: Service) => void;
+  onDeleteService?: (serviceId: string) => void;
   clinicId?: string;
   onSimulatePayment?: (clinicId: string) => void;
   saasPayments?: SaaSPayment[];
   language: Language;
 }
+
+interface CatalogItem {
+  name: string;
+  price: number;
+}
+
+interface CatalogCategory {
+  categoryNameUz: string;
+  categoryNameEn: string;
+  categoryNameRu: string;
+  items: CatalogItem[];
+}
+
+export const STANDARD_SERVICES_CATALOG: CatalogCategory[] = [
+  {
+    categoryNameUz: "Tishlar diagnostikasi",
+    categoryNameEn: "Teeth Diagnostics",
+    categoryNameRu: "Диагностика зубов",
+    items: [
+      { name: "Tish rentgeni", price: 25000 }
+    ]
+  },
+  {
+    categoryNameUz: "Terapevtik stomatologiya",
+    categoryNameEn: "Therapeutic Dentistry",
+    categoryNameRu: "Терапевтическая стоматология",
+    items: [
+      { name: "Kariesni davolash", price: 300000 },
+      { name: "Pulpitni davolash (1 ta ildiz kanali)", price: 180000 },
+      { name: "Pulpitni davolash (2 ta ildiz kanali)", price: 220000 },
+      { name: "Pulpitni davolash (3 ta ildiz kanali)", price: 250000 },
+      { name: "Kompozit plomba", price: 230000 },
+      { name: "Nurli (svetovaya) plomba", price: 300000 },
+      { name: "Shloionomerli sement", price: 200000 },
+      { name: "«Unisem» sementi", price: 150000 },
+      { name: "Tishlarni o'stirish (badiiy restavratsiya)", price: 500000 },
+      { name: "Stomatitni davolash", price: 100000 },
+      { name: "Otok (yiring haydash/drenaj)", price: 100000 },
+      { name: "Pulposeptin", price: 120000 },
+      { name: "Kalsiy saqlovchi pasta", price: 120000 },
+      { name: "3 ta kanalni qayta ochish (Re ENDO)", price: 500000 },
+      { name: "1 ta kanalni qayta ochish (Re ENDO)", price: 250000 },
+      { name: "Kanaldan asbob siniqlarini olib tashlash (bitta kanal)", price: 500000 }
+    ]
+  },
+  {
+    categoryNameUz: "Tishlarni oqartirish",
+    categoryNameEn: "Teeth Whitening",
+    categoryNameRu: "Отбеливание зубов",
+    items: [
+      { name: "Zoom 4 oqartirish tizimi", price: 5000000 },
+      { name: "Amazing White oqartirish tizimi", price: 3250000 },
+      { name: "Kanal ichini oqartirish", price: 500000 },
+      { name: "Opalescence oqartirish tizimi", price: 2000000 }
+    ]
+  },
+  {
+    categoryNameUz: "Vinirlar turlari",
+    categoryNameEn: "Veneers",
+    categoryNameRu: "Виды виниров",
+    items: [
+      { name: "Keramik vinir o'rnatish", price: 3500000 },
+      { name: "Kompozit vinir o'rnatish", price: 1500000 },
+      { name: "Tsirkoniy vinir o'rnatish", price: 2500000 },
+      { name: "E-max vinir o'rnatish", price: 3500000 }
+    ]
+  },
+  {
+    categoryNameUz: "Xirurgik stomatologiya",
+    categoryNameEn: "Surgical Dentistry",
+    categoryNameRu: "Хирургическая стоматология",
+    items: [
+      { name: "Tish olish", price: 200000 },
+      { name: "Aqlli tishni olish", price: 450000 },
+      { name: "Retenirlangan 8-tishni (chiqmagan aqlli tishni) olish", price: 650000 },
+      { name: "Tish kistasi va granulomasini olish", price: 1800000 },
+      { name: "Loskutli operatsiyalar", price: 1500000 },
+      { name: "Sinus-lifting", price: 2800000 },
+      { name: "Murakkab tish olish", price: 725000 },
+      { name: "Tish milk kapshonini kesish", price: 275000 },
+      { name: "Vestibuloplastika", price: 750000 },
+      { name: "Implant tishni olib tashlash", price: 1000000 },
+      { name: "Tish ildizini olish", price: 200000 },
+      { name: "Tish ildizi uchini rezeksiya qilish", price: 1325000 },
+      { name: "Og'iz bo'shlig'i abssessini davolash", price: 350000 }
+    ]
+  },
+  {
+    categoryNameUz: "Tishlarni protezlash",
+    categoryNameEn: "Teeth Prosthesis",
+    categoryNameRu: "Протезирование зубов",
+    items: [
+      { name: "Shtamplangan tish g'ilofi (koronka) o'rnatish", price: 300000 },
+      { name: "Byugel protezini o'rnatish", price: 4600000 },
+      { name: "Ko'chmaydigan protez o'rnatish", price: 3150000 },
+      { name: "Mikroprotezlash", price: 590000 },
+      { name: "Neylon protez o'rnatish", price: 2320000 },
+      { name: "Akril protez o'rnatish", price: 1750000 },
+      { name: "T-kristall protez o'rnatish", price: 3000000 },
+      { name: "Kvadroti protez o'rnatish", price: 1800000 },
+      { name: "Teleskopik protez", price: 6500000 },
+      { name: "Metallo-keramika koronka", price: 500000 },
+      { name: "Professional metallo-keramika koronka", price: 700000 },
+      { name: "Tsirkoniy dioksidli koronka", price: 1450000 },
+      { name: "Plastmassa koronka o'rnatish", price: 150000 }
+    ]
+  },
+  {
+    categoryNameUz: "Ortodontiya",
+    categoryNameEn: "Orthodontics",
+    categoryNameRu: "Ортодонтия",
+    items: [
+      { name: "Tish plastinkalarini o'rnatish", price: 1200000 },
+      { name: "Reteynerlar o'rnatish", price: 500000 },
+      { name: "Metall breketlar o'rnatish", price: 2800000 },
+      { name: "Keramik breketlar o'rnatish", price: 4000000 },
+      { name: "Sapfir breketlar o'rnatish", price: 4500000 },
+      { name: "Samoliguratsiyalanuvchi (o'zi qulflanadigan) breketlar", price: 5200000 },
+      { name: "Damon breketlarini o'rnatish", price: 9000000 }
+    ]
+  },
+  {
+    categoryNameUz: "Bolalar stomatologiya bo‘limi",
+    categoryNameEn: "Pediatric Dentistry",
+    categoryNameRu: "Детская стоматология",
+    items: [
+      { name: "Bolalar tishini olish", price: 200000 },
+      { name: "Bolalar tishini plomba qilish", price: 330000 },
+      { name: "Bolalar tishi fissuralarini germetizatsiya qilish", price: 200000 },
+      { name: "Bolalarga breket o'rnatish", price: 2000000 },
+      { name: "Bolalarda pulpitni davolash", price: 230000 }
+    ]
+  },
+  {
+    categoryNameUz: "Implantatsiya",
+    categoryNameEn: "Teeth Implantology",
+    categoryNameRu: "Имплантация",
+    items: [
+      { name: "Mini-implant o'rnatish", price: 1000000 },
+      { name: "Implant ustiga koronka qo'yish", price: 2650000 },
+      { name: "Bir lahzali (bir vaqtdagi) implantatsiya", price: 4225000 },
+      { name: "Bir bosqichli tish implantatsiyasi", price: 5000000 },
+      { name: "Alpha Bio implanti o'rnatish", price: 4000000 },
+      { name: "Osstem implanti o'rnatish", price: 3300000 },
+      { name: "MegaGen implanti o'rnatish", price: 3250000 }
+    ]
+  },
+  {
+    categoryNameUz: "Profilaktik gigiyena",
+    categoryNameEn: "Preventive Hygiene",
+    categoryNameRu: "Профилактическая гигиена",
+    items: [
+      { name: "Tish toshlarini olib tashlash (bitta jag')", price: 200000 },
+      { name: "Fissuralarni germetizatsiya qilish (bitta tish)", price: 175000 },
+      { name: "Tishlarni silliqlash (polirovka)", price: 100000 },
+      { name: "Air Flow yordamida tishlarni tozalash (bitta jag')", price: 250000 },
+      { name: "Ftorlash (ftor lak bilan qoplash)", price: 100000 },
+      { name: "Har ikkala jag'ning umumiy profilaktik gigiyenasi", price: 600000 }
+    ]
+  }
+];
 
 export default function DirectorDashboard({
   clinics,
@@ -49,6 +211,7 @@ export default function DirectorDashboard({
   onDeleteDoctor,
   onUpdateService,
   onAddService,
+  onDeleteService,
   clinicId,
   onSimulatePayment,
   saasPayments = [],
@@ -135,6 +298,8 @@ export default function DirectorDashboard({
   const [activeSubTab, setActiveSubTab] = useState<'bugun' | 'haftalik' | 'shifokorlar' | 'sozlamalar' | 'obuna'>('bugun');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [serviceToDelete, setServiceToDelete] = useState<any>(null);
+  const [doctorToDelete, setDoctorToDelete] = useState<Doctor | null>(null);
 
   // Doctor Creation Form States
   const [newDocName, setNewDocName] = useState('');
@@ -154,6 +319,11 @@ export default function DirectorDashboard({
   const [newServicePrice, setNewServicePrice] = useState<number | ''>('');
   const [showAddServiceForm, setShowAddServiceForm] = useState(false);
   const [selectedPatientTab, setSelectedPatientTab] = useState<'yangi' | 'jami'>('yangi');
+
+  // Pre-defined catalog selection & search states
+  const [selectedCatalogCategory, setSelectedCatalogCategory] = useState<number>(0);
+  const [catalogSearchQuery, setCatalogSearchQuery] = useState('');
+  const [customCatalogPrices, setCustomCatalogPrices] = useState<Record<string, number>>({});
 
   // Filter lists based on Samarqand clinic (the default CEO location)
   const currentClinicId = clinicId || 'samarqand';
@@ -413,7 +583,7 @@ export default function DirectorDashboard({
       {/* SEARCH PATIENT MODAL POPUP */}
       {showSearchModal && (
         <div className="fixed inset-0 z-55 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl p-5 max-w-lg w-full border border-slate-100 shadow-2xl space-y-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 max-w-lg w-full border border-slate-100 shadow-2xl space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-1.5 uppercase">
                 <Search className="text-blue-500 w-4 h-4" /> {t("Bemorlarni qidirish")}
@@ -521,7 +691,7 @@ export default function DirectorDashboard({
       </div>
 
       {/* METRIC CARD DOCK (SCREENSHOT 5) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-slate-800">
         {/* Metric 1 */}
         <div className="bg-white rounded-2xl p-4.5 border border-slate-150/80 shadow-xs flex items-center justify-between">
           <div>
@@ -589,7 +759,7 @@ export default function DirectorDashboard({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             
             {/* Shifokorlar bugungi hisoboti (Tab 1 left part) */}
-            <div className="lg:col-span-8 bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md">
+            <div className="lg:col-span-8 bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/80 shadow-md">
               <h3 className="text-sm font-extrabold text-slate-850 uppercase tracking-widest mb-4 border-b border-slate-50 pb-2">
                 🩺 Shifokorlar bugungi ko'rsatkichlari
               </h3>
@@ -636,16 +806,7 @@ export default function DirectorDashboard({
                               </button>
                               <span className="text-slate-300">|</span>
                               <button
-                                onClick={() => {
-                                  const confirmMsg = language === 'uz'
-                                    ? `"${doc.name}" shifokorini o'chirishni tasdiqlaysizmi?`
-                                    : language === 'ru'
-                                    ? `Вы действительно хотите удалить врача "${doc.name}"?`
-                                    : `Are you sure you want to delete doctor "${doc.name}"?`;
-                                  if (window.confirm(confirmMsg)) {
-                                    onDeleteDoctor?.(doc.id);
-                                  }
-                                }}
+                                onClick={() => setDoctorToDelete(doc)}
                                 className="text-rose-650 hover:text-rose-800 font-extrabold underline cursor-pointer text-[11px] flex items-center gap-0.5"
                               >
                                 🗑️ {language === 'uz' ? "O'chirish" : language === 'ru' ? "Удалить" : "Delete"}
@@ -661,7 +822,7 @@ export default function DirectorDashboard({
             </div>
 
             {/* Xizmatlar (bugun) (Tab 1 right part) */}
-            <div className="lg:col-span-4 bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md">
+            <div className="lg:col-span-4 bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/80 shadow-md">
               <h3 className="text-sm font-extrabold text-slate-850 uppercase tracking-widest mb-4 border-b border-slate-50 pb-2">
                 📋 Bugungi mashhur xizmatlar
               </h3>
@@ -693,7 +854,7 @@ export default function DirectorDashboard({
 
           {/* Full width: bugungi barcha navbatlar list */}
           {/* BEMORLAR TAHLILI - YANGI VS JAMI ALOHIDA (CREATIVE TABBED LAYOUT) */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-150/80 shadow-lg space-y-6">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 border border-slate-150/80 shadow-lg space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-widest text-[#0ea5e9]">👥 Bemorlar Ma'lumot BAZASI</span>
@@ -873,7 +1034,7 @@ export default function DirectorDashboard({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* Left Side: Kunlik tafsilot table (Screenshot 7 detail) */}
-          <div className="lg:col-span-5 bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md">
+          <div className="lg:col-span-5 bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/80 shadow-md">
             <h3 className="text-sm font-extrabold text-slate-850 uppercase tracking-widest mb-4 border-b border-slate-50 pb-2 flex items-center gap-1.5">
               <Calendar className="w-4 h-4 text-blue-500" /> Haftalik kunlik tafsilot
             </h3>
@@ -910,7 +1071,7 @@ export default function DirectorDashboard({
           <div className="lg:col-span-7 space-y-6">
             
             {/* Chart 1: Kunlik daromad line chart */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md">
+            <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/80 shadow-md">
               <div className="flex justify-between items-center mb-4">
                 <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest leading-none">
                   Kunlik daromad grafigi (so'm)
@@ -981,7 +1142,7 @@ export default function DirectorDashboard({
             </div>
 
             {/* Chart 2: Kunlik bemorlar count line chart */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md">
+            <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/80 shadow-md">
               <div className="flex justify-between items-center mb-4">
                 <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest leading-none">
                   Kunlik tashrif buyurgan bemorlar soni
@@ -1190,7 +1351,7 @@ export default function DirectorDashboard({
 
       {/* -------------------- TAB 4: EDIT SERVICES AND LICENSED PRICES -------------------- */}
       {activeSubTab === 'sozlamalar' && (
-        <div className="bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md space-y-6">
+        <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/80 shadow-md space-y-6">
           <div className="flex items-center justify-between border-b border-slate-50 pb-3 flex-wrap gap-4">
             <div className="flex items-center gap-2">
               <span className="p-2 bg-blue-50 text-blue-600 rounded-xl">🔧</span>
@@ -1213,21 +1374,186 @@ export default function DirectorDashboard({
             </div>
           )}
 
-          {/* New Service Creation Form Section */}
+          {/* 1. Standard Dental Services Catalog Selector Section */}
+          <div className="bg-slate-50 border border-slate-200/80 rounded-3xl p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3 flex-wrap">
+              <div>
+                <span className="text-[10px] bg-indigo-500/10 text-indigo-700 font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-lg border border-indigo-200">
+                  {language === 'uz' ? "🏥 Standart Tibbiy Xizmatlar Katalogi (Tezkor tanlash)" : language === 'ru' ? "🏥 Каталог Стандартных Медицинских Услуг (Быстрый выбор)" : "🏥 Standard Medical Services Catalog (Quick add)"}
+                </span>
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mt-1.5">
+                  {language === 'uz' ? "Xizmatlarni bir marta bosish orqali qo'shish (Narxini kiritish shart emas)" : language === 'ru' ? "Добавление услуг в один клик (Можно настроить свою цену)" : "Add services with a single click (Customize price dynamically)"}
+                </h4>
+              </div>
+
+              {/* Catalog Search input */}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder={language === 'uz' ? "Katalogdan qidirish..." : language === 'ru' ? "Поиск по каталогу..." : "Search catalog..."}
+                  value={catalogSearchQuery}
+                  onChange={(e) => setCatalogSearchQuery(e.target.value)}
+                  className="bg-white border border-slate-250 text-xs font-bold text-slate-800 rounded-xl pl-8 pr-3.5 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full sm:w-56"
+                />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              </div>
+            </div>
+
+            {/* Catalog Categories Grid / Selector Tabs */}
+            {!catalogSearchQuery && (
+              <div className="flex flex-wrap gap-1.5 pb-1">
+                {STANDARD_SERVICES_CATALOG.map((cat, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setSelectedCatalogCategory(idx)}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer border ${
+                      selectedCatalogCategory === idx
+                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
+                        : 'bg-white border-slate-200 hover:border-slate-350 text-slate-600 hover:text-slate-800'
+                    }`}
+                  >
+                    {language === 'uz' ? cat.categoryNameUz : language === 'ru' ? cat.categoryNameRu : cat.categoryNameEn}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Listed catalog items inside selected category or matching query */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[340px] overflow-y-auto pr-1 customize-scrollbar">
+              {(() => {
+                const results: { name: string; price: number; category: string }[] = [];
+                STANDARD_SERVICES_CATALOG.forEach(cat => {
+                  const categoryName = language === 'uz' ? cat.categoryNameUz : language === 'ru' ? cat.categoryNameRu : cat.categoryNameEn;
+                  cat.items.forEach(itm => {
+                    const matchesSearch = !catalogSearchQuery || itm.name.toLowerCase().includes(catalogSearchQuery.toLowerCase());
+                    const matchesCategory = catalogSearchQuery || STANDARD_SERVICES_CATALOG.indexOf(cat) === selectedCatalogCategory;
+                    if (matchesSearch && matchesCategory) {
+                      results.push({ ...itm, category: categoryName });
+                    }
+                  });
+                });
+
+                if (results.length === 0) {
+                  return (
+                    <div className="col-span-full py-8 text-center text-xs text-slate-400 font-bold">
+                      {language === 'uz' ? "Katalogda bunday nomli xizmat topilmadi 🔍" : language === 'ru' ? "Услуга с таким названием не найдена в каталоге 🔍" : "No matching catalog services found 🔍"}
+                    </div>
+                  );
+                }
+
+                return results.map((item, idX) => {
+                  const isActive = clinicServices.some(s => s.name.toLowerCase() === item.name.toLowerCase());
+                  const activePrice = clinicServices.find(s => s.name.toLowerCase() === item.name.toLowerCase())?.price;
+                  const customPrice = customCatalogPrices[item.name] !== undefined ? customCatalogPrices[item.name] : item.price;
+                  return (
+                    <div 
+                      key={idX} 
+                      className={`p-4 rounded-3xl border transition-all flex flex-col justify-between gap-3 bg-white ${
+                        isActive 
+                          ? 'border-emerald-200 bg-emerald-50/10 shadow-xs' 
+                          : 'border-slate-200 hover:border-indigo-300 hover:shadow-xs'
+                      }`}
+                    >
+                      <div>
+                        <span className="text-[8px] font-mono font-black text-indigo-500 uppercase tracking-widest block mb-1">
+                          {item.category}
+                        </span>
+                        <h5 className="text-[12px] font-black text-slate-800 leading-snug">
+                          {item.name}
+                        </h5>
+                      </div>
+                      
+                      {isActive ? (
+                        <div className="flex flex-col gap-1 w-full border-t border-slate-100 pt-2.5 mt-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                              {language === 'uz' ? "Amaldagi narx:" : language === 'ru' ? "Текущая цена:" : "Current price:"}
+                            </span>
+                            <span className="text-xs font-black text-emerald-700 font-mono">
+                              {activePrice?.toLocaleString('uz-UZ')} {language === 'uz' ? "so'm" : language === 'ru' ? "сум" : "UZS"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-end mt-1">
+                            <span className="px-2 py-0.5 rounded-lg bg-emerald-100/60 text-emerald-800 text-[8px] font-black uppercase flex items-center gap-1 border border-emerald-200">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" /> {language === 'uz' ? "Klinikada faol" : language === 'ru' ? "Активна в клинике" : "Active in clinic"}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-2 w-full border-t border-slate-100 pt-2.5 mt-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                              {language === 'uz' ? "Tavsiya etilgan:" : language === 'ru' ? "Рекомендуемая:" : "Recommended:"}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-500 font-mono">
+                              {item.price.toLocaleString('uz-UZ')} {language === 'uz' ? "so'm" : language === 'ru' ? "сум" : "UZS"}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 justify-between">
+                            <div className="relative flex-1">
+                              <input
+                                type="number"
+                                value={customPrice}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value) || 0;
+                                  setCustomCatalogPrices(prev => ({ ...prev, [item.name]: val }));
+                                }}
+                                className="w-full bg-slate-50 border border-slate-200 focus:bg-white text-xs font-black text-slate-800 rounded-xl pl-2 pr-7 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-center font-mono"
+                                placeholder={language === 'uz' ? "Narx" : language === 'ru' ? "Цена" : "Price"}
+                              />
+                              <span className="absolute right-2 top-2 text-[8px] text-slate-400 font-bold uppercase">{language === 'uz' ? "so'm" : language === 'ru' ? "сум" : "UZS"}</span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newSrv: Service = {
+                                  id: `srv_${currentClinicId}_std_${Date.now()}_${idX}_${Math.floor(Math.random() * 100)}`,
+                                  clinicId: currentClinicId,
+                                  name: item.name,
+                                  price: customPrice
+                                };
+                                if (onAddService) {
+                                  onAddService(newSrv);
+                                  setSrvFeedbackMsg(language === 'uz' ? `"${item.name}" yangi narx bilan qo'shildi!` : language === 'ru' ? `"${item.name}" добавлена с новой ценой!` : `"${item.name}" standard service added with customized price!`);
+                                  setTimeout(() => setSrvFeedbackMsg(''), 4000);
+                                }
+                              }}
+                              className="px-2.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 shadow-xs"
+                            >
+                              ➕ {language === 'uz' ? "Qo'shish" : language === 'ru' ? "Добавить" : "Add"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+
+          {/* New Service Creation Form Section (Manual Custom Input fallback if they have unique local service) */}
           {showAddServiceForm && (
             <div className="bg-gradient-to-br from-indigo-50/50 to-slate-50 border border-indigo-100 rounded-2xl p-5 space-y-4 animate-fade-in shadow-sm">
               <div className="flex items-center gap-2 border-b border-indigo-50 pb-2">
                 <span className="text-indigo-600 text-sm">✨</span>
-                <strong className="text-xs font-black text-slate-800 uppercase tracking-wider">Samarqand Filialiga Yangi Tibbiy Xizmat Qo'shish</strong>
+                <strong className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                  {language === 'uz' ? "Katalogdan Tashqari Maxsus Noyob Xizmat Qo'shish" : language === 'ru' ? "Добавить индивидуальную услугу вне каталога" : "Add custom medical service outside catalog"}
+                </strong>
               </div>
 
               <form onSubmit={handleCreateServiceSubmit} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
                 <div className="col-span-1 sm:col-span-6">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Xizmat nomi (M-n: Metallokeramika toj kiygizish)</label>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">
+                    {language === 'uz' ? "Xizmat nomi (Masalan: Maxsus implantatsiyadan keyingi terapiya)" : language === 'ru' ? "Название услуги (Например: Особая послеимплантационная терапия)" : "Service Name (e.g., Special post-implant therapeutics)"}
+                  </label>
                   <input
                     type="text"
                     required
-                    placeholder="Masalan: Protezlash - Metallokeramika"
+                    placeholder={language === 'uz' ? "Masalan: Maxsus muolaja" : language === 'ru' ? "Например: Особая процедура" : "e.g. Special procedure"}
                     value={newServiceName}
                     onChange={(e) => setNewServiceName(e.target.value)}
                     className="w-full bg-white border border-slate-200 text-xs font-black text-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -1235,7 +1561,7 @@ export default function DirectorDashboard({
                 </div>
 
                 <div className="col-span-1 sm:col-span-3">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Narxi (UZS)</label>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">{language === 'uz' ? "Narxi (UZS)" : language === 'ru' ? "Цена (UZS)" : "Price (UZS)"}</label>
                   <input
                     type="number"
                     required
@@ -1256,13 +1582,13 @@ export default function DirectorDashboard({
                     }}
                     className="w-full py-2.5 bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer"
                   >
-                    Bekor qilish
+                    {language === 'uz' ? "Bekor qilish" : language === 'ru' ? "Отмена" : "Cancel"}
                   </button>
                   <button
                     type="submit"
                     className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer"
                   >
-                    Saqlash✓
+                    {language === 'uz' ? "Saqlash✓" : language === 'ru' ? "Сохранить✓" : "Save✓"}
                   </button>
                 </div>
               </form>
@@ -1273,12 +1599,12 @@ export default function DirectorDashboard({
           {editingServiceId && (
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4.5 space-y-3.5">
               <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">
-                📝 Xizmat narxini va nomini o'zgartirish oynasi
+                {language === 'uz' ? "📝 Xizmat narxini va nomini o'zgartirish oynas" : language === 'ru' ? "📝 Окно редактирования названия и цены услуги" : "📝 Modify Service Name and Price Window"}
               </h4>
 
               <form onSubmit={handleUpdateServiceSubmit} className="flex flex-col sm:flex-row items-end gap-3">
                 <div className="flex-1">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Xizmat nomi</label>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">{language === 'uz' ? "Xizmat nomi" : language === 'ru' ? "Название услуги" : "Service Name"}</label>
                   <input
                     type="text"
                     required
@@ -1289,7 +1615,7 @@ export default function DirectorDashboard({
                 </div>
 
                 <div className="w-full sm:w-48 shrink-0">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Narxi (UZS)</label>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">{language === 'uz' ? "Narxi (UZS)" : language === 'ru' ? "Цена (UZS)" : "Price (UZS)"}</label>
                   <input
                     type="number"
                     required
@@ -1305,13 +1631,13 @@ export default function DirectorDashboard({
                     onClick={() => setEditingServiceId(null)}
                     className="px-3.5 py-2.5 bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
                   >
-                    Cancel
+                    {language === 'uz' ? "Bekor qilish" : language === 'ru' ? "Отмена" : "Cancel"}
                   </button>
                   <button
                     type="submit"
                     className="px-4 py-2.5 bg-[#0284c7] hover:bg-cyan-700 text-white text-xs font-black rounded-xl shadow-md transition-all shrink-0"
                   >
-                    Yangilash✓
+                    {language === 'uz' ? "Yangilash✓" : language === 'ru' ? "Обновить✓" : "Update✓"}
                   </button>
                 </div>
               </form>
@@ -1325,20 +1651,27 @@ export default function DirectorDashboard({
                 <div>
                   <h4 className="text-xs font-extrabold text-slate-800">{srv.name}</h4>
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">
-                    Samarqand filiali | ID: {srv.id}
+                    {myClinic?.name || currentClinicId} | ID: {srv.id}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-4 self-end sm:self-center">
+                <div className="flex items-center gap-2 self-end sm:self-center flex-wrap">
                   <span className="text-xs font-extrabold font-mono text-cyan-650 bg-cyan-50 px-3 py-1 rounded-lg border border-cyan-100">
-                    {srv.price.toLocaleString('uz-UZ')} so'm
+                    {srv.price.toLocaleString('uz-UZ')} {language === 'uz' ? "so'm" : language === 'ru' ? "сум" : "UZS"}
                   </span>
 
                   <button
                     onClick={() => startEditingService(srv)}
                     className="px-3.5 py-1.5 border border-slate-200 hover:bg-slate-100 text-slate-650 rounded-lg text-xs font-bold cursor-pointer transition-all shrink-0"
                   >
-                    Tahrirlash/Edit
+                    {language === 'uz' ? "Tahrirlash" : language === 'ru' ? "Редактировать" : "Edit"}
+                  </button>
+
+                  <button
+                    onClick={() => setServiceToDelete(srv)}
+                    className="px-3.5 py-1.5 border border-red-200 hover:bg-red-50 text-red-600 hover:text-red-700 rounded-lg text-xs font-bold cursor-pointer transition-all shrink-0"
+                  >
+                    {language === 'uz' ? "O'chirish" : language === 'ru' ? "Удалить" : "Delete"}
                   </button>
                 </div>
               </div>
@@ -1351,16 +1684,16 @@ export default function DirectorDashboard({
       {activeSubTab === 'obuna' && (
         <div className="space-y-6">
           {/* Main Info Box */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-150/80 shadow-md">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 border border-slate-150/80 shadow-md">
             <div className="flex items-center justify-between border-b border-slate-50 pb-4 flex-wrap gap-4">
               <div className="flex items-center gap-2">
                 <span className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">💳</span>
                 <div>
                   <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest">
-                    Oylik Obuna va Litsenziya Nazorati
+                    {language === 'uz' ? "Oylik Obuna va Litsenziya Nazorati" : language === 'ru' ? "Ежемесячный Контроль Лицензий и Подписок" : "Monthly SaaS License & Subscription Gate"}
                   </h3>
                   <p className="text-[11px] text-slate-400 font-semibold leading-none mt-1">
-                    Klinikangizning SaaS va ijra mantiqi bo'yicha to'lov ko'rsatkichlari
+                    {language === 'uz' ? "Klinikangizning SaaS va ijra mantiqi bo'yicha to'lov ko'rsatkichlari" : language === 'ru' ? "Метрики платежей и финансовый статус по аренде вашей клиники" : "Active tenant subscription financials and rental payment parameters"}
                   </p>
                 </div>
               </div>
@@ -1372,7 +1705,7 @@ export default function DirectorDashboard({
                   ? 'bg-amber-50 text-amber-600 border border-amber-100 animate-pulse' 
                   : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
               }`}>
-                Status: {isSuspended ? "To'xtatilgan" : isTrial ? "Sinov Muddati" : "Faol"}
+                Status: {isSuspended ? (language === 'uz' ? "To'xtatilgan" : language === 'ru' ? "Блокирован" : "Suspended") : isTrial ? (language === 'uz' ? "Sinov muddati" : language === 'ru' ? "Пробный период" : "Trial Phase") : (language === 'uz' ? "Faol" : language === 'ru' ? "Активен" : "Active")}
               </span>
             </div>
 
@@ -1380,51 +1713,55 @@ export default function DirectorDashboard({
               {/* Card 1 */}
               <div className="bg-slate-50 p-4.5 rounded-2xl border border-slate-100">
                 <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">
-                  Navbatdagi to'lov sanasi
+                  {language === 'uz' ? "Navbatdagi to'lov sanasi" : language === 'ru' ? "Дата следующего платежа" : "Next Payment Due date"}
                 </span>
                 <strong className="text-lg text-slate-800 font-semibold block mt-1.5 font-mono">
-                  {myClinic?.nextPaymentDate || "Mavjud emas"}
+                  {myClinic?.nextPaymentDate || (language === 'uz' ? "Mavjud emas" : language === 'ru' ? "Нет данных" : "N/A")}
                 </strong>
                 <span className="text-xs text-slate-400 font-semibold mt-1 block">
                   {daysDiff <= 0 
-                    ? "Muddati o'tgan! Iltimos to'lashni amalga oshiring." 
-                    : `SaaS xizmatingiz tugashiga ${daysDiff} kun qoldi.`}
+                    ? (language === 'uz' ? "Muddati o'tgan! Iltimos to'lashni amalga oshiring." : language === 'ru' ? "Просрочено! Пожалуйста, произведите оплату." : "Overdue penalty! Please wire the subscription fee.") 
+                    : language === 'uz' 
+                    ? `SaaS xizmatingiz tugashiga ${daysDiff} kun qoldi.` 
+                    : language === 'ru' 
+                    ? `До окончания SaaS подписки осталось ${daysDiff} дней.` 
+                    : `${daysDiff} calendar days remaining in your active session.`}
                 </span>
               </div>
 
               {/* Card 2 */}
               <div className="bg-slate-50 p-4.5 rounded-2xl border border-slate-100">
                 <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">
-                  Oylik abonent to'lovi
+                  {language === 'uz' ? "Oylik abonent to'lovi" : language === 'ru' ? "Ежемесячная абонентская плата" : "Monthly SaaS recurring price"}
                 </span>
                 <strong className="text-lg text-indigo-750 font-semibold block mt-1.5 font-mono">
-                  {(myClinic?.rentalPrice || 1500000).toLocaleString('uz-UZ')} so'm
+                  {(myClinic?.rentalPrice || 1500000).toLocaleString('uz-UZ')} {language === 'uz' ? "so'm" : language === 'ru' ? "сум" : "UZS"}
                 </strong>
                 <span className="text-xs text-slate-400 font-semibold mt-1 block">
-                  Yillik litsenziya imtiyozlari qo'llanilgan.
+                  {language === 'uz' ? "Yillik litsenziya imtiyozlari qo'llanilgan." : language === 'ru' ? "Применены льготы годовой лицензии." : "Annual tier corporate loyalty discount applied."}
                 </span>
               </div>
 
               {/* Card 3 */}
               <div className="bg-slate-50 p-4.5 rounded-2xl border border-slate-100">
                 <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">
-                  Klinika Subdomeni
+                  {language === 'uz' ? "Klinika Subdomeni" : language === 'ru' ? "Субдомен клиники" : "Clinic Subdomain"}
                 </span>
                 <strong className="text-lg text-emerald-700 font-semibold block mt-1.5 font-mono">
                   {myClinic?.subdomain || currentClinicId}.dstoma.uz
                 </strong>
                 <span className="text-xs text-slate-400 font-semibold mt-1 block">
-                  Xarita integratsiyasi faollashtirilgan.
+                  {language === 'uz' ? "Xarita integratsiyasi faollashtirilgan." : language === 'ru' ? "Интеграция с картами включена." : "Google Maps routing systems active."}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start text-slate-800">
             {/* Interactive Billing Form */}
             <div className="lg:col-span-4 bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md">
               <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-3 block">
-                💳 To'lovni amalga oshirish
+                💳 {language === 'uz' ? "To'lovni amalga oshirish" : language === 'ru' ? "Произвести платеж" : "Wire / Submit recurring fee"}
               </h4>
               
               {(() => {
@@ -1437,18 +1774,25 @@ export default function DirectorDashboard({
                         ⏱️
                       </div>
                       <div className="space-y-1">
-                        <strong className="text-xs text-slate-800 block">Tasdiqlanish kutilmoqda</strong>
+                        <strong className="text-xs text-slate-800 block">
+                          {language === 'uz' ? "Tasdiqlanish kutilmoqda" : language === 'ru' ? "Ожидает подтверждения" : "Pending admin validation"}
+                        </strong>
                         <p className="text-[11px] text-slate-500 leading-normal">
-                          Klinika hisobidan yuborilgan to'lov so'rovi (kod: <code className="font-mono bg-slate-50 px-1 py-0.5 rounded text-[10px]">{pendingApprovalInvoice.id}</code>) superadmin tasdig'ini kutmoqda. Superadmin uni tasdiqlashi bilan daromadga qo'shiladi va obuna uzaytiriladi!
+                          {language === 'uz' 
+                            ? `Klinika hisobidan yuborilgan to'lov so'rovi (kod: ${pendingApprovalInvoice.id}) superadmin tasdig'ini kutmoqda. Superadmin uni tasdiqlashi bilan daromadga qo'shiladi va obuna uzaytiriladi!` 
+                            : language === 'ru' 
+                            ? `Запрос на проведение платежа (код: ${pendingApprovalInvoice.id}) ожидает одобрения суперадминистратора. Как только он одобрит, подписка автоматически продлится!` 
+                            : `Rental payment proposal (inv-id: ${pendingApprovalInvoice.id}) is waiting for manual SaaS owner verification. Once approved, your validity extends instantly!`
+                          }
                         </p>
                       </div>
                       <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-left space-y-1">
                         <div className="text-[10px] text-slate-405 flex justify-between">
-                          <span>Summa:</span> 
+                          <span>{language === 'uz' ? "Summa:" : language === 'ru' ? "Сумма:" : "Amount:"}</span> 
                           <span className="font-bold font-mono text-slate-800">{pendingApprovalInvoice.amount.toLocaleString()} UZS</span>
                         </div>
                         <div className="text-[10px] text-slate-405 flex justify-between">
-                          <span>Yuborilgan sana:</span> 
+                          <span>{language === 'uz' ? "Yuborilgan sana:" : language === 'ru' ? "Дата подачи:" : "Submission date:"}</span> 
                           <span className="font-medium font-mono text-slate-700">{pendingApprovalInvoice.dueDate}</span>
                         </div>
                       </div>
@@ -1459,13 +1803,17 @@ export default function DirectorDashboard({
                 return (
                   <div className="space-y-4">
                     <p className="text-xs text-slate-600 leading-normal">
-                      Siz bu yerdan oylik to'lov so'rovini superadmin paneliga jo'natishingiz mumkin. Superadmin to'lovni tasdiqlagandan so'ng, tizimingiz muddati uzaytiriladi.
+                      {language === 'uz' 
+                        ? "Siz bu yerdan oylik to'lov so'rovini superadmin paneliga jo'natishingiz mumkin. Superadmin to'lovni tasdiqlagandan so'ng, tizimingiz muddati uzaytiriladi." 
+                        : language === 'ru' 
+                        ? "Здесь вы можете отправить запрос на подтверждение платежа в панель суперадминистратора. После одобрения срок действия платформы продлится." 
+                        : "Submit a payment clearance ticket directly to the superadmin desk. Once validated, your SaaS tenant license lease terms will extend accordingly."}
                     </p>
 
                     <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100 flex items-center gap-3">
                       <span className="text-lg">💡</span>
                       <p className="text-[11px] text-blue-800 leading-tight">
-                        <strong>Trial eslatmasi:</strong> Har qanday ro'yxatdan o'tgan yangi klinika uchun 1 haftalik mutlaqo bepul sinov litsenziyasi avtomatik tarzda taqdim etilgan!
+                        <strong>Trial:</strong> {language === 'uz' ? "Har qanday ro'yxatdan o'tgan yangi klinika uchun 1 haftalik mutlaqo bepul sinov litsenziyasi avtomatik tarzda taqdim etilgan!" : language === 'ru' ? "Для каждой новой зарегистрированной клиники автоматически предоставляется 1 неделя бесплатного триал-периода!" : "A 7-day complimentary developer/tester sandbox evaluation lease is provisioned for every newly deployed clinic!"}
                       </p>
                     </div>
 
@@ -1473,7 +1821,7 @@ export default function DirectorDashboard({
                       onClick={() => onSimulatePayment && onSimulatePayment(currentClinicId)}
                       className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs tracking-wider rounded-xl transition-all shadow-md active:scale-97 cursor-pointer flex items-center justify-center gap-1.5"
                     >
-                      <span>💳 Oylik To'lovni Yuborish</span>
+                      <span>💳 {language === 'uz' ? "Oylik To'lovni Yuborish" : language === 'ru' ? "Отправить ежемесячный платеж" : "Defray Monthly SaaS Renewal"}</span>
                     </button>
                   </div>
                 );
@@ -1481,13 +1829,13 @@ export default function DirectorDashboard({
             </div>
 
             {/* Invoices History Table */}
-            <div className="lg:col-span-8 bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md space-y-4">
+            <div className="lg:col-span-8 bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/80 shadow-md space-y-4">
               <div className="flex items-center justify-between border-b border-slate-50 pb-3">
                 <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400 block">
-                  📜 To'lovlar tarixi monitoringi (Filial bo'yicha)
+                  📜 {language === 'uz' ? "To'lovlar tarixi monitoringi (Filial bo'yicha)" : language === 'ru' ? "Мониторинг истории платежей по филиалу" : "Saas Invoicing & Clearance Ledger history"}
                 </h4>
                 <span className="text-[10px] text-slate-400 font-bold">
-                  Barcha kvitansiyalar
+                  {language === 'uz' ? "Barcha kvitansiyalar" : language === 'ru' ? "Все квитанции" : "All Receipts"}
                 </span>
               </div>
 
@@ -1495,10 +1843,10 @@ export default function DirectorDashboard({
                 <table className="w-full text-xs text-left">
                   <thead>
                     <tr className="border-b border-slate-100 text-slate-420 font-black tracking-wider uppercase text-[10px]">
-                      <th className="py-2.5">Kvitansiya ID</th>
-                      <th className="py-2.5">Muddati</th>
-                      <th className="py-2.5 text-right">Summa (UZS)</th>
-                      <th className="py-2.5">To'langan sana</th>
+                      <th className="py-2.5">{language === 'uz' ? "Kvitansiya ID" : language === 'ru' ? "ID Квитанции" : "Receipt ID"}</th>
+                      <th className="py-2.5">{language === 'uz' ? "Muddati" : language === 'ru' ? "Срок действия" : "Due Date"}</th>
+                      <th className="py-2.5 text-right">{language === 'uz' ? "Summa (UZS)" : language === 'ru' ? "Сумма (UZS)" : "Amount (UZS)"}</th>
+                      <th className="py-2.5">{language === 'uz' ? "To'langan sana" : language === 'ru' ? "Дата оплаты" : "Settlement Date"}</th>
                       <th className="py-2.5 text-right">Status</th>
                     </tr>
                   </thead>
@@ -1509,7 +1857,7 @@ export default function DirectorDashboard({
                         return (
                           <tr>
                             <td colSpan={5} className="py-8 text-center text-slate-400 font-semibold text-[11px]">
-                              Hozircha birorta ham to'lov hujjatlari topilmadi.
+                              {language === 'uz' ? "Hozircha birorta ham to'lov hujjatlari topilmadi." : language === 'ru' ? "Платежные документы на текущий момент отсутствуют." : "No invoicing records or past transactions exist for this tenant."}
                             </td>
                           </tr>
                         );
@@ -1533,7 +1881,7 @@ export default function DirectorDashboard({
                                 ? 'bg-amber-50 text-amber-600 border border-amber-100 animate-pulse'
                                 : 'bg-rose-50 text-rose-600 border border-rose-100'
                             }`}>
-                              {pay.status === 'confirmed' ? "Tasdiqlangan" : pay.status === 'pending_approval' ? "Kutilmoqda" : "To'lanmagan"}
+                              {pay.status === 'confirmed' ? (language === 'uz' ? "Tasdiqlangan" : language === 'ru' ? "Одобрено" : "Settled") : pay.status === 'pending_approval' ? (language === 'uz' ? "Kutilmoqda" : language === 'ru' ? "Ожидает" : "Pending") : (language === 'uz' ? "To'lanmagan" : language === 'ru' ? "Не уплачено" : "Unpaid")}
                             </span>
                           </td>
                         </tr>
@@ -1550,12 +1898,94 @@ export default function DirectorDashboard({
       {/* ----------------- FOOTER (SCREENSHOT 5) ----------------- */}
       <footer className="pt-8 border-t border-slate-200 mt-10">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 font-sans text-xs text-slate-400 font-semibold select-none pb-4">
-          <p>© 2025-2026 DStoma Clinic Boss Panel. Barcha huquqlar himoyalangan.</p>
+          <p>© 2025-2026 DStoma Clinic Boss Panel. {language === 'uz' ? "Barcha huquqlar himoyalangan." : language === 'ru' ? "Все права защищены." : "All rights reserved."}</p>
           <div className="flex items-center gap-1.5 text-slate-500">
-            Klinika hisoboti avtomatik tarzda shakllanadi.
+            {language === 'uz' ? "Klinika hisoboti avtomatik tarzda shakllanadi." : language === 'ru' ? "Отчеты клиники генерируются автоматически." : "Clinical ledger statements dynamically assembled."}
           </div>
         </div>
       </footer>
+
+      {/* DELETE DOCTOR CONFIRMATION MODAL */}
+      {doctorToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl space-y-4 text-center">
+            <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-2">
+              <span className="text-3xl">👨‍⚕️</span>
+            </div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
+              {language === 'uz' ? "Shifokorni o'chirish" : language === 'ru' ? "Удалить врача" : "Delete Doctor"}
+            </h3>
+            <p className="text-xs text-slate-600 font-medium">
+              {language === 'uz'
+                ? `"${doctorToDelete.name}" shifokorini o'chirishni tasdiqlaysizmi?`
+                : language === 'ru'
+                ? `Вы действительно хотите удалить врача "${doctorToDelete.name}"?`
+                : `Are you sure you want to delete doctor "${doctorToDelete.name}"?`
+              }
+            </p>
+            <div className="flex justify-center gap-3 pt-3">
+              <button
+                onClick={() => setDoctorToDelete(null)}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer"
+              >
+                {language === 'uz' ? "Bekor qilish" : language === 'ru' ? "Отмена" : "Cancel"}
+              </button>
+              <button
+                onClick={() => {
+                  onDeleteDoctor?.(doctorToDelete.id);
+                  setDoctorToDelete(null);
+                }}
+                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-md"
+              >
+                {t("O'chirish")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE SERVICE CONFIRMATION MODAL */}
+      {serviceToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl space-y-4 text-center">
+            <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-2">
+              <span className="text-3xl">⚙️</span>
+            </div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
+              {language === 'uz' ? "Xizmatni o'chirish" : language === 'ru' ? "Удалить услугу" : "Delete Service"}
+            </h3>
+            <p className="text-xs text-slate-600 font-medium">
+              {language === 'uz'
+                ? `Haqiqatdan ham "${serviceToDelete.name}" xizmatini o'chirmoqchimisiz?`
+                : language === 'ru'
+                ? `Вы действительно хотите удалить услугу "${serviceToDelete.name}"?`
+                : `Are you sure you want to delete "${serviceToDelete.name}"?`
+              }
+            </p>
+            <div className="flex justify-center gap-3 pt-3">
+              <button
+                onClick={() => setServiceToDelete(null)}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer"
+              >
+                {language === 'uz' ? "Bekor qilish" : language === 'ru' ? "Отмена" : "Cancel"}
+              </button>
+              <button
+                onClick={() => {
+                  if (onDeleteService) onDeleteService(serviceToDelete.id);
+                  else {
+                    const idx = services.findIndex(s => s.id === serviceToDelete.id);
+                    if (idx > -1) services.splice(idx, 1);
+                  }
+                  setServiceToDelete(null);
+                }}
+                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-md"
+              >
+                 {t("O'chirish")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

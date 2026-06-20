@@ -1,0 +1,37 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Public and private information for registered dental patients and dentists",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique user ID from Firebase Auth" },
+        "email": { "type": "string", "description": "Email address of the user" },
+        "displayName": { "type": "string", "description": "Human name of the user" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when user profile was created" }
+      },
+      "required": ["uid", "email"]
+    },
+    "DentalState": {
+      "title": "Patient Dental State",
+      "description": "Detailed diagnosis metrics for all 32 teeth of a user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the user who owns this dental state" },
+        "teeth": { "type": "object", "description": "Dynamic teeth metrics map index to tooth conditions" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of last edit" }
+      },
+      "required": ["userId", "teeth", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile records"
+    },
+    "/users/{userId}/dentalState/current": {
+      "schema": "DentalState",
+      "description": "The current verified or custom modified dental state of the user"
+    }
+  }
+}

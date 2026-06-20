@@ -20,7 +20,10 @@ import {
   Settings,
   CircleDot,
   UserCheck2,
-  CalendarCheck2
+  CalendarCheck2,
+  Sparkles,
+  Brain,
+  Info
 } from 'lucide-react';
 
 interface DoctorDashboardProps {
@@ -105,7 +108,27 @@ export default function DoctorDashboard({
       "chaqirish": { ru: "Вызвать", en: "Call" },
       "tugatilgan qabullar ro'yxati (bugun)": { ru: "Список завершенных приемов (Сегодня)", en: "List of completed consultations (Today)" },
       "bugun hali qabul sobiq qilinmadi.": { ru: "Сегодня приемов еще не было.", en: "No patients were admitted today yet." },
-      "kutilmoqda": { ru: "ожидание", en: "pending" }
+      "kutilmoqda": { ru: "ожидание", en: "pending" },
+      "telegram bot xizmati": { ru: "Сервис Telegram-Бота", en: "Telegram Bot Service" },
+      "tizimga ulanish": { ru: "Подключить кабинет", en: "Connect Cabinet" },
+      "shifokorlar uchun telegram yordamchisi. yangi bemorlar yozilganda zudlik bilan bildirishnomalar oling va navbatlarni bevosita telegramda boshqaring!": {
+        ru: "Telegram-помощник для врачей. Получайте мгновенные уведомления о записи пациентов и управляйте очередью прямо в Telegram!",
+        en: "Telegram assistant for doctors. Get instant notifications when patients register and manage your queue directly inside Telegram!"
+      },
+      "faollashtirish qadamlari:": { ru: "Шаги для активации:", en: "Activation Steps:" },
+      "1. telegramda @dstoma_doctor_bot yordamchisiga o'ting va /start ni bosing.": {
+        ru: "1. Перейдите в Telegram-бот @dstoma_doctor_bot и отправьте /start.",
+        en: "1. Open Telegram bot @dstoma_doctor_bot and send /start."
+      },
+      "2. /doctor buyrug'ini yuboring va xonadagi login parolingizni kiriting.": {
+        ru: "2. Отправьте команду /doctor и введите ваши логин и пароль.",
+        en: "2. Send command /doctor and enter your clinic login/password credentials."
+      },
+      "3. tayyor! yangi navbatlar xabari shu yerga keladi.": {
+        ru: "3. Готово! Уведомления о новых пациентах теперь будут поступать туда.",
+        en: "3. Ready! Success alerts and queue calls will land directly in your chat."
+      },
+      "telegram botni ochish 💬": { ru: "Открыть Telegram Bot 💬", en: "Open Telegram Bot 💬" }
     };
 
     const cleanText = text.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -234,7 +257,7 @@ export default function DoctorDashboard({
 
       {/* PROFILE UPDATE MODAL */}
       {showProfileSettings && (
-        <div className="bg-white p-5 rounded-3xl border border-slate-150/85 shadow-lg space-y-4 max-w-lg">
+        <div className="bg-white text-slate-800 p-5 rounded-3xl border border-slate-150/85 shadow-lg space-y-4 max-w-lg">
           <div className="flex items-center justify-between border-b border-slate-50 pb-2">
             <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest flex items-center gap-1.5">
               🔒 {t("Profilni Tahrirlash & Shaxsiy Sozlamalar")}
@@ -382,7 +405,7 @@ export default function DoctorDashboard({
       )}
 
       {/* METRIC BOXES */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-slate-800">
         {/* Metric 1 */}
         <div className="bg-white rounded-2xl p-4 border border-slate-150/85 shadow-xs flex items-center justify-between">
           <div className="space-y-0.5">
@@ -444,9 +467,55 @@ export default function DoctorDashboard({
         </div>
       </div>
 
+      {/* TELEGRAM BOT SERVICE INTEGRATION CARD FOR DOCTORS */}
+      <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white rounded-3xl p-6 border border-indigo-950 shadow-lg relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl text-lg shrink-0">🤖</span>
+              <h3 className="text-sm font-black uppercase tracking-wider text-indigo-300">
+                {t("telegram bot xizmati")}
+              </h3>
+            </div>
+            <p className="text-xs text-indigo-100/85 leading-relaxed max-w-2xl font-semibold">
+              {t("shifokorlar uchun telegram yordamchisi. yangi bemorlar yozilganda zudlik bilan bildirishnomalar oling va navbatlarni bevosita telegramda boshqaring!")}
+            </p>
+            <div className="pt-2.5 space-y-1.5 text-xs text-slate-300">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#38bdf8] block mb-1">
+                {t("faollashtirish qadamlari:")}
+              </span>
+              <div className="flex items-center gap-2 font-medium">
+                <span className="w-1.5 h-1.5 bg-[#38bdf8] rounded-full"></span>
+                <p>{t("1. telegramda @dstoma_doctor_bot yordamchisiga o'ting va /start ni bosing.")}</p>
+              </div>
+              <div className="flex items-center gap-2 font-medium">
+                <span className="w-1.5 h-1.5 bg-[#38bdf8] rounded-full"></span>
+                <p>{t("2. /doctor buyrug'ini yuboring va xonadagi login parolingizni kiriting.")}</p>
+              </div>
+              <div className="flex items-center gap-2 font-medium text-emerald-300">
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
+                <p className="font-bold">{t("3. tayyor! yangi navbatlar xabari shu yerga keladi.")}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="shrink-0 self-start md:self-center">
+            <a
+              href="https://t.me/dstoma_doctor_bot"
+              target="_blank"
+              rel="noreferrer"
+              className="px-5 py-3.5 bg-sky-600 hover:bg-sky-500 active:scale-95 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-lg transition-all inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              {t("telegram botni ochish 💬")}
+            </a>
+          </div>
+        </div>
+      </div>
+
       {/* ACTIVE CONSULTING PATIENT ROOM (MULTI-STEP QABUL TIZIMI: CALLING & IN_PROGRESS) */}
       {activeConsultingQueues.length > 0 && (
-        <div className="bg-white rounded-3xl p-5 border border-emerald-150 shadow-md space-y-4">
+        <div className="bg-white text-slate-800 rounded-3xl p-5 border border-emerald-150 shadow-md space-y-4">
           <div className="flex items-center gap-1.5 text-emerald-600 border-b border-slate-50 pb-2">
             <CircleDot className="w-4.5 h-4.5 animate-pulse text-emerald-500" />
             <span className="text-[11px] font-extrabold uppercase tracking-wide">
@@ -517,7 +586,7 @@ export default function DoctorDashboard({
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Column 1: Yangi Mijozlar */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-150/70 shadow-md space-y-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/70 shadow-md space-y-4 font-sans text-left">
             <h4 className="text-xs font-extrabold text-blue-600 block uppercase tracking-wider flex items-center justify-between">
               <span>{t("Yangi Mijozlar (Birlamchi ko'rik)")}</span>
               <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-mono text-[10px] font-bold rounded-full">
@@ -566,7 +635,7 @@ export default function DoctorDashboard({
           </div>
 
           {/* Column 2: Doimiy Mijozlar */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-150/70 shadow-md space-y-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/70 shadow-md space-y-4 font-sans text-left">
             <h4 className="text-xs font-extrabold text-indigo-600 block uppercase tracking-wider flex items-center justify-between">
               <span>{t("Doimiy Bemorlar (Tashrif tarixdagilar)")}</span>
               <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-mono text-[10px] font-bold rounded-full">
@@ -617,7 +686,7 @@ export default function DoctorDashboard({
       </div>
 
       {/* COMPLETED LIST OF TODAY */}
-      <div className="bg-white rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
+      <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
         <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-widest flex items-center gap-1.5 border-b border-slate-50 pb-2">
           <span>{t("Tugatilgan qabullar ro'yxati (Bugun)")}</span>
           <span className="px-2 py-0.5 bg-slate-100 text-slate-500 font-mono text-[10px] font-bold rounded-full">

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Clinic, Doctor, Service, QueueItem, Patient } from '../types';
+import { Clinic, Doctor, Service, QueueItem, Patient, ToothDiagnosis } from '../types';
 import { DjangoAPI, getApiUrl } from '../services/api';
 import { TRANSLATIONS, Language } from '../translations';
+import ThreeDentalModel from './ThreeDentalModel';
+import ClinicMap from './ClinicMap';
 import { 
   User, 
   Phone, 
@@ -32,7 +34,9 @@ import {
   Award,
   Upload,
   QrCode,
-  Bot
+  Bot,
+  MapPin,
+  ExternalLink
 } from 'lucide-react';
 
 interface ClientDashboardProps {
@@ -41,7 +45,7 @@ interface ClientDashboardProps {
   services: Service[];
   queues: QueueItem[];
   selectedClinic: Clinic | null;
-  onSelectClinic: (clinic: Clinic) => void;
+  onSelectClinic: (clinic: Clinic | null) => void;
   onAddQueue: (newQueue: QueueItem) => void;
   onCancelQueue: (id: string) => void;
   onUpdateDoctorRating: (doctorId: string, rating: number) => void;
@@ -242,9 +246,9 @@ export default function ClientDashboard({
   const [isLanguageOpen, setIsLanguageOpen] = useState(false);
 
   // --- FUTURISTIC 3D DENTAL SCANNER METRIC STATES ---
-  const [selectedToothIndex, setSelectedToothIndex] = useState<number>(23); // index 23 is FDI 38/41 depending on view
+  const [selectedToothIndex, setSelectedToothIndex] = useState<number>(7); // index 7 is Universal #8 Upper Right Central Incisor (Maxillary Central Incisor)
   const [dentalSystem, setDentalSystem] = useState<'fdi' | 'universal'>('universal');
-  const [activeJaw, setActiveJaw] = useState<'upper' | 'lower'>('lower');
+  const [activeJaw, setActiveJaw] = useState<'upper' | 'lower'>('upper');
   const [teethViewMode, setTeethViewMode] = useState<'arch' | 'grid'>('grid');
 
   // Perfectly spaced manual coordinates (x, y percentages) for 3D Arch representation
@@ -334,6 +338,49 @@ export default function ClientDashboard({
       return language === 'uz' ? "Qoziq tish (K9)" : language === 'ru' ? "Клык" : "Canine";
     }
     return language === 'uz' ? "To'sar tish (Kurak)" : language === 'ru' ? "Резец" : "Incisor";
+  };
+
+  // Dynamic custom tooth metrics state to track AI diagnostic updates over time
+  const [customTeethMetrics, setCustomTeethMetrics] = useState<{
+    [key: number]: {
+      health: number;
+      enamel: number;
+      dentin: number;
+      pulp: number;
+      root: number;
+      gum: number;
+      bone: number;
+      caries: number;
+      cavity: number;
+      plaque: number;
+      calculus: number;
+      gingivitis: number;
+      periodontitis: number;
+      riskLabel: 'LOW' | 'MEDIUM' | 'HIGH';
+    }
+  }>({});
+
+  const getToothMetrics = (idx: number) => {
+    if (customTeethMetrics[idx]) {
+      return customTeethMetrics[idx];
+    }
+    // Default initial state: perfectly healthy dental crown & roots
+    return {
+      health: 100,
+      enamel: 100,
+      dentin: 100,
+      pulp: 100,
+      root: 100,
+      gum: 100,
+      bone: 100,
+      caries: 0,
+      cavity: 0,
+      plaque: 0,
+      calculus: 0,
+      gingivitis: 0,
+      periodontitis: 0,
+      riskLabel: 'LOW' as 'LOW' | 'MEDIUM' | 'HIGH'
+    };
   };
 
   const selectedTooth = getToothDisplayNumber(selectedToothIndex, dentalSystem);
@@ -433,9 +480,125 @@ export default function ClientDashboard({
     reader.readAsDataURL(file);
   };
 
+  const saveDiagnosisForPatient = async (diagnosticResult: any) => {
+    if (!currentUser) return;
+    
+    const newDiagnosis: ToothDiagnosis = {
+      id: 'diag_' + Math.random().toString(36).substr(2, 5),
+      createdAt: new Date().toISOString(),
+      toothIndex: selectedToothIndex,
+      toothNumber: Number(getToothDisplayNumber(selectedToothIndex, dentalSystem)),
+      symptoms: symptomsInput || 'Routine Check',
+      imageFileName: imageFileName || undefined,
+      enamelAbrasion: diagnosticResult.enamelAbrasion || "Moderate",
+      healthFactor: diagnosticResult.healthFactor || "90%",
+      recommendedTreatment: diagnosticResult.recommendedTreatment || "Fluoride therapy",
+      diagnosticText: diagnosticResult.diagnosticText || "Condition looks normal.",
+      actionPlan: diagnosticResult.actionPlan || []
+    };
+    
+    const updatedDiagnoses = [...(currentUser.diagnoses || []), newDiagnosis];
+    const updatedUser = {
+      ...currentUser,
+      diagnoses: updatedDiagnoses
+    };
+    
+    setCurrentUser(updatedUser);
+    setPatients(prev => prev.map(p => p.id === currentUser.id ? updatedUser : p));
+    
+    try {
+      await fetch(`${getApiUrl()}/api/patients`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedUser)
+      });
+    } catch (apiErr) {
+      console.warn("Failed to persist patient diagnostics on backend:", apiErr);
+    }
+  };
+
   const handleAiDiagnostic = async () => {
     setIsScanning(false);
     setIsAiLoading(true);
+
+    const applyAiDiagnosticToTooth = (idx: number, diagnosticData: any) => {
+      if (!diagnosticData) return;
+      
+      let parsedHealth = 100;
+      let parsedCaries = 0;
+      let parsedEnamel = 100;
+      let parsedDentin = 100;
+      let parsedPulp = 100;
+      
+      const hStr = ((diagnosticData.healthFactor || diagnosticData.enamelAbrasion || "") + "").toLowerCase();
+      const matchPct = hStr.match(/(\d+)%/);
+      const pct = matchPct ? parseInt(matchPct[1]) : null;
+      
+      if (hStr.includes('kritik') || hStr.includes('critical') || hStr.includes('42%') || (pct && pct < 50)) {
+        parsedHealth = pct || 42;
+        parsedCaries = 58;
+        parsedEnamel = 72;
+        parsedDentin = 55;
+        parsedPulp = 42;
+      } else if (hStr.includes('o\'rta') || hStr.includes('o‘rta') || hStr.includes('fair') || hStr.includes('65%') || (pct && pct < 85)) {
+        parsedHealth = pct || 60;
+        parsedCaries = 40;
+        parsedEnamel = 68;
+        parsedDentin = 75;
+        parsedPulp = 82;
+      } else if (pct) {
+        parsedHealth = pct;
+        parsedCaries = Math.max(0, 100 - pct);
+        parsedEnamel = Math.max(0, pct - (idx % 4));
+        parsedDentin = Math.max(0, pct - 5);
+        parsedPulp = pct;
+      } else {
+        const sym = (symptomsInput || '').toLowerCase();
+        const hasImg = !!selectedToothImage;
+        if (sym.includes('og\'riq') || sym.includes('ogriq') || sym.includes('shish') || sym.includes('pain') || sym.includes('ache') || sym.includes('hurt')) {
+          parsedHealth = 42;
+          parsedCaries = 58;
+          parsedEnamel = 72;
+          parsedDentin = 55;
+          parsedPulp = 42;
+        } else if (hasImg) {
+          parsedHealth = 65;
+          parsedCaries = 35;
+          parsedEnamel = 68;
+          parsedDentin = 75;
+          parsedPulp = 82;
+        } else {
+          parsedHealth = 98;
+          parsedCaries = 2;
+          parsedEnamel = 98;
+          parsedDentin = 100;
+          parsedPulp = 100;
+        }
+      }
+      
+      setCustomTeethMetrics(prev => ({
+        ...prev,
+        [idx]: {
+          health: parsedHealth,
+          enamel: parsedEnamel,
+          dentin: parsedDentin,
+          pulp: parsedPulp,
+          root: Math.min(100, Math.max(0, parsedHealth - 4)),
+          gum: Math.min(100, Math.max(0, parsedHealth - 5)),
+          bone: Math.min(100, Math.max(0, parsedHealth - 10)),
+          caries: parsedCaries,
+          cavity: Math.max(0, parsedCaries - 10),
+          plaque: Math.floor(parsedCaries * 0.4 + 5),
+          calculus: Math.floor(parsedCaries * 0.3 + 2),
+          gingivitis: Math.floor(parsedCaries * 0.5),
+          periodontitis: Math.max(0, 100 - parsedHealth - 10),
+          riskLabel: parsedHealth < 50 ? 'HIGH' : parsedHealth < 75 ? 'MEDIUM' : 'LOW'
+        }
+      }));
+    };
+
     try {
       const response = await fetch(`${getApiUrl()}/api/ai/diagnostic`, {
         method: 'POST',
@@ -454,6 +617,8 @@ export default function ClientDashboard({
       }
       const data = await response.json();
       setAiOutput(data);
+      applyAiDiagnosticToTooth(selectedToothIndex, data);
+      await saveDiagnosisForPatient(data);
       setToastMsg({
         type: 'success',
         text: language === 'uz' ? 'AI diagnostika muvaffaqiyatli yakunlandi!' : language === 'ru' ? 'ИИ диагностика завершена успешно!' : 'AI diagnostics computed successfully!'
@@ -583,6 +748,8 @@ export default function ClientDashboard({
       }
 
       setAiOutput(localFallback);
+      applyAiDiagnosticToTooth(selectedToothIndex, localFallback);
+      await saveDiagnosisForPatient(localFallback);
       
       setToastMsg({
         type: 'success',
@@ -665,6 +832,29 @@ export default function ClientDashboard({
       return updated;
     });
   }, [queues, currentUser]);
+
+  // Dynamically select the first available service and doctor when active clinic or services list changes
+  React.useEffect(() => {
+    const activeClinic = selectedClinic;
+    const clinicServices = services.filter(s => s.clinicId === activeClinic?.id);
+    if (clinicServices.length > 0) {
+      const exists = clinicServices.some(s => s.id === bookingServiceId);
+      if (!exists) {
+        setBookingServiceId(clinicServices[0].id);
+      }
+    }
+  }, [selectedClinic, services, bookingServiceId]);
+
+  React.useEffect(() => {
+    const activeClinic = selectedClinic;
+    const clinicDoctors = doctors.filter(d => d.clinicId === activeClinic?.id);
+    if (clinicDoctors.length > 0) {
+      const exists = clinicDoctors.some(d => d.id === bookingDoctorId);
+      if (!exists) {
+        setBookingDoctorId(clinicDoctors[0].id);
+      }
+    }
+  }, [selectedClinic, doctors, bookingDoctorId]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -833,7 +1023,7 @@ export default function ClientDashboard({
   };
 
   // Filter lists based on active clinic
-  const activeClinic = selectedClinic || clinics[0];
+  const activeClinic = selectedClinic;
   const clinicDoctors = doctors.filter(d => d.clinicId === activeClinic?.id);
   const clinicServices = services.filter(s => s.clinicId === activeClinic?.id);
 
@@ -880,24 +1070,44 @@ export default function ClientDashboard({
               {activeClinic?.name}
             </h2>
             <span className="text-xs text-slate-400 font-bold leading-normal block">
-              📍 {activeClinic?.address} | 📞 {activeClinic?.phone}
+              📍 {activeClinic?.address} {activeClinic?.mapLink && (
+                <a 
+                  href={activeClinic.mapLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300 ml-1.5 underline underline-offset-2 transition-all"
+                >
+                  ({language === 'uz' ? "xaritada ochish" : language === 'ru' ? "открыть на карте" : "open in map"}) <ExternalLink className="w-3 h-3 text-cyan-400 inline" />
+                </a>
+              )} | 📞 {activeClinic?.phone}
             </span>
           </div>
 
-          {/* Dual Action CTA Buttons styled exactly in luxurious cyber gradients */}
+          {/* Tri-Action CTA Buttons styled exactly in luxurious cyber gradients */}
           <div className="flex flex-wrap items-center justify-end gap-3 shrink-0">
-            {/* 1. Register new Patient (Emerald dark luxury) */}
+            {/* 1. View / Switch Clinics Map (Cyan MapPin glass tab) */}
+            <button
+              onClick={() => {
+                onSelectClinic(null);
+              }}
+              className="px-5 py-3 text-xs font-black uppercase tracking-wider rounded-2xl flex items-center gap-2 transition-all cursor-pointer bg-slate-900 border border-[#203254]/80 text-cyan-400 hover:text-white hover:bg-slate-850 shadow-lg active:scale-95"
+            >
+              <MapPin className="w-4 h-4 text-cyan-400" />
+              {language === 'uz' ? "FILIALLAR XARITASI" : language === 'ru' ? "КАРТА ФИЛИАЛОВ" : "BRANCHES MAP"}
+            </button>
+
+            {/* 2. Register new Patient (Emerald dark luxury) */}
             <button
               onClick={() => {
                 setActiveSubView('register');
               }}
-              className="px-6 py-3 text-xs font-black uppercase tracking-wider rounded-2xl flex items-center gap-2.5 transition-all cursor-pointer bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-black shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/25 active:scale-95"
+              className="px-5 py-3 text-xs font-black uppercase tracking-wider rounded-2xl flex items-center gap-2 transition-all cursor-pointer bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-black shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/25 active:scale-95"
             >
               <UserPlus2 className="w-4 h-4 text-slate-950 stroke-[2.5]" />
               {t("Yangi bemor Ro'yxatdan o'tish")}
             </button>
 
-            {/* 2. Patient Cabinet (Indigo luxury glass tab) */}
+            {/* 3. Patient Cabinet (Indigo luxury glass tab) */}
             <button
               onClick={() => {
                 if (currentUser) {
@@ -908,7 +1118,7 @@ export default function ClientDashboard({
                   setActiveSubView('login');
                 }
               }}
-              className="px-6 py-3 text-xs font-black uppercase tracking-wider rounded-2xl flex items-center gap-2.5 transition-all cursor-pointer bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/10 hover:shadow-cyan-500/25 active:scale-95"
+              className="px-5 py-3 text-xs font-black uppercase tracking-wider rounded-2xl flex items-center gap-2 transition-all cursor-pointer bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/10 hover:shadow-cyan-500/25 active:scale-95"
             >
               <LogIn className="w-4 h-4 text-cyan-200" />
               {t("bemor Shaxsiy kabinetga kirish")}
@@ -919,8 +1129,16 @@ export default function ClientDashboard({
 
       {/* ----------------- CLIENT DASHBOARD WORKSPACE ----------------- */}
       {activeSubView === 'home' && (
-        activeClinic ? (
-          <div className="space-y-6">
+        <div className="space-y-6">
+          <ClinicMap
+            clinics={clinics}
+            selectedClinic={selectedClinic}
+            onSelectClinic={onSelectClinic}
+            language={language}
+          />
+
+          {activeClinic ? (
+            <div className="space-y-6 animate-fade-in text-left">
 
             {/* CROSS-CHANNEL SMART DUAL ONBOARDING & QR PANEL */}
             <div className="bg-[#10172a] rounded-3xl p-6 border border-slate-800 text-left relative overflow-hidden shadow-[0_15px_40px_rgba(0,0,0,0.3)] animate-fade-in select-none">
@@ -1035,7 +1253,11 @@ export default function ClientDashboard({
                       Smart Telegram Botimiz: @dstoma_bot
                     </h4>
                     <p className="text-[10.5px] text-slate-400 leading-relaxed">
-                      To'g'ridan-to'g'ri Telegram-da navbat olish, shifokorlar bilan chat va sun'iy intellekt shifokori maslahatlari integratsiyasi!
+                      {language === 'uz' 
+                        ? "To'g'ridan-to'g'ri Telegram-da navbat olish, shifokorlar bilan chat va sun'iy intellekt shifokori maslahatlari integratsiyasi!" 
+                        : language === 'ru' 
+                        ? "Запись в очередь напрямую через Telegram, чат с врачами и консультации ИИ-стоматолога!" 
+                        : "Queue booking via Telegram, chat with specialists, and AI dental advisor integration!"}
                     </p>
                     <a
                       href="https://t.me/dstoma_bot"
@@ -1043,775 +1265,104 @@ export default function ClientDashboard({
                       rel="noreferrer"
                       className="inline-flex items-center gap-1.5 text-[10px] font-black text-emerald-400 hover:text-emerald-300 transition-all underline"
                     >
-                      Telegram-da ulanish va boshlash 💬
+                      {language === 'uz' ? "Telegram-da ulanish va boshlash 💬" : language === 'ru' ? "Подключиться в Telegram 💬" : "Connect on Telegram 💬"}
                     </a>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* upper layout: Full-Width 3D Dental diagnostics AI system */}
-            <div className="grid grid-cols-1 gap-6">
-
-              {/* HIGH-TECH REAL-TIME 3D DENTAL ANATOMICAL ANALYZER (Full Width) */}
-              <div id="central-dental-telemetry-deck" className="bg-[#0b1022]/85 border border-[#1d2d4c]/80 rounded-3xl p-6 relative overflow-hidden text-left flex flex-col justify-between shadow-[0_4px_30px_rgba(0,0,0,0.4)] animate-fade-in">
-                <div className="absolute top-0 right-0 w-44 h-44 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-
-                <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-[#233256]/40 pb-4 mb-5 select-none gap-3">
-                  <div>
-                    <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[9px] font-black rounded font-mono uppercase tracking-wider">
-                      🧪 AI-Diagnostic System
-                    </span>
-                    <h3 className="text-sm font-black text-white uppercase tracking-wider font-display mt-0.5">
-                      Markaziy Tish Diagnostikasi & Telemetriya
-                    </h3>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    {/* Teeth Layout Mode Selector */}
-                    <div className="flex bg-slate-950/95 p-0.5 rounded-xl border border-slate-800/80 text-[8.5px] font-mono font-bold">
-                      <button
-                        type="button"
-                        onClick={() => setTeethViewMode('grid')}
-                        className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                          teethViewMode === 'grid'
-                            ? 'bg-gradient-to-r from-emerald-500 to-teal-555 text-slate-950 font-black'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                        title="32 tish klassik jadval shakli"
-                      >
-                        {language === 'uz' ? '32 Tish Gird' : language === 'ru' ? 'Сетка 32 зуба' : '32 Tooth Grid'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTeethViewMode('arch')}
-                        className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                          teethViewMode === 'arch'
-                            ? 'bg-gradient-to-r from-emerald-500 to-teal-555 text-slate-950 font-black'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                        title="3D tishlar joylashuvi sxemasi"
-                      >
-                        {language === 'uz' ? '3D Arka' : language === 'ru' ? '3D Схема' : '3D Arch'}
-                      </button>
-                    </div>
-
-                    {/* System designation selector */}
-                    <div className="flex bg-slate-950/95 p-0.5 rounded-xl border border-slate-800/80 text-[8.5px] font-mono font-bold">
-                      <button
-                        type="button"
-                        onClick={() => setDentalSystem('fdi')}
-                        className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                          dentalSystem === 'fdi'
-                            ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                        title="FDI (Yevropa/Xalqaro) tish raqamlanishi"
-                      >
-                        {language === 'uz' ? "FDI (Evropa)" : language === 'ru' ? 'FDI (Европа)' : 'FDI Notation'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDentalSystem('universal')}
-                        className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                          dentalSystem === 'universal'
-                            ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                        title="Universal (AQSh) tish raqamlanishi"
-                      >
-                        {language === 'uz' ? 'Universal (1-32)' : language === 'ru' ? 'США (1-32)' : 'Universal (1-32)'}
-                      </button>
-                    </div>
-
-                    {/* Mode badge indicator */}
-                    <div className="flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-[#233256]/70 text-[9px] font-mono font-bold text-emerald-400 uppercase">
-                      <Zap className={`w-3.5 h-3.5 ${isScanning ? 'animate-flicker text-[#fb1]' : 'text-emerald-400'}`} />
-                      <span>{isScanning ? 'Scanning...' : 'Manual Select'}</span>
-                    </div>
-                  </div>
+            {/* 🏥 CLINICAL SERVICES PRICING & SELECTION CATALOG */}
+            <div className="bg-[#0b1226]/80 border border-[#1e2f50] rounded-3xl p-6 space-y-4 shadow-xl text-left">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#132039] pb-3.5">
+                <div>
+                  <span className="text-[10px] bg-indigo-500/10 text-indigo-400 font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-lg border border-indigo-500/20">
+                    🩺 {activeClinic?.name || (language === 'uz' ? "Klinika" : language === 'ru' ? "Клиника" : "Clinic")} {language === 'uz' ? "Tibbiy Xizmatlari & Narxlari" : language === 'ru' ? "Медицинские услуги и Цены" : "Medical Services & Pricing"}
+                  </span>
+                  <h4 className="text-xs font-black text-slate-100 uppercase tracking-widest mt-1.5">
+                    {language === 'uz' ? "Filialda Mavjud Faol Muolajalar Ro'yxati" : language === 'ru' ? "Список активных процедур филиала" : "Active Treatment Offerings at Branch"}
+                  </h4>
                 </div>
+                
+                <span className="text-[10.5px] text-slate-400 font-semibold">
+                  {language === 'uz' ? "Jami" : language === 'ru' ? "Всего" : "Total"}: <strong className="text-indigo-400 font-mono">{clinicServices.length}</strong> {language === 'uz' ? "muolaja turi" : language === 'ru' ? "видов процедур" : "procedures"}
+                </span>
+              </div>
 
-                {/* Core Jaw Render Layout with teeth buttons arranged in customized arch curve */}
-                <div className="flex flex-col lg:flex-row items-stretch gap-7 justify-between flex-1 relative min-h-[300px] w-full">
-                  
-                  {/* Left Column containing BOTH Upper and Lower Jaws or the 32-Tooth Quick Interactive Grid */}
-                  <div className="flex flex-col gap-4.5 w-full lg:w-[485px] xl:w-[535px] shrink-0">
-                    
-                    {teethViewMode === 'grid' ? (
-                      <div className="flex flex-col gap-4 w-full bg-slate-950/90 p-5 rounded-3xl border border-[#233860]/85 overflow-hidden shadow-3xl select-none text-left">
-                        {/* Upper Jaw Block */}
-                        <div>
-                          <div className="flex items-center justify-between mb-2 pb-1 border-b border-[#233860]/40">
-                            <span className="text-[9px] font-mono font-black text-emerald-450 uppercase tracking-wider flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                              {language === 'uz' ? "Yuqori Jag' (Upper Jaw)" : language === 'ru' ? "Верхняя Челюсть" : "Upper Arch"}
-                            </span>
-                            <span className="text-[7.5px] font-mono text-slate-500 uppercase tracking-widest">Q1 - Q2</span>
-                          </div>
-                          
-                          {/* 2 sub-quadrants */}
-                          <div className="space-y-2.5">
-                            {/* Q1 Upper Right */}
-                            <div className="flex flex-col gap-1">
-                              <div className="flex justify-between text-[7px] font-mono text-[#4364ab] uppercase px-1">
-                                <span>{language === 'uz' ? "O'ng tomon (Q1)" : language === 'ru' ? "Правый квадрант (Q1)" : "Right Quadrant (Q1)"}</span>
-                                <span>{language === 'uz' ? "Markaziy kuraklar ▶" : "To Centrals ▶"}</span>
-                              </div>
-                              <div className="grid grid-cols-8 gap-1">
-                                {[0, 1, 2, 3, 4, 5, 6, 7].map((toothIdx) => {
-                                  const toothNum = getToothDisplayNumber(toothIdx, dentalSystem);
-                                  const isActive = selectedToothIndex === toothIdx;
-                                  const name = getAnatomicalName(toothIdx);
-                                  return (
-                                    <button
-                                      key={toothIdx}
-                                      type="button"
-                                      onClick={() => { setSelectedToothIndex(toothIdx); setIsScanning(false); }}
-                                      className={`py-1.5 px-0.5 rounded-xl text-[10px] font-mono font-black border flex flex-col items-center justify-center transition-all cursor-pointer ${
-                                        isActive
-                                          ? 'bg-gradient-to-br from-emerald-450 via-emerald-500 to-teal-600 text-slate-950 border-emerald-300 scale-105 z-10 shadow-[0_0_15px_rgba(16,185,129,0.7)]'
-                                          : 'bg-[#091020]/95 hover:bg-slate-850 text-slate-300 border-[#1f3762]/95 hover:border-[#10b981]/50'
-                                      }`}
-                                      title={`${name} (#${toothNum})`}
-                                    >
-                                      <span className="text-[10px]">{toothNum}</span>
-                                      <span className="text-[5.5px] font-semibold opacity-60 mt-0.5 leading-none">
-                                        {toothIdx === 0 ? 'WIS' : [1,2].includes(toothIdx) ? 'MOL' : [3,4].includes(toothIdx) ? 'PRE' : toothIdx === 5 ? 'CAN' : 'INC'}
-                                      </span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* Q2 Upper Left */}
-                            <div className="flex flex-col gap-1">
-                              <div className="flex justify-between text-[7px] font-mono text-[#4364ab] uppercase px-1">
-                                <span>{language === 'uz' ? "◀ Markaziy kuraklar" : "◀ From Centrals"}</span>
-                                <span>{language === 'uz' ? "Chap tomon (Q2)" : language === 'ru' ? "Левый квадрант (Q2)" : "Left Quadrant (Q2)"}</span>
-                              </div>
-                              <div className="grid grid-cols-8 gap-1">
-                                {[8, 9, 10, 11, 12, 13, 14, 15].map((toothIdx) => {
-                                  const toothNum = getToothDisplayNumber(toothIdx, dentalSystem);
-                                  const isActive = selectedToothIndex === toothIdx;
-                                  const name = getAnatomicalName(toothIdx);
-                                  return (
-                                    <button
-                                      key={toothIdx}
-                                      type="button"
-                                      onClick={() => { setSelectedToothIndex(toothIdx); setIsScanning(false); }}
-                                      className={`py-1.5 px-0.5 rounded-xl text-[10px] font-mono font-black border flex flex-col items-center justify-center transition-all cursor-pointer ${
-                                        isActive
-                                          ? 'bg-gradient-to-br from-emerald-450 via-emerald-500 to-teal-600 text-slate-950 border-emerald-300 scale-105 z-10 shadow-[0_0_15px_rgba(16,185,129,0.7)]'
-                                          : 'bg-[#091020]/95 hover:bg-slate-850 text-slate-300 border-[#1f3762]/95 hover:border-[#10b981]/50'
-                                      }`}
-                                      title={`${name} (#${toothNum})`}
-                                    >
-                                      <span className="text-[10px]">{toothNum}</span>
-                                      <span className="text-[5.5px] font-semibold opacity-60 mt-0.5 leading-none">
-                                        {toothIdx === 15 ? 'WIS' : [13,14].includes(toothIdx) ? 'MOL' : [11,12].includes(toothIdx) ? 'PRE' : toothIdx === 10 ? 'CAN' : 'INC'}
-                                      </span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Lower Jaw Block */}
-                        <div className="mt-3">
-                          <div className="flex items-center justify-between mb-2 pb-1 border-b border-[#233860]/40">
-                            <span className="text-[9px] font-mono font-black text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                              {language === 'uz' ? "Pastki Jag' (Lower Jaw)" : language === 'ru' ? "Нижняя Челюсть" : "Lower Arch"}
-                            </span>
-                            <span className="text-[7.5px] font-mono text-slate-500 uppercase tracking-widest">Q4 - Q3</span>
-                          </div>
-                          
-                          {/* 2 sub-quadrants */}
-                          <div className="space-y-2.5">
-                            {/* Q4 Lower Right */}
-                            <div className="flex flex-col gap-1">
-                              <div className="flex justify-between text-[7px] font-mono text-[#4364ab] uppercase px-1">
-                                <span>{language === 'uz' ? "O'ng tomon (Q4)" : language === 'ru' ? "Правый квадрант (Q4)" : "Right Quadrant (Q4)"}</span>
-                                <span>{language === 'uz' ? "Markaziy kuraklar ▶" : "To Centrals ▶"}</span>
-                              </div>
-                              <div className="grid grid-cols-8 gap-1">
-                                {[16, 17, 18, 19, 20, 21, 22, 23].map((toothIdx) => {
-                                  const toothNum = getToothDisplayNumber(toothIdx, dentalSystem);
-                                  const isActive = selectedToothIndex === toothIdx;
-                                  const name = getAnatomicalName(toothIdx);
-                                  return (
-                                    <button
-                                      key={toothIdx}
-                                      type="button"
-                                      onClick={() => { setSelectedToothIndex(toothIdx); setIsScanning(false); }}
-                                      className={`py-1.5 px-0.5 rounded-xl text-[10px] font-mono font-black border flex flex-col items-center justify-center transition-all cursor-pointer ${
-                                        isActive
-                                          ? 'bg-gradient-to-br from-emerald-450 via-emerald-500 to-teal-600 text-slate-950 border-emerald-300 scale-105 z-10 shadow-[0_0_15px_rgba(16,185,129,0.7)]'
-                                          : 'bg-[#091020]/95 hover:bg-slate-850 text-slate-300 border-[#1f3762]/95 hover:border-[#10b981]/50'
-                                      }`}
-                                      title={`${name} (#${toothNum})`}
-                                    >
-                                      <span className="text-[10px]">{toothNum}</span>
-                                      <span className="text-[5.5px] font-semibold opacity-60 mt-0.5 leading-none">
-                                        {toothIdx === 16 ? 'WIS' : [17,18].includes(toothIdx) ? 'MOL' : [19,20].includes(toothIdx) ? 'PRE' : toothIdx === 21 ? 'CAN' : 'INC'}
-                                      </span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* Q3 Lower Left */}
-                            <div className="flex flex-col gap-1">
-                              <div className="flex justify-between text-[7px] font-mono text-[#4364ab] uppercase px-1">
-                                <span>{language === 'uz' ? "◀ Markaziy kuraklar" : "◀ From Centrals"}</span>
-                                <span>{language === 'uz' ? "Chap tomon (Q3)" : language === 'ru' ? "Левый квадрант (Q3)" : "Left Quadrant (Q3)"}</span>
-                              </div>
-                              <div className="grid grid-cols-8 gap-1">
-                                {[24, 25, 26, 27, 28, 29, 30, 31].map((toothIdx) => {
-                                  const toothNum = getToothDisplayNumber(toothIdx, dentalSystem);
-                                  const isActive = selectedToothIndex === toothIdx;
-                                  const name = getAnatomicalName(toothIdx);
-                                  return (
-                                    <button
-                                      key={toothIdx}
-                                      type="button"
-                                      onClick={() => { setSelectedToothIndex(toothIdx); setIsScanning(false); }}
-                                      className={`py-1.5 px-0.5 rounded-xl text-[10px] font-mono font-black border flex flex-col items-center justify-center transition-all cursor-pointer ${
-                                        isActive
-                                          ? 'bg-gradient-to-br from-emerald-450 via-emerald-500 to-teal-600 text-slate-950 border-emerald-300 scale-105 z-10 shadow-[0_0_15px_rgba(16,185,129,0.7)]'
-                                          : 'bg-[#091020]/95 hover:bg-slate-850 text-slate-300 border-[#1f3762]/95 hover:border-[#10b981]/50'
-                                      }`}
-                                      title={`${name} (#${toothNum})`}
-                                    >
-                                      <span className="text-[10px]">{toothNum}</span>
-                                      <span className="text-[5.5px] font-semibold opacity-60 mt-0.5 leading-none">
-                                        {toothIdx === 31 ? 'WIS' : [29,30].includes(toothIdx) ? 'MOL' : [27,28].includes(toothIdx) ? 'PRE' : toothIdx === 26 ? 'CAN' : 'INC'}
-                                      </span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {/* Upper Jaw panel */}
-                        <div className="flex flex-col items-center justify-center relative w-full h-[255px] select-none bg-slate-950/80 p-5 rounded-3xl border border-[#233860]/85 overflow-hidden shadow-3xl transition-all duration-300 animate-fade-in">
-                          {/* Holographic backdrop */}
-                          <div className="absolute inset-0 bg-[radial-gradient(#10b981_1.2px,transparent_1.2px)] [background-size:14px_14px] opacity-[0.08] pointer-events-none" />
-                          
-                          {/* Subtle scanner laser sweeping indicator */}
-                          {isScanning && activeJaw === 'upper' && (
-                            <div className="absolute inset-x-0 w-full h-1 bg-emerald-400/80 shadow-[0_0_25px_#10b981] animate-laser-scanning opacity-90 z-10" />
-                          )}
-
-                          {/* Info corner badge */}
-                          <span className="absolute top-3.5 left-3.5 px-2.5 py-1 text-[8.5px] font-mono font-black text-slate-305 bg-slate-900/90 rounded-lg border border-slate-800/80 flex items-center gap-1.5">
-                            <span className={`w-1.5 h-1.5 rounded-full ${selectedToothIndex < 16 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-                            {language === 'uz' ? 'YUQORI JAG\' (UPPER JAW)' : language === 'ru' ? 'ВЕРХНЯЯ ЧЕЛЮСТЬ' : 'UPPER JAW'}
+              {clinicServices.length === 0 ? (
+                <div className="text-center py-6 text-xs text-slate-500 font-bold">
+                  {language === 'uz' ? "Ushbu filialda hozircha faol tibbiy xizmatlar topilmadi." : language === 'ru' ? "В этом филиале пока нет активных медицинских услуг." : "No active medical services have been found for this branch yet."}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[350px] overflow-y-auto pr-1 customize-scrollbar">
+                  {clinicServices.map((srv) => (
+                    <div 
+                      key={srv.id} 
+                      className="p-3.5 rounded-2xl bg-[#080d1e] hover:bg-[#0c142b] border border-[#172545] hover:border-[#22386a] transition-all flex items-center justify-between gap-3 group"
+                    >
+                      <div className="space-y-1">
+                        <h5 className="text-xs font-extrabold text-slate-200 group-hover:text-white transition-colors">
+                          {srv.name}
+                        </h5>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] bg-indigo-500/5 text-indigo-400 font-mono px-2 py-0.5 rounded border border-indigo-500/10 uppercase font-black">
+                            {activeClinic?.id}
                           </span>
-
-                          {/* Left & Right directions labels */}
-                          <div className="absolute inset-x-5 top-5 flex justify-between pointer-events-none text-[8.5px] font-mono tracking-widest text-[#2f497a]/70 uppercase font-black">
-                            <span>◀ L (LEFT)</span>
-                            <span>R (RIGHT) ▶</span>
-                          </div>
-
-                          {/* Tooth buttons */}
-                          <div className="relative w-full h-[175px] mt-8 flex items-center justify-center">
-                            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((toothIdx, index) => {
-                              const { x: px, y: py } = getArchCoordinates(toothIdx);
-
-                              const toothNum = getToothDisplayNumber(toothIdx, dentalSystem);
-                              const isCurrentlyActive = selectedToothIndex === toothIdx;
-
-                              return (
-                                <button
-                                  key={toothIdx}
-                                  type="button"
-                                  onClick={() => { setSelectedToothIndex(toothIdx); setIsScanning(false); }}
-                                  className={`absolute w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 text-[10px] sm:text-xs font-mono font-black rounded-xl md:rounded-2xl border flex items-center justify-center transition-all cursor-pointer whitespace-nowrap select-none ${
-                                    isCurrentlyActive 
-                                      ? 'bg-gradient-to-br from-emerald-450 via-emerald-500 to-teal-600 text-slate-950 border-emerald-300 scale-120 z-20 shadow-[0_0_20px_rgba(16,185,129,0.9)]'
-                                      : 'bg-[#091020]/95 hover:bg-slate-800 text-slate-300 border-[#1f3762]/90 hover:border-[#10b981]/60 hover:scale-115'
-                                  }`}
-                                  style={{ left: `${px}%`, top: `${py}%`, transform: 'translate(-50%, -50%)' }}
-                                  title={`Tish #${toothNum} - ${getAnatomicalName(toothIdx)}`}
-                                >
-                                  <span className="relative">
-                                    {toothNum}
-                                    {toothIdx === 15 && (
-                                      <span className="absolute -top-1.5 -right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
-                                    )}
-                                    {toothIdx === 7 && (
-                                      <span className="absolute -top-1.5 -right-1.5 w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
-                                    )}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* Lower Jaw panel */}
-                        <div className="flex flex-col items-center justify-center relative w-full h-[255px] select-none bg-slate-950/80 p-5 rounded-3xl border border-[#233860]/85 overflow-hidden shadow-3xl transition-all duration-300 animate-fade-in">
-                          {/* Holographic backdrop */}
-                          <div className="absolute inset-0 bg-[radial-gradient(#10b981_1.2px,transparent_1.2px)] [background-size:14px_14px] opacity-[0.08] pointer-events-none" />
-                          
-                          {/* Subtle scanner laser sweeping indicator */}
-                          {isScanning && activeJaw === 'lower' && (
-                            <div className="absolute inset-x-0 w-full h-1 bg-emerald-400/80 shadow-[0_0_25px_#10b981] animate-laser-scanning opacity-90 z-10" />
-                          )}
-
-                          {/* Info corner badge */}
-                          <span className="absolute top-3.5 left-3.5 px-2.5 py-1 text-[8.5px] font-mono font-black text-slate-305 bg-slate-900/90 rounded-lg border border-slate-800/80 flex items-center gap-1.5">
-                            <span className={`w-1.5 h-1.5 rounded-full ${selectedToothIndex >= 16 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-                            {language === 'uz' ? 'PASTKI JAG\' (LOWER JAW)' : language === 'ru' ? 'НИЖНЯЯ ЧЕЛЮСТЬ' : 'LOWER JAW'}
-                          </span>
-
-                          {/* Left & Right directions labels */}
-                          <div className="absolute inset-x-5 top-5 flex justify-between pointer-events-none text-[8.5px] font-mono tracking-widest text-[#2f497a]/70 uppercase font-black">
-                            <span>◀ L (LEFT)</span>
-                            <span>R (RIGHT) ▶</span>
-                          </div>
-
-                          {/* Tooth buttons */}
-                          <div className="relative w-full h-[175px] mt-8 flex items-center justify-center">
-                            {[16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31].map((toothIdx, index) => {
-                              const { x: px, y: py } = getArchCoordinates(toothIdx);
-
-                              const toothNum = getToothDisplayNumber(toothIdx, dentalSystem);
-                              const isCurrentlyActive = selectedToothIndex === toothIdx;
-
-                              return (
-                                <button
-                                  key={toothIdx}
-                                  type="button"
-                                  onClick={() => { setSelectedToothIndex(toothIdx); setIsScanning(false); }}
-                                  className={`absolute w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 text-[10px] sm:text-xs font-mono font-black rounded-xl md:rounded-2xl border flex items-center justify-center transition-all cursor-pointer whitespace-nowrap select-none ${
-                                    isCurrentlyActive 
-                                      ? 'bg-gradient-to-br from-emerald-450 via-emerald-500 to-teal-600 text-slate-950 border-emerald-300 scale-120 z-20 shadow-[0_0_20px_rgba(16,185,129,0.9)]'
-                                      : 'bg-[#091020]/95 hover:bg-slate-800 text-slate-300 border-[#1f3762]/90 hover:border-[#10b981]/60 hover:scale-115'
-                                  }`}
-                                  style={{ left: `${px}%`, top: `${py}%`, transform: 'translate(-50%, -50%)' }}
-                                  title={`Tish #${toothNum} - ${getAnatomicalName(toothIdx)}`}
-                                >
-                                  <span className="relative">
-                                    {toothNum}
-                                    {toothIdx === 18 && (
-                                      <span className="absolute -top-1.5 -right-1.5 w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                                    )}
-                                    {toothIdx === 29 && (
-                                      <span className="absolute -top-1.5 -right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
-                                    )}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Right Telemetry Information output panel */}
-                  <div className="flex-1 bg-slate-950/90 border border-[#21355c]/65 rounded-2xl p-4.5 font-mono text-[10.5px] text-slate-300 space-y-3.5 max-w-full lg:max-w-xs flex flex-col justify-start">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                      <span className="text-[9.5px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1">
-                        <Activity className="w-3 h-3 text-emerald-400 shrink-0" />
-                        {language === 'uz' ? 'Tish AI Telemetriyasi' : language === 'ru' ? 'ИИ Телеметрия зуба' : 'Tooth AI Telemetry'}
-                      </span>
-                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-400/20 text-[8.5px] font-black">NODE: #{selectedTooth}</span>
-                    </div>
-
-                    {/* Quick Symptoms Inputs for clinical assessment */}
-                    <div className="space-y-2 select-none">
-                      <div className="text-left">
-                        <label className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block mb-1">
-                          {language === 'uz' ? '🦷 Xastalik alomatlari / Shikoyatlar:' : language === 'ru' ? '🦷 Жалобы и симптомы:' : '🦷 Personal Symptoms:'}
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={symptomsInput}
-                          onChange={(e) => setSymptomsInput(e.target.value)}
-                          placeholder={
-                            language === 'uz' 
-                              ? "Og'riq bormi? Sovuq-issiqqa sezasizmi? Karies bormi..." 
-                              : language === 'ru' 
-                                ? "Есть острая боль? Реакция на холодное? Кариес?" 
-                                : "Is there acute pain? Sensitivity? Describe issues..."
-                          }
-                          className="w-full text-[10px] p-2 bg-[#061025] hover:bg-[#091733] border border-[#1e3256]/80 text-white rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 font-sans resize-none transition-all placeholder-slate-500"
-                        />
-                        
-                        {/* Beautiful reactive quick symptom selectors */}
-                        <div className="flex flex-wrap gap-1 mt-1.5">
-                          {(language === 'uz' ? [
-                            { label: "Og'riq ⚡", text: "Tishda o'tkir og'riq bor" },
-                            { label: "Sezuvchanlik ❄️🔥", text: "Sovuq va issiqqa qattiq sezuvchanlik" },
-                            { label: "Karies doli 🦷", text: "Tishda karies dog'i bor" },
-                            { label: "Shish 🎈", text: "Milkda shish kuzatilmoqda" },
-                            { label: "Qonash 🩸", text: "Tish yuvganda milk qonashi" }
-                          ] : language === 'ru' ? [
-                            { label: "Боль ⚡", text: "Острая боль в зубе" },
-                            { label: "Чувствительность ❄️", text: "Реакция на холодное и горячее" },
-                            { label: "Кариес 🦷", text: "Темные пятна кариеса на зубе" },
-                            { label: "Опухоль 🎈", text: "Припухлость десны вокруг зуба" },
-                            { label: "Кровотечение 🩸", text: "Кровоточивость десен при чистке" }
-                          ] : [
-                            { label: "Toothache ⚡", text: "Acute pain in the tooth" },
-                            { label: "Sensitivity ❄️", text: "Extreme temperature sensitivity" },
-                            { label: "Caries 🦷", text: "Visible dental caries" },
-                            { label: "Swelling 🎈", text: "Gum swelling and tenderness" },
-                            { label: "Bleeding 🩸", text: "Gums bleeding when brushing" }
-                          ]).map((sym, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => {
-                                setSymptomsInput(prev => {
-                                  const trimmed = prev.trim();
-                                  if (!trimmed) return sym.text;
-                                  if (trimmed.includes(sym.text) || trimmed.toLowerCase().includes(sym.text.toLowerCase())) return prev;
-                                  return `${trimmed}, ${sym.text.toLowerCase()}`;
-                                });
-                              }}
-                              className="px-1.5 py-0.5 rounded-md bg-slate-900/80 hover:bg-emerald-500/20 border border-[#1e3256]/50 hover:border-emerald-500/50 text-[#10b981] hover:text-white text-[7.5px] font-sans font-medium transition-all active:scale-95 cursor-pointer"
-                            >
-                              {sym.label}
-                            </button>
-                          ))}
                         </div>
                       </div>
 
-                      {/* Multimodal Tooth Image Upload Zone */}
-                      <div className="text-left">
-                        <label className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block mb-1">
-                          📸 {language === 'uz' ? 'Tish rasmini yuklash (ixtiyoriy):' : language === 'ru' ? 'Фотография зуба (опционально):' : 'Tooth Image (Optional):'}
-                        </label>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-xs font-extrabold font-mono text-[#38bdf8] bg-[#0284c7]/10 px-2.5 py-1 rounded-lg border border-[#0284c7]/20">
+                          {srv.price.toLocaleString('uz-UZ')} {language === 'uz' ? "so'm" : language === 'ru' ? "сум" : "UZS"}
+                        </span>
                         
-                        <div
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            setIsDragging(true);
-                          }}
-                          onDragLeave={() => setIsDragging(false)}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            setIsDragging(false);
-                            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                              handleFileChange(e.dataTransfer.files[0]);
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBookingServiceId(srv.id);
+                            const bookingFormEl = document.getElementById("booking_registration_form_anchor");
+                            if (bookingFormEl) {
+                              bookingFormEl.scrollIntoView({ behavior: 'smooth' });
                             }
                           }}
-                          className={`relative border border-dashed rounded-xl p-2.5 flex flex-col items-center justify-center transition-all text-center cursor-pointer ${
-                            isDragging
-                              ? 'border-emerald-400 bg-emerald-500/10'
-                              : 'border-[#1e3256]/60 bg-[#061025] hover:bg-[#091733]/80 hover:border-emerald-500/40'
-                          }`}
-                          onClick={() => {
-                            const el = document.getElementById('image-upload-input');
-                            if (el) el.click();
-                          }}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider cursor-pointer shadow-md transition-all active:scale-95"
                         >
-                          <input
-                            id="image-upload-input"
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              if (e.target.files && e.target.files[0]) {
-                                handleFileChange(e.target.files[0]);
-                              }
-                            }}
-                          />
-                          
-                          {selectedToothImage ? (
-                            <div className="w-full flex items-center gap-2 relative">
-                              <img
-                                src={`data:${selectedToothImage.mimeType};base64,${selectedToothImage.data}`}
-                                alt="Selected Tooth"
-                                className="w-8 h-8 object-cover rounded border border-emerald-500/30"
-                              />
-                              <div className="flex-1 text-left min-w-0 pr-5">
-                                <p className="text-[8.5px] text-emerald-400 font-black truncate">✓ {imageFileName || 'tooth.jpg'}</p>
-                                <p className="text-[7px] text-slate-400 truncate uppercase font-mono">{selectedToothImage.mimeType}</p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedToothImage(null);
-                                  setImageFileName('');
-                                }}
-                                className="absolute right-0 top-1/2 -translate-y-1/2 p-0.5 text-rose-450 hover:text-rose-400 font-bold bg-slate-900/80 rounded-full hover:bg-slate-950 transition-all cursor-pointer text-[9px] w-4.5 h-4.5 flex items-center justify-center border border-rose-500/20"
-                                title={language === 'uz' ? 'O\'chirish' : language === 'ru' ? 'Удалить' : 'Remove'}
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="space-y-1">
-                              <Upload className="w-3.5 h-3.5 text-slate-400 mx-auto animate-pulse" />
-                              <p className="text-[8px] text-slate-350 leading-tight">
-                                {language === 'uz' 
-                                  ? "Rasm sudrab tashlang yoki bosing" 
-                                  : language === 'ru' 
-                                    ? "Перетащите фото или кликните" 
-                                    : "Drag & drop image or click"}
-                              </p>
-                              <span className="text-[6.5px] text-slate-500 uppercase block font-mono">JPG / PNG / WEBP</span>
-                            </div>
-                          )}
-                        </div>
+                          {language === 'uz' ? "Tanlash" : language === 'ru' ? "Выбрать" : "Select"}
+                        </button>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={handleAiDiagnostic}
-                        disabled={isAiLoading}
-                        className={`w-full py-2 rounded-xl transition-all cursor-pointer font-black text-[9.5px]/[normal] tracking-wider uppercase flex items-center justify-center gap-1.5 border ${
-                          isAiLoading
-                            ? 'bg-[#0f2d20]/30 border-emerald-500/40 text-emerald-400/80 cursor-wait'
-                            : 'bg-emerald-500 text-slate-950 font-black hover:bg-emerald-400 border-transparent shadow-[0_0_12px_rgba(16,185,129,0.25)] hover:scale-[1.02]'
-                        }`}
-                      >
-                        {isAiLoading ? (
-                          <>
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            <span>{language === 'uz' ? 'AI Hisoblamoqda...' : language === 'ru' ? 'ИИ Вычисляет...' : 'AI Computing...'}</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-3 h-3 text-slate-950 fill-current" />
-                            <span>{language === 'uz' ? 'Klinik tahlil o\'tkazish' : language === 'ru' ? 'Запустить анализ ИИ' : 'Compute Diagnostic'}</span>
-                          </>
-                        )}
-                      </button>
                     </div>
-
-                    {/* Output segment rendering either dynamic Gemini results or default baseline profile */}
-                    {isAiLoading ? (
-                      <div className="border border-[#10b981]/20 rounded-xl p-3 bg-slate-950/60 flex flex-col items-center justify-center py-6 space-y-2 select-none">
-                        <div className="relative">
-                          <div className="w-7 h-7 rounded-full border-2 border-emerald-500/10 border-t-emerald-400 animate-spin" />
-                          <Activity className="w-3.5 h-3.5 text-emerald-400 absolute inset-0 m-auto animate-pulse" />
-                        </div>
-                        <span className="text-[8px] font-bold text-slate-400 animate-pulse tracking-widest uppercase">
-                          {language === 'uz' ? 'Generatsiya qilinmoqda...' : language === 'ru' ? 'Генерация результатов...' : 'Running LLM Diagnostic...'}
-                        </span>
-                      </div>
-                    ) : aiOutput ? (
-                      <div className="space-y-2.5 text-left select-all animate-fade-in text-[10px]">
-                        <div className="space-y-1.5 border-b border-slate-900 pb-2">
-                          <p className="flex justify-between items-center bg-slate-900/50 p-1 px-1.5 rounded">
-                            <strong className="text-slate-400">{language === 'uz' ? 'Yemirilish (Abrasion):' : language === 'ru' ? 'Истирание эмали:' : 'Enamel Abrasion:'}</strong> 
-                            <span className="text-white font-bold">{aiOutput.enamelAbrasion}</span>
-                          </p>
-                          <p className="flex justify-between items-center bg-slate-900/50 p-1 px-1.5 rounded">
-                            <strong className="text-slate-400">{language === 'uz' ? 'Salomatlik koeff:' : language === 'ru' ? 'Фактор здоровья:' : 'Health Factor:'}</strong> 
-                            <span className={`font-black uppercase text-[9px] ${
-                              aiOutput.healthFactor.toLowerCase().includes('critical') || aiOutput.healthFactor.toLowerCase().includes('kritik') || aiOutput.healthFactor.toLowerCase().includes('low')
-                                ? 'text-red-400'
-                                : aiOutput.healthFactor.toLowerCase().includes('fair') || aiOutput.healthFactor.toLowerCase().includes('moderate')
-                                  ? 'text-amber-400'
-                                  : 'text-emerald-400'
-                            }`}>{aiOutput.healthFactor}</span>
-                          </p>
-                          <p className="flex flex-col bg-emerald-500/5 p-1 px-1.5 border border-emerald-500/20 rounded">
-                            <strong className="text-emerald-400 text-[8px] uppercase tracking-wider">{language === 'uz' ? 'Tavsiya muolaja:' : language === 'ru' ? 'Рекомендовано:' : 'Recommended Treatment:'}</strong> 
-                            <span className="text-white font-bold mt-0.5">{aiOutput.recommendedTreatment}</span>
-                          </p>
-                        </div>
-
-                        {/* Rationale text paragraph */}
-                        <div className="bg-[#040813] border border-[#21355c]/30 rounded-lg p-2 text-slate-350 text-[9.5px] leading-relaxed select-text font-sans">
-                          {aiOutput.diagnosticText}
-                        </div>
-
-                        {/* Bullet list actionPlan */}
-                        {aiOutput.actionPlan && aiOutput.actionPlan.length > 0 && (
-                          <div className="space-y-1 select-none">
-                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block">{language === 'uz' ? 'TAVSIYALARNING AMALIY REJASI:' : language === 'ru' ? 'ПЛАН ДЕЙСТВИЙ ДЛЯ ПАЦИЕНТА:' : 'PRACTICAL ACTION PLAN:'}</span>
-                            <ul className="list-disc pl-3 text-[9px] text-[#10b981] space-y-0.5 text-slate-300 font-sans">
-                              {aiOutput.actionPlan.map((step, idx) => (
-                                <li key={idx}>{step}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {/* Integration type footer badge */}
-                        <div className="pt-2 border-t border-slate-900 select-none flex items-center justify-between text-[7.5px] font-bold tracking-widest uppercase">
-                          <span className="text-slate-500">DSTOMA DIAGNOSTIC v3.5</span>
-                          <span className="px-1.5 py-0.5 rounded text-slate-950 font-black bg-emerald-400">
-                            ⭐ NODE LIVE
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Classical telemetry panel fallback with prompt reminder */
-                      <div className="space-y-2 text-left animate-fade-in text-[10px]">
-                        <div className="space-y-2 text-xs">
-                          <p className="flex justify-between items-center bg-slate-900/50 p-1 px-1.5 rounded">
-                            <strong className="text-slate-400">
-                              {language === 'uz' ? 'Tish indeksi:' : language === 'ru' ? 'Индекс зуба:' : 'Tooth Index:'}
-                            </strong>
-                            <span className="text-white font-mono font-bold">
-                              #{selectedTooth} ({selectedToothIndex < 16 ? (language === 'uz' ? "Yuqori Jag'" : language === 'ru' ? 'Верхняя Челюсть' : 'Upper Jaw') : (language === 'uz' ? "Pastki Jag'" : language === 'ru' ? 'Нижняя Челюсть' : 'Lower Jaw')})
-                            </span>
-                          </p>
-
-                          <p className="flex justify-between items-center bg-slate-900/50 p-1 px-1.5 rounded">
-                            <strong className="text-slate-400">
-                              {language === 'uz' ? 'Anatomik nomi:' : language === 'ru' ? 'Название зуба:' : 'Anatomical Name:'}
-                            </strong>
-                            <span className="text-[#10b981] font-bold text-right text-[10.5px]">
-                              {getAnatomicalName(selectedToothIndex)}
-                            </span>
-                          </p>
-
-                          <p className="flex flex-col bg-slate-900/40 p-1.5 px-2 border border-[#1e3256]/30 rounded-xl">
-                            <strong className="text-[#10b981] text-[10px]">
-                              {language === 'uz' ? 'Tavsiya etilgan muolaja:' : language === 'ru' ? 'Рекомендованное лечение:' : 'Recommended Treatment:'}
-                            </strong>
-                            <span className={"text-[11px] font-bold mt-0.5 " + ([29, 15].includes(selectedToothIndex) ? "text-red-400" : [18, 7].includes(selectedToothIndex) ? "text-amber-400" : "text-emerald-400")}>
-                              {selectedToothIndex === 18 
-                                ? (language === 'uz' ? "Kompozit plomba o'rnatish" : language === 'ru' ? "Установка композитной пломбы" : "Composite filling installation")
-                                : selectedToothIndex === 27 
-                                  ? (language === 'uz' ? 'Klinik kuzatuv' : language === 'ru' ? 'Клиническое наблюдение' : 'Clinical monitoring')
-                                  : selectedToothIndex === 29 
-                                    ? (language === 'uz' ? 'Endodontik davolash' : language === 'ru' ? 'Эндодонтическое лечение' : 'Endodontic treatment')
-                                    : selectedToothIndex === 7 
-                                      ? (language === 'uz' ? 'Flyuorizatsiya va laklash' : language === 'ru' ? 'Фторирование и лакирование' : 'Fluoridation & varnishing')
-                                      : selectedToothIndex === 15 
-                                        ? (language === 'uz' ? "Xirurgik o'chirish (Ekstraktsiya)" : language === 'ru' ? "Хирургическое удаление (Экстракция)" : "Surgical extraction")
-                                        : (language === 'uz' ? 'Profilaktik tozalash' : language === 'ru' ? 'Профилактическая чистка' : 'Preventive cleaning')
-                              }
-                            </span>
-                          </p>
-
-                          <p className="flex justify-between items-center bg-slate-900/50 p-1 px-1.5 rounded">
-                            <strong className="text-slate-400 font-bold">
-                              {language === 'uz' ? 'Salomatlik koeff:' : language === 'ru' ? 'Фактор здоровья:' : 'Health Factor:'}
-                            </strong>
-                            <span className={"font-black uppercase text-[9px] " + (selectedToothIndex === 29 ? "text-red-400" : [15, 18].includes(selectedToothIndex) ? "text-amber-400" : "text-emerald-400")}>
-                              {selectedToothIndex === 18 
-                                ? (language === 'uz' ? 'Qoniqarli (72%)' : language === 'ru' ? 'Удовлетворительное (72%)' : 'Fair (72%)')
-                                : selectedToothIndex === 29 
-                                  ? (language === 'uz' ? 'Kritik (40%)' : language === 'ru' ? 'Критическое (40%)' : 'Critical (40%)') 
-                                  : selectedToothIndex === 7 
-                                    ? (language === 'uz' ? 'Yaxshi (85%)' : language === 'ru' ? 'Хорошее (85%)' : 'Good (85%)')
-                                    : selectedToothIndex === 15 
-                                      ? (language === 'uz' ? 'Muammoli (55%)' : language === 'ru' ? 'Проблемное (55%)' : 'Impaired (55%)')
-                                      : (language === 'uz' ? "Sog'lom / A'lo (98%)" : language === 'ru' ? 'Отличное (98%)' : 'Excellent (98%)')}
-                            </span>
-                          </p>
-                        </div>
-
-                        <div className="pt-1 select-none flex items-center gap-1.5 text-slate-400 text-[8.5px] border-t border-slate-900 pt-2">
-                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          <span>
-                            {language === 'uz' 
-                              ? 'Aniqroq tahlil uchun xastalik belgilarini yozib "Diagnostic" tugmasini bosing.' 
-                              : language === 'ru' 
-                                ? 'Для диагностики напишите симптомы и нажмите кнопку "Diagnostic".' 
-                                : 'Type symptoms above and click "Diagnostic" for live deep assessment.'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  ))}
                 </div>
+              )}
+            </div>
 
-                {/* Sweep Control toolbar */}
-                <div className="mt-4 pt-4 border-t border-[#1d2d4c]/60 flex items-center justify-between select-none">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        let prev = selectedToothIndex - 1;
-                        if (prev < 0) prev = 31;
-                        setSelectedToothIndex(prev);
-                        setIsScanning(false);
-                      }}
-                      className="p-1 px-3 bg-[#0a1122]/95 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-black rounded-lg active:scale-95 transition-all text-center cursor-pointer"
-                    >
-                      ◀
-                    </button>
-                    
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsScanning(true);
-                        setTimeout(() => {
-                          setIsScanning(false);
-                          handleAiDiagnostic();
-                        }, 1500);
-                      }}
-                      disabled={isScanning || isAiLoading}
-                      className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
-                        isScanning 
-                          ? 'bg-emerald-600/25 text-emerald-300 border border-emerald-500/40'
-                          : 'bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/30 hover:bg-[#10b981]/25 disabled:opacity-50'
-                      }`}
-                    >
-                      <Sparkles className="w-3 h-3 text-[#10b981] fill-current animate-pulse" />
-                      <span>{isScanning ? (language === 'uz' ? "Skanyerlash..." : language === 'ru' ? "Сканирование..." : "Scanning...") : (language === 'uz' ? "Diagnostik Skand" : language === 'ru' ? "Диагностич. Скан" : "Diagnostic Scan")}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        let next = selectedToothIndex + 1;
-                        if (next > 31) next = 0;
-                        setSelectedToothIndex(next);
-                        setIsScanning(false);
-                      }}
-                      className="p-1 px-3 bg-[#0a1122]/95 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-black rounded-lg active:scale-95 transition-all text-center cursor-pointer"
-                    >
-                      ▶
-                    </button>
-                  </div>
-
-                  <span className="text-[9px] text-slate-500 font-bold font-mono uppercase tracking-widest pt-1">
-                    Telemetry Tick: {scannerTick}
-                  </span>
-                </div>
+            </div>
+          ) : (
+            /* Segment when there is no selected clinic yet, prompt them clearly and show the maps for manual selection */
+            <div className="bg-[#0b1022]/85 border border-[#203254]/80 rounded-3xl p-8 text-center space-y-3 max-w-2xl mx-auto animate-fade-in shadow-2xl relative">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
+              <div className="w-12 h-12 bg-slate-900 border border-slate-800 text-yellow-500 rounded-2xl mx-auto flex items-center justify-center text-xl shadow-lg">
+                📍
               </div>
+              <h3 className="text-xs font-black text-slate-100 uppercase tracking-widest font-sans">
+                Klinika Filiali Tanlanmagan
+              </h3>
+              <p className="text-[11px] text-slate-400 font-semibold max-w-md mx-auto leading-relaxed">
+                {language === 'uz' 
+                  ? "Xizmatlarni ko'rish va navbat olish uchun yuqoridagi interaktiv xaritadan yoki ro'yxatdan o'zingiz xohlagan filialni tanlang. Sizga eng yaqini maxsus belgi orqali tavsiya qilinadi."
+                  : language === 'ru'
+                    ? "Для просмотра услуг и записи в очередь выберите желаемый филиал на интерактивной карте или в списке выше. Ближайший к вам филиал будет рекомендован специальной отметкой."
+                    : "To view services and join the queue, please select your preferred branch from the interactive map or list above. The closest one to you will be recommended with a special badge."}
+              </p>
             </div>
-
-
-
-            {/* removed doctor biographies and services list as requested */}
-          </div>
-        ) : (
-          /* Segment when there is no selected clinic yet, prompt them clearly */
-          <div className="bg-[#0b1022]/80 border border-[#203254]/80 rounded-3xl p-10 text-center space-y-4 max-w-2xl mx-auto py-12 animate-fade-in shadow-2xl relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
-            <div className="w-16 h-16 bg-slate-900 border border-slate-800 text-yellow-500 rounded-3xl mx-auto flex items-center justify-center text-3xl shadow-lg">
-              📍
-            </div>
-            <h3 className="text-sm font-black text-slate-100 uppercase tracking-widest font-sans">
-              Klinika Filiali Tanlanmagan
-            </h3>
-            <p className="text-xs text-slate-400 font-semibold max-w-md mx-auto leading-relaxed">
-              Klinikamiz tarkibini, ko'rsatiladigan tibbiy xizmatlar ro'yxatini va narxlarini ko'rish hamda onlayn chipta olish uchun yuqoridagi O'zbekiston neon xaritasidan kerakli filialni tanlang.
-            </p>
-          </div>
-        )
+          )}
+        </div>
       )}
 
 
       {/* ---------------- VIEW 2: REGISTER PATIENT FORM (SCREENSHOT 2) ---------------- */}
       {activeSubView === 'register' && (
-        <div className="max-w-xl mx-auto bg-white rounded-3xl shadow-[0_20px_50px_rgba(15,23,42,0.06)] border border-slate-100 overflow-hidden animate-fade-in text-left">
+        <div className="max-w-xl mx-auto bg-white text-slate-800 rounded-3xl shadow-[0_20px_50px_rgba(15,23,42,0.06)] border border-slate-100 overflow-hidden animate-fade-in text-left">
           {/* Header */}
           <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-5 border-b border-slate-100 text-center relative">
             <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center justify-center gap-2">
@@ -1992,7 +1543,7 @@ export default function ClientDashboard({
 
       {/* ---------------- VIEW 1.5: LOGIN PATIENT FORM ---------------- */}
       {activeSubView === 'login' && (
-        <div className="max-w-md mx-auto bg-white rounded-3xl shadow-[0_20px_50px_rgba(15,23,42,0.06)] border border-slate-100 overflow-hidden animate-fade-in text-left">
+        <div className="max-w-md mx-auto bg-white text-slate-800 rounded-3xl shadow-[0_20px_50px_rgba(15,23,42,0.06)] border border-slate-100 overflow-hidden animate-fade-in text-left">
           {/* Header */}
           <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-5 border-b border-slate-100 text-center">
             <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center justify-center gap-2">
@@ -2020,9 +1571,6 @@ export default function ClientDashboard({
                 placeholder="AA1234567"
                 className="w-full bg-slate-50/70 text-xs font-bold text-slate-800 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/25 focus:outline-none transition-all uppercase font-mono tracking-widest placeholder:text-slate-400"
               />
-              <p className="text-[10px] text-slate-400 font-semibold mt-1">
-                Demo uchun pasport: <span className="font-bold font-mono">AA1234567</span>
-              </p>
             </div>
 
             {/* Password */}
@@ -2038,9 +1586,6 @@ export default function ClientDashboard({
                 placeholder="••••••"
                 className="w-full bg-slate-50/70 text-xs font-semibold text-slate-800 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/25 focus:outline-none transition-all placeholder:text-slate-400"
               />
-              <p className="text-[10px] text-slate-400 font-semibold mt-1">
-                Demo parol: <span className="font-bold font-mono">123456</span>
-              </p>
             </div>
 
             {/* Action Buttons */}
@@ -2107,9 +1652,9 @@ export default function ClientDashboard({
           </div>
 
           {/* New 3-Column Premium Stats Cards Row */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-slate-800">
             {/* Stat Card 1 */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-[0_10px_30px_rgba(15,23,42,0.02)] hover:shadow-[0_15px_40px_rgba(15,23,42,0.04)] transition-all flex items-center gap-4 group">
+            <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-100 shadow-[0_10px_30px_rgba(15,23,42,0.02)] hover:shadow-[0_15px_40px_rgba(15,23,42,0.04)] transition-all flex items-center gap-4 group">
               <div className="w-12 h-12 bg-indigo-50/70 text-indigo-650 rounded-2xl flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform">
                 ⏳
               </div>
@@ -2133,7 +1678,7 @@ export default function ClientDashboard({
             </div>
 
             {/* Stat Card 2 */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-[0_10px_30px_rgba(15,23,42,0.02)] hover:shadow-[0_15px_40px_rgba(15,23,42,0.04)] transition-all flex items-center gap-4 group">
+            <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-100 shadow-[0_10px_30px_rgba(15,23,42,0.02)] hover:shadow-[0_15px_40px_rgba(15,23,42,0.04)] transition-all flex items-center gap-4 group">
               <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform">
                 ✅
               </div>
@@ -2146,7 +1691,7 @@ export default function ClientDashboard({
             </div>
 
             {/* Stat Card 3 */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-[0_10px_30px_rgba(15,23,42,0.02)] hover:shadow-[0_15px_40px_rgba(15,23,42,0.04)] transition-all flex items-center gap-4 group">
+            <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-100 shadow-[0_10px_30px_rgba(15,23,42,0.02)] hover:shadow-[0_15px_40px_rgba(15,23,42,0.04)] transition-all flex items-center gap-4 group">
               <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform">
                 ⭐
               </div>
@@ -2159,13 +1704,376 @@ export default function ClientDashboard({
             </div>
           </div>
 
+          {/* DStoma Smart AI v3.5 - Client Cabinet Interactive Block */}
+          <div className="bg-[#111827]/95 border border-slate-700/50 rounded-3xl p-6 md:p-8 space-y-6 shadow-2xl animate-fade-in text-slate-100 select-none">
+            {/* Header Panel */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800 pb-5 gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="p-1 px-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-xs font-bold font-mono tracking-wide uppercase border border-emerald-500/15">
+                    DStoma Smart AI v3.5
+                  </span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                </div>
+                <h3 className="text-lg font-black text-slate-100 tracking-tight font-sans">
+                  {language === 'uz' ? "Sizning Shaxsiy 3D Dental Diagnostika Tizimingiz" : language === 'ru' ? "Ваша Личная Система 3D Дентал Диагностики" : "Your Personal 3D Dental Diagnostic System"}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {language === 'uz' ? "Kabinetingizdagi interaktiv 3D tish modeli yordamida muloqot va sun'iy intellekt tahlili" : "Select and analyze individual tooth statuses with automated dental intelligence"}
+                </p>
+              </div>
+
+              {/* System settings toggle button */}
+              <div className="flex bg-slate-900 border border-slate-800 p-0.5 rounded-xl text-xs font-medium">
+                <button
+                  type="button"
+                  onClick={() => setDentalSystem('fdi')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    dentalSystem === 'fdi'
+                      ? 'bg-emerald-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {language === 'uz' ? "FDI (Evropa)" : "FDI"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDentalSystem('universal')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    dentalSystem === 'universal'
+                      ? 'bg-emerald-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {language === 'uz' ? "AQSh (1-32)" : "Universal"}
+                </button>
+              </div>
+            </div>
+
+            {/* DYNAMIC COMPLAINTS & SCAN LOADER FOR LIVE GEMINI APIS (PLACED AT THE TOP) */}
+            <div id="ai-smart-assistant-system" className="bg-[#0b1329]/65 border border-slate-800/80 p-5 md:p-6 rounded-2xl space-y-4 shadow-2xl relative overflow-hidden backdrop-blur-md">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-[#10b981]/5 rounded-full blur-3xl pointer-events-none" />
+              
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-800/80 mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[11px] uppercase font-extrabold tracking-widest text-[#00f2fe] font-mono">
+                    {language === 'uz' ? "TIAMI SHAXSIY AI DIAGNOSTIKA PANELI" : "TIAMI PERSONAL AI DIAGNOSTIC PANEL"}
+                  </span>
+                </div>
+
+                {/* ACTIVE TOOTH SELECTOR INDICATOR MIGRATED FROM SIDEBAR */}
+                <div className="flex items-center gap-2 bg-[#041227] border border-[#0d2a4f] px-3 py-1 rounded-xl shadow-inner">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  <span className="text-[10px] font-bold text-slate-400">
+                    {language === 'uz' ? "Tanlangan Tish:" : "Diagnosing Tooth:"}
+                  </span>
+                  <span className="text-xs font-black text-emerald-400 font-mono">
+                    #{selectedTooth}
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-medium font-sans">
+                    ({getAnatomicalName(selectedToothIndex)})
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
+                {/* Left complaints column */}
+                <div className="md:col-span-5 text-left flex flex-col justify-between space-y-2.5">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1.5 font-bold">
+                      <Bot className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>{language === 'uz' ? "✍️ Shikoyat va Alomatlar:" : "✍️ Describe Symptoms:"}</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={symptomsInput}
+                      onChange={(e) => setSymptomsInput(e.target.value)}
+                      placeholder={
+                        language === 'uz'
+                          ? "Masalan: Issiq-sovuqqa og'riq bor, milk qonashi yoki karies doli..."
+                          : "Describe any discomfort, temperature sensitivity, or visible issues..."
+                      }
+                      className="w-full text-xs font-sans p-3 bg-[#030913] hover:bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-100 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-transparent transition-all placeholder-slate-650 h-[85px] resize-none font-mono"
+                    />
+                  </div>
+
+                  {/* Badges shortcuts */}
+                  <div className="flex flex-wrap gap-1">
+                    {(language === 'uz' ? [
+                      { label: "Og'riq ⚡", text: "Tishda o'tkir og'riq bor" },
+                      { label: "Sezuvchanlik ❄️", text: "Issiq-sovuqqa qattiq sezuvchanlik" },
+                      { label: "Karies doli 🦷", text: "Tishda karies dog'i bor" },
+                      { label: "Qonash 🩸", text: "Tish yubganda milk qonashi kuzatiladi" }
+                    ] : [
+                      { label: "Toothache ⚡", text: "Acute pain in the tooth" },
+                      { label: "Sensitivity ❄️", text: "Extreme hot or cold sensitivity" },
+                      { label: "Caries Spot 🦷", text: "Visible caries or dark spot" },
+                      { label: "Bleeding 🩸", text: "Gums bleeding when brushing" }
+                    ]).map((item, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => {
+                          setSymptomsInput(prev => {
+                            const trimmed = prev.trim();
+                            if (!trimmed) return item.text;
+                            if (prev.includes(item.text)) return prev;
+                            return `${trimmed}, ${item.text.toLowerCase()}`;
+                          });
+                        }}
+                        className="px-2 py-0.5 text-[9px] rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 transition-all cursor-pointer"
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Middle X-Ray photo column */}
+                <div className="md:col-span-4 text-left flex flex-col justify-start space-y-2">
+                  <label className="text-[11px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1.5 font-bold">
+                    <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{language === 'uz' ? "📸 Rentgen / Foto yuklash:" : "📸 X-Ray or Tooth Photo:"}</span>
+                  </label>
+
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragging(true);
+                    }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragging(false);
+                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        handleFileChange(e.dataTransfer.files[0]);
+                      }
+                    }}
+                    onClick={() => {
+                      const fileInput = document.getElementById('dental-xray-file-input-cabinet');
+                      if (fileInput) fileInput.click();
+                    }}
+                    className={`h-[110px] bg-[#030913] border border-dashed rounded-xl flex flex-col items-center justify-center p-3 cursor-pointer hover:border-emerald-500/40 hover:bg-[#061022]/40 transition-all text-center ${
+                      isDragging ? 'border-emerald-500 bg-emerald-500/5' : 'border-slate-800'
+                    }`}
+                  >
+                    <input
+                      id="dental-xray-file-input-cabinet"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          handleFileChange(e.target.files[0]);
+                        }
+                      }}
+                    />
+                    
+                    {selectedToothImage ? (
+                      <div className="flex flex-col items-center gap-1 max-w-full">
+                        <Check className="w-5 h-5 text-emerald-400 shrink-0" />
+                        <span className="text-[10px] text-slate-300 font-bold truncate max-w-[155px] font-mono">
+                          {imageFileName || "Scan_Uploaded.jpg"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedToothImage(null);
+                            setImageFileName('');
+                          }}
+                          className="text-[9px] text-rose-500 hover:text-rose-400 font-black uppercase tracking-wider block mt-1 hover:underline"
+                        >
+                          {language === 'uz' ? "[O'chirish]" : "[Remove]"}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <Upload className="w-4 h-4 text-slate-550 mx-auto" />
+                        <p className="text-[10px] text-slate-450 uppercase font-black tracking-wider">
+                          {language === 'uz' ? "SUDRAO'T TASHHLANG YOKI SELECTION" : "DRAG & DROP IMAGE OR CLICK"}
+                        </p>
+                        <p className="text-[8.5px] text-slate-600 font-medium font-mono">
+                          {language === 'uz' ? "PNG, JPG formatida rentgen" : "SUPPORTED FORMAT: DIAGNOSTIC GRAPH"}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right submission trigger button */}
+                <div className="md:col-span-3 text-left flex flex-col justify-end space-y-2">
+                  <div className="text-right">
+                    <span className="text-[8px] border border-[#0d2a4f] text-cyan-400/90 font-bold font-mono px-2 py-0.5 rounded bg-cyan-950/20 uppercase tracking-widest leading-none">
+                      {language === 'uz' ? "LIVE MULTI-MODAL MODEL // ACTIVE" : "LIVE MULTI-MODAL MODEL"}
+                    </span>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={handleAiDiagnostic}
+                    disabled={isAiLoading || isScanning}
+                    className="w-full h-[110px] rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black flex flex-col items-center justify-center p-4 cursor-pointer hover:shadow-[0_0_20px_rgba(16,185,129,0.35)] transition-all duration-300 disabled:opacity-45"
+                  >
+                    {isAiLoading ? (
+                      <>
+                        <RefreshCw className="w-6 h-6 animate-spin mb-1 text-slate-950" />
+                        <span className="text-[9.5px] uppercase font-mono tracking-widest">{language === 'uz' ? "TAXLIL JARAYONIDA..." : "EVALUATING MODEL..."}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Bot className="w-6 h-6 mb-1 text-slate-950" />
+                        <span className="text-[10px] uppercase tracking-widest font-mono text-center">
+                          {language === 'uz' ? "SUN'IY INTELLEKT TAHLILI" : "RUN AI ASSESSMENT"}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* AI DIAGNOSIS HISTORY LOGS (FOR INDIVIDUAL PATIENT TRACKING) */}
+            {currentUser?.diagnoses && currentUser.diagnoses.length > 0 && (
+              <div className="bg-[#081225] border border-slate-800/80 p-5 rounded-2xl space-y-3 shadow-inner">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black text-slate-100 uppercase tracking-wider font-sans flex items-center gap-1.5">
+                    <span>📑 {language === 'uz' ? "Sizning Diagnostikalar Tarixingiz" : "Your Diagnostics History"}</span>
+                    <span className="px-2 py-0.5 bg-indigo-500/15 text-indigo-400 text-[10px] font-mono font-bold rounded">
+                      {currentUser.diagnoses.length} {language === 'uz' ? 'ta taxlil' : 'records'}
+                    </span>
+                  </h4>
+                  <button
+                    onClick={() => {
+                      setSymptomsInput('');
+                      setSelectedToothImage(null);
+                      setImageFileName('');
+                      setAiOutput(null);
+                      showToast(language === 'uz' ? "Yangi tahlilni boshlashingiz mumkin." : "Reset for new diagnosis.");
+                    }}
+                    className="text-[10px] font-black text-emerald-400 hover:text-emerald-300 transition-all uppercase tracking-widest font-mono px-2.5 py-1.5 bg-emerald-950/40 rounded border border-emerald-900/30 font-bold"
+                  >
+                    + {language === 'uz' ? "YANGI TASHXIS" : "NEW ASSESSMENT"}
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-[190px] overflow-y-auto pr-1">
+                  {currentUser.diagnoses.map((diag) => (
+                    <button
+                      key={diag.id}
+                      onClick={() => {
+                        setSymptomsInput(diag.symptoms);
+                        setSelectedToothIndex(diag.toothIndex);
+                        setAiOutput({
+                          enamelAbrasion: diag.enamelAbrasion,
+                          healthFactor: diag.healthFactor,
+                          recommendedTreatment: diag.recommendedTreatment,
+                          diagnosticText: diag.diagnosticText,
+                          actionPlan: diag.actionPlan
+                        });
+                        showToast(language === 'uz' ? `Tish #${diag.toothNumber} tahlili yuklandi!` : `Tooth #${diag.toothNumber} evaluation loaded!`);
+                      }}
+                      className="text-left p-3 bg-[#030913]/90 border border-slate-800 hover:border-emerald-500/40 rounded-xl transition-all flex flex-col justify-between hover:bg-[#061022] group"
+                    >
+                      <div className="mb-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-extrabold text-xs text-emerald-400 font-mono">#{language === 'uz' ? 'Tish' : 'Tooth'} {diag.toothNumber}</span>
+                          <span className="text-[9px] font-mono text-slate-500 font-bold">{new Date(diag.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <span className="text-[9.5px] font-medium text-slate-400 truncate block">
+                          {getAnatomicalName(diag.toothIndex)}
+                        </span>
+                        <p className="text-[10px] text-slate-350 truncate mt-1 italic">
+                          "{diag.symptoms}"
+                        </p>
+                      </div>
+                      <div className="pt-2 border-t border-slate-850/80 flex items-center justify-between text-[11px] font-bold">
+                        <span className="text-slate-500">{language === 'uz' ? "Holati:" : "Health:"}</span>
+                        <span className={diag.healthFactor.toLowerCase().includes('krit') || diag.healthFactor.toLowerCase().includes('crit') ? 'text-rose-400' : 'text-emerald-400'}>
+                          {diag.healthFactor}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* REPORT OUTCOMES IF COMPUTED OR GENERATED (PLACED AT THE TOP RIGHT UNDER CONTROLS) */}
+            <AnimatePresence>
+              {aiOutput && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  className="bg-[#10b981]/5 border border-emerald-500/20 p-5 rounded-2xl space-y-4 text-left relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl z-0 pointer-events-none" />
+                  <div className="flex items-center gap-2 border-b border-[#10b981]/10 pb-2 relative z-10">
+                    <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse fill-current" />
+                    <h4 className="text-[10.5px] font-black text-emerald-400 uppercase tracking-widest font-mono">
+                      {language === 'uz' ? "TIAMI AI EX-RAY LAB xulosasi" : "TIAMI AI EX-RAY LAB DIAGNOSTIC BRIEF"}
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs relative z-10">
+                    <div className="space-y-1.5 p-3.5 bg-[#030a15] border border-slate-850/60 rounded-xl">
+                      <span className="text-[8px] font-black text-slate-550 uppercase tracking-widest block font-mono">{language === 'uz' ? "DIAGNOSTIK XULOOSA" : "CLINICAL SUMMARY"}</span>
+                      <p className="text-slate-300 font-medium font-sans leading-relaxed">{aiOutput.diagnosticText}</p>
+                    </div>
+
+                    <div className="space-y-1.5 p-3.5 bg-[#030a15] border border-slate-850/60 rounded-xl">
+                      <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest block font-mono">{language === 'uz' ? "REJALASHTIRILGAN DAVOLASH" : "RECOMMENDED INTERVENTIONS"}</span>
+                      <p className="font-semibold text-emerald-300 font-sans leading-relaxed">{aiOutput.recommendedTreatment}</p>
+                    </div>
+                  </div>
+
+                  {/* Integrated clinical checklist */}
+                  {aiOutput.actionPlan && aiOutput.actionPlan.length > 0 && (
+                    <div className="space-y-2 pt-1 text-xs relative z-10">
+                      <span className="text-[8.5px] font-black text-slate-500 tracking-wider uppercase block font-mono">
+                        {language === 'uz' ? "Klinik davolash qadamlari va yo'riqnomalar:" : "Prescribed patient action guide:"}
+                      </span>
+                      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300">
+                        {aiOutput.actionPlan.map((step, idx) => (
+                          <li key={idx} className="flex items-start gap-2 bg-[#020b17] p-2.5 border border-slate-850/60 rounded-lg leading-relaxed font-sans text-[11px]">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                            <span className="font-medium text-slate-300">{step}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Master Layout */}
+            <div className="w-full">
+              <ThreeDentalModel
+                selectedToothIndex={selectedToothIndex}
+                setSelectedToothIndex={setSelectedToothIndex}
+                language={language}
+                dentalSystem={dentalSystem}
+                getToothMetrics={getToothMetrics}
+                getToothDisplayNumber={getToothDisplayNumber}
+                getAnatomicalName={getAnatomicalName}
+                globalAiResult={aiOutput}
+              />
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start mt-6">
             
             {/* Left Column (Profile & Bot setting) */}
             <div className="lg:col-span-4 space-y-6">
               
               {/* Profile card with Name of patient */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-150 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_40px_rgba(0,0,0,0.04)] transition-all">
+              <div className="bg-white text-slate-800 rounded-3xl p-6 border border-slate-150 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_40px_rgba(0,0,0,0.04)] transition-all">
                 <div className="bg-gradient-to-br from-indigo-600 via-indigo-750 to-purple-700 text-white p-6 rounded-2xl flex flex-col gap-1 items-center text-center relative overflow-hidden shadow-md">
                   <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
                   <div className="w-16 h-16 bg-white/95 text-indigo-750 rounded-full flex items-center justify-center font-black text-2xl select-none shadow-md border-2 border-white/20">
@@ -2215,7 +2123,7 @@ export default function ClientDashboard({
               </div>
 
               {/* Bot settings container card */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-150 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_40px_rgba(0,0,0,0.04)] transition-all">
+              <div className="bg-white text-slate-800 rounded-3xl p-6 border border-slate-150 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_40px_rgba(0,0,0,0.04)] transition-all">
                 <div className="flex items-center gap-2.5 mb-3">
                   <span className="text-2xl">🤖</span>
                   <h3 className="text-xs font-black text-slate-950 uppercase tracking-widest">
@@ -2254,7 +2162,7 @@ export default function ClientDashboard({
             <div className="lg:col-span-8 space-y-6">
               
               {/* Online queue booking container form */}
-              <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-150 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_40px_rgba(15,23,42,0.04)] transition-all">
+              <div id="booking_registration_form_anchor" className="bg-white text-slate-800 rounded-3xl p-6 md:p-8 border border-slate-150 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_40px_rgba(15,23,42,0.04)] transition-all">
                 <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
                   <div className="flex items-center gap-2.5">
                     <span className="text-2xl">⚡</span>
@@ -2333,7 +2241,7 @@ export default function ClientDashboard({
               </div>
 
               {/* Table Column of My Bookings */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-150 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_40px_rgba(15,23,42,0.04)] transition-all">
+              <div className="bg-white text-slate-800 rounded-3xl p-6 border border-slate-150 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_40px_rgba(15,23,42,0.04)] transition-all">
                 <div className="flex items-center justify-between mb-5 border-b border-slate-100 pb-3">
                   <div className="flex items-center gap-2">
                     <span className="text-xl">📅</span>

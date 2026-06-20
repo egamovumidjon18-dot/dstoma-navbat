@@ -14,6 +14,59 @@ const PORT = 3000;
 // Enable JSON bodies
 app.use(express.json());
 
+// SECURE HEADER MIDDLEWARE FOR PRODUCTION-GRADE COMPLIANCE
+app.use((req, res, next) => {
+  res.setHeader("X-DNS-Prefetch-Control", "off");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Download-Options", "noopen");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  next();
+});
+
+// A LIGHTWEIGHT RATE-LIMITER TO DEFEND AGAINST BRUTE FORCE ATTACKS & SPAM
+const ipLimits = new Map<string, { count: number; resetTime: number }>();
+function rateLimiter(maxRequests: number, windowMs: number) {
+  return (req: any, res: any, next: any) => {
+    const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown_ip";
+    const now = Date.now();
+    const record = ipLimits.get(ip);
+    
+    if (!record) {
+      ipLimits.set(ip, { count: 1, resetTime: now + windowMs });
+      return next();
+    }
+    
+    if (now > record.resetTime) {
+      record.count = 1;
+      record.resetTime = now + windowMs;
+      return next();
+    }
+    
+    record.count++;
+    if (record.count > maxRequests) {
+      return res.status(429).json({
+        error: "Too many requests. Please try again later.",
+        retryAfterMs: record.resetTime - now
+      });
+    }
+    next();
+  };
+}
+
+// XSS SANITIZATION HELPER
+function sanitizeString(str: string): string {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
+}
+
 // Centralized In-Memory Database for Synchronized Clinic Operations
 interface Patient {
   id: string;
@@ -48,81 +101,44 @@ interface QueueItem {
 }
 
 const g = globalThis as any;
+if (!g._doctorTelegramChats) {
+  g._doctorTelegramChats = {};
+}
+if (!g._serverClinics) {
+  g._serverClinics = [];
+}
+if (!g._serverDoctors) {
+  g._serverDoctors = [];
+}
 if (!g._patientsDb) {
-  g._patientsDb = [
-    {
-      id: 'pat_test_2',
-      clinicId: 'samarqand',
-      fullName: 'Test Bemor 2',
-      passportSerial: 'AA1234567',
-      phone: '+998 (90) 123-45-67',
-      birthDate: '1998-05-12',
-      password: '123456',
-      bloodGroup: 'II+',
-      allergies: "Yo'q",
-      chronicDiseases: "Mavjud emas (Sog'lom)",
-      hasInfection: false,
-      telegramChatId: '57896431'
-    }
-  ];
+  g._patientsDb = [];
 }
 if (!g._queuesDb) {
-  g._queuesDb = [
-    {
-      id: 'q_1',
-      clinicId: 'samarqand',
-      patientName: 'Anvar Alimov',
-      patientPhone: '+998 (99) 441-23-45',
-      doctorId: 'doc_sm_1',
-      serviceId: 'srv_sm_1',
-      number: 101,
-      status: 'completed',
-      rating: 5,
-      createdAt: '2026-06-03T10:15:00Z'
-    },
-    {
-      id: 'q_2',
-      clinicId: 'samarqand',
-      patientName: 'Malika Sobirova',
-      patientPhone: '+998 (90) 789-11-22',
-      doctorId: 'doc_sm_2',
-      serviceId: 'srv_sm_2',
-      number: 102,
-      status: 'calling',
-      createdAt: '2026-06-03T15:10:00Z'
-    },
-    {
-      id: 'q_3',
-      clinicId: 'samarqand',
-      patientName: 'Sherzod Tojiyev',
-      patientPhone: '+998 (91) 440-55-66',
-      doctorId: 'doc_sm_1',
-      serviceId: 'srv_sm_3',
-      number: 103,
-      status: 'pending',
-      createdAt: '2026-06-03T15:15:00Z'
-    }
-  ];
+  g._queuesDb = [];
+}
+if (!g._serverServices) {
+  g._serverServices = [];
 }
 
 let patientsDb: Patient[] = g._patientsDb;
 let queuesDb: QueueItem[] = g._queuesDb;
 
 
-// Dynamic variable to hold the active Telegram Bot Token in memory for cross-client synchrony
-let activeTelegramToken = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "8763628372:AAHbaTWP-J7A4ZGAijFoTdXwROEZohOnvqc";
+// Dynamic variables to hold active Telegram Bot Tokens in memory for cross-client synchrony
+let activeTelegramToken = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "";
+let activeDoctorBotToken = process.env.DOCTOR_BOT_TOKEN || "";
 
 // GET active Telegram Bot Config dynamically to synchronize with Vercel Env changes
 app.get("/api/telegram-config", (req, res) => {
-  res.json({ token: activeTelegramToken });
+  res.json({ token: activeTelegramToken, doctorToken: activeDoctorBotToken });
 });
 
 const gAdmin = globalThis as any;
-if (!gAdmin.superadminLogin) gAdmin.superadminLogin = "superadmin";
-if (!gAdmin.superadminPassword) gAdmin.superadminPassword = "demo123";
+if (!gAdmin.superadminLogin) gAdmin.superadminLogin = process.env.ADMIN_USER || "superadmin";
+if (!gAdmin.superadminPassword) gAdmin.superadminPassword = process.env.ADMIN_PASS || "demo123";
 
 // POST endpoint for secure superadmin login to prevent plain text password on client-side
-app.post("/api/admin-login", (req, res) => {
+app.post("/api/admin-login", rateLimiter(5, 60 * 1000), (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ ok: false, error: "Username and password are required" });
@@ -134,7 +150,7 @@ app.post("/api/admin-login", (req, res) => {
 });
 
 // POST endpoint to update admin credentials dynamically
-app.post("/api/admin-update-creds", (req, res) => {
+app.post("/api/admin-update-creds", rateLimiter(3, 60 * 1000), (req, res) => {
   const { newLogin, newPassword } = req.body;
   if (newLogin && newLogin.trim() && newPassword && newPassword.trim()) {
     gAdmin.superadminLogin = newLogin.trim();
@@ -145,7 +161,7 @@ app.post("/api/admin-update-creds", (req, res) => {
 });
 
 // POST to update the active Telegram Bot Token dynamically across all doctor & patient devices
-app.post("/api/telegram-config", (req, res) => {
+app.post("/api/telegram-config", rateLimiter(3, 60 * 1000), (req, res) => {
   const { token } = req.body;
   if (token && token.trim()) {
     activeTelegramToken = token.trim();
@@ -320,11 +336,19 @@ app.get("/api/patients", (req, res) => {
   res.json(patientsDb);
 });
 
-app.post("/api/patients", (req, res) => {
-  const newPatient = req.body;
+app.post("/api/patients", rateLimiter(30, 60 * 1000), (req, res) => {
+  const newPatient = { ...req.body };
   if (!newPatient.id) {
     newPatient.id = 'pat_' + Math.random().toString(36).substr(2, 5);
   }
+  
+  // Sanitize values to immunize against Cross-Site Scripting (XSS)
+  if (newPatient.fullName) newPatient.fullName = sanitizeString(newPatient.fullName);
+  if (newPatient.phone) newPatient.phone = sanitizeString(newPatient.phone);
+  if (newPatient.passportSerial) newPatient.passportSerial = sanitizeString(newPatient.passportSerial);
+  if (newPatient.allergies) newPatient.allergies = sanitizeString(newPatient.allergies);
+  if (newPatient.chronicDiseases) newPatient.chronicDiseases = sanitizeString(newPatient.chronicDiseases);
+  if (newPatient.bloodGroup) newPatient.bloodGroup = sanitizeString(newPatient.bloodGroup);
   
   const serialClean = (newPatient.passportSerial || '').replace(/\s+/g, '').toUpperCase();
   
@@ -346,17 +370,17 @@ app.get("/api/queues", (req, res) => {
   res.json(queuesDb);
 });
 
-app.post("/api/queues", (req, res) => {
+app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
   const q = req.body;
-  const clinicId = q.clinic_id || q.clinicId || 'samarqand';
-  const doctorId = q.doctor_id || q.doctorId || 'doc_sm_1';
-  const serviceId = q.service_id || q.serviceId || 'srv_sm_1';
-  const patientName = q.patient_name || q.patientName || 'Mehmon';
-  const patientPhone = q.patient_phone || q.patientPhone || '';
+  const clinicId = sanitizeString(q.clinic_id || q.clinicId || 'samarqand');
+  const doctorId = sanitizeString(q.doctor_id || q.doctorId || 'doc_sm_1');
+  const serviceId = sanitizeString(q.service_id || q.serviceId || 'srv_sm_1');
+  const patientName = sanitizeString(q.patient_name || q.patientName || 'Mehmon');
+  const patientPhone = sanitizeString(q.patient_phone || q.patientPhone || '');
   const telegramChatId = q.telegram_chat_id || q.telegramChatId || undefined;
   const hasInfection = q.has_infection ?? q.hasInfection ?? false;
-  const medicalNotes = q.medical_notes ?? q.medicalNotes ?? '';
-  const passportSerial = q.passport_serial ?? q.passportSerial ?? '';
+  const medicalNotes = sanitizeString(q.medical_notes ?? q.medicalNotes ?? '');
+  const passportSerial = sanitizeString(q.passport_serial ?? q.passportSerial ?? '');
 
   const ticketNo = queuesDb.filter(item => item.clinicId === clinicId).length + 104;
 
@@ -378,6 +402,21 @@ app.post("/api/queues", (req, res) => {
 
   queuesDb.push(newQueueItem);
   
+  // Send active notification to assigned doctor if linked on Telegram
+  const docChatId = g._doctorTelegramChats?.[doctorId];
+  if (docChatId) {
+    const textMsg = `🔔 *YANGI BEMOR NAVBATGA YOZILDI!* 🔔\n\n` +
+      `🎫 *Chipta raqami:* #${ticketNo}\n` +
+      `👤 *Bemor:* ${patientName}\n` +
+      `📞 *Telefon:* \`${patientPhone}\`\n` +
+      (medicalNotes ? `📝 *Izoh:* _${medicalNotes}_\n` : '') +
+      `⏳ *Holati:* Navbatda kutmoqda`;
+    
+    sendDoctorDashboard(activeDoctorBotToken, Number(docChatId), doctorId, textMsg).catch(e => {
+      console.error("[Doctor Notify Warn]", e);
+    });
+  }
+
   const responseData = {
     ...newQueueItem,
     clinic_id: clinicId,
@@ -410,6 +449,24 @@ app.patch("/api/queues/:id", (req, res) => {
   });
 
   if (updatedItem) {
+    const item = updatedItem as QueueItem;
+    // Notify doctor
+    const docChatId = g._doctorTelegramChats?.[item.doctorId];
+    if (docChatId) {
+      const statusLabel = item.status === 'calling' ? 'qabulxonaga chaqirildi 🟢' : (item.status === 'completed' ? 'tamomlandi ✅' : (item.status === 'cancelled' ? 'bekor qilindi ❌' : 'navbatda turibdi ⏳'));
+      sendDoctorTelegramMessage(docChatId, `ℹ️ *Tizim yangilanishi:* #${item.number} - ${item.patientName} navbat holati *${statusLabel}* ga o'zgartirildi.`).catch(e => {});
+    }
+    
+    // Notify patient
+    if (item.telegramChatId) {
+      if (item.status === 'calling') {
+        sendBgTelegramMessage(item.telegramChatId, `🔔 *CHIPTANGIZ KELDI!* 🔔\n\nAssalomu alaykum! Sizni shifokor hozir kabinetda kutmoqda. Kechikmasdan kirishingiz so'raladi. 🦷\n🎫 Chiptangiz: *#${item.number}*`).catch(e => {});
+      } else if (item.status === 'completed') {
+        sendBgTelegramMessage(item.telegramChatId, `✅ *Rahmat!* \n\nShifokor ko'rigi muvaffaqiyatli yakunlandi. Salomat bo'ling! Iltimos, shaxsiy kabinetingizda shifokorga baho bering. ⭐`).catch(e => {});
+      } else if (item.status === 'cancelled') {
+        sendBgTelegramMessage(item.telegramChatId, `❌ *Diqqat!* \n\nSizning *#${item.number}* sonli navbatingiz bekor qilindi.`).catch(e => {});
+      }
+    }
     res.json(updatedItem);
   } else {
     res.status(404).json({ error: "Queue not found" });
@@ -437,35 +494,84 @@ app.post("/api/queues/:id/rate", (req, res) => {
 });
 
 app.get("/api/clinics", (req, res) => {
-  res.json([
-    {
-      id: "samarqand",
-      name: "DStoma Samarqand",
-      address: "Dahbed ko'chasi 32-uy, Samarqand shahri",
-      phone: "+998 (93) 123-45-01"
-    },
-    {
-      id: "buxoro",
-      name: "DStoma Buxoro",
-      address: "Bahauddin Naqshband ko'chasi 110-uy, Buxoro shahri",
-      phone: "+998 (93) 123-45-02"
-    },
-    {
-      id: "toshkent",
-      name: "DStoma Toshkent (Bosh Ofis)",
-      address: "Amir Temur shoh ko'chasi 45-uy, Toshkent shahri",
-      phone: "+998 (93) 123-45-03"
-    }
-  ]);
+  res.json(g._serverClinics || []);
+});
+
+app.post("/api/clinics", (req, res) => {
+  const clinic = req.body;
+  if (!g._serverClinics) g._serverClinics = [];
+  // Ensure not duplicated
+  g._serverClinics = g._serverClinics.filter((c: any) => c.id !== clinic.id);
+  g._serverClinics.push(clinic);
+  res.status(201).json(clinic);
+});
+
+app.delete("/api/clinics/:id", (req, res) => {
+  const id = req.params.id;
+  if (g._serverClinics) {
+    g._serverClinics = g._serverClinics.filter((c: any) => c.id !== id);
+  }
+  if (g._serverDoctors) {
+    g._serverDoctors = g._serverDoctors.filter((d: any) => d.clinicId !== id);
+  }
+  if (g._serverServices) {
+    g._serverServices = g._serverServices.filter((s: any) => s.clinicId !== id);
+  }
+  res.json({ ok: true });
 });
 
 app.get("/api/doctors", (req, res) => {
-  res.json([
-    { id: "doc_sm_1", full_name: "Dr. Jasur Shodiyev", specialization: "Stomatolog-Xirurg", rating: 4.97 },
-    { id: "doc_sm_2", full_name: "Dr. Maftunaxon Sobirova", specialization: "Stomatolog-Terapevt", rating: 4.95 },
-    { id: "doc_bx_1", full_name: "Dr. Dilshod Karimov", specialization: "Ortodont", rating: 4.8 },
-    { id: "doc_bx_2", full_name: "Dr. Sabina Aliyeva", specialization: "Stomatolog-Terapevt", rating: 4.5 }
-  ]);
+  const mapped = (g._serverDoctors || []).map((d: any) => ({
+    id: d.id,
+    full_name: d.name || d.fullName || d.full_name || "Unknown Doctor",
+    name: d.name || d.fullName || d.full_name || "Unknown Doctor",
+    specialization: d.specialty || d.specialization || "Stomatolog",
+    specialty: d.specialty || d.specialization || "Stomatolog",
+    rating: Number(d.rating) || 5.0,
+    ratingCount: Number(d.ratingCount) || 1,
+    image: d.image || "https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=200&auto=format&fit=crop",
+    status: d.status || "idle",
+    login: d.login,
+    password: d.password,
+    clinicId: d.clinicId
+  }));
+  res.json(mapped);
+});
+
+app.post("/api/doctors", (req, res) => {
+  const doc = req.body;
+  if (!g._serverDoctors) g._serverDoctors = [];
+  g._serverDoctors = g._serverDoctors.filter((d: any) => d.id !== doc.id);
+  g._serverDoctors.push(doc);
+  res.status(201).json(doc);
+});
+
+app.delete("/api/doctors/:id", (req, res) => {
+  const id = req.params.id;
+  if (g._serverDoctors) {
+    g._serverDoctors = g._serverDoctors.filter((d: any) => d.id !== id);
+  }
+  res.json({ ok: true });
+});
+
+app.get("/api/services", (req, res) => {
+  res.json(g._serverServices || []);
+});
+
+app.post("/api/services", (req, res) => {
+  const srv = req.body;
+  if (!g._serverServices) g._serverServices = [];
+  g._serverServices = g._serverServices.filter((s: any) => s.id !== srv.id);
+  g._serverServices.push(srv);
+  res.status(201).json(srv);
+});
+
+app.delete("/api/services/:id", (req, res) => {
+  const id = req.params.id;
+  if (g._serverServices) {
+    g._serverServices = g._serverServices.filter((s: any) => s.id !== id);
+  }
+  res.json({ ok: true });
 });
 
 // Initialize the GoogleGenAI helper supporting lazy on-demand resolution (critical for serverless setups like Vercel)
@@ -745,13 +851,87 @@ async function tgApi(token: string, method: string, payload: any) {
   }
 }
 
+async function sendBgTelegramMessage(chatId: string | number, text: string) {
+  const token = activeTelegramToken;
+  if (!token) return;
+  await tgApi(token, 'sendMessage', {
+    chat_id: chatId,
+    text: text,
+    parse_mode: 'Markdown'
+  });
+}
+
+async function sendDoctorTelegramMessage(chatId: string | number, text: string) {
+  const token = activeDoctorBotToken;
+  if (!token) return;
+  await tgApi(token, 'sendMessage', {
+    chat_id: chatId,
+    text: text,
+    parse_mode: 'Markdown'
+  });
+}
+
+async function sendDoctorDashboard(token: string, chatId: number | string, doctorId: string, text: string) {
+  const docQueues = queuesDb.filter(q => q.doctorId === doctorId && q.status !== 'completed' && q.status !== 'cancelled');
+  let msg = text + "\n\n";
+  const activeDoc = (g._serverDoctors || []).find((d: any) => d.id === doctorId);
+  const docName = activeDoc ? activeDoc.name : "Shifokor";
+  msg += `👨‍⚕️ *Shifokor:* Dr. ${docName}\n`;
+  msg += `⏳ *Faol navbatlar soni:* ${docQueues.length} ta bemor\n\n`;
+
+  const callingPatient = docQueues.find(q => q.status === 'calling');
+  if (callingPatient) {
+    msg += `🔔 *Xonadagi bemor:* \n` +
+      ` 🎫 Chipta raqami: *#${callingPatient.number}*\n` +
+      ` 👤 Ismi: *${callingPatient.patientName}*\n` +
+      ` 📞 Tel: \`${callingPatient.patientPhone}\`\n` +
+      ` 🩺 Status: *QABULDA (Xonada)*\n\n`;
+  }
+
+  if (docQueues.length > 0) {
+    msg += `📋 *Kutayotgan bemorlar ro'yxati (Navbati bilan):*\n`;
+    docQueues.forEach((q, idx) => {
+      const statusSign = q.status === 'calling' ? '🟢' : '⏳';
+      msg += `${idx + 1}. ${statusSign} *#${q.number}* - ${q.patientName} (${q.status === 'calling' ? 'xonada' : 'kutmoqda'})\n`;
+    });
+  } else {
+    msg += `🎉 *Hozircha navbatda turgan bemorlar yo'q! Navbatchilik bo'sh.*`;
+  }
+
+  const replyMarkup: any = { inline_keyboard: [] };
+  
+  if (callingPatient) {
+    replyMarkup.inline_keyboard.push([
+      { text: "✅ Qabulni Yakunlash", callback_data: `doc_complete_active_${doctorId}` },
+      { text: "❌ Bekor qilish", callback_data: `doc_cancel_active_${doctorId}` }
+    ]);
+  } else if (docQueues.length > 0) {
+    replyMarkup.inline_keyboard.push([
+      { text: "🔔 Keyingi bemorni chaqirish", callback_data: `doc_call_next_${doctorId}` }
+    ]);
+  }
+  
+  replyMarkup.inline_keyboard.push([
+    { text: "🔄 Yangilash", callback_data: `doc_refresh_${doctorId}` },
+    { text: "🚪 Tizimdan chiqish", callback_data: `doc_logout_${doctorId}` }
+  ]);
+
+  await tgApi(token, 'sendMessage', {
+    chat_id: chatId,
+    text: msg,
+    parse_mode: 'Markdown',
+    reply_markup: replyMarkup
+  });
+}
+
 // Active conversational sessions state mapper for Telegram registration
 const gSessions = globalThis as any;
 if (!gSessions._botSessions) {
   gSessions._botSessions = {};
 }
 const botSessions: Record<number, {
-  step?: 'register_name' | 'register_phone' | 'register_passport' | 'register_password' | 'register_blood';
+  step?: 'register_name' | 'register_phone' | 'register_passport' | 'register_password' | 'register_blood' | 'doctor_login' | 'doctor_password';
+  tempDoctorLogin?: string;
   tempUser?: {
     id?: string;
     clinicId?: string;
@@ -765,44 +945,96 @@ const botSessions: Record<number, {
 }> = gSessions._botSessions;
 
 async function startTelegramBot() {
-  console.log("[Telegram Bot] Launching Smart Polling Bot Service...");
-  let offset = 0;
+  console.log("[Telegram Bot] Launching Dual Polling Bot Service for Patient and Doctor bots...");
+  let patientOffset = 0;
+  let doctorOffset = 0;
+  let lastPatientToken = "";
+  let lastDoctorToken = "";
 
-  // Active secure sequential polling loop to prevent race conditions
-  async function poll() {
+  async function pollPatient() {
     const token = activeTelegramToken;
     if (!token) {
-      setTimeout(poll, 4000);
+      setTimeout(pollPatient, 4000);
       return;
     }
+
+    if (token !== lastPatientToken) {
+      try {
+        console.log(`[Patient Bot] clearing pending webhooks/updates for token: ${token.slice(0, 10)}...`);
+        await fetch(`https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=true`);
+        lastPatientToken = token;
+      } catch (err) {
+        console.error("[Patient Bot] Failed to clear webhook:", err);
+      }
+    }
+
     try {
-      const response = await fetch(`https://api.telegram.org/bot${token}/getUpdates?offset=${offset}&timeout=5`);
+      const response = await fetch(`https://api.telegram.org/bot${token}/getUpdates?offset=${patientOffset}&timeout=5`);
       if (response.ok) {
         const data = await response.json();
         if (data.ok && data.result && data.result.length > 0) {
           for (const update of data.result) {
-            offset = update.update_id + 1;
+            patientOffset = update.update_id + 1;
             try {
               await handleTelegramUpdate(token, update);
             } catch (err) {
-              console.error("[Telegram Bot Update Error]:", err);
+              console.error("[Patient Bot Update handling warning]:", err);
             }
           }
         }
       }
     } catch (e) {
-      // Prevent networking failures from crashing the server
+      // suppress network noise logging
     }
-    // Schedule next poll ONLY after this round of handling is completely finished
-    setTimeout(poll, 1000);
+    setTimeout(pollPatient, 1000);
   }
 
-  // Start polling
-  poll();
+  async function pollDoctor() {
+    const token = activeDoctorBotToken;
+    if (!token) {
+      setTimeout(pollDoctor, 4000);
+      return;
+    }
+
+    if (token !== lastDoctorToken) {
+      try {
+        console.log(`[Doctor Bot] clearing pending webhooks/updates for token: ${token.slice(0, 10)}...`);
+        await fetch(`https://api.telegram.org/bot${token}/deleteWebhook?drop_pending_updates=true`);
+        lastDoctorToken = token;
+      } catch (err) {
+        console.error("[Doctor Bot] Failed to clear webhook:", err);
+      }
+    }
+
+    try {
+      const response = await fetch(`https://api.telegram.org/bot${token}/getUpdates?offset=${doctorOffset}&timeout=5`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.ok && data.result && data.result.length > 0) {
+          for (const update of data.result) {
+            doctorOffset = update.update_id + 1;
+            try {
+              await handleTelegramUpdate(token, update);
+            } catch (err) {
+              console.error("[Doctor Bot Update handling warning]:", err);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // suppress network noise logging
+    }
+    setTimeout(pollDoctor, 1000);
+  }
+
+  pollPatient();
+  pollDoctor();
 }
 
 async function handleTelegramUpdate(token: string, update: any) {
   try {
+    const isDoctorBot = (token === activeDoctorBotToken);
+
     if (update.message) {
       const chatId = update.message.chat.id;
       const text = update.message.text || '';
@@ -815,9 +1047,31 @@ async function handleTelegramUpdate(token: string, update: any) {
       }
 
       if (text.startsWith('/start')) {
-        await sendWelcomeMessage(token, chatId, firstName);
+        if (isDoctorBot) {
+          await sendDoctorWelcomeMessage(token, chatId, firstName);
+        } else {
+          await sendPatientWelcomeMessage(token, chatId, firstName);
+        }
+      } else if (text.startsWith('/doctor')) {
+        if (isDoctorBot) {
+          await handleDoctorCabinetCommand(token, chatId);
+        } else {
+          await tgApi(token, 'sendMessage', {
+            chat_id: chatId,
+            text: `⚠️ <b>Ushbu bot faqat bemorlar uchun mo'ljallangan!</b>\n\nShifokor xizmatlari va navbatni boshqarish uchun shifokor yordamchi botimizga o'ting: @dstoma_doctor_bot`,
+            parse_mode: 'HTML'
+          });
+        }
       } else {
-        await handleBotDiagnosticMessage(token, chatId, update.message, firstName);
+        if (isDoctorBot) {
+          await tgApi(token, 'sendMessage', {
+            chat_id: chatId,
+            text: `ℹ️ <b>DStoma Shifokor Yordamchisi:</b>\n\nIymonli shifokor, ushbu bot faqat yangi navbatlar haqida bildirishnoma olish hamda qabulni boshqarish uchun xizmat qiladi.\n\n• Shaxsiy kabinetingizga kirish uchun /start yoki /doctor buyrug'ini yuboring.`,
+            parse_mode: 'HTML'
+          });
+        } else {
+          await handlePatientBotDiagnosticMessage(token, chatId, update.message, firstName);
+        }
       }
     } else if (update.callback_query) {
       const queryId = update.callback_query.id;
@@ -825,13 +1079,30 @@ async function handleTelegramUpdate(token: string, update: any) {
       const callbackData = update.callback_query.data;
       const firstName = update.callback_query.from.first_name || 'Bemor';
 
-      // Answer callback to stop loading spinners immediately
       await tgApi(token, 'answerCallbackQuery', { callback_query_id: queryId });
 
-      await handleCallbackQuery(token, chatId, callbackData, firstName);
+      if (isDoctorBot) {
+        await handleDoctorCallbackQuery(token, chatId, callbackData, firstName);
+      } else {
+        await handleCallbackQuery(token, chatId, callbackData, firstName);
+      }
     }
   } catch (err) {
-    console.error("[Telegram Bot Update Error]:", err);
+    console.error("[Telegram Dynamic Router Error]:", err);
+  }
+}
+
+async function handleDoctorCabinetCommand(token: string, chatId: number) {
+  const matchedDoctorId = Object.keys(g._doctorTelegramChats || {}).find(key => String(g._doctorTelegramChats[key]) === String(chatId));
+  if (matchedDoctorId) {
+    await sendDoctorDashboard(token, chatId, matchedDoctorId, `👨‍⚕️ *Shifokor boshqaruv paneli:*`);
+  } else {
+    botSessions[chatId] = { step: 'doctor_login' };
+    await tgApi(token, 'sendMessage', {
+      chat_id: chatId,
+      text: `🔐 *DStoma Shifokor Autentifikatsiyasi*\n\nTizimda shifokor sifatida tasdiqlanish uchun shaxsiy login nomingizni kiriting:\n\n_(Masalan: \`umidjon\`, \`abdulaziz\` yoki \`sherzod\` )_`,
+      parse_mode: 'Markdown'
+    });
   }
 }
 
@@ -849,7 +1120,7 @@ function getSecureWebAppUrl() {
   return url;
 }
 
-async function sendWelcomeMessage(token: string, chatId: number, firstName: string) {
+async function sendPatientWelcomeMessage(token: string, chatId: number, firstName: string) {
   const text = `🦷 <b>DStoma Elektron Navbat Tizimiga xush kelibsiz!</b> 🦷\n\n` +
     `Assalomu alaykum, <b>${firstName}</b>! Ushbu rasmiy yordamchi bot orqali siz:\n` +
     `• Klinikalarda olingan navbatingiz holatini real vaqtda kuzatib borishingiz;\n` +
@@ -859,7 +1130,6 @@ async function sendWelcomeMessage(token: string, chatId: number, firstName: stri
     `<i>(Ushbu ID raqamni DStoma platformasida navbat olayotib kiriting)</i>\n\n` +
     `👇 Quyidagi tugmalardan birini tanlang yoki savolingiz bo'lsa bizga yozib yuboring (Gemini AI shifokorimiz javob beradi!):`;
 
-  // Dynamically resolve the Mini App Web URL (guaranteed secure HTTPS)
   const webAppUrl = getSecureWebAppUrl();
 
   const replyMarkup = {
@@ -879,8 +1149,36 @@ async function sendWelcomeMessage(token: string, chatId: number, firstName: stri
         { text: "🦷 AI Diagnostika", callback_data: "ai_help" }
       ],
       [
-        { text: "🏥 Klinikalarimiz", callback_data: "list_clinics" },
-        { text: "🖼 Web App QR Kodi", callback_data: "app_qr" }
+        { text: "🏥 Klinikalarimiz", callback_data: "list_clinics" }
+      ],
+      [
+        { text: "ℹ️ Qo'llanma", callback_data: "patient_guide" }
+      ]
+    ]
+  };
+
+  await tgApi(token, 'sendMessage', {
+    chat_id: chatId,
+    text: text,
+    parse_mode: 'HTML',
+    reply_markup: replyMarkup
+  });
+}
+
+async function sendDoctorWelcomeMessage(token: string, chatId: number, firstName: string) {
+  const text = `👨‍⚕️ <b>DStoma Shifokor Yordamchi Tizimiga xush kelibsiz!</b> 👨‍⚕️\n\n` +
+    `Assalomu alaykum, <b>${firstName}</b>! Ushbu maxsus yordamchi bot faqat DStoma shifokorlari uchun mo'ljallangan.\n\n` +
+    `<b>Bot orqali quyidagilarni amalga oshirishingiz mumkin:</b>\n` +
+    `• 🔄 Yangi bemor navbatga yozilganda tezkor bildirishnoma olish;\n` +
+    `• 📢 Bemorlarni bevosita xonaga chaqirish, navbat to'liq yakunlash va bekor qilish;\n` +
+    `• 📊 Kabinet holati va navbat kutish ro'yxatini istalgan joydan real vaqtda boshqarish.\n\n` +
+    `🆔 Sizning Telegram <b>Chat ID</b> raqamingiz: <code>${chatId}</code>\n\n` +
+    `👇 Tizimdan to'liq foydalanish va shaxsiy kabinetingizga ulanish uchun quyidagi tugmalardan birini tanlang yoki o'zingizni authentication qiling (shifokor sifatida login/password kiriting):`;
+
+  const replyMarkup = {
+    inline_keyboard: [
+      [
+        { text: "🔐 Shifokor Login / Tizimga Ulanish", callback_data: "doctor_cabinet" }
       ],
       [
         { text: "ℹ️ Qo'llanma", callback_data: "guide" }
@@ -1032,60 +1330,111 @@ async function handleRegistrationStep(token: string, chatId: number, session: an
       parse_mode: 'Markdown',
       reply_markup: replyMarkup
     });
+  } else if (session.step === 'doctor_login') {
+    if (!text || text.trim().length === 0) {
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: "⚠️ Iltimos, login nomingizni to'g'ri kiriting:"
+      });
+      return;
+    }
+    session.tempDoctorLogin = text.trim().toLowerCase();
+    session.step = 'doctor_password';
+    await tgApi(token, 'sendMessage', {
+      chat_id: chatId,
+      text: "🔑 Endi shaxsiy mahfiy parolingizni kiriting:"
+    });
+  } else if (session.step === 'doctor_password') {
+    if (!text || text.trim().length === 0) {
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: "⚠️ Iltimos, parolingizni kiriting:"
+      });
+      return;
+    }
+    const loginVal = session.tempDoctorLogin;
+    const pwdVal = text.trim();
+    
+    const serverDoctors = g._serverDoctors || [];
+    const doc = serverDoctors.find((d: any) => d.login.toLowerCase() === loginVal && d.password === pwdVal);
+    
+    if (doc) {
+      g._doctorTelegramChats[doc.id] = String(chatId);
+      delete botSessions[chatId];
+      
+      const successText = `🎉 *Tizimga muvaffaqiyatli kirdingiz!* 🎉\n\n` +
+        `👨‍⚕️ *Shifokor:* Dr. *${doc.name}*\n` +
+        `🦷 *Mutaxassislik:* ${doc.specialty}\n\n` +
+        `✅ Ushbu Telegram profilingiz endi shaxsiy DStoma shifokor kabinetingizga ulandi! Yangi bemorlar yozilganda shu yerda xabarnomalar olasiz va navbatlarni boshqara olasiz.`;
+      
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: successText,
+        parse_mode: 'Markdown'
+      });
+      
+      await sendDoctorDashboard(token, chatId, doc.id, `📋 *Shifokor boshqaruv paneli:*`);
+    } else {
+      session.step = 'doctor_login';
+      delete session.tempDoctorLogin;
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: "❌ *Login yoki parol xato!* Iltimos, login nomingizni qaytadan kiriting:"
+      });
+    }
   }
 }
 
-async function handleBotDiagnosticMessage(token: string, chatId: number, message: any, firstName: string) {
+
+
+function getBotSimulatedReply(text: string, hasImage: boolean): string {
+  const t = text.toLowerCase();
+  if (hasImage) {
+    return `📸 *DStoma Shifokor AI Referensi:*\n\n` +
+      `Siz yuklagan tasvir tahliliga ko'ra tish emalining o'rta darajali emirilishi va milklar atrofida bir oz shishish/qizarish (gingivit yoki periodontit boshlang'ich bosqichi) belgilari aniqlandi.\n\n` +
+      `*🩺 Shifokor uchun klinik tavsiyalar:* \n` +
+      `• Klinik dental professional gigiyenik tozalash;\n` +
+      `• Mahalliy antiseptik terapiya (Xlorgeksidin diglyukonat 0.12% chayish);\n` +
+      `• Reminerallash va ftorlash muolajalari tavsiya etiladi.`;
+  }
+  return `🩺 *DStoma Shifokor Klinik Ko'makchisi:*\n\n` +
+    `Siz so'ragan so'rov buyicha klinik ma'lumotlar tahlili: "${text || 'Karyes tahlili'}"\n\n` +
+    `Bizning AI yordamchimiz shifokorlar uchun professional patologiyalar, dori dozalari, terapevtik hamda jarrohlik operatsiyalari rejalashtirish bo'yicha tezkor ma'lumotlarni topib beradi. Iltimos shaxsiy kabinetingizga ulaning!`;
+}
+
+
+async function handlePatientBotDiagnosticMessage(token: string, chatId: number, message: any, firstName: string) {
   const text = message.text || message.caption || '';
   const photo = message.photo;
 
-  // Show typing state to the user for interactive UI feel
   await tgApi(token, 'sendChatAction', { chat_id: chatId, action: 'typing' });
 
   try {
     let imagePart: any = null;
-    
     if (photo && photo.length > 0) {
       await tgApi(token, 'sendMessage', {
         chat_id: chatId,
-        text: "⚡ *DStoma AI:* Yuklangan dental tasvir yuklab olinmoqda va skaner qilinmoqda, iltimos ozgina kuting..."
+        text: "⚡ *DStoma AI Diagnostika:* Yuklangan dental tasviringiz yuklab olinmoqda va skaner qilinmoqda, iltimos ozgina kuting..."
       });
-
-      // Get largest photo size
       const largest = photo[photo.length - 1];
       const fileId = largest.file_id;
-
-      // Ask Telegram for file details
       const fileInfoRes = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
       const fileInfo = await fileInfoRes.json();
-      
       if (fileInfo.ok && fileInfo.result && fileInfo.result.file_path) {
         const filePath = fileInfo.result.file_path;
-        // Download image binary data
         const downloadUrl = `https://api.telegram.org/file/bot${token}/${filePath}`;
         const imageRes = await fetch(downloadUrl);
         const buffer = await imageRes.arrayBuffer();
         const base64Data = Buffer.from(buffer).toString('base64');
         const ext = filePath.split('.').pop() || 'jpg';
         const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
-
-        imagePart = {
-          inlineData: {
-            mimeType: mimeType,
-            data: base64Data
-          }
-        };
+        imagePart = { inlineData: { mimeType: mimeType, data: base64Data } };
       }
     }
 
-    if (!text && !imagePart) {
-      // Just a random non-text files or system updates, do nothing
-      return;
-    }
+    if (!text && !imagePart) return;
 
-    // Set expert prompt
     const systemPrompt = `You are an expert robotic AI dental scientist operating in DStoma Digital Hub. You analyze dental questions, symptoms, and human teeth/mouth photos/x-rays. You talk directly to patient named ${firstName}. Respond in Uzbek (unless they write in Russian or English). Be warm, precise, professional, and very helpful. Format with bullet points where necessary. Keep the answer under 150 words. Always include a reminder that AI diagnostics is estimated and you must schedule/consult real dentists at DStoma.`;
-
     const userPrompt = text ? text : "Diagnose this uploaded tooth/mouth photo and give preventative dental advice.";
 
     let response;
@@ -1098,14 +1447,13 @@ async function handleBotDiagnosticMessage(token: string, chatId: number, message
       } else {
         parts.push({ text: `Analyze this question: "${userPrompt}"\n\nSystem Instruction: ${systemPrompt}` });
       }
-
       response = await aiInstance.models.generateContent({
         model: "gemini-3.5-flash",
         contents: { parts: parts }
       });
     }
 
-    const replyText = response?.text || getBotSimulatedReply(userPrompt, !!imagePart);
+    const replyText = response?.text || getPatientBotSimulatedReply(userPrompt, !!imagePart);
 
     await tgApi(token, 'sendMessage', {
       chat_id: chatId,
@@ -1113,36 +1461,29 @@ async function handleBotDiagnosticMessage(token: string, chatId: number, message
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
-          [
-            { text: "📱 Mini App-ni ochish", web_app: { url: getSecureWebAppUrl() } }
-          ],
-          [
-            { text: "📝 Bot orqali Navbat Olish", callback_data: "book_queue" },
-            { text: "🎟 Mening faol navbatim", callback_data: "my_queue" }
-          ]
+          [{ text: "📱 DStoma Mini App-ni ochish", web_app: { url: getSecureWebAppUrl() } }],
+          [{ text: "📝 Bot orqali Navbat Olish", callback_data: "book_queue" }]
         ]
       }
     });
-
-  } catch (err: any) {
-    console.error("[Telegram Bot AI Diagnostics Error]:", err);
-    const fallbackText = getBotSimulatedReply(text, !!photo);
+  } catch (err) {
+    console.error("[Telegram Patient Bot AI Diagnostics Error]:", err);
+    const fallbackText = getPatientBotSimulatedReply(text, !!photo);
     await tgApi(token, 'sendMessage', {
       chat_id: chatId,
       text: fallbackText,
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
-          [
-            { text: "📱 Mini App-ni ochish", web_app: { url: getSecureWebAppUrl() } }
-          ]
+          [{ text: "📱 DStoma Mini App-ni ochish", web_app: { url: getSecureWebAppUrl() } }],
+          [{ text: "📝 Bot orqali Navbat Olish", callback_data: "book_queue" }]
         ]
       }
     });
   }
 }
 
-function getBotSimulatedReply(text: string, hasImage: boolean): string {
+function getPatientBotSimulatedReply(text: string, hasImage: boolean): string {
   const t = text.toLowerCase();
   if (hasImage) {
     return `📸 *DStoma AI Diagnostika tahlili:*\n\n` +
@@ -1165,6 +1506,101 @@ function getBotSimulatedReply(text: string, hasImage: boolean): string {
     `Menga tishingiz yoki milklaringiz rasmini yuborishingiz yoki savolingizni yozishingiz mumkin. Men ularni tahlil qilib, tibbiy maslahat beraman.`;
 }
 
+async function handleDoctorCallbackQuery(token: string, chatId: number, callbackData: string, firstName: string) {
+  if (callbackData === 'doctor_cabinet') {
+    await handleDoctorCabinetCommand(token, chatId);
+    return;
+  }
+
+  if (callbackData.startsWith('doc_call_next_')) {
+    const docId = callbackData.replace('doc_call_next_', '');
+    const pendingItem = queuesDb.find(q => q.doctorId === docId && q.status === 'pending');
+    if (pendingItem) {
+      pendingItem.status = 'calling';
+      g._queuesDb = queuesDb;
+      if (pendingItem.telegramChatId) {
+        await sendBgTelegramMessage(pendingItem.telegramChatId, `🔔 *CHIPTANGIZ KELDI!* 🔔\n\nAssalomu alaykum! Sizni shifokor hozir kabinetda kutmoqda. Kechikmasdan kirishingiz so'raladi. 🦷\n🎫 Chiptangiz: *#${pendingItem.number}*`);
+      }
+      await sendDoctorDashboard(token, chatId, docId, `🔔 *#${pendingItem.number} - ${pendingItem.patientName}* xonaga chaqirildi! Bemorga xabarnoma yuborildi.`);
+    } else {
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: "⚠️ Kutayotgan navbatlar ro'yxatida hech kim yo'q!"
+      });
+    }
+    return;
+  }
+
+  if (callbackData.startsWith('doc_complete_active_')) {
+    const docId = callbackData.replace('doc_complete_active_', '');
+    const callingItem = queuesDb.find(q => q.doctorId === docId && q.status === 'calling');
+    if (callingItem) {
+      callingItem.status = 'completed';
+      g._queuesDb = queuesDb;
+      if (callingItem.telegramChatId) {
+        await sendBgTelegramMessage(callingItem.telegramChatId, `✅ *Rahmat!* \n\nShifokor ko'rigi muvaffaqiyatli yakunlandi. Salomat bo'ling! Iltimos, shaxsiy kabinetingizda shifokorga baho bering. ⭐`);
+      }
+      await sendDoctorDashboard(token, chatId, docId, `✅ *#${callingItem.number} - ${callingItem.patientName}* qabuli muvaffaqiyatli yakunlandi.`);
+    } else {
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: "⚠️ Faol qabul qilinayotgan bemor topilmadi!"
+      });
+    }
+    return;
+  }
+
+  if (callbackData.startsWith('doc_cancel_active_')) {
+    const docId = callbackData.replace('doc_cancel_active_', '');
+    const callingItem = queuesDb.find(q => q.doctorId === docId && q.status === 'calling');
+    if (callingItem) {
+      callingItem.status = 'cancelled';
+      g._queuesDb = queuesDb;
+      if (callingItem.telegramChatId) {
+        await sendBgTelegramMessage(callingItem.telegramChatId, `❌ *Diqqat!* \n\nSizning *#${callingItem.number}* sonli navbatingiz bekor qilindi.`);
+      }
+      await sendDoctorDashboard(token, chatId, docId, `❌ *#${callingItem.number} - ${callingItem.patientName}* navbati bekor qilindi.`);
+    } else {
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: "⚠️ Bekor qilish uchun faol qabul qilinayotgan bemor topilmadi!"
+      });
+    }
+    return;
+  }
+
+  if (callbackData.startsWith('doc_refresh_')) {
+    const docId = callbackData.replace('doc_refresh_', '');
+    await sendDoctorDashboard(token, chatId, docId, `🔄 Kabinet holati va navbatlar ro'yxati yangilandi!`);
+    return;
+  }
+
+  if (callbackData.startsWith('doc_logout_')) {
+    const docId = callbackData.replace('doc_logout_', '');
+    delete g._doctorTelegramChats[docId];
+    await tgApi(token, 'sendMessage', {
+      chat_id: chatId,
+      text: "🚪 Shifokor shaxsiy profilidan chiqdingiz!"
+    });
+    await sendDoctorWelcomeMessage(token, chatId, firstName);
+    return;
+  }
+
+  if (callbackData === 'guide') {
+    const text = "ℹ️ *DStoma - Shifokorlar uchun Botdan foydalanish qo'llanmasi:*\n\n" +
+      "1️⃣ Telegram botni shaxsiy shifokor kabinetingizga ulash uchun `🔐 Shifokor Login / Tizimga Ulanish` tugmasini bosing yoki `/doctor` buyrug'ini yuboring.\n" +
+      "2️⃣ Tizimdagi ro'yxatdan o'tgan login va parolingizni kiriting.\n" +
+      "3️⃣ Ulanish muvaffaqiyatli amalga oshgach, profilingiz avtomatik tarzda bog'lanadi.\n" +
+      "4️⃣ Endi yangi bemorlar navbatga yozilganda shu yerda tezkor bildirishnomalar olasiz va navbatni bevosita boshqarishingiz mumkin.\n\n" +
+      "👨‍⚕️ _DStoma zamonaviy tibbiyot tizimi ish faoliyatingizni osonlashtirishga yordam beradi!_";
+
+    await tgApi(token, 'sendMessage', {
+      chat_id: chatId,
+      text: text,
+      parse_mode: 'Markdown'
+    });
+  }
+}
 
 async function handleCallbackQuery(token: string, chatId: number, callbackData: string, firstName: string) {
   const apiBase = "http://127.0.0.1:3000";
@@ -1425,12 +1861,12 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
     });
 
   } else if (callbackData === 'guide') {
-    const text = "ℹ️ *DStoma - Telegram Botdan foydalanish qo'llanmasi:*\n\n" +
-      "1️⃣ Botimiz sizga shaxsiy Telegram Chat ID beradi. Uni `/start` komandasi orqali har doim ko'rishingiz mumkin.\n" +
-      "2️⃣ DStoma ilovasida (veb-saytda) o'zingizga qulay shifokor va vaqtni tanlab, navbat oling.\n" +
-      "3️⃣ Telefon raqami va ismingizdan so'ng, \"Telegram ID\" maydoniga ushbu bot bergan ID raqamini kiriting qoldiring.\n" +
-      "4️⃣ Bo'ldi! Shifokor sizning navbatingiz yaqinlashganda \"Chaqirish (Call)\" tugmasini bosa oladi, va botimiz sizga bir zumda telegram xabari yo'llaydi.\n\n" +
-      "⚠️ _Diqqat! Smart elektron sensorlarimiz sizning navbatingiz kelganda bevosita bot orqali ogohlantiradi, zallarda sariq chiziqda behuda kutishga hojat yo't!_";
+    const text = "ℹ️ *DStoma - Shifokorlar uchun Botdan foydalanish qo'llanmasi:*\n\n" +
+      "1️⃣ Telegram botni shaxsiy shifokor kabinetingizga ulash uchun `🔐 Shifokor Login / Tizimga Ulanish` tugmasini bosing yoki `/doctor` buyrug'ini yuboring.\n" +
+      "2️⃣ Tizimdagi ro'yxatdan o'tgan login va parolingizni kiriting.\n" +
+      "3️⃣ Ulanish muvaffaqiyatli amalga oshgach, profilingiz avtomatik tarzda bog'lanadi.\n" +
+      "4️⃣ Endi yangi bemorlar navbatga yozilganda shu yerda tezkor bildirishnomalar olasiz va navbatni bevosita boshqarishingiz mumkin.\n\n" +
+      "👨‍⚕️ _DStoma zamonaviy tibbiyot tizimi ish faoliyatingizni osonlashtirishga yordam beradi!_";
 
     await tgApi(token, 'sendMessage', {
       chat_id: chatId,
@@ -1458,7 +1894,21 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
     });
 
   } else if (callbackData === 'back_to_main') {
-    await sendWelcomeMessage(token, chatId, firstName);
+    await sendPatientWelcomeMessage(token, chatId, firstName);
+
+  } else if (callbackData === 'patient_guide') {
+    const text = "ℹ️ *DStoma - Bemorlar uchun Botdan foydalanish qo'llanmasi:*\n\n" +
+      "1️⃣ *Navbat Olish:* `📝 Bot orqali Navbat Olish` tugmasini bosing, filialni, shifokor va kerakli xizmatni tanlab tezkor elektron chipta (e-ticket) oling.\n" +
+      "2️⃣ *Tizimga Kirish:* `📝 Bot orqali Ro'yxatdan O'tish` yoki Mini App orqali shaxsiy ma'lumotlaringizni to'ldiring.\n" +
+      "3️⃣ *Navbatni Kuzatish:* `🎟 Mening faol navbatim` tugmasi orqali istalgan daqiqada hozirgi navbat holatini ko'ring.\n" +
+      "4️⃣ *Sun'iy Intellekt:* Botga bevosita og'riq haqida savollar yozishingiz yoki tish/og'iz bo'shlig'i rasmini jo'natib diagnostika tahlilini olishingiz mumkin.\n\n" +
+      "🦷 _DStoma - sog'lom tabassum sari birgalikda!_";
+
+    await tgApi(token, 'sendMessage', {
+      chat_id: chatId,
+      text: text,
+      parse_mode: 'Markdown'
+    });
 
   } else if (callbackData.startsWith('book_cl_')) {
     // Stage 2: Select doctor for chosen clinic branch

@@ -41,6 +41,20 @@ export interface Service {
   price: number; // in UZS
 }
 
+export interface ToothDiagnosis {
+  id: string;
+  createdAt: string;
+  toothIndex: number;
+  toothNumber: number;
+  symptoms: string;
+  imageFileName?: string;
+  enamelAbrasion: string;
+  healthFactor: string;
+  recommendedTreatment: string;
+  diagnosticText: string;
+  actionPlan: string[];
+}
+
 export interface Patient {
   id: string;
   clinicId: string;
@@ -54,6 +68,7 @@ export interface Patient {
   allergies?: string;
   chronicDiseases?: string;
   hasInfection?: boolean;
+  diagnoses?: ToothDiagnosis[];
 }
 
 export interface QueueItem {
@@ -90,3 +105,22 @@ export interface CodeSnippet {
   filename: string;
   code: string;
 }
+
+export interface ToothMetrics {
+  health: number;
+  enamel: number;
+  dentin: number;
+  pulp: number;
+  root: number;
+  gum: number;
+  bone: number;
+  caries: number;
+  cavity: number;
+  plaque: number;
+  calculus: number;
+  gingivitis: number;
+  periodontitis: number;
+  riskLabel: 'LOW' | 'MEDIUM' | 'HIGH';
+}
+
+

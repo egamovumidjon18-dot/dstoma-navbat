@@ -1,6 +1,6 @@
 {
   "name": "DStoma Queue",
-  "description": "Stomatologiya klinikalari uchun ko'p ijarachili (Multi-Tenant) elektron navbat va Google Maps integratsiyali smart boshqaruv tizimi.",
+  "description": "Stomatologiya va tish diagnostikasi uchun interaktiv 3D tahliliy sun'iy intellekt (AI) telemetriya tizimi va smart boshqaruv.",
   "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

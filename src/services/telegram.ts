@@ -25,9 +25,6 @@ export async function sendTelegramMessage(chatId: string, text: string): Promise
   const token = getTelegramBotToken();
   if (!token) {
     console.warn("Telegram Bot Token is not configured. Please supply VITE_TELEGRAM_BOT_TOKEN or set it in SuperAdmin panel.");
-    if (typeof window !== 'undefined') {
-      alert("⚠️ Telegram Bot Token sozlanmagan! Iltimos, SuperAdmin panelidan token kiritib saqlang.");
-    }
     return false;
   }
 
