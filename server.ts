@@ -116,12 +116,121 @@ if (!g._patientsDb) {
 if (!g._queuesDb) {
   g._queuesDb = [];
 }
+// Variable initialization for fallbacks
 if (!g._serverServices) {
   g._serverServices = [];
 }
 
-let patientsDb: Patient[] = g._patientsDb;
-let queuesDb: QueueItem[] = g._queuesDb;
+// FIREBASE INIT
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import fs from 'fs';
+
+let fDb: any = null;
+try {
+  const cfgPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(cfgPath)) {
+    const firebaseConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    const firebaseApp = initializeApp(firebaseConfig);
+    fDb = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+    console.log("🔥 Connected to Firebase Firestore");
+  }
+} catch (error) {
+  console.log("Firebase config not found or invalid", error);
+}
+
+// ASYNC DB HELPERS
+async function getPatients(): Promise<Patient[]> {
+  if (fDb) {
+    const s = await getDocs(collection(fDb, "patients"));
+    return s.docs.map((d: any) => ({ ...d.data(), id: d.id } as Patient));
+  }
+  return g._patientsDb || [];
+}
+async function savePatient(p: Patient) {
+  if (fDb) {
+    await setDoc(doc(fDb, "patients", p.id!), p);
+  } else {
+    if (!g._patientsDb) g._patientsDb = [];
+    const idx = g._patientsDb.findIndex((x: any) => x.id === p.id);
+    if (idx >= 0) g._patientsDb[idx] = p;
+    else g._patientsDb.push(p);
+  }
+}
+async function getQueues(): Promise<QueueItem[]> {
+  if (fDb) {
+    const s = await getDocs(collection(fDb, "queues"));
+    return s.docs.map((d: any) => ({ ...d.data(), id: d.id } as QueueItem));
+  }
+  return g._queuesDb || [];
+}
+async function saveQueue(q: QueueItem) {
+  if (fDb) {
+    await setDoc(doc(fDb, "queues", q.id!), q);
+  } else {
+    if (!g._queuesDb) g._queuesDb = [];
+    const idx = g._queuesDb.findIndex((x: any) => x.id === q.id);
+    if (idx >= 0) g._queuesDb[idx] = q;
+    else g._queuesDb.push(q);
+  }
+}
+async function getClinics() {
+  if (fDb) {
+    const s = await getDocs(collection(fDb, "clinics"));
+    return s.docs.map((d: any) => ({ ...d.data(), id: d.id }));
+  }
+  return g._serverClinics || [];
+}
+async function saveClinic(c: any) {
+  if (fDb) await setDoc(doc(fDb, "clinics", c.id), c);
+  else {
+    if (!g._serverClinics) g._serverClinics = [];
+    g._serverClinics = g._serverClinics.filter((x:any) => x.id !== c.id);
+    g._serverClinics.push(c);
+  }
+}
+async function deleteClinic(id: string) {
+  if (fDb) await deleteDoc(doc(fDb, "clinics", id));
+  if (g._serverClinics) g._serverClinics = g._serverClinics.filter((x:any) => x.id !== id);
+}
+async function getDoctors() {
+  if (fDb) {
+    const s = await getDocs(collection(fDb, "doctors"));
+    return s.docs.map((d: any) => ({ ...d.data(), id: d.id }));
+  }
+  return g._serverDoctors || [];
+}
+async function saveDoctor(c: any) {
+  if (fDb) await setDoc(doc(fDb, "doctors", c.id), c);
+  else {
+    if (!g._serverDoctors) g._serverDoctors = [];
+    g._serverDoctors = g._serverDoctors.filter((x:any) => x.id !== c.id);
+    g._serverDoctors.push(c);
+  }
+}
+async function deleteDoctor(id: string) {
+  if (fDb) await deleteDoc(doc(fDb, "doctors", id));
+  if (g._serverDoctors) g._serverDoctors = g._serverDoctors.filter((x:any) => x.id !== id);
+}
+async function getServices() {
+  if (fDb) {
+    const s = await getDocs(collection(fDb, "services"));
+    return s.docs.map((d: any) => ({ ...d.data(), id: d.id }));
+  }
+  return g._serverServices || [];
+}
+async function saveService(c: any) {
+  if (fDb) await setDoc(doc(fDb, "services", c.id), c);
+  else {
+    if (!g._serverServices) g._serverServices = [];
+    g._serverServices = g._serverServices.filter((x:any) => x.id !== c.id);
+    g._serverServices.push(c);
+  }
+}
+async function deleteService(id: string) {
+  if (fDb) await deleteDoc(doc(fDb, "services", id));
+  if (g._serverServices) g._serverServices = g._serverServices.filter((x:any) => x.id !== id);
+}
 
 
 // Dynamic variables to hold active Telegram Bot Tokens in memory for cross-client synchrony
@@ -332,11 +441,11 @@ app.get("/api/telegram-webhook-setup", async (req, res) => {
 });
 
 // Centralized API Routes for patients and queues
-app.get("/api/patients", (req, res) => {
-  res.json(patientsDb);
+app.get("/api/patients", async (req, res) => {
+  res.json(await getPatients());
 });
 
-app.post("/api/patients", rateLimiter(30, 60 * 1000), (req, res) => {
+app.post("/api/patients", rateLimiter(30, 60 * 1000), async (req, res) => {
   const newPatient = { ...req.body };
   if (!newPatient.id) {
     newPatient.id = 'pat_' + Math.random().toString(36).substr(2, 5);
@@ -352,22 +461,23 @@ app.post("/api/patients", rateLimiter(30, 60 * 1000), (req, res) => {
   
   const serialClean = (newPatient.passportSerial || '').replace(/\s+/g, '').toUpperCase();
   
-  const existingIdx = patientsDb.findIndex(p => {
+  const patDb = await getPatients();
+  const existingIdx = patDb.findIndex(p => {
     const existingSerial = (p.passportSerial || '').replace(/\s+/g, '').toUpperCase();
     return (existingSerial && existingSerial === serialClean) || 
            (newPatient.telegramChatId && String(p.telegramChatId) === String(newPatient.telegramChatId));
   });
 
   if (existingIdx === -1) {
-    patientsDb.push(newPatient);
+    await savePatient(newPatient);
   } else {
-    patientsDb[existingIdx] = { ...patientsDb[existingIdx], ...newPatient };
+    await savePatient({ ...patDb[existingIdx], ...newPatient });
   }
   res.status(201).json(newPatient);
 });
 
-app.get("/api/queues", (req, res) => {
-  res.json(queuesDb);
+app.get("/api/queues", async (req, res) => {
+  res.json(await getQueues());
 });
 
 app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
@@ -382,7 +492,8 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
   const medicalNotes = sanitizeString(q.medical_notes ?? q.medicalNotes ?? '');
   const passportSerial = sanitizeString(q.passport_serial ?? q.passportSerial ?? '');
 
-  const ticketNo = queuesDb.filter(item => item.clinicId === clinicId).length + 104;
+  const qDb = await getQueues();
+  const ticketNo = qDb.filter(item => item.clinicId === clinicId).length + 104;
 
   const newQueueItem: QueueItem = {
     id: q.id || 'q_' + Math.random().toString(36).substr(2, 9),
@@ -400,7 +511,7 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
     telegramChatId
   };
 
-  queuesDb.push(newQueueItem);
+  await saveQueue(newQueueItem);
   
   // Send active notification to assigned doctor if linked on Telegram
   const docChatId = g._doctorTelegramChats?.[doctorId];
@@ -432,23 +543,21 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
   res.status(201).json(responseData);
 });
 
-app.patch("/api/queues/:id", (req, res) => {
+app.patch("/api/queues/:id", async (req, res) => {
   const { id } = req.params;
   const updateFields = req.body;
   let updatedItem: QueueItem | null = null;
 
-  queuesDb = queuesDb.map(q => {
-    if (q.id === id) {
-      updatedItem = {
-        ...q,
-        status: updateFields.status !== undefined ? updateFields.status : q.status
-      };
-      return updatedItem;
-    }
-    return q;
-  });
+  const qDb = await getQueues();
+  const itemMatch = qDb.find(q => q.id === id);
 
-  if (updatedItem) {
+  if (itemMatch) {
+    updatedItem = {
+      ...itemMatch,
+      status: updateFields.status !== undefined ? updateFields.status : itemMatch.status
+    };
+    await saveQueue(updatedItem);
+    
     const item = updatedItem as QueueItem;
     // Notify doctor
     const docChatId = g._doctorTelegramChats?.[item.doctorId];
@@ -473,55 +582,43 @@ app.patch("/api/queues/:id", (req, res) => {
   }
 });
 
-app.post("/api/queues/:id/rate", (req, res) => {
+app.post("/api/queues/:id/rate", async (req, res) => {
   const { id } = req.params;
   const { rating } = req.body;
   let updatedItem: QueueItem | null = null;
 
-  queuesDb = queuesDb.map(q => {
-    if (q.id === id) {
-      updatedItem = { ...q, rating: Number(rating) };
-      return updatedItem;
-    }
-    return q;
-  });
+  const qDb = await getQueues();
+  const itemMatch = qDb.find(q => q.id === id);
 
-  if (updatedItem) {
+  if (itemMatch) {
+    updatedItem = { ...itemMatch, rating: Number(rating) };
+    await saveQueue(updatedItem);
     res.json(updatedItem);
   } else {
     res.status(404).json({ error: "Queue not found" });
   }
 });
 
-app.get("/api/clinics", (req, res) => {
-  res.json(g._serverClinics || []);
+app.get("/api/clinics", async (req, res) => {
+  res.json(await getClinics());
 });
 
-app.post("/api/clinics", (req, res) => {
+app.post("/api/clinics", async (req, res) => {
   const clinic = req.body;
-  if (!g._serverClinics) g._serverClinics = [];
-  // Ensure not duplicated
-  g._serverClinics = g._serverClinics.filter((c: any) => c.id !== clinic.id);
-  g._serverClinics.push(clinic);
+  await saveClinic(clinic);
   res.status(201).json(clinic);
 });
 
-app.delete("/api/clinics/:id", (req, res) => {
+app.delete("/api/clinics/:id", async (req, res) => {
   const id = req.params.id;
-  if (g._serverClinics) {
-    g._serverClinics = g._serverClinics.filter((c: any) => c.id !== id);
-  }
-  if (g._serverDoctors) {
-    g._serverDoctors = g._serverDoctors.filter((d: any) => d.clinicId !== id);
-  }
-  if (g._serverServices) {
-    g._serverServices = g._serverServices.filter((s: any) => s.clinicId !== id);
-  }
+  await deleteClinic(id);
+  // Optional cascade delete mappings if performance allows, but for now just single entity delete
   res.json({ ok: true });
 });
 
-app.get("/api/doctors", (req, res) => {
-  const mapped = (g._serverDoctors || []).map((d: any) => ({
+app.get("/api/doctors", async (req, res) => {
+  const docs = await getDoctors();
+  const mapped = docs.map((d: any) => ({
     id: d.id,
     full_name: d.name || d.fullName || d.full_name || "Unknown Doctor",
     name: d.name || d.fullName || d.full_name || "Unknown Doctor",
@@ -538,39 +635,31 @@ app.get("/api/doctors", (req, res) => {
   res.json(mapped);
 });
 
-app.post("/api/doctors", (req, res) => {
+app.post("/api/doctors", async (req, res) => {
   const doc = req.body;
-  if (!g._serverDoctors) g._serverDoctors = [];
-  g._serverDoctors = g._serverDoctors.filter((d: any) => d.id !== doc.id);
-  g._serverDoctors.push(doc);
+  await saveDoctor(doc);
   res.status(201).json(doc);
 });
 
-app.delete("/api/doctors/:id", (req, res) => {
+app.delete("/api/doctors/:id", async (req, res) => {
   const id = req.params.id;
-  if (g._serverDoctors) {
-    g._serverDoctors = g._serverDoctors.filter((d: any) => d.id !== id);
-  }
+  await deleteDoctor(id);
   res.json({ ok: true });
 });
 
-app.get("/api/services", (req, res) => {
-  res.json(g._serverServices || []);
+app.get("/api/services", async (req, res) => {
+  res.json(await getServices());
 });
 
-app.post("/api/services", (req, res) => {
+app.post("/api/services", async (req, res) => {
   const srv = req.body;
-  if (!g._serverServices) g._serverServices = [];
-  g._serverServices = g._serverServices.filter((s: any) => s.id !== srv.id);
-  g._serverServices.push(srv);
+  await saveService(srv);
   res.status(201).json(srv);
 });
 
-app.delete("/api/services/:id", (req, res) => {
+app.delete("/api/services/:id", async (req, res) => {
   const id = req.params.id;
-  if (g._serverServices) {
-    g._serverServices = g._serverServices.filter((s: any) => s.id !== id);
-  }
+  await deleteService(id);
   res.json({ ok: true });
 });
 
@@ -651,7 +740,7 @@ Return the JSON response adhering strictly to this schema:
     parts.push({ text: promptText });
 
     const response = await aiInstance.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.0-flash",
       contents: { parts: parts },
       config: {
         responseMimeType: "application/json",
@@ -700,20 +789,47 @@ Return the JSON response adhering strictly to this schema:
 // Helper for offline diagnostics & prompt feedback
 function getSimulatedDiagnosis(tooth: number, symptoms: string, lang: string, hasImage = false) {
   const cleanSym = symptoms.trim().toLowerCase();
+  const severityIndex = (tooth + cleanSym.length) % 3;
   
   if (lang === 'uz') {
     if (hasImage) {
-      return {
-        enamelAbrasion: "32% Yuzaki mikrosiniq",
-        healthFactor: "O'rta (65%)",
-        recommendedTreatment: "Badiiy restavratsiya (Kompozit)",
-        diagnosticText: `Yuborilgan tish (#${tooth}) rasm tahlili natijalariga ko'ra emal qismida o'rta darajadagi yemirilish va tish chetida mikrosiniqlar aniqlandi. Quyidagi alomatlar ham o'rganildi: "${symptoms || 'Yo\'q'}" . Tishni qayta tirklash va emalini mustahkamlash uchun kompozit restavratsiya qilish samaralidir.`,
-        actionPlan: [
-          "DStoma shifokoriga badiiy restavratsiya uchun uchrashish",
-          "Kalsiy va minerallarga boy maxsus tish pastalarini ishlatish",
-          "Rang beruvchi hamda o'ta issiq/sovuq taomlardan vaqtincha saqlanish"
-        ]
-      };
+      if (severityIndex === 0) {
+        return {
+          enamelAbrasion: "18% Yengil yemirilish",
+          healthFactor: "Yaxshi (82%)",
+          recommendedTreatment: "Profilaktik tozalash",
+          diagnosticText: `Yuborilgan tish (#${tooth}) rasm tahliliga ko'ra, kichik dog'lar va yengil shikastlanish ko'rinib turibdi. Alomatlar: "${symptoms || 'Yo\'q'}". Maxsus muolajalarsiz faqatgina ftorlash tavsiya etiladi.`,
+          actionPlan: [
+            "DStoma shifokoriga profilaktika uchun uchrashish",
+            "Ftorga boy tish pastasidan foydalanish",
+            "Tish ipidan muntazam foydalanish"
+          ]
+        };
+      } else if (severityIndex === 1) {
+        return {
+          enamelAbrasion: "32% Yuzaki mikrosiniq",
+          healthFactor: "O'rta (65%)",
+          recommendedTreatment: "Badiiy restavratsiya (Kompozit)",
+          diagnosticText: `Yuborilgan tish (#${tooth}) rasm tahlili natijalariga ko'ra emal qismida o'rta darajadagi yemirilish va tish chetida mikrosiniqlar aniqlandi. Quyidagi alomatlar ham o'rganildi: "${symptoms || 'Yo\'q'}" . Tishni qayta tiklash va emalini mustahkamlash uchun kompozit restavratsiya qilish samaralidir.`,
+          actionPlan: [
+            "DStoma shifokoriga badiiy restavratsiya uchun uchrashish",
+            "Kalsiy va minerallarga boy maxsus tish pastalarini ishlatish",
+            "Rang beruvchi hamda o'ta issiq/sovuq taomlardan vaqtincha saqlanish"
+          ]
+        };
+      } else {
+        return {
+          enamelAbrasion: "65% Chuqur karies / yemirilish",
+          healthFactor: "Kritik (35%)",
+          recommendedTreatment: "Kanal muolajasi va Koronka",
+          diagnosticText: `Yuborilgan tish (#${tooth}) rasmida jiddiy shikastlanish, ehtimol nervgacha yetib borgan karies ko'rinmoqda. Alomatlar: "${symptoms || 'Yo\'q'}". Zudlik bilan shifokor ko'rigi va ehtimoliy ildiz kanali muolajasi (endodontiya) zarur.`,
+          actionPlan: [
+            "Zudlik bilan DStoma shifokoriga qo'ng'iroq qilish",
+            "Og'riq qoldiruvchi dorilarni shifokor nazoratida olish",
+            "Qattiq ovqatlardan tiyilish"
+          ]
+        };
+      }
     }
     if (cleanSym.includes('og\'riq') || cleanSym.includes('ogriq') || cleanSym.includes('shish') || cleanSym.includes('pain')) {
       return {
@@ -741,17 +857,43 @@ function getSimulatedDiagnosis(tooth: number, symptoms: string, lang: string, ha
     };
   } else if (lang === 'ru') {
     if (hasImage) {
-      return {
-        enamelAbrasion: "32% Поверхностная микротрещина",
-        healthFactor: "Средний (65%)",
-        recommendedTreatment: "Художественная реставрация зуба",
-        diagnosticText: `Результаты анализа изображения зуба #${tooth}: на эмали обнаружена умеренная пигментация и микротрещина по краю. С учетом симптомов: "${symptoms || 'нет'}", рекомендуется художественная композитная реставрация для герметизации дефекта и защиты нерва.`,
-        actionPlan: [
-          "Записаться на художественную реставрацию в клинику DStoma",
-          "Использовать зубную пасту с гидроксиапатитом кальция для укрепления эмали",
-          "Избегать резких температурных перепадов и красящих продуктов"
-        ]
-      };
+      if (severityIndex === 0) {
+        return {
+          enamelAbrasion: "18% Легкое повреждение",
+          healthFactor: "Хорошее (82%)",
+          recommendedTreatment: "Профилактическая чистка",
+          diagnosticText: `Анализ изображения зуба #${tooth}: наблюдаются незначительные пятна и легкий износ. Симптомы: "${symptoms || 'нет'}". Рекомендуется фторирование без сложных вмешательств.`,
+          actionPlan: [
+            "Профилактический визит в DStoma",
+            "Использовать зубную пасту с фтором",
+            "Регулярно использовать зубную нить"
+          ]
+        };
+      } else if (severityIndex === 1) {
+        return {
+          enamelAbrasion: "32% Поверхностная микротрещина",
+          healthFactor: "Средний (65%)",
+          recommendedTreatment: "Художественная реставрация зуба",
+          diagnosticText: `Результаты анализа изображения зуба #${tooth}: на эмали обнаружена умеренная пигментация и микротрещина по краю. С учетом симптомов: "${symptoms || 'нет'}", рекомендуется художественная композитная реставрация для герметизации дефекта и защиты нерва.`,
+          actionPlan: [
+            "Записаться на художественную реставрацию в клинику DStoma",
+            "Использовать зубную пасту с гидроксиапатитом кальция для укрепления эмали",
+            "Избегать резких температурных перепадов и красящих продуктов"
+          ]
+        };
+      } else {
+        return {
+          enamelAbrasion: "65% Глубокий кариес",
+          healthFactor: "Критическое (35%)",
+          recommendedTreatment: "Лечение корневых каналов и коронка",
+          diagnosticText: `На изображении зуба #${tooth} обнаружено серьезное повреждение, возможен глубокий кариес. Симптомы: "${symptoms || 'нет'}". Необходим срочный осмотр и возможное лечение каналов.`,
+          actionPlan: [
+            "Срочно посетить стоматолога DStoma",
+            "Принимать обезболивающие только по назначению",
+            "Избегать твердой пищи"
+          ]
+        };
+      }
     }
     if (cleanSym.includes('бол') || cleanSym.includes('опух') || cleanSym.includes('острый') || cleanSym.includes('pain')) {
       return {
@@ -780,17 +922,43 @@ function getSimulatedDiagnosis(tooth: number, symptoms: string, lang: string, ha
   } else {
     // English default
     if (hasImage) {
-      return {
-        enamelAbrasion: "32% Superficial micro-fracture",
-        healthFactor: "Fair (65%)",
-        recommendedTreatment: "Aesthetic Composite Restoration",
-        diagnosticText: `Visual analysis of your uploaded image for Tooth #${tooth} indicates moderate enamel wear and a minor superficial fracture on the incisal edge. Symptoms: "${symptoms || 'none'}". Aesthetic composite restoration is recommended to protect the tissue structure.`,
-        actionPlan: [
-          "Schedule an appointment for composite restoration at DStoma",
-          "Apply remineralizing toothpaste containing hydroxyapatite",
-          "Avoid direct heavy biting on hard objects and thermal shock food"
-        ]
-      };
+      if (severityIndex === 0) {
+        return {
+          enamelAbrasion: "18% Mild wear",
+          healthFactor: "Good (82%)",
+          recommendedTreatment: "Preventative Cleaning & Fluoride",
+          diagnosticText: `Based on the attached image of Tooth #${tooth}, there are minor spots and slight wear. Symptoms: "${symptoms || 'none'}". Fluoride therapy is recommended.`,
+          actionPlan: [
+            "Schedule preventative care at DStoma",
+            "Use fluoride-rich toothpaste",
+            "Floss daily"
+          ]
+        };
+      } else if (severityIndex === 1) {
+        return {
+          enamelAbrasion: "32% Superficial micro-fracture",
+          healthFactor: "Fair (65%)",
+          recommendedTreatment: "Aesthetic Composite Restoration",
+          diagnosticText: `Visual analysis of your uploaded image for Tooth #${tooth} indicates moderate enamel wear and a minor superficial fracture on the incisal edge. Symptoms: "${symptoms || 'none'}". Aesthetic composite restoration is recommended to protect the tissue structure.`,
+          actionPlan: [
+            "Schedule an appointment for composite restoration at DStoma",
+            "Apply remineralizing toothpaste containing hydroxyapatite",
+            "Avoid direct heavy biting on hard objects and thermal shock food"
+          ]
+        };
+      } else {
+        return {
+          enamelAbrasion: "65% Deep decay",
+          healthFactor: "Critical (35%)",
+          recommendedTreatment: "Root Canal and Crown",
+          diagnosticText: `Image analysis of Tooth #${tooth} reveals severe damage, likely deep decay reaching the pulp. Symptoms: "${symptoms || 'none'}". Urgent dental care is required.`,
+          actionPlan: [
+            "Urgent appointment at DStoma",
+            "Take pain relievers only as directed",
+            "Avoid chewing hard foods"
+          ]
+        };
+      }
     }
     if (cleanSym.includes('pain') || cleanSym.includes('ache') || cleanSym.includes('hurt') || cleanSym.includes('swoll')) {
       return {
@@ -872,9 +1040,11 @@ async function sendDoctorTelegramMessage(chatId: string | number, text: string) 
 }
 
 async function sendDoctorDashboard(token: string, chatId: number | string, doctorId: string, text: string) {
-  const docQueues = queuesDb.filter(q => q.doctorId === doctorId && q.status !== 'completed' && q.status !== 'cancelled');
+  const qDb = await getQueues();
+  const docQueues = qDb.filter((q: any) => q.doctorId === doctorId && q.status !== 'completed' && q.status !== 'cancelled');
   let msg = text + "\n\n";
-  const activeDoc = (g._serverDoctors || []).find((d: any) => d.id === doctorId);
+  const sDocs = await getDoctors();
+  const activeDoc = sDocs.find((d: any) => d.id === doctorId);
   const docName = activeDoc ? activeDoc.name : "Shifokor";
   msg += `👨‍⚕️ *Shifokor:* Dr. ${docName}\n`;
   msg += `⏳ *Faol navbatlar soni:* ${docQueues.length} ta bemor\n\n`;
@@ -1270,7 +1440,8 @@ async function handleRegistrationStep(token: string, chatId: number, session: an
     const passport = text.trim().toUpperCase();
     
     // Check if passport is already used
-    const duplicate = patientsDb.find(p => p.passportSerial.toUpperCase() === passport);
+    const patDb = await getPatients();
+    const duplicate = patDb.find((p: any) => p.passportSerial.toUpperCase() === passport);
     if (duplicate) {
       await tgApi(token, 'sendMessage', {
         chat_id: chatId,
@@ -1355,7 +1526,7 @@ async function handleRegistrationStep(token: string, chatId: number, session: an
     const loginVal = session.tempDoctorLogin;
     const pwdVal = text.trim();
     
-    const serverDoctors = g._serverDoctors || [];
+    const serverDoctors = await getDoctors();
     const doc = serverDoctors.find((d: any) => d.login.toLowerCase() === loginVal && d.password === pwdVal);
     
     if (doc) {
@@ -1448,7 +1619,7 @@ async function handlePatientBotDiagnosticMessage(token: string, chatId: number, 
         parts.push({ text: `Analyze this question: "${userPrompt}"\n\nSystem Instruction: ${systemPrompt}` });
       }
       response = await aiInstance.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-2.0-flash",
         contents: { parts: parts }
       });
     }
@@ -1514,10 +1685,11 @@ async function handleDoctorCallbackQuery(token: string, chatId: number, callback
 
   if (callbackData.startsWith('doc_call_next_')) {
     const docId = callbackData.replace('doc_call_next_', '');
-    const pendingItem = queuesDb.find(q => q.doctorId === docId && q.status === 'pending');
+    const qDb = await getQueues();
+    const pendingItem = qDb.find((q: any) => q.doctorId === docId && q.status === 'pending');
     if (pendingItem) {
       pendingItem.status = 'calling';
-      g._queuesDb = queuesDb;
+      await saveQueue(pendingItem);
       if (pendingItem.telegramChatId) {
         await sendBgTelegramMessage(pendingItem.telegramChatId, `🔔 *CHIPTANGIZ KELDI!* 🔔\n\nAssalomu alaykum! Sizni shifokor hozir kabinetda kutmoqda. Kechikmasdan kirishingiz so'raladi. 🦷\n🎫 Chiptangiz: *#${pendingItem.number}*`);
       }
@@ -1533,10 +1705,11 @@ async function handleDoctorCallbackQuery(token: string, chatId: number, callback
 
   if (callbackData.startsWith('doc_complete_active_')) {
     const docId = callbackData.replace('doc_complete_active_', '');
-    const callingItem = queuesDb.find(q => q.doctorId === docId && q.status === 'calling');
+    const qDb = await getQueues();
+    const callingItem = qDb.find((q: any) => q.doctorId === docId && q.status === 'calling');
     if (callingItem) {
       callingItem.status = 'completed';
-      g._queuesDb = queuesDb;
+      await saveQueue(callingItem);
       if (callingItem.telegramChatId) {
         await sendBgTelegramMessage(callingItem.telegramChatId, `✅ *Rahmat!* \n\nShifokor ko'rigi muvaffaqiyatli yakunlandi. Salomat bo'ling! Iltimos, shaxsiy kabinetingizda shifokorga baho bering. ⭐`);
       }
@@ -1552,10 +1725,11 @@ async function handleDoctorCallbackQuery(token: string, chatId: number, callback
 
   if (callbackData.startsWith('doc_cancel_active_')) {
     const docId = callbackData.replace('doc_cancel_active_', '');
-    const callingItem = queuesDb.find(q => q.doctorId === docId && q.status === 'calling');
+    const qDb = await getQueues();
+    const callingItem = qDb.find((q: any) => q.doctorId === docId && q.status === 'calling');
     if (callingItem) {
       callingItem.status = 'cancelled';
-      g._queuesDb = queuesDb;
+      await saveQueue(callingItem);
       if (callingItem.telegramChatId) {
         await sendBgTelegramMessage(callingItem.telegramChatId, `❌ *Diqqat!* \n\nSizning *#${callingItem.number}* sonli navbatingiz bekor qilindi.`);
       }
@@ -1607,7 +1781,8 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
 
   if (callbackData === 'bot_register') {
     // Check if patient exists
-    const existing = patientsDb.find(p => String(p.telegramChatId || '') === String(chatId));
+    const patDb = await getPatients();
+    const existing = patDb.find((p: any) => String(p.telegramChatId || '') === String(chatId));
     if (existing) {
       await tgApi(token, 'sendMessage', {
         chat_id: chatId,
@@ -1660,7 +1835,7 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
         telegramChatId: String(chatId)
       };
 
-      patientsDb.push(finalPatient);
+      await savePatient(finalPatient);
       delete botSessions[chatId];
 
       const successText = `🎉 *Tabriklaymiz, ro'yxatdan o'tish muvaffaqiyatli yakunlandi!* 🎉\n\n` +
