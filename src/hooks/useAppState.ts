@@ -25,7 +25,7 @@ export function useAppState() {
     name?: string;
   } | null>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('dstoma_user_session');
+      const saved = sessionStorage.getItem('dstoma_user_session');
       if (saved) {
         try {
           return JSON.parse(saved);
@@ -176,7 +176,7 @@ export function useAppState() {
         };
         setCurrentUser(session);
         if (typeof window !== 'undefined') {
-          localStorage.setItem('dstoma_user_session', JSON.stringify(session));
+          sessionStorage.setItem('dstoma_user_session', JSON.stringify(session));
           localStorage.setItem('dstoma_sa_login', userLower);
         }
         setAuthUsername('');
@@ -195,7 +195,7 @@ export function useAppState() {
       };
       setCurrentUser(session);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('dstoma_user_session', JSON.stringify(session));
+        sessionStorage.setItem('dstoma_user_session', JSON.stringify(session));
         localStorage.setItem('dstoma_sa_login', userLower);
       }
       setAuthUsername('');
@@ -213,7 +213,7 @@ export function useAppState() {
       };
       setCurrentUser(session);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('dstoma_user_session', JSON.stringify(session));
+        sessionStorage.setItem('dstoma_user_session', JSON.stringify(session));
       }
       setSelectedClinic(matchedClinic);
       setAuthUsername('');
@@ -232,7 +232,7 @@ export function useAppState() {
       };
       setCurrentUser(session);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('dstoma_user_session', JSON.stringify(session));
+        sessionStorage.setItem('dstoma_user_session', JSON.stringify(session));
       }
       setAuthUsername('');
       setAuthPassword('');
@@ -247,7 +247,7 @@ export function useAppState() {
     setAuthError(null);
     setActiveTab('bemor');
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('dstoma_user_session');
+      sessionStorage.removeItem('dstoma_user_session');
     }
   };
 

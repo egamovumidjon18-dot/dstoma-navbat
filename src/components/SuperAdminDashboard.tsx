@@ -32,7 +32,9 @@ import {
   Mail,
   Inbox,
   PenSquare,
-  AlertTriangle
+  AlertTriangle,
+  Trash2,
+  Pencil
 } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
@@ -1378,6 +1380,20 @@ export default function SuperAdminDashboard({
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => setClinicToEdit(clinic)}
+                          className="p-1 px-2.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 rounded text-[10px] font-bold shadow-sm transition-all"
+                          title="Tahrirlash"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setClinicToDelete(clinic)}
+                          className="p-1 px-2.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded text-[10px] font-bold shadow-sm transition-all"
+                          title="O'chirish"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                         <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-full tracking-wide ${
                           subStatus === 'active' 
                             ? 'bg-emerald-100 text-emerald-800' 
@@ -1578,9 +1594,23 @@ export default function SuperAdminDashboard({
                         <span className={`w-2.5 h-2.5 rounded-full ${
                           doc.status === 'idle' ? 'bg-emerald-500' : doc.status === 'busy' ? 'bg-rose-500' : 'bg-amber-400'
                         }`} title={`Hozirgi holat: ${doc.status}`}></span>
-                        <span className="text-[10px] text-slate-400 font-mono font-bold capitalize select-none">
+                        <span className="text-[10px] text-slate-400 font-mono font-bold capitalize select-none mr-2">
                           {doc.status}
                         </span>
+                        <button
+                          onClick={() => setDoctorToEditDetails(doc)}
+                          className="p-1 px-2.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 rounded text-[10px] font-bold shadow-sm transition-all"
+                          title="Tahrirlash"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => setDoctorToDelete(doc)}
+                          className="p-1 px-2.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded text-[10px] font-bold shadow-sm transition-all"
+                          title="O'chirish"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
                       </div>
                     </div>
 
