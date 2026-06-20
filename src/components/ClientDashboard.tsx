@@ -51,6 +51,7 @@ interface ClientDashboardProps {
   onUpdateDoctorRating: (doctorId: string, rating: number) => void;
   setActiveTab?: (tab: 'bemor' | 'shifokor' | 'boshliq' | 'kod') => void;
   language: Language;
+  userLocationRef?: React.MutableRefObject<{ lat: number, lng: number, status: 'idle' | 'detecting' | 'active' | 'denied', initialized: boolean }>;
 }
 
 export default function ClientDashboard({
@@ -64,7 +65,8 @@ export default function ClientDashboard({
   onCancelQueue,
   onUpdateDoctorRating,
   setActiveTab,
-  language
+  language,
+  userLocationRef
 }: ClientDashboardProps) {
 
   // Translation Helper for ClientDashboard
@@ -1135,6 +1137,7 @@ export default function ClientDashboard({
             selectedClinic={selectedClinic}
             onSelectClinic={onSelectClinic}
             language={language}
+            userLocationRef={userLocationRef}
           />
 
           {activeClinic ? (

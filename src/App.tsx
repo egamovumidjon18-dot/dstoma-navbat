@@ -29,6 +29,7 @@ export default function App() {
     superadminPassword,
     gmailInboxes,
     saasPayments,
+    userLocationRef,
     t,
     handleUpdateClinicCreds,
     handleUpdateDoctorCreds,
@@ -214,6 +215,7 @@ export default function App() {
             onUpdateDoctorRating={handleUpdateDoctorRating}
             setActiveTab={setActiveTab}
             language={language}
+            userLocationRef={userLocationRef}
           />
         )}
 

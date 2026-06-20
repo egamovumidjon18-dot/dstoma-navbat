@@ -8,55 +8,99 @@ interface ClinicMapProps {
   selectedClinic: Clinic | null;
   onSelectClinic: (clinic: Clinic) => void;
   language: Language;
+  userLocationRef?: React.MutableRefObject<{ lat: number, lng: number, status: 'idle' | 'detecting' | 'active' | 'denied', initialized: boolean }>;
 }
 
-export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, language }: ClinicMapProps) {
+export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, language, userLocationRef }: ClinicMapProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'google' | 'vector' | 'leaflet' | 'yandex'>('google');
-  const [userLat, setUserLat] = useState<number>(39.6542); // defaults to Samarqand shahri
-  const [userLng, setUserLng] = useState<number>(66.9597);
-  const [gpsStatus, setGpsStatus] = useState<'idle' | 'detecting' | 'active' | 'denied'>('idle');
+  const [activeTab, setActiveTab] = useState<'google' | 'vector' | 'leaflet' | 'dgis'>('google');
+  
+  // Use the provided ref to persist location across tab changes, or fallback to a local ref
+  const fallbackRef = useRef({ lat: 39.6542, lng: 66.9597, status: 'idle' as const, initialized: false });
+  const locationRef = userLocationRef || fallbackRef;
+
+  const [userLat, setUserLat] = useState<number>(locationRef.current.lat);
+  const [userLng, setUserLng] = useState<number>(locationRef.current.lng);
+  const [gpsStatus, setGpsStatus] = useState<'idle' | 'detecting' | 'active' | 'denied'>(locationRef.current.status);
+  
   const [leafletLoaded, setLeafletLoaded] = useState<boolean>(false);
-  const [yandexLoaded, setYandexLoaded] = useState<boolean>(false);
+
+  const [dgisLoaded, setDgisLoaded] = useState<boolean>(false);
   const [customDistanceFilter, setCustomDistanceFilter] = useState<number>(3000); // 3000km to cover all of Uzbekistan in search
 
   // Refs for map elements
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
   const markersGroupRef = useRef<any>(null);
-  const yandexMapContainerRef = useRef<HTMLDivElement>(null);
-  const yandexMapRef = useRef<any>(null);
+  const dgisMapContainerRef = useRef<HTMLDivElement>(null);
+  const dgisMapRef = useRef<any>(null);
 
   const t = (key: string) => {
     return (TRANSLATIONS[language] as any)?.[key] || (TRANSLATIONS['uz'] as any)?.[key] || key;
   };
 
-  const locateUserExact = () => {
+  useEffect(() => {
+    locationRef.current = { lat: userLat, lng: userLng, status: gpsStatus, initialized: locationRef.current.initialized };
+  }, [userLat, userLng, gpsStatus, locationRef]);
+
+  const locateUserExact = (isAuto = false) => {
     if (navigator.geolocation) {
       setGpsStatus('detecting');
+      
+      const updateMapPos = (lat: number, lng: number) => {
+        locationRef.current.initialized = true;
+        setUserLat(lat);
+        setUserLng(lng);
+        setGpsStatus('active');
+        if (leafletMapRef.current && (activeTab === 'leaflet' || activeTab === 'google')) {
+          leafletMapRef.current.setView([lat, lng], 14);
+        } else if (dgisMapRef.current && activeTab === 'dgis') {
+          dgisMapRef.current.setView([lat, lng], 14);
+        }
+      };
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setUserLat(position.coords.latitude);
-          setUserLng(position.coords.longitude);
-          setGpsStatus('active');
-          
-          if (leafletMapRef.current && (activeTab === 'leaflet' || activeTab === 'google')) {
-            leafletMapRef.current.setView([position.coords.latitude, position.coords.longitude], 14);
-          } else if (yandexMapRef.current && activeTab === 'yandex') {
-            yandexMapRef.current.setCenter([position.coords.latitude, position.coords.longitude], 14);
-          }
+          updateMapPos(position.coords.latitude, position.coords.longitude);
         },
         (error) => {
-          console.warn('Geolocation failed:', error);
-          setGpsStatus('denied');
-          alert(language === 'uz' ? 'Joylashuvni aniqlashga ruxsat etilmagan yoki xatolik yuz berdi.' : 'Location access denied or failed.');
+          console.warn('Geolocation exact lookup high-accuracy failed:', error);
+          
+          if (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE) {
+            // Try with low accuracy
+            navigator.geolocation.getCurrentPosition(
+              (pos) => updateMapPos(pos.coords.latitude, pos.coords.longitude),
+              (err2) => {
+                locationRef.current.initialized = true;
+                setGpsStatus('denied');
+                setUserLat(39.6542);
+                setUserLng(66.9597);
+                if (!isAuto) alert(language === 'uz' ? 'Joylashuvni aniqlab bo\'lmadi. Samarqand koordinatasiga qaytilmoqda.' : 'Location could not be determined. Falling back to Samarqand.');
+              },
+              { enableHighAccuracy: false, timeout: 10000, maximumAge: Infinity }
+            );
+          } else {
+             locationRef.current.initialized = true;
+             setGpsStatus('denied');
+             setUserLat(39.6542);
+             setUserLng(66.9597);
+             if (!isAuto) alert(language === 'uz' ? 'Joylashuvni aniqlashga ruxsat etilmagan yoki xatolik yuz berdi. Samarqand koordinatasiga qaytilmoqda.' : 'Location access denied or failed. Falling back to Samarqand.');
+          }
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
+      locationRef.current.initialized = true;
       setGpsStatus('denied');
+      if (!isAuto) alert(language === 'uz' ? 'Brauzeringiz geolokatsiyani qo\'llab-quvvatlamaydi.' : 'Your browser does not support geolocation.');
     }
   };
+
+  useEffect(() => {
+    if (!locationRef.current.initialized) {
+      locateUserExact(true);
+    }
+  }, []);
 
   // Dynamic Leaflet asset loading
   useEffect(() => {
@@ -95,26 +139,31 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
     }
   }, [activeTab]);
 
-  // Dynamic Yandex Maps asset loading
+  // Dynamic 2GIS Maps asset loading
   useEffect(() => {
-    if (activeTab !== 'yandex') return;
+    if (activeTab !== 'dgis') return;
 
-    if (!document.getElementById('yandex-js')) {
+    if (!document.getElementById('dgis-js')) {
       const script = document.createElement('script');
-      script.id = 'yandex-js';
-      script.src = 'https://api-maps.yandex.ru/2.1/?lang=uz_UZ';
+      script.id = 'dgis-js';
+      script.src = 'https://maps.api.2gis.com/2.0/loader.js';
       script.crossOrigin = 'anonymous';
       script.onload = () => {
-        setYandexLoaded(true);
+        setDgisLoaded(true);
+      };
+      script.onerror = () => {
+        console.error('2GIS Maps JS un-loadable');
+        alert(language === 'uz' ? '2GIS xarita yuklanmadi, Google Maps dan foydalaning.' : '2GIS map failed to load, switching to Google Maps.');
+        setActiveTab('google');
       };
       document.body.appendChild(script);
     } else {
-      if ((window as any).ymaps) {
-        setYandexLoaded(true);
+      if ((window as any).DG) {
+        setDgisLoaded(true);
       } else {
         const interval = setInterval(() => {
-          if ((window as any).ymaps) {
-            setYandexLoaded(true);
+          if ((window as any).DG) {
+            setDgisLoaded(true);
             clearInterval(interval);
           }
         }, 300);
@@ -125,25 +174,58 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
 
   // Geolocation loader
   useEffect(() => {
+    // Prevent refetching if already initialized
+    if (locationRef.current.initialized) return;
+
+    let mounted = true;
+
     if (navigator.geolocation) {
       setGpsStatus('detecting');
       
-      // Get initial position
+      const geoOptions = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+      
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          if (!mounted) return;
+          locationRef.current.initialized = true;
           setUserLat(position.coords.latitude);
           setUserLng(position.coords.longitude);
           setGpsStatus('active');
         },
         (error) => {
-          console.warn('Geolocation failed or rejected, falling back to Samarqand:', error);
-          setGpsStatus('denied');
+          if (!mounted) return;
+          console.warn('Geolocation failed or rejected:', error);
+          
+          // Retry once with lower accuracy if timeout or unavailable
+          if (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE) {
+             navigator.geolocation.getCurrentPosition(
+               (pos) => {
+                 if (!mounted) return;
+                 locationRef.current.initialized = true;
+                 setUserLat(pos.coords.latitude);
+                 setUserLng(pos.coords.longitude);
+                 setGpsStatus('active');
+               },
+               (err2) => {
+                 if (!mounted) return;
+                 locationRef.current.initialized = true;
+                 setGpsStatus('denied');
+               },
+               { enableHighAccuracy: false, timeout: 10000, maximumAge: Infinity }
+             );
+          } else {
+            locationRef.current.initialized = true;
+            setGpsStatus('denied');
+          }
         },
-        { enableHighAccuracy: true, timeout: 8050 }
+        geoOptions
       );
     } else {
+      locationRef.current.initialized = true;
       setGpsStatus('denied');
     }
+    
+    return () => { mounted = false; };
   }, []);
 
   // Haversine formula to compute distance in km
@@ -330,7 +412,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
               </div>
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 4px;">
                 <a href="https://www.google.com/maps/dir/?api=1&origin=${userLat},${userLng}&destination=${clinic.lat},${clinic.lng}&travelmode=driving" target="_blank" rel="noopener noreferrer" style="background-color: #10b981; color: white; padding: 5px; border-radius: 6px; font-size: 9px; font-weight: 900; text-decoration: none; text-align: center; display: block; filter: drop-shadow(0 1px 2px rgba(16,185,129,0.35)); transition: all 0.2s;">GOOGLE MAP</a>
-                <a href="https://yandex.com/maps/?rtext=${userLat},${userLng}~${clinic.lat},${clinic.lng}&rtt=auto" target="_blank" rel="noopener noreferrer" style="background-color: #f43f5e; color: white; padding: 5px; border-radius: 6px; font-size: 9px; font-weight: 900; text-decoration: none; text-align: center; display: block; filter: drop-shadow(0 1px 2px rgba(244,63,94,0.35)); transition: all 0.2s;">YANDEX MAP</a>
+                <a href="https://2gis.uz/routeSearch/rsType/car/from/${userLng},${userLat}/to/${clinic.lng},${clinic.lat}" target="_blank" rel="noopener noreferrer" style="background-color: #f43f5e; color: white; padding: 5px; border-radius: 6px; font-size: 9px; font-weight: 900; text-decoration: none; text-align: center; display: block; filter: drop-shadow(0 1px 2px rgba(244,63,94,0.35)); transition: all 0.2s;">2GIS MAP</a>
               </div>
             </div>
           `)
@@ -381,115 +463,116 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
     }
   }, [leafletLoaded, activeTab, userLat, userLng, clinics, selectedClinic]);
 
-  // 2. Initialize Yandex Map (Once)
+  // 2. Initialize 2GIS Map (Once)
   useEffect(() => {
-    if (activeTab !== 'yandex' || !yandexLoaded || !yandexMapContainerRef.current) return;
-    const ymaps = (window as any).ymaps;
-    if (!ymaps) return;
+    if (activeTab !== 'dgis' || !dgisLoaded || !dgisMapContainerRef.current) return;
+    const DG = (window as any).DG;
+    if (!DG) return;
 
-    if (yandexMapRef.current) return;
+    if (dgisMapRef.current) return;
 
-    ymaps.ready(() => {
+    DG.then(() => {
+      if (!dgisMapContainerRef.current) return;
       try {
-        const map = new ymaps.Map(yandexMapContainerRef.current, {
+        const map = DG.map(dgisMapContainerRef.current, {
           center: [userLat, userLng],
           zoom: 12,
-          controls: ['zoomControl', 'fullscreenControl']
+          fullscreenControl: false
         });
         
-        yandexMapRef.current = map;
+        dgisMapRef.current = map;
       } catch (err) {
-        console.error("Yandex Live map init error:", err);
+        console.error("2GIS Live map init error:", err);
+        alert(language === 'uz' ? '2GIS xarita yuklanmadi, Google Maps dan foydalaning' : '2GIS map failed to load, switching to Google Maps');
+        setActiveTab('google');
       }
     });
 
     return () => {
-      if (yandexMapRef.current) {
+      if (dgisMapRef.current) {
         try {
-          yandexMapRef.current.destroy();
+          dgisMapRef.current.remove();
         } catch (e) {
           console.warn(e);
         }
-        yandexMapRef.current = null;
+        dgisMapRef.current = null;
       }
     };
-  }, [yandexLoaded, activeTab]);
+  }, [dgisLoaded, activeTab]);
 
-  // 2b. Update Yandex Map Objects
+  // 2b. Update 2GIS Map Objects
   useEffect(() => {
-    if (activeTab !== 'yandex' || !yandexLoaded || !yandexMapRef.current) return;
-    const map = yandexMapRef.current;
+    if (activeTab !== 'dgis' || !dgisLoaded || !dgisMapRef.current) return;
+    const map = dgisMapRef.current;
+    const DG = (window as any).DG;
+    if (!DG) return;
 
     try {
-      map.geoObjects.removeAll();
+      // Create or clear a layer group
+      if (map._markersGroup) {
+        map._markersGroup.removeFrom(map);
+      }
+      map._markersGroup = DG.featureGroup().addTo(map);
 
-      const ymaps = (window as any).ymaps;
-      if (!ymaps) return;
+      // 1. User marker
+      DG.marker([userLat, userLng], {
+        icon: DG.divIcon({
+          className: 'custom-div-icon',
+          html: `<div style="background-color: #3b82f6; width: 14px; height: 14px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(59,130,246,0.8);"></div>`,
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        }),
+        zIndexOffset: 1000
+      }).bindPopup(t('myLocation')).addTo(map._markersGroup);
 
-      // Add User Location indicator (Red Circle Dot Icon)
-      const userPlacemark = new ymaps.Placemark(
-        [userLat, userLng],
-        {
-          hintContent: t('approxLocation'),
-          balloonContent: `<b>${t('approxLocation')}</b><br/>Lat: ${userLat.toFixed(4)}, Lng: ${userLng.toFixed(4)}`
-        },
-        {
-          preset: 'islands#redCircleDotIconWithGlyph',
-          iconColor: '#f43f5e'
-        }
-      );
-      map.geoObjects.add(userPlacemark);
-
-      // Add each Clinic to Yandex Maps
+      // 2. Clinic markers
       clinics.forEach((clinic) => {
         const isSelected = selectedClinic?.id === clinic.id;
-        const placemark = new ymaps.Placemark(
-          [clinic.lat, clinic.lng],
-          {
-            hintContent: clinic.name,
-            balloonContent: `
-              <div style="font-family: sans-serif; padding: 6px; color: #1f2937; min-width: 170px;">
-                <small style="color: #10b981; font-weight: 800; text-transform: uppercase; font-size: 8px;">${clinic.subdomain}.dstoma-navbat-lk2p.vercel.app</small>
-                <h4 style="margin: 2px 0; font-size: 13px; font-weight: 800; color: #111827; line-height: 1.2;">${clinic.name}</h4>
-                <p style="margin: 3px 0; font-size: 11px; color: #4b5563; line-height: 1.3;">📍 ${clinic.address}</p>
-                <p style="margin: 2px 0 6px 0; font-size: 11px; font-weight: 600; color: #374151;">📞 ${clinic.phone}</p>
-                <div style="color: #f59e0b; font-size: 10px; font-weight: 850;">★ ${clinic.rating} | ${getDistance(userLat, userLng, clinic.lat, clinic.lng)} km</div>
-              </div>
-            `
-          },
-          {
-            preset: isSelected ? 'islands#greenMedicalIcon' : 'islands#blueMedicalIcon',
-            iconColor: isSelected ? '#10b981' : '#0ea5e9'
-          }
-        );
+        
+        const clinicIcon = DG.divIcon({
+          className: 'custom-div-icon',
+          html: `
+            <div style="background-color: ${isSelected ? '#f43f5e' : '#10b981'}; width: ${isSelected ? '28px' : '18px'}; height: ${isSelected ? '28px' : '18px'}; border-radius: 50%; border: ${isSelected ? '3px' : '2px'} solid white; box-shadow: 0 0 15px ${isSelected ? 'rgba(244,63,94,0.6)' : 'rgba(16,185,129,0.5)'}; display: flex; align-items: center; justify-content: center; transition: all 0.3s; transform: scale(${isSelected ? 1.1 : 1});">
+              <span style="color: white; font-size: ${isSelected ? '14px' : '10px'}; font-weight: 900;">+</span>
+            </div>
+          `,
+          iconSize: [isSelected ? 30 : 20, isSelected ? 30 : 20],
+          iconAnchor: [isSelected ? 15 : 10, isSelected ? 15 : 10]
+        });
 
-        placemark.events.add('click', () => {
+        const m = DG.marker([clinic.lat, clinic.lng], {
+          icon: clinicIcon,
+          zIndexOffset: isSelected ? 900 : 100
+        }).addTo(map._markersGroup);
+
+        m.on('click', () => {
           onSelectClinic(clinic);
         });
 
-        map.geoObjects.add(placemark);
+        if (isSelected && window.innerWidth > 768) {
+           m.bindPopup(`<b>${clinic.name}</b><br/>${clinic.address}`).openPopup();
+        }
       });
 
-      // Set viewport bounds safely to prevent panning cutoff
-      const yMapState = map as any;
+      // 3. Routing (polyline) for selected clinic
       if (selectedClinic) {
-        if (yMapState._lastSelectedId !== selectedClinic.id) {
-          map.setCenter([selectedClinic.lat, selectedClinic.lng], 12.5);
-          yMapState._lastSelectedId = selectedClinic.id;
-        }
-      } else if (clinics.length > 0) {
-        if (!yMapState._hasFittedInitialBounds) {
-          const bounds = map.geoObjects.getBounds();
-          if (bounds) {
-            map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 40 });
-            yMapState._hasFittedInitialBounds = true;
-          }
-        }
+        DG.polyline([
+          [userLat, userLng],
+          [selectedClinic.lat, selectedClinic.lng]
+        ], {
+          color: '#3b82f6',
+          weight: 4,
+          opacity: 0.8,
+        }).addTo(map._markersGroup);
+        
+        map.setView([selectedClinic.lat, selectedClinic.lng]);
+      } else {
+        map.setView([userLat, userLng]);
       }
     } catch (err) {
-      console.warn("Yandex overlay update issue:", err);
+      console.warn("2GIS overlay update issue:", err);
     }
-  }, [yandexLoaded, activeTab, userLat, userLng, clinics, selectedClinic]);
+  }, [dgisLoaded, activeTab, userLat, userLng, clinics, selectedClinic]);
 
   return (
     <div id="clinic-map-root" className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-900 rounded-3xl overflow-hidden border border-[#233355]/50 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]">
@@ -568,7 +651,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
               </select>
 
               <button
-                onClick={locateUserExact}
+                onClick={() => locateUserExact(false)}
                 className="w-full mt-1.5 flex items-center justify-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl px-3 py-2 text-[11px] font-bold uppercase transition-all"
               >
                 📍 {language === 'uz' ? 'Haqiqiy Joylashuvni Yangilash (GPS)' : language === 'ru' ? 'Обновить Реальное Положение' : 'Update Real Location'}
@@ -759,13 +842,13 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                           Google Navigation
                         </a>
                         <a
-                          href={`https://yandex.com/maps/?rtext=${userLat},${userLng}~${clinic.lat},${clinic.lng}&rtt=auto`}
+                          href={`https://2gis.uz/routeSearch/rsType/car/from/${userLng},${userLat}/to/${clinic.lng},${clinic.lat}`}
                           target="_blank"
                           referrerPolicy="no-referrer"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center gap-1 py-1 text-[9px] font-black text-rose-450 bg-rose-950/40 border border-rose-500/20 rounded-lg hover:bg-rose-500 hover:text-white transition-all uppercase"
                         >
-                          Yandex Navigation
+                          2GIS Navigation
                         </a>
                       </div>
                     </div>
@@ -778,13 +861,25 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
       </div>
 
       {/* Main Map Presentation - compact responsive height */}
-      <div id="map-canvas-container" className="lg:col-span-8 h-[280px] sm:h-[385px] lg:h-[650px] relative bg-[#040814] flex flex-col">
+      <div id="map-canvas-container" className="lg:col-span-8 h-[280px] sm:h-[385px] lg:h-[650px] relative bg-[#040814] flex flex-col overflow-hidden">
+        
+        {/* Detecting Location Initial Overlay */}
+        {gpsStatus === 'detecting' && !locationRef.current.initialized && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm transition-opacity duration-300">
+            <div className="flex flex-col items-center p-6 bg-[#0c1225] rounded-3xl border border-emerald-500/30 shadow-[0_0_40px_-5px_rgba(16,185,129,0.3)] animate-in fade-in zoom-in duration-500">
+              <Globe className="w-10 h-10 text-emerald-400 animate-spin mb-3 shadow-emerald-500/50" />
+              <span className="text-[11px] font-black text-emerald-400 uppercase tracking-[0.2em] animate-pulse">
+                {language === 'uz' ? 'Joylashuv Aniqlanmoqda...' : language === 'ru' ? 'Определение Местоположения...' : 'Detecting Location...'}
+              </span>
+            </div>
+          </div>
+        )}
         
         {/* Real Dynamic Tab Choices - compact responsive size on mobile */}
         <div className="absolute top-3 left-2 sm:left-14 z-40 flex flex-wrap gap-1 bg-slate-950/92 backdrop-blur-md p-1 rounded-xl shadow-2xl border border-[#1e3256]/50 origin-top-left">
           
           <button
-            onClick={locateUserExact}
+            onClick={() => locateUserExact(false)}
             className={`px-2.5 py-1.5 text-[9px] sm:text-[10px] font-black uppercase rounded-lg transition-all flex items-center gap-1 cursor-pointer bg-slate-900 border border-[#1e3256]/70 text-cyan-400 hover:bg-cyan-500 hover:text-slate-950`}
             title={t('approxLocation')}
           >
@@ -825,18 +920,18 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
           </button>
           
           <button
-            onClick={() => setActiveTab('yandex')}
+            onClick={() => setActiveTab('dgis')}
             className={`px-2.5 py-1.5 text-[9px] sm:text-[10px] font-black uppercase rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
-              activeTab === 'yandex'
+              activeTab === 'dgis'
                 ? 'bg-emerald-500 text-slate-950 font-black shadow-lg'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            🧭 <span className="hidden sm:inline">Yandex Live</span><span className="inline sm:hidden">Yandex</span> {yandexLoaded && activeTab === 'yandex' && <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping"></span>}
+            🧭 <span className="hidden sm:inline">2GIS Live</span><span className="inline sm:hidden">2GIS</span> {dgisLoaded && activeTab === 'dgis' && <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping"></span>}
           </button>
         </div>
 
-        {/* Selected Clinic overlay hud - perfectly optimized and beautiful on mobile with Google/Yandex shortcuts */}
+        {/* Selected Clinic overlay hud - perfectly optimized and beautiful on mobile with Google/2GIS shortcuts */}
         {selectedClinic && (
           <div className="absolute top-14 sm:top-4 right-2 sm:right-4 z-40 max-w-[270px] bg-slate-950/95 backdrop-blur-md p-3 rounded-2xl shadow-2xl border border-[#1e3256]/60 text-left scale-90 sm:scale-100 origin-top-right">
             <div className="flex items-center justify-between gap-1 mb-1.5">
@@ -872,13 +967,13 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                   {language === 'uz' ? '🟢 GOOGLE MARSHRUT' : language === 'ru' ? '🟢 МАРШРУТ GOOGLE' : '🟢 GOOGLE ROUTE'}
                 </a>
                 <a
-                  href={`https://yandex.com/maps/?rtext=${userLat},${userLng}~${selectedClinic.lat},${selectedClinic.lng}&rtt=auto`}
+                  href={`https://2gis.uz/routeSearch/rsType/car/from/${userLng},${userLat}/to/${selectedClinic.lng},${selectedClinic.lat}`}
                   target="_blank"
                   referrerPolicy="no-referrer"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-1 text-[9px] font-black text-white bg-rose-600 hover:bg-rose-500 rounded-xl px-2 py-1.5 shadow-lg transition-all uppercase"
                 >
-                  {language === 'uz' ? '🔴 YANDEX MARSHRUT' : language === 'ru' ? '🔴 МАРШРУТ YANDEX' : '🔴 YANDEX ROUTE'}
+                  {language === 'uz' ? '🔴 2GIS MARSHRUT' : language === 'ru' ? '🔴 МАРШРУТ 2GIS' : '🔴 2GIS ROUTE'}
                 </a>
               </div>
             </div>
@@ -886,7 +981,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         )}
 
         {/* Tab 1: Leaflet Interactive Map (Also used for Google Tiles) */}
-        {(activeTab === 'leaflet' || activeTab === 'google') && (
+        {locationRef.current.initialized && (activeTab === 'leaflet' || activeTab === 'google') && (
           <div className="w-full h-full relative z-10 bg-slate-950 flex flex-col justify-end">
             <div ref={mapContainerRef} className="w-full h-full bg-[#111] border border-[#1b2b4d]/40 rounded-b-2xl overflow-hidden shadow-inner" style={{ minHeight: '100%', height: '100%' }}></div>
             
@@ -908,7 +1003,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         )}
 
         {/* Tab 2: Vector fallback style map of Uzbekistan */}
-        {activeTab === 'vector' && (
+        {locationRef.current.initialized && activeTab === 'vector' && (
           <div className="w-full h-full bg-[#050a18] flex flex-col justify-between p-6 overflow-hidden relative border border-[#1e2e4b] rounded-b-2xl">
             {/* Grid Pattern Background */}
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f1c35_1px,transparent_1px),linear-gradient(to_bottom,#0f1c35_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-70"></div>
@@ -1042,17 +1137,17 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
           </div>
         )}
 
-        {/* Tab 4: Yandex Interactive Map */}
-        {activeTab === 'yandex' && (
+        {/* Tab 4: 2GIS Interactive Map */}
+        {locationRef.current.initialized && activeTab === 'dgis' && (
           <div className="w-full h-full relative z-10 bg-slate-950 flex flex-col justify-end">
-            <div ref={yandexMapContainerRef} className="w-full h-full bg-[#111] border border-[#1b2b4d]/40 rounded-b-2xl overflow-hidden shadow-inner" style={{ minHeight: '100%', height: '100%' }}></div>
+            <div ref={dgisMapContainerRef} className="w-full h-full bg-[#111] border border-[#1b2b4d]/40 rounded-b-2xl overflow-hidden shadow-inner" style={{ minHeight: '100%', height: '100%' }}></div>
             
             {/* Live alert */}
             <div className="absolute bottom-2 left-2 right-2 z-40 flex items-center gap-2 bg-slate-950/90 border border-[#1e3256]/60 p-3 rounded-xl text-[10px] text-slate-300 shadow-xl text-left scale-90 sm:scale-100 origin-bottom pointer-events-none">
               <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
               <span>
                 <strong>
-                  {language === 'uz' ? 'Yandex Maps faol:' : language === 'ru' ? 'Карта Yandex активна:' : 'Yandex Maps Live Active:'}
+                  {language === 'uz' ? '2GIS Maps faol:' : language === 'ru' ? 'Карта 2GIS активна:' : '2GIS Maps Live Active:'}
                 </strong>{' '}
                 {language === 'uz' 
                   ? "Bemorning aniq koordinatasi (qizil nuqta) hamda barcha filiallar reytinglari va masofalari xaritada ko'rsatildi. Marshrut olish uchun pastdagi tugmalarni bosing."

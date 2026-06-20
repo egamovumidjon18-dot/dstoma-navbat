@@ -17,6 +17,13 @@ export function useAppState() {
   const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(INITIAL_CLINICS[0] || null); // Pre-selected first clinic by default so dental model is loaded immediately
   const selectedClinicRef = useRef<Clinic | null>(selectedClinic);
 
+  const userLocationRef = useRef<{ lat: number, lng: number, status: 'idle' | 'detecting' | 'active' | 'denied', initialized: boolean }>({
+    lat: 39.6542,
+    lng: 66.9597,
+    status: 'detecting',
+    initialized: false
+  });
+
   useEffect(() => {
     selectedClinicRef.current = selectedClinic;
   }, [selectedClinic]);
@@ -745,6 +752,7 @@ export function useAppState() {
     saasPayments,
     mobileMenuOpen,
     setMobileMenuOpen,
+    userLocationRef,
     t,
     handleUpdateClinicCreds,
     handleUpdateDoctorCreds,
