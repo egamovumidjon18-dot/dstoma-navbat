@@ -134,9 +134,11 @@ try {
     const firebaseApp = initializeApp(firebaseConfig);
     fDb = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
     console.log("🔥 Connected to Firebase Firestore");
+  } else {
+    console.log("Firebase config not found at", cfgPath);
   }
 } catch (error) {
-  console.log("Firebase config not found or invalid", error);
+  console.log("Firebase config init error", error);
 }
 
 // ASYNC DB HELPERS
