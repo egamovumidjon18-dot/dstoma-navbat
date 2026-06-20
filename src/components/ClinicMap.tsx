@@ -278,7 +278,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         const clinicMarker = L.marker([clinic.lat, clinic.lng], { icon: clinicIcon })
           .bindPopup(`
             <div style="font-family: sans-serif; padding: 6px; color: #1f2937; min-width: 170px;">
-              <small style="color: #10b981; font-weight: 800; text-transform: uppercase; font-size: 8px; letter-spacing: 0.5px;">${clinic.subdomain}.dstoma.uz</small>
+              <small style="color: #10b981; font-weight: 800; text-transform: uppercase; font-size: 8px; letter-spacing: 0.5px;">${clinic.subdomain}.dstoma-navbat-lk2p.vercel.app</small>
               <h4 style="margin: 2px 0; font-size: 13px; font-weight: 800; color: #111827; line-height: 1.2;">${clinic.name}</h4>
               <p style="margin: 3px 0; font-size: 11px; color: #4b5563; line-height: 1.3;">📍 ${clinic.address}</p>
               <p style="margin: 2px 0 6px 0; font-size: 11px; font-weight: 600; color: #374151;">📞 ${clinic.phone}</p>
@@ -396,7 +396,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
             hintContent: clinic.name,
             balloonContent: `
               <div style="font-family: sans-serif; padding: 6px; color: #1f2937; min-width: 170px;">
-                <small style="color: #10b981; font-weight: 800; text-transform: uppercase; font-size: 8px;">${clinic.subdomain}.dstoma.uz</small>
+                <small style="color: #10b981; font-weight: 800; text-transform: uppercase; font-size: 8px;">${clinic.subdomain}.dstoma-navbat-lk2p.vercel.app</small>
                 <h4 style="margin: 2px 0; font-size: 13px; font-weight: 800; color: #111827; line-height: 1.2;">${clinic.name}</h4>
                 <p style="margin: 3px 0; font-size: 11px; color: #4b5563; line-height: 1.3;">📍 ${clinic.address}</p>
                 <p style="margin: 2px 0 6px 0; font-size: 11px; font-weight: 600; color: #374151;">📞 ${clinic.phone}</p>
@@ -526,7 +526,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 <option value="" className="text-slate-400 font-normal">ℹ️ {language === 'uz' ? '-- Klinikani tanlang --' : language === 'ru' ? '-- Выберите филиал --' : '-- Choose Clinic or Branch --'}</option>
                 {clinics.map((clinic) => (
                   <option key={clinic.id} value={clinic.id} className="text-slate-200 font-semibold bg-[#0c1225]">
-                    {clinic.name} ({clinic.subdomain}.dstoma.uz)
+                    {clinic.name} ({clinic.subdomain}.dstoma-navbat-lk2p.vercel.app)
                   </option>
                 ))}
               </select>
@@ -598,7 +598,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] font-black px-2 py-0.5 bg-slate-900 border border-[#1e3256]/60 text-emerald-400 rounded-md font-mono">
-                      {clinic.subdomain}.dstoma.uz
+                      {clinic.subdomain}.dstoma-navbat-lk2p.vercel.app
                     </span>
                     <span className="text-[11px] font-mono font-bold text-amber-500 flex items-center gap-0.5">
                       ★ {clinic.rating}
@@ -751,7 +751,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
           <div className="absolute top-14 sm:top-4 right-2 sm:right-4 z-40 max-w-[270px] bg-slate-950/95 backdrop-blur-md p-3 rounded-2xl shadow-2xl border border-[#1e3256]/60 text-left scale-90 sm:scale-100 origin-top-right">
             <div className="flex items-center justify-between gap-1 mb-1.5">
               <div className="flex items-center gap-1 text-[8.5px] uppercase tracking-wider font-slate-400 text-emerald-450 font-black leading-none">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-405 shrink-0" /> {selectedClinic.subdomain}.dstoma.uz
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-405 shrink-0" /> {selectedClinic.subdomain}.dstoma-navbat-lk2p.vercel.app
               </div>
               <button 
                 onClick={() => onSelectClinic(null as any)}

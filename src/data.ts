@@ -40,7 +40,7 @@ python manage.py makemigrations dentistry_clinic && python manage.py migrate && 
   {
     title: '2. Multi-Tenant Subdomain Middleware',
     language: 'python',
-    description: 'Bemor subdomain orqali kirganda (masalan samarqand.dstoma.uz), klinika aniqlanadi va "request.clinic" sifatida request-ga biriktiriladi. Bu barcha SQL so\'rovlarini shu klinika doirasida cheklash imkonini beradi.',
+    description: 'Bemor subdomain orqali kirganda (masalan samarqand.dstoma-navbat-lk2p.vercel.app), klinika aniqlanadi va "request.clinic" sifatida request-ga biriktiriladi. Bu barcha SQL so\'rovlarini shu klinika doirasida cheklash imkonini beradi.',
     filename: 'dstoma/middleware.py',
     code: `import django
 from django.shortcuts import get_object_or_404
@@ -168,7 +168,7 @@ def doctor_queue_view(request):
                         <h5 style="margin: 0 0 4px 0; color: #1a73e8; font-weight: bold;">\${clinic.name}</h5>
                         <p style="margin: 0 0 6px 0; font-size: 13px; color: #5f6368;">\${clinic.address}</p>
                         <p style="margin: 0 0 10px 0; font-size: 12px;">📞 <a href="tel:\${clinic.phone}">\${clinic.phone}</a></p>
-                        <a href="https://\${clinic.subdomain}.dstoma.uz" 
+                        <a href="https://\${clinic.subdomain}.dstoma-navbat-lk2p.vercel.app" 
                            target="_blank" 
                            style="display: inline-block; background-color: #1a73e8; color: white; padding: 6px 12px; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: 500;">
                            Navbatga Yozilish ➜
@@ -208,7 +208,7 @@ class ClinicSitemap(Sitemap):
 
     def location(self, item):
         # Multitenant saytlarda to'liq subdomain linkini qaytaramiz
-        return f"https://{item.subdomain}.dstoma.uz/"
+        return f"https://{item.subdomain}.dstoma-navbat-lk2p.vercel.app/"
 
 class DoctorSitemap(Sitemap):
     changefreq = "monthly"
@@ -218,7 +218,7 @@ class DoctorSitemap(Sitemap):
         return Doctor.objects.select_related('clinic').all()
 
     def location(self, item):
-        return f"https://{item.clinic.subdomain}.dstoma.uz/doctors/{item.id}/"
+        return f"https://{item.clinic.subdomain}.dstoma-navbat-lk2p.vercel.app/doctors/{item.id}/"
 
 # urls.py dagi mapping:
 # path('sitemap.xml', sitemap, {'sitemaps': {'clinics': ClinicSitemap, 'doctors': DoctorSitemap}}, name='django.contrib.sitemaps.views.sitemap')`
@@ -236,7 +236,7 @@ class DoctorSitemap(Sitemap):
 2. MULK (PROPERTY) QO'SHISH:
    - "Mulk qo'shish" (Add Property) tugmasini bosing.
    - Tanlov uchun ikki tomon bor: "Domain" (barcha subdomenlar uchun) yoki "URL prefix" (faqat yagona manzil uchun).
-   - "Domain" variantini tanlab "dstoma.uz" (yoki o'zingizning domeningizni) kiriting. Bu eng yaxshi yo'l, chunki u samarqand.dstoma.uz, buxoro.dstoma.uz kabi barcha multi-tenant subdomenlarni bitta mulkda qamrab oladi.
+   - "Domain" variantini tanlab "dstoma.uz" (yoki o'zingizning domeningizni) kiriting. Bu eng yaxshi yo'l, chunki u samarqand.dstoma-navbat-lk2p.vercel.app, buxoro.dstoma-navbat-lk2p.vercel.app kabi barcha multi-tenant subdomenlarni bitta mulkda qamrab oladi.
 
 3. DOMENGA EGALIKNI TASDIQLASH (DNS Verification):
    - Google sizga maxsus TXT record beradi (masalan: google-site-verification=xxxxxxxxx).
@@ -254,7 +254,7 @@ class DoctorSitemap(Sitemap):
    - "Yuborish" (Submit) tugmasini bosing. Google haftalik ravishda barcha subdomen va sahifalarni avtomat o'qib boradi.
 
 5. URL INSPECTION (Majburiy tezkor indekslash uchun):
-   - Agar yangi klinika yoki maqola qo'shsangiz, yuqoridagi qidiruv maydoniga (URL inspection) to'liq linkni kiriting (masalan: https://samarqand.dstoma.uz/).
+   - Agar yangi klinika yoki maqola qo'shsangiz, yuqoridagi qidiruv maydoniga (URL inspection) to'liq linkni kiriting (masalan: https://samarqand.dstoma-navbat-lk2p.vercel.app/).
    - "Indekslashni so'rash" (Request Indexing) tugmasini bosing. Bu Google botlarini bir necha soat ichida sahifani tekshirishga majburlaydi.`
   }
 ];

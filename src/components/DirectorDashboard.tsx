@@ -1748,7 +1748,7 @@ export default function DirectorDashboard({
                   {language === 'uz' ? "Klinika Subdomeni" : language === 'ru' ? "Субдомен клиники" : "Clinic Subdomain"}
                 </span>
                 <strong className="text-lg text-emerald-700 font-semibold block mt-1.5 font-mono">
-                  {myClinic?.subdomain || currentClinicId}.dstoma.uz
+                  {myClinic?.subdomain || currentClinicId}.dstoma-navbat-lk2p.vercel.app
                 </strong>
                 <span className="text-xs text-slate-400 font-semibold mt-1 block">
                   {language === 'uz' ? "Xarita integratsiyasi faollashtirilgan." : language === 'ru' ? "Интеграция с картами включена." : "Google Maps routing systems active."}
