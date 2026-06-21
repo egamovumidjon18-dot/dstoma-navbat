@@ -5,6 +5,7 @@ import ClientDashboard from './components/ClientDashboard';
 import DoctorDashboard from './components/DoctorDashboard';
 import DirectorDashboard from './components/DirectorDashboard';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { KeyRound, ShieldAlert, LogOut, CheckCircle, Smartphone, Lock, ClipboardCheck } from 'lucide-react';
 
 export default function App() {
@@ -213,35 +214,39 @@ export default function App() {
         ) : (
           <>
             {activeTab === 'bemor' && (
-              <ClientDashboard
-                clinics={clinics}
-                doctors={doctors}
-                services={services}
-                queues={queues}
-                selectedClinic={selectedClinic}
-                onSelectClinic={setSelectedClinic}
-                onAddQueue={handleAddQueue}
-                onCancelQueue={handleCancelQueue}
-                onUpdateDoctorRating={handleUpdateDoctorRating}
-                setActiveTab={setActiveTab}
-                language={language}
-                userLocationRef={userLocationRef}
-              />
+              <ErrorBoundary>
+                <ClientDashboard
+                  clinics={clinics}
+                  doctors={doctors}
+                  services={services}
+                  queues={queues}
+                  selectedClinic={selectedClinic}
+                  onSelectClinic={setSelectedClinic}
+                  onAddQueue={handleAddQueue}
+                  onCancelQueue={handleCancelQueue}
+                  onUpdateDoctorRating={handleUpdateDoctorRating}
+                  setActiveTab={setActiveTab}
+                  language={language}
+                  userLocationRef={userLocationRef}
+                />
+              </ErrorBoundary>
             )}
 
         {activeTab === 'shifokor' && (
           hasAccess('shifokor') ? (
-            <DoctorDashboard
-              clinics={clinics}
-              doctors={doctors}
-              services={services}
-              queues={queues}
-              onUpdateQueueStatus={handleUpdateQueueStatus}
-              selectedClinic={selectedClinic}
-              setActiveTab={setActiveTab}
-              currentUser={currentUser}
-              language={language}
-            />
+            <ErrorBoundary>
+              <DoctorDashboard
+                clinics={clinics}
+                doctors={doctors}
+                services={services}
+                queues={queues}
+                onUpdateQueueStatus={handleUpdateQueueStatus}
+                selectedClinic={selectedClinic}
+                setActiveTab={setActiveTab}
+                currentUser={currentUser}
+                language={language}
+              />
+            </ErrorBoundary>
           ) : (
             <div className="flex flex-col items-center justify-center max-w-lg mx-auto w-full my-auto py-12">
               <SecurityLoginForm role="doctor" onSubmit={handleLoginSubmit} language={language} error={authError} authUsername={authUsername} setAuthUsername={setAuthUsername} authPassword={authPassword} setAuthPassword={setAuthPassword} />
@@ -251,22 +256,24 @@ export default function App() {
 
         {activeTab === 'boshliq' && (
           hasAccess('boshliq') ? (
-            <DirectorDashboard
-              clinics={clinics}
-              doctors={doctors}
-              services={services}
-              queues={queues}
-              setActiveTab={setActiveTab}
-              onAddDoctor={handleAddDoctor}
-              onDeleteDoctor={handleDeleteDoctor}
-              onUpdateService={handleUpdateService}
-              onAddService={handleAddService}
-              onDeleteService={handleDeleteService}
-              clinicId={currentUser?.clinicId || 'samarqand'}
-              onSimulatePayment={handlePaySubscriptionSimulate}
-              saasPayments={saasPayments}
-              language={language}
-            />
+            <ErrorBoundary>
+              <DirectorDashboard
+                clinics={clinics}
+                doctors={doctors}
+                services={services}
+                queues={queues}
+                setActiveTab={setActiveTab}
+                onAddDoctor={handleAddDoctor}
+                onDeleteDoctor={handleDeleteDoctor}
+                onUpdateService={handleUpdateService}
+                onAddService={handleAddService}
+                onDeleteService={handleDeleteService}
+                clinicId={currentUser?.clinicId || 'samarqand'}
+                onSimulatePayment={handlePaySubscriptionSimulate}
+                saasPayments={saasPayments}
+                language={language}
+              />
+            </ErrorBoundary>
           ) : (
             <div className="flex flex-col items-center justify-center max-w-lg mx-auto w-full my-auto py-12">
               <SecurityLoginForm role="director" onSubmit={handleLoginSubmit} language={language} error={authError} authUsername={authUsername} setAuthUsername={setAuthUsername} authPassword={authPassword} setAuthPassword={setAuthPassword} />
@@ -276,27 +283,29 @@ export default function App() {
 
         {activeTab === 'superadmin' && (
           hasAccess('superadmin') ? (
-            <SuperAdminDashboard
-              clinics={clinics}
-              queues={queues}
-              doctors={doctors}
-              onAddClinic={handleAddClinic}
-              onAddDoctor={handleAddDoctor}
-              onToggleSubscription={handleToggleClinicStatus}
-              onUpdateClinicCreds={handleUpdateClinicCreds}
-              onUpdateDoctorCreds={handleUpdateDoctorCreds}
-              onUpdateDoctorDetails={handleUpdateDoctorDetails}
-              onDeleteClinic={handleDeleteClinic}
-              onDeleteDoctor={handleDeleteDoctor}
-              language={language}
-              saasPayments={saasPayments}
-              onApproveSaaSPayment={handleApproveSaaSPayment}
-              onUpdateClinicDetails={handleUpdateClinicDetails}
-              superadminLogin={superadminLogin}
-              superadminPassword={superadminPassword}
-              onUpdateSuperadminCreds={handleUpdateSuperadminCreds}
-              gmailInboxes={gmailInboxes}
-            />
+            <ErrorBoundary>
+              <SuperAdminDashboard
+                clinics={clinics}
+                queues={queues}
+                doctors={doctors}
+                onAddClinic={handleAddClinic}
+                onAddDoctor={handleAddDoctor}
+                onToggleSubscription={handleToggleClinicStatus}
+                onUpdateClinicCreds={handleUpdateClinicCreds}
+                onUpdateDoctorCreds={handleUpdateDoctorCreds}
+                onUpdateDoctorDetails={handleUpdateDoctorDetails}
+                onDeleteClinic={handleDeleteClinic}
+                onDeleteDoctor={handleDeleteDoctor}
+                language={language}
+                saasPayments={saasPayments}
+                onApproveSaaSPayment={handleApproveSaaSPayment}
+                onUpdateClinicDetails={handleUpdateClinicDetails}
+                superadminLogin={superadminLogin}
+                superadminPassword={superadminPassword}
+                onUpdateSuperadminCreds={handleUpdateSuperadminCreds}
+                gmailInboxes={gmailInboxes}
+              />
+            </ErrorBoundary>
           ) : (
             <div className="flex flex-col items-center justify-center max-w-lg mx-auto w-full my-auto py-12">
               <SecurityLoginForm role="superadmin" onSubmit={handleLoginSubmit} language={language} error={authError} authUsername={authUsername} setAuthUsername={setAuthUsername} authPassword={authPassword} setAuthPassword={setAuthPassword} />

@@ -1383,38 +1383,39 @@ export default function DirectorDashboard({
 
       {/* -------------------- TAB 4: EDIT SERVICES AND LICENSED PRICES -------------------- */}
       {activeSubTab === 'sozlamalar' && (
-        <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/80 shadow-md space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-50 pb-3 flex-wrap gap-4">
+        <div className="bg-[#0b1226]/90 border border-[#1e2f50] shadow-[0_15px_40px_rgba(0,0,0,0.15)] relative overflow-hidden rounded-3xl p-5 md:p-6 space-y-6">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="flex items-center justify-between border-b border-[#132039] pb-4 flex-wrap gap-4 relative z-10">
             <div className="flex items-center gap-2">
-              <span className="p-2 bg-blue-50 text-blue-600 rounded-xl">🔧</span>
-              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest">
+              <span className="p-2 bg-[#111a33] border border-[#1e2f50] text-emerald-400 rounded-xl">🔧</span>
+              <h3 className="text-sm font-bold text-slate-100 uppercase tracking-widest">
                 ⚙ Tibbiy Xizmatlar Katalogi va Narxlar Tahriri
               </h3>
             </div>
             
             <button
               onClick={() => setShowAddServiceForm(!showAddServiceForm)}
-              className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+              className="px-4.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/20"
             >
               ➕ {showAddServiceForm ? "Yopish" : "Yangi Xizmat Qo'shish"}
             </button>
           </div>
 
           {srvFeedbackMsg && (
-            <div className="p-3 bg-emerald-50 border border-emerald-250 text-emerald-800 text-xs font-bold rounded-2xl animate-fade-in">
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold rounded-2xl animate-fade-in relative z-10">
               {srvFeedbackMsg}
             </div>
           )}
 
           {/* 1. Standard Dental Services Catalog Selector Section */}
-          <div className="bg-slate-50 border border-slate-200/80 rounded-3xl p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3 flex-wrap">
+          <div className="bg-[#0d1428] border border-[#1e2f50] rounded-3xl p-5 space-y-4 relative z-10">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1e2f50] pb-4 flex-wrap">
               <div>
-                <span className="text-[10px] bg-indigo-500/10 text-indigo-700 font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-lg border border-indigo-200">
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-lg border border-emerald-500/20">
                   {language === 'uz' ? "🏥 Standart Tibbiy Xizmatlar Katalogi (Tezkor tanlash)" : language === 'ru' ? "🏥 Каталог Стандартных Медицинских Услуг (Быстрый выбор)" : "🏥 Standard Medical Services Catalog (Quick add)"}
                 </span>
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mt-1.5">
-                  {language === 'uz' ? "Xizmatlarni bir marta bosish orqali qo'shish (Narxini kiritish shart emas)" : language === 'ru' ? "Добавление услуг в один клик (Можно настроить свою цену)" : "Add services with a single click (Customize price dynamically)"}
+                <h4 className="text-xs font-black text-slate-200 uppercase tracking-widest mt-2 block">
+                  {language === 'uz' ? "Xizmatlarni qo'shish (Narxini kiritish shart emas)" : language === 'ru' ? "Добавление услуг (Можно настроить свою цену)" : "Add services (Customize price dynamically)"}
                 </h4>
               </div>
 
@@ -1425,15 +1426,15 @@ export default function DirectorDashboard({
                   placeholder={language === 'uz' ? "Katalogdan qidirish..." : language === 'ru' ? "Поиск по каталогу..." : "Search catalog..."}
                   value={catalogSearchQuery}
                   onChange={(e) => setCatalogSearchQuery(e.target.value)}
-                  className="bg-white border border-slate-250 text-xs font-bold text-slate-800 rounded-xl pl-8 pr-3.5 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full sm:w-56"
+                  className="bg-[#111a33] border border-[#263b65] text-xs font-bold text-slate-100 rounded-xl pl-8 pr-3.5 py-2.5 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 w-full sm:w-56 transition-all placeholder-slate-500"
                 />
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-3" />
               </div>
             </div>
 
             {/* Catalog Categories Grid / Selector Tabs */}
             {!catalogSearchQuery && (
-              <div className="flex flex-wrap gap-1.5 pb-1">
+              <div className="flex flex-wrap gap-1.5 pb-2 border-b border-[#172545]">
                 {STANDARD_SERVICES_CATALOG.map((cat, idx) => (
                   <button
                     key={idx}
@@ -1441,8 +1442,8 @@ export default function DirectorDashboard({
                     onClick={() => setSelectedCatalogCategory(idx)}
                     className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer border ${
                       selectedCatalogCategory === idx
-                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
-                        : 'bg-white border-slate-200 hover:border-slate-350 text-slate-600 hover:text-slate-800'
+                        ? 'bg-emerald-500 border-emerald-500 text-slate-900 shadow-md shadow-emerald-500/20'
+                        : 'bg-[#111a33] border-[#1e2f50] hover:border-emerald-500/50 text-slate-400 hover:text-emerald-400'
                     }`}
                   >
                     {language === 'uz' ? cat.categoryNameUz : language === 'ru' ? cat.categoryNameRu : cat.categoryNameEn}
@@ -1452,7 +1453,7 @@ export default function DirectorDashboard({
             )}
 
             {/* Listed catalog items inside selected category or matching query */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[340px] overflow-y-auto pr-1 customize-scrollbar">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[340px] overflow-y-auto pr-1 customize-scrollbar pt-2">
               {(() => {
                 const results: { name: string; price: number; category: string }[] = [];
                 STANDARD_SERVICES_CATALOG.forEach(cat => {
@@ -1468,7 +1469,7 @@ export default function DirectorDashboard({
 
                 if (results.length === 0) {
                   return (
-                    <div className="col-span-full py-8 text-center text-xs text-slate-400 font-bold">
+                    <div className="col-span-full py-8 text-center text-xs text-slate-500 font-bold">
                       {language === 'uz' ? "Katalogda bunday nomli xizmat topilmadi 🔍" : language === 'ru' ? "Услуга с таким названием не найдена в каталоге 🔍" : "No matching catalog services found 🔍"}
                     </div>
                   );
@@ -1481,49 +1482,49 @@ export default function DirectorDashboard({
                   return (
                     <div 
                       key={idX} 
-                      className={`p-4 rounded-3xl border transition-all flex flex-col justify-between gap-3 bg-white ${
+                      className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
                         isActive 
-                          ? 'border-emerald-200 bg-emerald-50/10 shadow-xs' 
-                          : 'border-slate-200 hover:border-indigo-300 hover:shadow-xs'
+                          ? 'bg-[#152445] border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.05)]' 
+                          : 'bg-[#101830] border-[#1b2a4e] hover:border-emerald-500/30'
                       }`}
                     >
                       <div>
-                        <span className="text-[8px] font-mono font-black text-indigo-500 uppercase tracking-widest block mb-1">
+                        <span className="text-[8px] font-mono font-black text-emerald-500/70 uppercase tracking-widest block mb-1.5">
                           {item.category}
                         </span>
-                        <h5 className="text-[12px] font-black text-slate-800 leading-snug">
+                        <h5 className="text-[12px] font-bold text-slate-100 leading-snug">
                           {item.name}
                         </h5>
                       </div>
                       
                       {isActive ? (
-                        <div className="flex flex-col gap-1 w-full border-t border-slate-100 pt-2.5 mt-1">
+                        <div className="flex flex-col gap-1 w-full border-t border-[#1e2f50] pt-3 mt-1">
                           <div className="flex items-center justify-between gap-1">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">
                               {language === 'uz' ? "Amaldagi narx:" : language === 'ru' ? "Текущая цена:" : "Current price:"}
                             </span>
-                            <span className="text-xs font-black text-emerald-700 font-mono">
-                              {activePrice?.toLocaleString('uz-UZ')} {language === 'uz' ? "so'm" : language === 'ru' ? "сум" : "UZS"}
+                            <span className="text-xs font-black text-emerald-400 font-mono">
+                              {activePrice?.toLocaleString('uz-UZ')} <span className="text-[8px] uppercase">UZS</span>
                             </span>
                           </div>
-                          <div className="flex items-center justify-end mt-1">
-                            <span className="px-2 py-0.5 rounded-lg bg-emerald-100/60 text-emerald-800 text-[8px] font-black uppercase flex items-center gap-1 border border-emerald-200">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" /> {language === 'uz' ? "Klinikada faol" : language === 'ru' ? "Активна в клинике" : "Active in clinic"}
+                          <div className="flex items-center justify-end mt-1.5">
+                            <span className="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-[8px] font-black uppercase flex items-center gap-1 border border-emerald-500/20">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" /> {language === 'uz' ? "Klinikada faol" : language === 'ru' ? "Активна в клинике" : "Active in clinic"}
                             </span>
                           </div>
                         </div>
                       ) : (
-                        <div className="flex flex-col gap-2 w-full border-t border-slate-100 pt-2.5 mt-1">
+                        <div className="flex flex-col gap-2 w-full border-t border-[#1e2f50] pt-3 mt-1">
                           <div className="flex items-center justify-between gap-1">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">
                               {language === 'uz' ? "Tavsiya etilgan:" : language === 'ru' ? "Рекомендуемая:" : "Recommended:"}
                             </span>
-                            <span className="text-[10px] font-bold text-slate-500 font-mono">
-                              {item.price.toLocaleString('uz-UZ')} {language === 'uz' ? "so'm" : language === 'ru' ? "сум" : "UZS"}
+                            <span className="text-[10px] font-bold text-slate-400 font-mono">
+                              {item.price.toLocaleString('uz-UZ')} <span className="text-[8px] uppercase">UZS</span>
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2 justify-between">
+                          <div className="flex items-center gap-2 justify-between mt-1">
                             <div className="relative flex-1">
                               <input
                                 type="number"
@@ -1532,10 +1533,10 @@ export default function DirectorDashboard({
                                   const val = parseInt(e.target.value) || 0;
                                   setCustomCatalogPrices(prev => ({ ...prev, [item.name]: val }));
                                 }}
-                                className="w-full bg-slate-50 border border-slate-200 focus:bg-white text-xs font-black text-slate-800 rounded-xl pl-2 pr-7 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-center font-mono"
+                                className="w-full bg-[#111a33] border border-[#263b65] focus:border-emerald-500 text-xs font-black text-emerald-400 rounded-xl pl-2 pr-8 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-center font-mono"
                                 placeholder={language === 'uz' ? "Narx" : language === 'ru' ? "Цена" : "Price"}
                               />
-                              <span className="absolute right-2 top-2 text-[8px] text-slate-400 font-bold uppercase">{language === 'uz' ? "so'm" : language === 'ru' ? "сум" : "UZS"}</span>
+                              <span className="absolute right-2.5 top-2.5 text-[7px] text-slate-500 font-bold uppercase">UZS</span>
                             </div>
 
                             <button
@@ -1553,7 +1554,7 @@ export default function DirectorDashboard({
                                   setTimeout(() => setSrvFeedbackMsg(''), 4000);
                                 }
                               }}
-                              className="px-2.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 shadow-xs"
+                              className="px-3 py-2 bg-[#172545] hover:bg-emerald-500 hover:text-slate-900 border border-[#263b65] hover:border-emerald-400 text-emerald-400 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0"
                             >
                               ➕ {language === 'uz' ? "Qo'shish" : language === 'ru' ? "Добавить" : "Add"}
                             </button>
@@ -1569,17 +1570,17 @@ export default function DirectorDashboard({
 
           {/* New Service Creation Form Section (Manual Custom Input fallback if they have unique local service) */}
           {showAddServiceForm && (
-            <div className="bg-gradient-to-br from-indigo-50/50 to-slate-50 border border-indigo-100 rounded-2xl p-5 space-y-4 animate-fade-in shadow-sm">
-              <div className="flex items-center gap-2 border-b border-indigo-50 pb-2">
-                <span className="text-indigo-600 text-sm">✨</span>
-                <strong className="text-xs font-black text-slate-800 uppercase tracking-wider">
+            <div className="bg-[#0a1020] border border-emerald-500/30 rounded-2xl p-5 space-y-4 animate-fade-in shadow-[0_0_20px_rgba(16,185,129,0.1)] relative z-10 w-full col-span-full">
+              <div className="flex items-center gap-2 border-b border-[#1e2f50] pb-3">
+                <span className="text-emerald-400 text-sm">✨</span>
+                <strong className="text-xs font-black text-emerald-400 uppercase tracking-wider">
                   {language === 'uz' ? "Katalogdan Tashqari Maxsus Noyob Xizmat Qo'shish" : language === 'ru' ? "Добавить индивидуальную услугу вне каталога" : "Add custom medical service outside catalog"}
                 </strong>
               </div>
 
-              <form onSubmit={handleCreateServiceSubmit} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              <form onSubmit={handleCreateServiceSubmit} className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end pt-2">
                 <div className="col-span-1 sm:col-span-6">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">
                     {language === 'uz' ? "Xizmat nomi (Masalan: Maxsus implantatsiyadan keyingi terapiya)" : language === 'ru' ? "Название услуги (Например: Особая послеимплантационная терапия)" : "Service Name (e.g., Special post-implant therapeutics)"}
                   </label>
                   <input
@@ -1588,19 +1589,19 @@ export default function DirectorDashboard({
                     placeholder={language === 'uz' ? "Masalan: Maxsus muolaja" : language === 'ru' ? "Например: Особая процедура" : "e.g. Special procedure"}
                     value={newServiceName}
                     onChange={(e) => setNewServiceName(e.target.value)}
-                    className="w-full bg-white border border-slate-200 text-xs font-black text-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full bg-[#111a33] border border-[#263b65] focus:border-emerald-500 text-xs font-black text-slate-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-emerald-500 placeholder-slate-500 transition-all"
                   />
                 </div>
 
                 <div className="col-span-1 sm:col-span-3">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">{language === 'uz' ? "Narxi (UZS)" : language === 'ru' ? "Цена (UZS)" : "Price (UZS)"}</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">{language === 'uz' ? "Narxi (UZS)" : language === 'ru' ? "Цена (UZS)" : "Price (UZS)"}</label>
                   <input
                     type="number"
                     required
                     placeholder="Masalan: 350000"
                     value={newServicePrice}
                     onChange={(e) => setNewServicePrice(e.target.value === '' ? '' : parseInt(e.target.value))}
-                    className="w-full bg-white border border-slate-200 text-xs font-black text-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                    className="w-full bg-[#111a33] border border-[#263b65] focus:border-emerald-500 text-xs font-black text-emerald-400 rounded-xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono placeholder-emerald-500/30 transition-all"
                   />
                 </div>
 
@@ -1612,13 +1613,13 @@ export default function DirectorDashboard({
                       setNewServicePrice('');
                       setShowAddServiceForm(false);
                     }}
-                    className="w-full py-2.5 bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer"
+                    className="w-full py-3 bg-[#172545] border border-[#263b65] hover:bg-[#1e2f50] text-[#a0b0d0] text-xs font-black rounded-xl cursor-pointer transition-all"
                   >
-                    {language === 'uz' ? "Bekor qilish" : language === 'ru' ? "Отмена" : "Cancel"}
+                    {language === 'uz' ? "Bekor" : language === 'ru' ? "Отмена" : "Cancel"}
                   </button>
                   <button
                     type="submit"
-                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer"
+                    className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-900 border border-emerald-400 text-xs font-black rounded-xl shadow-lg shadow-emerald-500/25 transition-all cursor-pointer"
                   >
                     {language === 'uz' ? "Saqlash✓" : language === 'ru' ? "Сохранить✓" : "Save✓"}
                   </button>
@@ -1629,31 +1630,31 @@ export default function DirectorDashboard({
 
           {/* Inline Edit Form Container */}
           {editingServiceId && (
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4.5 space-y-3.5">
-              <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">
+            <div className="bg-[#0a1020] border border-amber-500/40 rounded-2xl p-5 space-y-4 shadow-[0_0_20px_rgba(245,158,11,0.08)] relative z-10 w-full mt-4">
+              <h4 className="text-xs font-black text-amber-500 uppercase tracking-widest border-b border-[#1e2f50] pb-2">
                 {language === 'uz' ? "📝 Xizmat narxini va nomini o'zgartirish oynas" : language === 'ru' ? "📝 Окно редактирования названия и цены услуги" : "📝 Modify Service Name and Price Window"}
               </h4>
 
-              <form onSubmit={handleUpdateServiceSubmit} className="flex flex-col sm:flex-row items-end gap-3">
+              <form onSubmit={handleUpdateServiceSubmit} className="flex flex-col sm:flex-row items-end gap-3 pt-1">
                 <div className="flex-1">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">{language === 'uz' ? "Xizmat nomi" : language === 'ru' ? "Название услуги" : "Service Name"}</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">{language === 'uz' ? "Xizmat nomi" : language === 'ru' ? "Название услуги" : "Service Name"}</label>
                   <input
                     type="text"
                     required
                     value={editingServiceName}
                     onChange={(e) => setEditingServiceName(e.target.value)}
-                    className="w-full bg-white border border-slate-250 text-xs font-bold text-slate-800 rounded-xl px-3 py-2 focus:outline-none"
+                    className="w-full bg-[#111a33] border border-[#263b65] focus:border-amber-500 text-xs font-bold text-slate-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-amber-500 transition-all"
                   />
                 </div>
 
                 <div className="w-full sm:w-48 shrink-0">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">{language === 'uz' ? "Narxi (UZS)" : language === 'ru' ? "Цена (UZS)" : "Price (UZS)"}</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">{language === 'uz' ? "Narxi (UZS)" : language === 'ru' ? "Цена (UZS)" : "Price (UZS)"}</label>
                   <input
                     type="number"
                     required
                     value={editingServicePrice}
                     onChange={(e) => setEditingServicePrice(parseInt(e.target.value) || 0)}
-                    className="w-full bg-white border border-slate-250 text-xs font-bold text-slate-800 rounded-xl px-3 py-2 focus:outline-none font-mono"
+                    className="w-full bg-[#111a33] border border-[#263b65] focus:border-amber-500 text-xs font-bold text-amber-400 rounded-xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono transition-all"
                   />
                 </div>
 
@@ -1661,13 +1662,13 @@ export default function DirectorDashboard({
                   <button
                     type="button"
                     onClick={() => setEditingServiceId(null)}
-                    className="px-3.5 py-2.5 bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
+                    className="px-4 py-3 bg-[#172545] border border-[#263b65] hover:bg-[#1e2f50] text-[#a0b0d0] text-xs font-bold rounded-xl transition-all"
                   >
                     {language === 'uz' ? "Bekor qilish" : language === 'ru' ? "Отмена" : "Cancel"}
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2.5 bg-[#0284c7] hover:bg-cyan-700 text-white text-xs font-black rounded-xl shadow-md transition-all shrink-0"
+                    className="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-slate-900 border border-amber-400 text-xs font-extrabold rounded-xl shadow-lg shadow-amber-500/20 transition-all"
                   >
                     {language === 'uz' ? "Yangilash✓" : language === 'ru' ? "Обновить✓" : "Update✓"}
                   </button>
@@ -1677,31 +1678,31 @@ export default function DirectorDashboard({
           )}
 
           {/* List of services in a table */}
-          <div className="divide-y divide-slate-100 border border-slate-150 rounded-2xl overflow-hidden shadow-xs">
+          <div className="divide-y divide-[#1e2f50] border border-[#1e2f50] rounded-2xl overflow-hidden shadow-lg shadow-[#0b1226]/50 bg-[#0d1428]">
             {clinicServices.map((srv) => (
-              <div key={srv.id} className="p-3.5 bg-white hover:bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
+              <div key={srv.id} className="p-4 hover:bg-[#152445] flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
                 <div>
-                  <h4 className="text-xs font-extrabold text-slate-800">{srv.name}</h4>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">
+                  <h4 className="text-[13px] font-bold text-slate-100">{srv.name}</h4>
+                  <span className="text-[10px] text-emerald-500/60 font-bold uppercase tracking-wider font-mono mt-1 block">
                     {myClinic?.name || currentClinicId} | ID: {srv.id}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 self-end sm:self-center flex-wrap">
-                  <span className="text-xs font-extrabold font-mono text-cyan-650 bg-cyan-50 px-3 py-1 rounded-lg border border-cyan-100">
-                    {srv.price.toLocaleString('uz-UZ')} {language === 'uz' ? "so'm" : language === 'ru' ? "сум" : "UZS"}
+                <div className="flex items-center gap-2.5 self-end sm:self-center flex-wrap">
+                  <span className="text-[13px] font-black font-mono text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 shadow-inner">
+                    {srv.price.toLocaleString('uz-UZ')} <span className="text-[9px] uppercase tracking-wider">UZS</span>
                   </span>
 
                   <button
                     onClick={() => startEditingService(srv)}
-                    className="px-3.5 py-1.5 border border-slate-200 hover:bg-slate-100 text-slate-650 rounded-lg text-xs font-bold cursor-pointer transition-all shrink-0"
+                    className="px-4 py-2 border border-[#263b65] hover:border-amber-400/50 hover:bg-amber-500/10 text-slate-300 hover:text-amber-400 rounded-xl text-xs font-bold cursor-pointer transition-all shrink-0"
                   >
                     {language === 'uz' ? "Tahrirlash" : language === 'ru' ? "Редактировать" : "Edit"}
                   </button>
 
                   <button
                     onClick={() => setServiceToDelete(srv)}
-                    className="px-3.5 py-1.5 border border-red-200 hover:bg-red-50 text-red-600 hover:text-red-700 rounded-lg text-xs font-bold cursor-pointer transition-all shrink-0"
+                    className="px-4 py-2 border border-[#263b65] hover:border-rose-400/50 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 rounded-xl text-xs font-bold cursor-pointer transition-all shrink-0"
                   >
                     {language === 'uz' ? "O'chirish" : language === 'ru' ? "Удалить" : "Delete"}
                   </button>

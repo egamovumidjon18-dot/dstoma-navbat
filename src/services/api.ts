@@ -39,7 +39,7 @@ export const mapQueueToReact = (item: any): QueueItem => {
 export const DjangoAPI = {
   // 1. Fetch all Clinics List
   async getClinics(): Promise<Clinic[]> {
-    const url = `${getApiUrl()}/api/clinics/`;
+    const url = `${getApiUrl()}/api/clinics`;
     const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
     if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
     return res.json();
@@ -47,7 +47,7 @@ export const DjangoAPI = {
 
   // 2. Fetch all Doctors List
   async getDoctors(): Promise<Doctor[]> {
-    const url = `${getApiUrl()}/api/doctors/`;
+    const url = `${getApiUrl()}/api/doctors`;
     const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
     if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
     return res.json();
@@ -55,7 +55,7 @@ export const DjangoAPI = {
 
   // 3. Fetch all Services List
   async getServices(): Promise<Service[]> {
-    const url = `${getApiUrl()}/api/services/`;
+    const url = `${getApiUrl()}/api/services`;
     const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
     if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
     return res.json();
@@ -63,7 +63,7 @@ export const DjangoAPI = {
 
   // 4. Fetch the active Queues List
   async getQueues(): Promise<QueueItem[]> {
-    const url = `${getApiUrl()}/api/queues/`;
+    const url = `${getApiUrl()}/api/queues`;
     const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
     if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
     const data = await res.json();
@@ -82,7 +82,7 @@ export const DjangoAPI = {
     passportSerial?: string;
     telegramChatId?: string;
   }): Promise<QueueItem> {
-    const url = `${getApiUrl()}/api/queues/`;
+    const url = `${getApiUrl()}/api/queues`;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -106,7 +106,7 @@ export const DjangoAPI = {
 
   // 6. Update Queue status (calling, completed, cancelled)
   async updateQueueStatus(queueId: string, status: QueueItem['status']): Promise<QueueItem> {
-    const url = `${getApiUrl()}/api/queues/${queueId}/`;
+    const url = `${getApiUrl()}/api/queues/${queueId}`;
     const isCompleted = status === 'completed';
     const res = await fetch(url, {
       method: 'PATCH',
@@ -123,7 +123,7 @@ export const DjangoAPI = {
 
   // 7. Update Queue rating
   async rateQueueItem(queueId: string, rating: number): Promise<QueueItem> {
-    const url = `${getApiUrl()}/api/queues/${queueId}/rate/`;
+    const url = `${getApiUrl()}/api/queues/${queueId}/rate`;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -136,7 +136,7 @@ export const DjangoAPI = {
 
   // 8. Update Clinic Tenant Subscription from CEO Landlord Panel
   async updateClinicSubscription(clinicId: string, status: 'active' | 'suspended' | 'trial', nextDueDate: string): Promise<Clinic> {
-    const url = `${getApiUrl()}/api/clinics/${clinicId}/subscription/`;
+    const url = `${getApiUrl()}/api/clinics/${clinicId}/subscription`;
     const res = await fetch(url, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

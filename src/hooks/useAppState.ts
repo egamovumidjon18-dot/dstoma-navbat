@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Clinic, Doctor, Service, QueueItem, SaaSPayment } from '../types';
-import { INITIAL_CLINICS, INITIAL_DOCTORS, INITIAL_SERVICES, INITIAL_QUEUES } from '../data';
 import { TRANSLATIONS, Language } from '../translations';
 import { sendQueueCreatedNotification, sendQueueStatusNotification } from '../services/telegram';
-import { DjangoAPI } from '../services/api';
 
 export function useAppState() {
   // Master States
@@ -23,6 +21,8 @@ export function useAppState() {
     status: 'detecting',
     initialized: false
   });
+  
+  const isSyncingRef = useRef(false);
 
   useEffect(() => {
     selectedClinicRef.current = selectedClinic;
@@ -300,14 +300,26 @@ export function useAppState() {
         const clRes = await fetch('/api/clinics');
         if (clRes.ok) {
           const clList = await clRes.json();
-          if (active) {
-            setClinics(prev => JSON.stringify(prev) === JSON.stringify(clList) ? prev : clList);
+          clList.sort((a, b) => a.id.localeCompare(b.id));
+
+          if (active && !isSyncingRef.current) {
+            setClinics(prev => {
+              const prevSorted = [...prev].sort((a, b) => a.id.localeCompare(b.id));
+              return JSON.stringify(prevSorted) === JSON.stringify(clList) ? prev : clList;
+            });
+            
             const params = new URLSearchParams(window.location.search);
             const clinicParam = params.get('clinic');
             
-            // Only auto-select from URL once, or don't aggressively force the first clinic when user closed it
-            if (isInitialLoad && clinicParam && !selectedClinicRef.current) {
-              const found = clList.find((c: any) => c.id === clinicParam || c.subdomain === clinicParam);
+            // Only auto-select from URL once, or default to the first clinic
+            if (isInitialLoad && !selectedClinicRef.current) {
+              let found = null;
+              if (clinicParam) {
+                found = clList.find((c: any) => c.id === clinicParam || c.subdomain === clinicParam);
+              }
+              if (!found && clList.length > 0) {
+                found = clList[0];
+              }
               if (found) setSelectedClinic(found);
             }
           }
@@ -320,7 +332,13 @@ export function useAppState() {
         const docRes = await fetch('/api/doctors');
         if (docRes.ok) {
           const docList = await docRes.json();
-          if (active) setDoctors(prev => JSON.stringify(prev) === JSON.stringify(docList) ? prev : docList);
+          docList.sort((a, b) => a.name.localeCompare(b.name));
+          if (active && !isSyncingRef.current) {
+            setDoctors(prev => {
+              const prevSorted = [...prev].sort((a, b) => a.name.localeCompare(b.name));
+              return JSON.stringify(prevSorted) === JSON.stringify(docList) ? prev : docList;
+            });
+          }
         }
       } catch (err) {
         console.warn("[AppState Hook] Error loading doctors from server:", err);
@@ -330,7 +348,13 @@ export function useAppState() {
         const srvRes = await fetch('/api/services');
         if (srvRes.ok) {
           const srvList = await srvRes.json();
-          if (active) setServices(prev => JSON.stringify(prev) === JSON.stringify(srvList) ? prev : srvList);
+          srvList.sort((a, b) => a.name.localeCompare(b.name));
+          if (active && !isSyncingRef.current) {
+            setServices(prev => {
+              const prevSorted = [...prev].sort((a, b) => a.name.localeCompare(b.name));
+              return JSON.stringify(prevSorted) === JSON.stringify(srvList) ? prev : srvList;
+            });
+          }
         }
       } catch (err) {
         console.warn("[AppState Hook] Error loading services from server:", err);
@@ -340,7 +364,15 @@ export function useAppState() {
         const qRes = await fetch('/api/queues');
         if (qRes.ok) {
           const qList = await qRes.json();
-          if (active) setQueues(prev => JSON.stringify(prev) === JSON.stringify(qList) ? prev : qList);
+          // Sort to ensure stable JSON serialization and prevent UI jumping
+          qList.sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+          
+          if (active && !isSyncingRef.current) {
+            setQueues(prev => {
+              const prevSorted = [...prev].sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+              return JSON.stringify(prevSorted) === JSON.stringify(qList) ? prev : qList;
+            });
+          }
         }
       } catch (err) {
         console.warn("[AppState Hook] Error loading queues from server:", err);
@@ -397,30 +429,11 @@ export function useAppState() {
     window.history.replaceState({}, '', newUrl.toString());
   }, [activeTab, selectedClinic]);
 
-  // Sync queues
-  useEffect(() => {
-    let active = true;
-    const fetchQueues = async () => {
-      try {
-        const data = await DjangoAPI.getQueues();
-        if (active && data && data.length > 0) {
-          setQueues(data);
-        }
-      } catch (err) {
-        console.warn("[AppState Hook DB Poll] Central server offline:", err);
-      }
-    };
+  // Sync queues removed in favor of loadServerData sync
 
-    fetchQueues();
-    const interval = setInterval(fetchQueues, 4000);
-
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, []);
 
   const handleAddQueue = async (newQueue: QueueItem) => {
+    isSyncingRef.current = true;
     setQueues(prev => [...prev, newQueue]);
     
     setClinics(prev => prev.map(c => {
@@ -431,20 +444,45 @@ export function useAppState() {
     }));
 
     try {
-      const saved = await DjangoAPI.createQueueItem({
-        clinicId: newQueue.clinicId,
-        doctorId: newQueue.doctorId,
-        serviceId: newQueue.serviceId,
-        patientName: newQueue.patientName,
-        patientPhone: newQueue.patientPhone,
-        hasInfection: newQueue.hasInfection,
-        medicalNotes: newQueue.medicalNotes,
-        passportSerial: newQueue.passportSerial,
-        telegramChatId: newQueue.telegramChatId
+      const res = await fetch('/api/queues', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newQueue.id,
+          clinicId: newQueue.clinicId,
+          doctorId: newQueue.doctorId,
+          serviceId: newQueue.serviceId,
+          patientName: newQueue.patientName,
+          patientPhone: newQueue.patientPhone,
+          hasInfection: newQueue.hasInfection,
+          medicalNotes: newQueue.medicalNotes,
+          passportSerial: newQueue.passportSerial,
+          telegramChatId: newQueue.telegramChatId
+        })
       });
-      setQueues(prev => prev.map(q => q.id === newQueue.id ? saved : q));
+      if (res.ok) {
+        const saved = await res.json();
+        const mapped = {
+          id: saved.id || Math.random().toString(36).substr(2, 9),
+          clinicId: saved.clinicId || saved.clinic_id || '',
+          doctorId: saved.doctorId || saved.doctor_id || '',
+          serviceId: saved.serviceId || saved.service_id || '',
+          number: saved.number || newQueue.number,
+          patientName: saved.patientName || saved.patient_name || '',
+          patientPhone: saved.patientPhone || saved.patient_phone || '',
+          hasInfection: saved.hasInfection || saved.has_infection || false,
+          medicalNotes: saved.medicalNotes || saved.medical_notes || '',
+          passportSerial: saved.passportSerial || saved.passport_serial || '',
+          telegramChatId: saved.telegramChatId || saved.telegram_chat_id || '',
+          status: saved.status || 'pending',
+          createdAt: saved.createdAt || saved.created_at || new Date().toISOString()
+        };
+        setQueues(prev => prev.map(q => q.id === newQueue.id ? mapped : q));
+      }
     } catch (err) {
       console.warn("[AppState Hook] Backend sync failed, using offline state", err);
+    } finally {
+      isSyncingRef.current = false;
     }
 
     if (newQueue.telegramChatId) {
@@ -472,12 +510,19 @@ export function useAppState() {
   };
 
   const handleCancelQueue = async (id: string) => {
+    isSyncingRef.current = true;
     setQueues(prev => prev.map(q => q.id === id ? { ...q, status: 'cancelled' } : q));
 
     try {
-      await DjangoAPI.updateQueueStatus(id, 'cancelled');
+      await fetch(`/api/queues/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'cancelled' })
+      });
     } catch (err) {
       console.warn("[AppState Hook] Cancellation sync failed", err);
+    } finally {
+      isSyncingRef.current = false;
     }
 
     const item = queues.find(q => q.id === id);
@@ -504,12 +549,19 @@ export function useAppState() {
   };
 
   const handleUpdateQueueStatus = async (id: string, newStatus: QueueItem['status']) => {
+    isSyncingRef.current = true;
     setQueues(prev => prev.map(q => q.id === id ? { ...q, status: newStatus } : q));
 
     try {
-      await DjangoAPI.updateQueueStatus(id, newStatus);
+      await fetch(`/api/queues/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
     } catch (err) {
       console.warn("[AppState Hook] Status mutation sync failed", err);
+    } finally {
+      isSyncingRef.current = false;
     }
 
     const item = queues.find(q => q.id === id);
@@ -686,6 +738,7 @@ export function useAppState() {
   };
 
   const handleAddDoctor = async (newDoc: Doctor) => {
+    isSyncingRef.current = true;
     setDoctors(prev => [...prev, newDoc]);
     try {
       await fetch('/api/doctors', {
@@ -695,10 +748,13 @@ export function useAppState() {
       });
     } catch (e) {
       console.warn(e);
+    } finally {
+      isSyncingRef.current = false;
     }
   };
 
   const handleUpdateService = async (updatedSrv: Service) => {
+    isSyncingRef.current = true;
     setServices(prev => prev.map(s => s.id === updatedSrv.id ? updatedSrv : s));
     try {
       await fetch('/api/services', {
@@ -708,10 +764,13 @@ export function useAppState() {
       });
     } catch (e) {
       console.warn(e);
+    } finally {
+      isSyncingRef.current = false;
     }
   };
 
   const handleAddService = async (newSrv: Service) => {
+    isSyncingRef.current = true;
     setServices(prev => [...prev, newSrv]);
     try {
       await fetch('/api/services', {
@@ -721,10 +780,13 @@ export function useAppState() {
       });
     } catch (e) {
       console.warn(e);
+    } finally {
+      isSyncingRef.current = false;
     }
   };
 
   const handleDeleteService = async (serviceId: string) => {
+    isSyncingRef.current = true;
     setServices(prev => prev.filter(s => s.id !== serviceId));
     try {
       await fetch(`/api/services/${serviceId}`, {
@@ -732,6 +794,8 @@ export function useAppState() {
       });
     } catch (e) {
       console.warn(e);
+    } finally {
+      isSyncingRef.current = false;
     }
   };
 

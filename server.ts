@@ -130,13 +130,14 @@ let fDb: any = null;
 try {
   if (firebaseConfig && firebaseConfig.projectId) {
     const firebaseApp = initializeApp(firebaseConfig as any);
-    fDb = getFirestore(firebaseApp, (firebaseConfig as any).firestoreDatabaseId);
-    console.log("🔥 Connected to Firebase Firestore");
+    const dbId = (firebaseConfig as any).firestoreDatabaseId || "ai-studio-0d6fd32c-9664-44c9-b09f-9e98080e44ef";
+    fDb = getFirestore(firebaseApp, dbId);
+    console.log("🔥 Connected to Firebase Firestore", dbId);
   } else {
     console.log("Firebase config not found or missing projectId");
   }
 } catch (error) {
-  console.log("Firebase config init error", error);
+  console.log("Firebase Init Error:", error);
 }
 
 // ASYNC DB HELPERS

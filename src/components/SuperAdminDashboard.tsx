@@ -980,8 +980,8 @@ export default function SuperAdminDashboard({
                   triggerToast("Yangi hisob ma'lumotlari Gmail elektron pochtangizga jo'natildi! 📬");
                   setCurrentSuperadminPass('');
                 } else {
-                  addLog(`Superadmin paroli xato kiritildi`, 'error');
-                  triggerToast("Joriy parol xato! Parol o'zgartirilmadi ❌", true);
+                  addLog(`Superadmin paroli xato kiritildi`, 'warn');
+                  triggerToast("Joriy parol xato! Parol o'zgartirilmadi ❌");
                 }
               }
             }} className="space-y-4 pt-2">

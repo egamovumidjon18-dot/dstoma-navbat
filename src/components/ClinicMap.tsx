@@ -378,24 +378,13 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
           iconAnchor: [20, 20]
         });
 
-        const clinicMarker = L.marker([clinic.lat, clinic.lng], { icon: clinicIcon })
-          .bindTooltip(`
-            <div style="font-family: sans-serif; padding: 6px; color: #1f2937; min-width: 170px;">
-              <small style="color: #10b981; font-weight: 800; text-transform: uppercase; font-size: 8px; letter-spacing: 0.5px;">${clinic.subdomain}.dstoma-navbat-lk2p.vercel.app</small>
-              <h4 style="margin: 2px 0; font-size: 13px; font-weight: 800; color: #111827; line-height: 1.2;">${clinic.name}</h4>
-              <p style="margin: 3px 0; font-size: 11px; color: #4b5563; line-height: 1.3;">📍 ${clinic.address}</p>
-              <p style="margin: 2px 0 6px 0; font-size: 11px; font-weight: 600; color: #374151;">📞 ${clinic.phone}</p>
-              <div style="color: #f59e0b; font-size: 10px; font-weight: 800; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 5px;">
-                <span>★ ${clinic.rating}</span>
-                <span style="color: #10b981; background: #ecfdf5; padding: 1px 4px; border-radius: 4px;">${getDistance(userLat, userLng, clinic.lat, clinic.lng)} km</span>
-              </div>
-            </div>
-          `, { direction: 'top', offset: [0, -10] })
-          .addTo(markersGroup);
+        const clinicMarker = L.marker([clinic.lat, clinic.lng], { icon: clinicIcon }).addTo(markersGroup);
 
         clinicMarker.on('click', () => {
-          map.closePopup();
-          onSelectClinic(clinic);
+          if (map) map.closePopup();
+          setTimeout(() => {
+            onSelectClinic(clinic);
+          }, 10);
         });
       });
 
@@ -523,12 +512,10 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
 
         m.on('click', () => {
           if (map) map.closePopup();
-          onSelectClinic(clinic);
+          setTimeout(() => {
+            onSelectClinic(clinic);
+          }, 10);
         });
-
-        if (isSelected && window.innerWidth > 768) {
-           m.bindPopup(`<b>${clinic.name}</b><br/>${clinic.address}`).openPopup();
-        }
       });
 
       // 3. Routing (polyline) for selected clinic

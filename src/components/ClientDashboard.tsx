@@ -23,6 +23,8 @@ import {
   PlusCircle, 
   Check, 
   ChevronDown, 
+  ChevronUp,
+  Search,
   ShieldAlert, 
   ThumbsUp,
   UserPlus2,
@@ -837,7 +839,7 @@ export default function ClientDashboard({
 
   // Dynamically select the first available service and doctor when active clinic or services list changes
   React.useEffect(() => {
-    const activeClinic = selectedClinic;
+    const activeClinic = selectedClinic || clinics[0];
     const clinicServices = services.filter(s => s.clinicId === activeClinic?.id);
     if (clinicServices.length > 0) {
       const exists = clinicServices.some(s => s.id === bookingServiceId);
@@ -845,10 +847,10 @@ export default function ClientDashboard({
         setBookingServiceId(clinicServices[0].id);
       }
     }
-  }, [selectedClinic, services, bookingServiceId]);
+  }, [selectedClinic, clinics, services, bookingServiceId]);
 
   React.useEffect(() => {
-    const activeClinic = selectedClinic;
+    const activeClinic = selectedClinic || clinics[0];
     const clinicDoctors = doctors.filter(d => d.clinicId === activeClinic?.id);
     if (clinicDoctors.length > 0) {
       const exists = clinicDoctors.some(d => d.id === bookingDoctorId);
@@ -856,7 +858,7 @@ export default function ClientDashboard({
         setBookingDoctorId(clinicDoctors[0].id);
       }
     }
-  }, [selectedClinic, doctors, bookingDoctorId]);
+  }, [selectedClinic, clinics, doctors, bookingDoctorId]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1024,10 +1026,67 @@ export default function ClientDashboard({
     showToast("Baho berganingiz uchun rahmat! ❤️");
   };
 
-  // Filter lists based on active clinic
-  const activeClinic = selectedClinic;
+  const [servicesSearchTerm, setServicesSearchTerm] = useState('');
+  const [openServiceCategory, setOpenServiceCategory] = useState<string>("Mashhur xizmatlar");
+
+  const getServiceCategory = (name: string): string => {
+    const n = name.toLowerCase();
+    
+    if (n.includes('diagnostika') || n.includes('konsultasiya') || n.includes('rentgen') || n.includes('snimk')) return 'Diagnostika';
+    if (n.includes('oqartirish') || n.includes('bleaching') || n.includes('zoom')) return 'Tishlarni oqartirish';
+    if (n.includes('vinir') || n.includes('komponir') || n.includes('lyuminir')) return 'Vinirlar';
+    if (n.includes('implant') || n.includes('all-on-4') || n.includes('mega gen') || n.includes('osstem') || n.includes('implantatsiya')) return 'Implantatsiya';
+    if (n.includes('protez') || n.includes('koronka') || n.includes('metallokera') || n.includes('sirkoniy') || n.includes('sirqoniy') || n.includes('plastmassa koronka')) return 'Protezlash';
+    if (n.includes('breket') || n.includes('plastinka') || n.includes('reteyner') || n.includes('elayner')) return 'Ortodontiya';
+    if (n.includes('bolalar') || n.includes('sut tish') || n.includes('bolalarda')) return 'Bolalar stomatologiyasi';
+    if (n.includes('olish') || n.includes('xirurg') || n.includes('operasiya') || n.includes('operatsiya') || n.includes('rezeksiya') || n.includes('kista') || n.includes('sinus') || n.includes('loskut')) return 'Xirurgiya';
+    if (n.includes('tosh') || n.includes('tozalash') || n.includes('gigiyena') || n.includes('polirovka') || n.includes('ftor') || n.includes('air flow')) return 'Profilaktika';
+    if (n.includes('karies') || n.includes('plomba') || n.includes('pulpit') || n.includes('abssess')) return 'Terapevtik stomatologiya';
+    
+    return 'Boshqa';
+  };
+
+  const isPopularService = (name: string): boolean => {
+    const n = name.toLowerCase();
+    if ((n.includes('karies') || n.includes('davolash')) && !n.includes('bolalar')) return true;
+    if (n.includes('tish olish') && !n.includes('bolalar')) return true;
+    if (n.includes('kompozit') && n.includes('plomba')) return true;
+    if (n.includes('tish tosh') || n.includes('toshlarini')) return true;
+    return false;
+  };
+
+  // Filter lists based on active clinic or current user's clinic or default clinic
+  const activeClinic = selectedClinic || clinics.find(c => c.id === currentUser?.clinicId) || clinics[0];
   const clinicDoctors = doctors.filter(d => d.clinicId === activeClinic?.id);
   const clinicServices = services.filter(s => s.clinicId === activeClinic?.id);
+
+  const groupServicesByCategory = () => {
+    const filtered = clinicServices.filter(s => 
+      s.name.toLowerCase().includes((servicesSearchTerm || '').toLowerCase())
+    );
+    
+    const categories: Record<string, Service[]> = {};
+    const popular: Service[] = [];
+    
+    filtered.forEach(s => {
+      if (!servicesSearchTerm && isPopularService(s.name) && popular.length < 5) {
+        popular.push(s);
+      }
+      
+      const cat = getServiceCategory(s.name);
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat].push(s);
+    });
+
+    return { popular, categories };
+  };
+
+  const groupedServicesData = groupServicesByCategory();
+  const sortedCategories = [
+    "Diagnostika", "Terapevtik stomatologiya", "Tishlarni oqartirish", 
+    "Vinirlar", "Xirurgiya", "Protezlash", "Ortodontiya", 
+    "Bolalar stomatologiyasi", "Implantatsiya", "Profilaktika", "Boshqa"
+  ].filter(c => groupedServicesData.categories[c] && groupedServicesData.categories[c].length > 0);
 
   return (
     <div className="space-y-6 font-sans relative">
@@ -1275,70 +1334,7 @@ export default function ClientDashboard({
               </div>
             </div>
 
-            {/* 🏥 CLINICAL SERVICES PRICING & SELECTION CATALOG */}
-            <div className="bg-[#0b1226]/80 border border-[#1e2f50] rounded-3xl p-6 space-y-4 shadow-xl text-left">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#132039] pb-3.5">
-                <div>
-                  <span className="text-[10px] bg-indigo-500/10 text-indigo-400 font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-lg border border-indigo-500/20">
-                    🩺 {activeClinic?.name || (language === 'uz' ? "Klinika" : language === 'ru' ? "Клиника" : "Clinic")} {language === 'uz' ? "Tibbiy Xizmatlari & Narxlari" : language === 'ru' ? "Медицинские услуги и Цены" : "Medical Services & Pricing"}
-                  </span>
-                  <h4 className="text-xs font-black text-slate-100 uppercase tracking-widest mt-1.5">
-                    {language === 'uz' ? "Filialda Mavjud Faol Muolajalar Ro'yxati" : language === 'ru' ? "Список активных процедур филиала" : "Active Treatment Offerings at Branch"}
-                  </h4>
-                </div>
-                
-                <span className="text-[10.5px] text-slate-400 font-semibold">
-                  {language === 'uz' ? "Jami" : language === 'ru' ? "Всего" : "Total"}: <strong className="text-indigo-400 font-mono">{clinicServices.length}</strong> {language === 'uz' ? "muolaja turi" : language === 'ru' ? "видов процедур" : "procedures"}
-                </span>
-              </div>
-
-              {clinicServices.length === 0 ? (
-                <div className="text-center py-6 text-xs text-slate-500 font-bold">
-                  {language === 'uz' ? "Ushbu filialda hozircha faol tibbiy xizmatlar topilmadi." : language === 'ru' ? "В этом филиале пока нет активных медицинских услуг." : "No active medical services have been found for this branch yet."}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[350px] overflow-y-auto pr-1 customize-scrollbar">
-                  {clinicServices.map((srv) => (
-                    <div 
-                      key={srv.id} 
-                      className="p-3.5 rounded-2xl bg-[#080d1e] hover:bg-[#0c142b] border border-[#172545] hover:border-[#22386a] transition-all flex items-center justify-between gap-3 group"
-                    >
-                      <div className="space-y-1">
-                        <h5 className="text-xs font-extrabold text-slate-200 group-hover:text-white transition-colors">
-                          {srv.name}
-                        </h5>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] bg-indigo-500/5 text-indigo-400 font-mono px-2 py-0.5 rounded border border-indigo-500/10 uppercase font-black">
-                            {activeClinic?.id}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-xs font-extrabold font-mono text-[#38bdf8] bg-[#0284c7]/10 px-2.5 py-1 rounded-lg border border-[#0284c7]/20">
-                          {srv.price.toLocaleString('uz-UZ')} {language === 'uz' ? "so'm" : language === 'ru' ? "сум" : "UZS"}
-                        </span>
-                        
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setBookingServiceId(srv.id);
-                            const bookingFormEl = document.getElementById("booking_registration_form_anchor");
-                            if (bookingFormEl) {
-                              bookingFormEl.scrollIntoView({ behavior: 'smooth' });
-                            }
-                          }}
-                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider cursor-pointer shadow-md transition-all active:scale-95"
-                        >
-                          {language === 'uz' ? "Tanlash" : language === 'ru' ? "Выбрать" : "Select"}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
+            {/* 🏥 CLINICAL SERVICES PRICING & SELECTION CATALOG HAS BEEN MOVED TO PATIENT CABINET */}
             </div>
           ) : (
             /* Segment when there is no selected clinic yet, prompt them clearly and show the maps for manual selection */
@@ -2165,8 +2161,8 @@ export default function ClientDashboard({
             <div className="lg:col-span-8 space-y-6">
               
               {/* Online queue booking container form */}
-              <div id="booking_registration_form_anchor" className="bg-white text-slate-800 rounded-3xl p-6 md:p-8 border border-slate-150 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_40px_rgba(15,23,42,0.04)] transition-all">
-                <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
+              <div id="booking_registration_form_anchor" className="bg-gradient-to-br from-white to-slate-50 text-slate-800 rounded-3xl p-6 md:p-8 border border-slate-150 shadow-[0_10px_35px_rgba(30,41,59,0.03)] hover:shadow-[0_15px_45px_rgba(15,23,42,0.06)] transition-all">
+                <div className="flex items-center justify-between mb-6 border-b border-indigo-50 pb-4">
                   <div className="flex items-center gap-2.5">
                     <span className="text-2xl">⚡</span>
                     <div>
@@ -2182,7 +2178,7 @@ export default function ClientDashboard({
                 </div>
 
                 <form onSubmit={handleBookQueue} className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div>
+                  <div className="md:col-span-2">
                     <label className="text-xs font-black text-slate-700 block mb-1.5">
                       Shifokorni tanlang *
                     </label>
@@ -2191,6 +2187,7 @@ export default function ClientDashboard({
                       onChange={(e) => setBookingDoctorId(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-sans"
                     >
+                      <option value="">-- Shifokorni tanlang --</option>
                       {clinicDoctors.map(d => (
                         <option key={d.id} value={d.id}>
                           {d.name} — {d.specialty} (★ {d.rating})
@@ -2199,22 +2196,186 @@ export default function ClientDashboard({
                     </select>
                   </div>
 
-                  <div>
-                    <label className="text-xs font-black text-slate-700 block mb-1.5">
-                      Xizmat turini tanlang *
-                    </label>
-                    <select
-                      value={bookingServiceId}
-                      onChange={(e) => setBookingServiceId(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-sans"
-                    >
-                      {clinicServices.map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} — {s.price.toLocaleString('uz-UZ')} so'm
-                        </option>
-                      ))}
-                    </select>
+
+                  {/* INTEGRATED PREMIUM SERVICE SELECTOR (DARK MODE) */}
+                  <div className="md:col-span-2 mt-4">
+                    <div className="bg-[#0b1226]/90 border border-[#1e2f50] rounded-3xl p-5 md:p-6 space-y-4 shadow-[0_15px_40px_rgba(0,0,0,0.15)] relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+                      
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#132039] pb-3.5 relative z-10">
+                        <div>
+                          <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-lg border border-emerald-500/20 flex items-center gap-1.5 w-max">
+                             <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></div>
+                             {language === 'uz' ? "Klinika Xizmatlar Katalogi" : "Catalog of Services"}
+                          </span>
+                          <h4 className="text-xs font-black text-slate-100 uppercase tracking-widest mt-2 block">
+                            {language === 'uz' ? "Muolajani tanlang:" : "Select Treatment:"}
+                          </h4>
+                        </div>
+                        <span className="text-[10.5px] text-slate-400 font-semibold bg-[#111a33] px-3 py-1.5 rounded-lg border border-[#1e2f50]">
+                          {language === 'uz' ? "Jami" : "Total"}: <strong className="text-emerald-400 font-mono">{clinicServices.length}</strong>
+                        </span>
+                      </div>
+
+                      <div className="relative mb-5 z-10">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                          <Search className="w-4 h-4" />
+                        </span>
+                        <input 
+                          type="text" 
+                          placeholder={language === 'uz' ? "Xizmat nomini qidiring (Masalan: tish olish, plomba...)" : "Поиск услуг..."}
+                          value={servicesSearchTerm}
+                          onChange={e => setServicesSearchTerm(e.target.value)}
+                          className="w-full bg-[#0d1428] text-slate-100 border border-[#263b65] rounded-xl pl-11 pr-4 py-3.5 text-xs font-semibold focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none transition-all placeholder-slate-500"
+                        />
+                      </div>
+
+                      {clinicServices.length === 0 ? (
+                        <div className="text-center py-6 text-xs text-slate-500 font-bold relative z-10">
+                          {language === 'uz' ? "Ushbu filialda hozircha faol tibbiy xizmatlar topilmadi." : "No active medical services have been found for this branch yet."}
+                        </div>
+                      ) : (
+                        <div className="space-y-3 relative z-10">
+                          {!servicesSearchTerm && groupedServicesData.popular.length > 0 && (
+                            <div className="border border-[#172545] rounded-2xl overflow-hidden bg-[#0a1020]/90">
+                              <button 
+                                onClick={(e) => { e.preventDefault(); setOpenServiceCategory(openServiceCategory === "Mashhur xizmatlar" ? "" : "Mashhur xizmatlar"); }}
+                                className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-[#111a33] to-[#0a1020] hover:bg-[#15203f] transition-colors cursor-pointer"
+                                type="button"
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <span className="text-amber-400">🔥</span>
+                                  <span className="text-xs font-black uppercase tracking-wider text-slate-100">
+                                    Mashhur xizmatlar
+                                  </span>
+                                </div>
+                                {openServiceCategory === "Mashhur xizmatlar" ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                              </button>
+                              
+                              <AnimatePresence>
+                                {openServiceCategory === "Mashhur xizmatlar" && (
+                                  <motion.div 
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    className="overflow-hidden"
+                                  >
+                                    <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-[#172545]/50">
+                                      {groupedServicesData.popular.map(srv => {
+                                        const isSelected = bookingServiceId === srv.id;
+                                        return (
+                                        <div 
+                                          key={`pop-${srv.id}`} 
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setBookingServiceId(srv.id);
+                                          }}
+                                          className={`cursor-pointer border rounded-xl p-3.5 flex flex-col justify-between transition-all group relative overflow-hidden ${isSelected ? 'bg-[#152445] border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : 'bg-[#101830] border-[#1b2a4e] hover:border-[#2b4175]'}`}
+                                        >
+                                           {isSelected && (
+                                              <div className="absolute top-2 right-2 flex items-center justify-center w-5 h-5 bg-emerald-500 text-slate-900 rounded-lg text-[10px] font-black">
+                                                ✓
+                                              </div>
+                                           )}
+                                           <div>
+                                            <h5 className={`text-sm font-black mb-2 leading-tight transition-colors pr-6 ${isSelected ? 'text-emerald-400' : 'text-white group-hover:text-amber-200'}`}>
+                                              {srv.name}
+                                            </h5>
+                                           </div>
+                                           <div className="flex items-end justify-between mt-3 pt-3 border-t border-[#1b2a4e]/50">
+                                             <span className={`text-base font-black tracking-tight ${isSelected ? 'text-emerald-400' : 'text-emerald-500/80'}`}>
+                                               {srv.price.toLocaleString('uz-UZ')} <span className="text-[10px] font-semibold uppercase">UZS</span>
+                                             </span>
+                                           </div>
+                                        </div>
+                                      )})}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          )}
+
+                          {/* Render Categories */}
+                          {sortedCategories.map(cat => (
+                            <div key={cat} className="border border-[#172545] rounded-2xl overflow-hidden bg-[#0a1020]/90">
+                              <button 
+                                onClick={(e) => { e.preventDefault(); setOpenServiceCategory(openServiceCategory === cat ? "" : cat); }}
+                                className="w-full flex items-center justify-between p-4 bg-[#0d1428] hover:bg-[#121c38] transition-colors cursor-pointer"
+                                type="button"
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <span className="text-slate-400">
+                                     {cat === "Diagnostika" && "🔬"}
+                                     {cat === "Terapevtik stomatologiya" && "🦷"}
+                                     {cat === "Tishlarni oqartirish" && "✨"}
+                                     {cat === "Vinirlar" && "💎"}
+                                     {cat === "Xirurgiya" && "🩸"}
+                                     {cat === "Protezlash" && "🦿"}
+                                     {cat === "Ortodontiya" && "🗜️"}
+                                     {cat === "Bolalar stomatologiyasi" && "🧸"}
+                                     {cat === "Implantatsiya" && "🔩"}
+                                     {cat === "Profilaktika" && "🧼"}
+                                     {cat === "Boshqa" && "📌"}
+                                  </span>
+                                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-200 text-left">
+                                    {cat}
+                                  </span>
+                                  <span className="bg-[#172545] text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full ml-1">
+                                    {groupedServicesData.categories[cat].length}
+                                  </span>
+                                </div>
+                                {openServiceCategory === cat ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+                              </button>
+
+                              <AnimatePresence>
+                                {(openServiceCategory === cat || servicesSearchTerm) && (
+                                  <motion.div 
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    className="overflow-hidden bg-[#080c18]"
+                                  >
+                                    <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-[#172545]/50">
+                                      {groupedServicesData.categories[cat].map(srv => {
+                                        const isSelected = bookingServiceId === srv.id;
+                                        return (
+                                        <div 
+                                          key={srv.id} 
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setBookingServiceId(srv.id);
+                                          }}
+                                          className={`cursor-pointer border rounded-xl p-3.5 flex flex-col justify-between transition-all group relative ${isSelected ? 'bg-[#152445] border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : 'bg-[#11192b] border-[#1b2a4e] hover:border-[#2b4175]'}`}
+                                        >
+                                          {isSelected && (
+                                              <div className="absolute top-2 right-2 flex items-center justify-center w-5 h-5 bg-emerald-500 text-slate-900 rounded-lg text-[10px] font-black">
+                                                ✓
+                                              </div>
+                                           )}
+                                           <div>
+                                            <h5 className={`text-sm font-bold mb-2 leading-snug transition-colors pr-6 ${isSelected ? 'text-emerald-400' : 'text-slate-200 group-hover:text-white'}`}>
+                                              {srv.name}
+                                            </h5>
+                                           </div>
+                                           <div className="flex items-end justify-between mt-3 pt-3 border-t border-[#1b2a4e]/50">
+                                             <span className={`text-[15px] font-black tracking-tight ${isSelected ? 'text-emerald-400' : 'text-emerald-500/80'}`}>
+                                               {srv.price.toLocaleString('uz-UZ')} <span className="text-[9px] font-semibold uppercase tracking-widest ml-0.5">UZS</span>
+                                             </span>
+                                           </div>
+                                        </div>
+                                      )})}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
+
 
                   {/* Infection safety Warning banner inside cabinet */}
                   <div className="md:col-span-2 flex items-center gap-3.5 py-4 px-4 bg-rose-50/50 border border-rose-100 rounded-2xl">
