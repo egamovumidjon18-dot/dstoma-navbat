@@ -7,14 +7,14 @@ import { DjangoAPI } from '../services/api';
 
 export function useAppState() {
   // Master States
-  const [clinics, setClinics] = useState<Clinic[]>(INITIAL_CLINICS);
-  const [doctors, setDoctors] = useState<Doctor[]>(INITIAL_DOCTORS);
-  const [services, setServices] = useState<Service[]>(INITIAL_SERVICES);
-  const [queues, setQueues] = useState<QueueItem[]>(INITIAL_QUEUES);
+  const [clinics, setClinics] = useState<Clinic[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [queues, setQueues] = useState<QueueItem[]>([]);
   
   // Navigation
   const [activeTab, setActiveTab] = useState<'bemor' | 'shifokor' | 'boshliq' | 'superadmin'>('bemor');
-  const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(INITIAL_CLINICS[0] || null); // Pre-selected first clinic by default so dental model is loaded immediately
+  const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null);
   const selectedClinicRef = useRef<Clinic | null>(selectedClinic);
 
   const userLocationRef = useRef<{ lat: number, lng: number, status: 'idle' | 'detecting' | 'active' | 'denied', initialized: boolean }>({
@@ -289,6 +289,8 @@ export function useAppState() {
     syncTelegramConfig();
   }, []);
 
+  const [isAppLoading, setIsAppLoading] = useState(true);
+
   // Set up continuous client-side sync of clinics, doctors, and services from express server
   useEffect(() => {
     let active = true;
@@ -344,6 +346,7 @@ export function useAppState() {
         console.warn("[AppState Hook] Error loading queues from server:", err);
       }
       isInitialLoad = false;
+      if (active) setIsAppLoading(false);
     };
     loadServerData();
     const clInt = setInterval(loadServerData, 4000);
@@ -626,27 +629,33 @@ export function useAppState() {
     }));
   };
 
-  const handleUpdateSuperadminCreds = async (newLogin: string, newPass: string) => {
-    setSuperadminLogin(newLogin);
-    setSuperadminPassword(newPass);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('dstoma_sa_login', newLogin);
-    }
-    
+  const handleUpdateSuperadminCreds = async (currentPass: string, newLogin: string, newPass: string) => {
     try {
-      await fetch('/api/admin-update-creds', {
+      const res = await fetch('/api/admin-update-creds', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newLogin, newPassword: newPass })
+        body: JSON.stringify({ currentPassword: currentPass, newLogin, newPassword: newPass })
       });
-    } catch (err) {
+      if (!res.ok) {
+        throw new Error("Parol noto'g'ri yoki xatolik yuz berdi");
+      }
+      
+      setSuperadminLogin(newLogin);
+      setSuperadminPassword(newPass);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('dstoma_sa_login', newLogin);
+      }
+      
+      triggerGmailNotification(
+        "🔑 DStoma Superadmin akkaunt ma'lumotlari muvaffaqiyatli o'zgartirildi",
+        `Hurmatli DStoma tarmog'i egasi,\n\nTizim xavfsizligi bo'limidan xabar: Sizning Superadmin boshqaruv paneliga kirish parametrlaringiz muvaffaqiyatli yangilandi!\n\nYangi Login ma'lumotlari:\n- Yangi Login: ${newLogin}\n- Yangi Parol: ${newPass}\n\nUshbu xat egamovumidjon18@gmail.com elektron pochtangizga avtomatik tarzda xavfsizlik protokoli doirasida yuborildi. Iltimos, hisob ma'lumotlarini begonalarga aslo oshkor qilmang.\n\nHurmat bilan, DStoma SaaS Security Team.`
+      );
+      
+      return true; // success flag
+    } catch (err: any) {
       console.warn("Could not sync superadmin credentials with backend", err);
+      return false;
     }
-
-    triggerGmailNotification(
-      "🔑 DStoma Superadmin akkaunt ma'lumotlari muvaffaqiyatli o'zgartirildi",
-      `Hurmatli DStoma tarmog'i egasi,\n\nTizim xavfsizligi bo'limidan xabar: Sizning Superadmin boshqaruv paneliga kirish parametrlaringiz muvaffaqiyatli yangilandi!\n\nYangi Login ma'lumotlari:\n- Yangi Login: ${newLogin}\n- Yangi Parol: ${newPass}\n\nUshbu xat egamovumidjon18@gmail.com elektron pochtangizga avtomatik tarzda xavfsizlik protokoli doirasida yuborildi. Iltimos, hisob ma'lumotlarini begonalarga aslo oshkor qilmang.\n\nHurmat bilan, DStoma SaaS Security Team.`
-    );
   };
 
   const handleAddClinic = async (newClinic: Clinic) => {
@@ -729,6 +738,7 @@ export function useAppState() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return {
+    isAppLoading,
     clinics,
     doctors,
     services,

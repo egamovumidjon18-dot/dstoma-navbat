@@ -59,7 +59,7 @@ interface SuperAdminDashboardProps {
   // Custom superadmin credentials and GMail simulation
   superadminLogin?: string;
   superadminPassword?: string;
-  onUpdateSuperadminCreds?: (newLogin: string, newPass: string) => void;
+  onUpdateSuperadminCreds?: (currentPass: string, newLogin: string, newPass: string) => Promise<boolean>;
   gmailInboxes?: Array<{
     id: string;
     from: string;
@@ -124,6 +124,7 @@ export default function SuperAdminDashboard({
 
   // Local States for Clinic Details editing and Superadmin Self-Credentials Management
   const [clinicToEdit, setClinicToEdit] = useState<Clinic | null>(null);
+  const [currentSuperadminPass, setCurrentSuperadminPass] = useState('');
   const [newSuperadminLogin, setNewSuperadminLogin] = useState(superadminLogin);
   const [newSuperadminPass, setNewSuperadminPass] = useState(superadminPassword);
 
@@ -970,14 +971,30 @@ export default function SuperAdminDashboard({
               Xavfsizlik tizimi yuqori darajada sozlangan. Superadmin login yoki parolini o'zgartirganingizda, yangi hisob ma'lumotlari darhol sizning tasdiqlangan <strong className="text-indigo-800">egamovumidjon18@gmail.com</strong> pochtangizga jo'natiladi.
             </p>
 
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               if (onUpdateSuperadminCreds) {
-                onUpdateSuperadminCreds(newSuperadminLogin, newSuperadminPass);
-                addLog(`Superadmin login/paroli o'zgartirildi va Gmail ga jo'natildi`, 'info');
-                triggerToast("Yangi hisob ma'lumotlari Gmail elektron pochtangizga jo'natildi! 📬");
+                const success = await onUpdateSuperadminCreds(currentSuperadminPass, newSuperadminLogin, newSuperadminPass);
+                if (success) {
+                  addLog(`Superadmin login/paroli o'zgartirildi va Gmail ga jo'natildi`, 'info');
+                  triggerToast("Yangi hisob ma'lumotlari Gmail elektron pochtangizga jo'natildi! 📬");
+                  setCurrentSuperadminPass('');
+                } else {
+                  addLog(`Superadmin paroli xato kiritildi`, 'error');
+                  triggerToast("Joriy parol xato! Parol o'zgartirilmadi ❌", true);
+                }
               }
             }} className="space-y-4 pt-2">
+              <div>
+                <label className="text-[9px] font-black text-slate-500 block mb-1 uppercase tracking-widest">JORIY PAROL *</label>
+                <input
+                  type="password"
+                  required
+                  value={currentSuperadminPass}
+                  onChange={(e) => setCurrentSuperadminPass(e.target.value)}
+                  className="w-full bg-slate-50 text-xs font-black font-mono text-slate-800 border border-slate-200 rounded-lg px-3 py-2.5 focus:border-[#0284c7] focus:outline-none"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3.5">
                 <div>
                   <label className="text-[9px] font-black text-slate-500 block mb-1 uppercase tracking-widest">YANGI LOGIN *</label>

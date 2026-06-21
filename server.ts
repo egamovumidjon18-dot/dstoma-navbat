@@ -260,7 +260,10 @@ app.post("/api/admin-login", rateLimiter(5, 60 * 1000), (req, res) => {
 
 // POST endpoint to update admin credentials dynamically
 app.post("/api/admin-update-creds", rateLimiter(3, 60 * 1000), (req, res) => {
-  const { newLogin, newPassword } = req.body;
+  const { currentPassword, newLogin, newPassword } = req.body;
+  if (!currentPassword || currentPassword !== gAdmin.superadminPassword) {
+    return res.status(401).json({ ok: false, error: "Joriy parol noto'g'ri (Current password incorrect)" });
+  }
   if (newLogin && newLogin.trim() && newPassword && newPassword.trim()) {
     gAdmin.superadminLogin = newLogin.trim();
     gAdmin.superadminPassword = newPassword.trim();
@@ -546,58 +549,76 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
 });
 
 app.patch("/api/queues/:id", async (req, res) => {
-  const { id } = req.params;
-  const updateFields = req.body;
-  let updatedItem: QueueItem | null = null;
+  try {
+    const { id } = req.params;
+    const updateFields = req.body;
+    let updatedItem: QueueItem | null = null;
 
-  const qDb = await getQueues();
-  const itemMatch = qDb.find(q => q.id === id);
+    const qDb = await getQueues();
+    const itemMatch = qDb.find(q => q.id === id);
 
-  if (itemMatch) {
-    updatedItem = {
-      ...itemMatch,
-      status: updateFields.status !== undefined ? updateFields.status : itemMatch.status
-    };
-    await saveQueue(updatedItem);
-    
-    const item = updatedItem as QueueItem;
-    // Notify doctor
-    const docChatId = g._doctorTelegramChats?.[item.doctorId];
-    if (docChatId) {
-      const statusLabel = item.status === 'calling' ? 'qabulxonaga chaqirildi 🟢' : (item.status === 'completed' ? 'tamomlandi ✅' : (item.status === 'cancelled' ? 'bekor qilindi ❌' : 'navbatda turibdi ⏳'));
-      sendDoctorTelegramMessage(docChatId, `ℹ️ *Tizim yangilanishi:* #${item.number} - ${item.patientName} navbat holati *${statusLabel}* ga o'zgartirildi.`).catch(e => {});
-    }
-    
-    // Notify patient
-    if (item.telegramChatId) {
-      if (item.status === 'calling') {
-        sendBgTelegramMessage(item.telegramChatId, `🔔 *CHIPTANGIZ KELDI!* 🔔\n\nAssalomu alaykum! Sizni shifokor hozir kabinetda kutmoqda. Kechikmasdan kirishingiz so'raladi. 🦷\n🎫 Chiptangiz: *#${item.number}*`).catch(e => {});
-      } else if (item.status === 'completed') {
-        sendBgTelegramMessage(item.telegramChatId, `✅ *Rahmat!* \n\nShifokor ko'rigi muvaffaqiyatli yakunlandi. Salomat bo'ling! Iltimos, shaxsiy kabinetingizda shifokorga baho bering. ⭐`).catch(e => {});
-      } else if (item.status === 'cancelled') {
-        sendBgTelegramMessage(item.telegramChatId, `❌ *Diqqat!* \n\nSizning *#${item.number}* sonli navbatingiz bekor qilindi.`).catch(e => {});
+    if (itemMatch) {
+      updatedItem = {
+        ...itemMatch,
+        status: updateFields.status !== undefined ? updateFields.status : itemMatch.status
+      };
+      await saveQueue(updatedItem);
+      
+      const item = updatedItem as QueueItem;
+      // Memory sync as requested by user
+      if (typeof (globalThis as any)._queuesDb !== 'undefined') {
+        const _qDb = (globalThis as any)._queuesDb;
+        const _idx = _qDb.findIndex((x: any) => x.id === item.id);
+        if (_idx >= 0) _qDb[_idx] = item;
       }
+      // Notify doctor
+      const docChatId = g._doctorTelegramChats?.[item.doctorId];
+      if (docChatId) {
+        const statusLabel = item.status === 'calling' ? 'qabulxonaga chaqirildi 🟢' : (item.status === 'completed' ? 'tamomlandi ✅' : (item.status === 'cancelled' ? 'bekor qilindi ❌' : 'navbatda turibdi ⏳'));
+        sendDoctorTelegramMessage(docChatId, `ℹ️ *Tizim yangilanishi:* #${item.number} - ${item.patientName} navbat holati *${statusLabel}* ga o'zgartirildi.`).catch(e => {
+          console.error(`[Telegram] Doctor notification failed:`, e.message);
+        });
+      }
+      
+      // Notify patient
+      if (item.telegramChatId) {
+        if (item.status === 'calling') {
+          sendBgTelegramMessage(item.telegramChatId, `🔔 *CHIPTANGIZ KELDI!* 🔔\n\nAssalomu alaykum! Sizni shifokor hozir kabinetda kutmoqda. Kechikmasdan kirishingiz so'raladi. 🦷\n🎫 Chiptangiz: *#${item.number}*`).catch(e => { console.error(`[Telegram] Patient notification failed:`, e.message); });
+        } else if (item.status === 'completed') {
+          sendBgTelegramMessage(item.telegramChatId, `✅ *Rahmat!* \n\nShifokor ko'rigi muvaffaqiyatli yakunlandi. Salomat bo'ling! Iltimos, shaxsiy kabinetingizda shifokorga baho bering. ⭐`).catch(e => { console.error(`[Telegram] Patient notification failed:`, e.message); });
+        } else if (item.status === 'cancelled') {
+          sendBgTelegramMessage(item.telegramChatId, `❌ *Diqqat!* \n\nSizning *#${item.number}* sonli navbatingiz bekor qilindi.`).catch(e => { console.error(`[Telegram] Patient notification failed:`, e.message); });
+        }
+      }
+      res.json(updatedItem);
+    } else {
+      res.status(404).json({ error: "Queue not found" });
     }
-    res.json(updatedItem);
-  } else {
-    res.status(404).json({ error: "Queue not found" });
+  } catch (error: any) {
+    console.error("[API Edit Queue] Error:", error.message);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
 app.post("/api/queues/:id/rate", async (req, res) => {
-  const { id } = req.params;
-  const { rating } = req.body;
-  let updatedItem: QueueItem | null = null;
+  try {
+    const { id } = req.params;
+    const { rating } = req.body;
+    let updatedItem: QueueItem | null = null;
 
-  const qDb = await getQueues();
-  const itemMatch = qDb.find(q => q.id === id);
+    const qDb = await getQueues();
+    const itemMatch = qDb.find(q => q.id === id);
 
-  if (itemMatch) {
-    updatedItem = { ...itemMatch, rating: Number(rating) };
-    await saveQueue(updatedItem);
-    res.json(updatedItem);
-  } else {
-    res.status(404).json({ error: "Queue not found" });
+    if (itemMatch) {
+      updatedItem = { ...itemMatch, rating: Number(rating) };
+      await saveQueue(updatedItem);
+      res.json(updatedItem);
+    } else {
+      res.status(404).json({ error: "Queue not found" });
+    }
+  } catch (error: any) {
+    console.error("[API Rate Queue] Error:", error.message);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 

@@ -97,9 +97,8 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
   };
 
   useEffect(() => {
-    if (!locationRef.current.initialized) {
-      locateUserExact(true);
-    }
+    locateUserExact(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Dynamic Leaflet asset loading
@@ -317,14 +316,14 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
       if (leafletMapRef.current) {
         try {
           leafletMapRef.current.remove();
-        } catch (err) {
-          console.warn("Leaflet map removal error on unmount:", err);
+        } catch (e) {
+          console.warn('Leaflet cleanup error:', e);
         }
         leafletMapRef.current = null;
         markersGroupRef.current = null;
-        if (mapContainerRef.current) {
-           (mapContainerRef.current as any)._leaflet_id = null;
-        }
+      }
+      if (mapContainerRef.current) {
+        (mapContainerRef.current as any)._leaflet_id = null;
       }
     };
   }, [leafletLoaded, activeTab]);
@@ -355,7 +354,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
       });
 
       L.marker([userLat, userLng], { icon: userIcon })
-        .bindPopup(`<b>${t('approxLocation')}</b><br/>Lat: ${userLat.toFixed(4)}, Lng: ${userLng.toFixed(4)}`)
+        .bindTooltip(`<b>${t('approxLocation')}</b><br/>Lat: ${userLat.toFixed(4)}, Lng: ${userLng.toFixed(4)}`, { direction: 'top', offset: [0, -10] })
         .addTo(markersGroup);
 
       // Add each Clinic to the map
@@ -380,7 +379,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         });
 
         const clinicMarker = L.marker([clinic.lat, clinic.lng], { icon: clinicIcon })
-          .bindPopup(`
+          .bindTooltip(`
             <div style="font-family: sans-serif; padding: 6px; color: #1f2937; min-width: 170px;">
               <small style="color: #10b981; font-weight: 800; text-transform: uppercase; font-size: 8px; letter-spacing: 0.5px;">${clinic.subdomain}.dstoma-navbat-lk2p.vercel.app</small>
               <h4 style="margin: 2px 0; font-size: 13px; font-weight: 800; color: #111827; line-height: 1.2;">${clinic.name}</h4>
@@ -390,15 +389,12 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 <span>★ ${clinic.rating}</span>
                 <span style="color: #10b981; background: #ecfdf5; padding: 1px 4px; border-radius: 4px;">${getDistance(userLat, userLng, clinic.lat, clinic.lng)} km</span>
               </div>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 4px;">
-                <a href="https://www.google.com/maps/dir/?api=1&origin=${userLat},${userLng}&destination=${clinic.lat},${clinic.lng}&travelmode=driving" target="_blank" rel="noopener noreferrer" style="background-color: #10b981; color: white; padding: 5px; border-radius: 6px; font-size: 9px; font-weight: 900; text-decoration: none; text-align: center; display: block; filter: drop-shadow(0 1px 2px rgba(16,185,129,0.35)); transition: all 0.2s;">GOOGLE MAP</a>
-                <a href="https://2gis.uz/routeSearch/rsType/car/from/${userLng},${userLat}/to/${clinic.lng},${clinic.lat}" target="_blank" rel="noopener noreferrer" style="background-color: #f43f5e; color: white; padding: 5px; border-radius: 6px; font-size: 9px; font-weight: 900; text-decoration: none; text-align: center; display: block; filter: drop-shadow(0 1px 2px rgba(244,63,94,0.35)); transition: all 0.2s;">2GIS MAP</a>
-              </div>
             </div>
-          `)
+          `, { direction: 'top', offset: [0, -10] })
           .addTo(markersGroup);
 
         clinicMarker.on('click', () => {
+          map.closePopup();
           onSelectClinic(clinic);
         });
       });
@@ -526,6 +522,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         }).addTo(map._markersGroup);
 
         m.on('click', () => {
+          if (map) map.closePopup();
           onSelectClinic(clinic);
         });
 
@@ -863,7 +860,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
             className={`px-2.5 py-1.5 text-[9px] sm:text-[10px] font-black uppercase rounded-lg transition-all flex items-center gap-1 cursor-pointer bg-slate-900 border border-[#1e3256]/70 text-cyan-400 hover:bg-cyan-500 hover:text-slate-950`}
             title={t('approxLocation')}
           >
-            📍 <span className="hidden sm:inline">{language === 'uz' ? 'Joylashuvim' : language === 'ru' ? 'Моё место' : 'My Location'}</span>
+            <span>📍</span> <span className="hidden sm:inline">{language === 'uz' ? 'Joylashuvim' : language === 'ru' ? 'Моё место' : 'My Location'}</span>
           </button>
           
           <button
@@ -874,7 +871,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            🌎 <span className="hidden sm:inline">Google Maps</span><span className="inline sm:hidden">Google</span> {leafletLoaded && activeTab === 'google' && <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>}
+            <span>🌎</span> <span className="hidden sm:inline">Google Maps</span><span className="inline sm:hidden">Google</span> <span className={leafletLoaded && activeTab === 'google' ? "w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping ml-0.5" : "hidden"}></span>
           </button>
 
           <button
@@ -885,7 +882,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            🗺️ <span className="hidden sm:inline">OSM Map</span><span className="inline sm:hidden">OSM</span> {leafletLoaded && activeTab === 'leaflet' && <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>}
+            <span>🗺️</span> <span className="hidden sm:inline">OSM Map</span><span className="inline sm:hidden">OSM</span> <span className={leafletLoaded && activeTab === 'leaflet' ? "w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping ml-0.5" : "hidden"}></span>
           </button>
           
           <button
@@ -896,7 +893,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            📟 <span className="hidden sm:inline">High-Tech HUD</span><span className="inline sm:hidden">HUD Map</span>
+            <span>📟</span> <span className="hidden sm:inline">High-Tech HUD</span><span className="inline sm:hidden">HUD Map</span>
           </button>
           
           <button
@@ -907,7 +904,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            🧭 <span className="hidden sm:inline">2GIS Live</span><span className="inline sm:hidden">2GIS</span> {dgisLoaded && activeTab === 'dgis' && <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping"></span>}
+            <span>🧭</span> <span className="hidden sm:inline">2GIS Live</span><span className="inline sm:hidden">2GIS</span> <span className={dgisLoaded && activeTab === 'dgis' ? "w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping ml-0.5" : "hidden"}></span>
           </button>
         </div>
 
@@ -961,7 +958,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         )}
 
         {/* Tab 1: Leaflet Interactive Map (Also used for Google Tiles) */}
-        {locationRef.current.initialized && (activeTab === 'leaflet' || activeTab === 'google') && (
+        {(activeTab === 'leaflet' || activeTab === 'google') && (
           <div className="w-full h-full relative z-10 bg-slate-950 flex flex-col justify-end">
             <div ref={mapContainerRef} className="w-full h-full bg-[#111] border border-[#1b2b4d]/40 rounded-b-2xl overflow-hidden shadow-inner" style={{ minHeight: '100%', height: '100%' }}></div>
             
@@ -983,7 +980,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         )}
 
         {/* Tab 2: Vector fallback style map of Uzbekistan */}
-        {locationRef.current.initialized && activeTab === 'vector' && (
+        {activeTab === 'vector' && (
           <div className="w-full h-full bg-[#050a18] flex flex-col justify-between p-6 overflow-hidden relative border border-[#1e2e4b] rounded-b-2xl">
             {/* Grid Pattern Background */}
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f1c35_1px,transparent_1px),linear-gradient(to_bottom,#0f1c35_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-70"></div>
@@ -1118,7 +1115,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         )}
 
         {/* Tab 4: 2GIS Interactive Map */}
-        {locationRef.current.initialized && activeTab === 'dgis' && (
+        {activeTab === 'dgis' && (
           <div className="w-full h-full relative z-10 bg-slate-950 flex flex-col justify-end">
             <div ref={dgisMapContainerRef} className="w-full h-full bg-[#111] border border-[#1b2b4d]/40 rounded-b-2xl overflow-hidden shadow-inner" style={{ minHeight: '100%', height: '100%' }}></div>
             

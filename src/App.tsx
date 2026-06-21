@@ -9,6 +9,7 @@ import { KeyRound, ShieldAlert, LogOut, CheckCircle, Smartphone, Lock, Clipboard
 
 export default function App() {
   const {
+    isAppLoading,
     clinics,
     doctors,
     services,
@@ -202,22 +203,31 @@ export default function App() {
 
       {/* DASHBOARD ROUTING MAIN VIEWPORT */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col">
-        {activeTab === 'bemor' && (
-          <ClientDashboard
-            clinics={clinics}
-            doctors={doctors}
-            services={services}
-            queues={queues}
-            selectedClinic={selectedClinic}
-            onSelectClinic={setSelectedClinic}
-            onAddQueue={handleAddQueue}
-            onCancelQueue={handleCancelQueue}
-            onUpdateDoctorRating={handleUpdateDoctorRating}
-            setActiveTab={setActiveTab}
-            language={language}
-            userLocationRef={userLocationRef}
-          />
-        )}
+        {isAppLoading ? (
+          <div className="flex flex-col items-center justify-center my-auto w-full h-full pb-20">
+            <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+            <p className="mt-5 text-slate-400 font-bold uppercase tracking-widest text-[10px]">
+              {language === 'uz' ? "Ma'lumotlar yuklanmoqda..." : "Loading..."}
+            </p>
+          </div>
+        ) : (
+          <>
+            {activeTab === 'bemor' && (
+              <ClientDashboard
+                clinics={clinics}
+                doctors={doctors}
+                services={services}
+                queues={queues}
+                selectedClinic={selectedClinic}
+                onSelectClinic={setSelectedClinic}
+                onAddQueue={handleAddQueue}
+                onCancelQueue={handleCancelQueue}
+                onUpdateDoctorRating={handleUpdateDoctorRating}
+                setActiveTab={setActiveTab}
+                language={language}
+                userLocationRef={userLocationRef}
+              />
+            )}
 
         {activeTab === 'shifokor' && (
           hasAccess('shifokor') ? (
@@ -292,6 +302,8 @@ export default function App() {
               <SecurityLoginForm role="superadmin" onSubmit={handleLoginSubmit} language={language} error={authError} authUsername={authUsername} setAuthUsername={setAuthUsername} authPassword={authPassword} setAuthPassword={setAuthPassword} />
             </div>
           )
+        )}
+        </>
         )}
       </main>
 
