@@ -302,8 +302,34 @@ async function saveAdminCreds(login: string, pass: string) {
 let activeTelegramToken = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "";
 let activeDoctorBotToken = process.env.DOCTOR_BOT_TOKEN || "";
 
+async function loadTelegramCreds() {
+  if (fDb) {
+    try {
+      const d = await getDoc(doc(fDb, "admin", "telegram"));
+      if (d.exists()) {
+        const data = d.data();
+        if (data.token) activeTelegramToken = data.token;
+        if (data.doctorToken) activeDoctorBotToken = data.doctorToken;
+      }
+    } catch(err) {
+      console.warn("Failed to get telegram config", err);
+    }
+  }
+}
+
+async function saveTelegramCreds(token: string, doctorToken: string) {
+  if (fDb) {
+    try {
+      await setDoc(doc(fDb, "admin", "telegram"), { token, doctorToken }, { merge: true });
+    } catch(err) {
+      console.error(err);
+    }
+  }
+}
+
 // GET active Telegram Bot Config dynamically to synchronize with Vercel Env changes
-app.get("/api/telegram-config", (req, res) => {
+app.get("/api/telegram-config", async (req, res) => {
+  await loadTelegramCreds();
   res.json({ token: activeTelegramToken, doctorToken: activeDoctorBotToken });
 });
 
@@ -339,10 +365,11 @@ app.post("/api/admin-update-creds", rateLimiter(3, 60 * 1000), async (req, res) 
 });
 
 // POST to update the active Telegram Bot Token dynamically across all doctor & patient devices
-app.post("/api/telegram-config", rateLimiter(3, 60 * 1000), (req, res) => {
+app.post("/api/telegram-config", rateLimiter(3, 60 * 1000), async (req, res) => {
   const { token } = req.body;
   if (token && token.trim()) {
     activeTelegramToken = token.trim();
+    await saveTelegramCreds(activeTelegramToken, activeDoctorBotToken);
     console.log(`[DStoma Server] Dynamically updated active Telegram Bot Token: ${activeTelegramToken.slice(0, 10)}...`);
     res.json({ ok: true, message: "Server token updated successfully." });
   } else {
@@ -667,13 +694,22 @@ app.patch("/api/queues/:id", async (req, res) => {
       }
       
       // Notify patient
-      if (item.telegramChatId) {
+      let finalTgChatId = item.telegramChatId;
+      if (!finalTgChatId && item.passportSerial) {
+         try {
+           const patDb = await getPatients();
+           const pat = patDb.find((p: any) => p.passportSerial === item.passportSerial);
+           if (pat && pat.telegramChatId) finalTgChatId = pat.telegramChatId;
+         } catch(e) {}
+      }
+
+      if (finalTgChatId) {
         if (item.status === 'calling') {
-          sendBgTelegramMessage(item.telegramChatId, `🔔 *CHIPTANGIZ KELDI!* 🔔\n\nAssalomu alaykum! Sizni shifokor hozir kabinetda kutmoqda. Kechikmasdan kirishingiz so'raladi. 🦷\n🎫 Chiptangiz: *#${item.number}*`).catch(e => { console.error(`[Telegram] Patient notification failed:`, e.message); });
+          sendBgTelegramMessage(finalTgChatId, `🔔 *CHIPTANGIZ KELDI!* 🔔\n\nAssalomu alaykum! Sizni shifokor hozir kabinetda kutmoqda. Kechikmasdan kirishingiz so'raladi. 🦷\n🎫 Chiptangiz: *#${item.number}*`).catch(e => { console.error(`[Telegram] Patient notification failed:`, e.message); });
         } else if (item.status === 'completed') {
-          sendBgTelegramMessage(item.telegramChatId, `✅ *Rahmat!* \n\nShifokor ko'rigi muvaffaqiyatli yakunlandi. Salomat bo'ling! Iltimos, shaxsiy kabinetingizda shifokorga baho bering. ⭐`).catch(e => { console.error(`[Telegram] Patient notification failed:`, e.message); });
+          sendBgTelegramMessage(finalTgChatId, `✅ *Rahmat!* \n\nShifokor ko'rigi muvaffaqiyatli yakunlandi. Salomat bo'ling! Iltimos, shaxsiy kabinetingizda shifokorga baho bering. ⭐`).catch(e => { console.error(`[Telegram] Patient notification failed:`, e.message); });
         } else if (item.status === 'cancelled') {
-          sendBgTelegramMessage(item.telegramChatId, `❌ *Diqqat!* \n\nSizning *#${item.number}* sonli navbatingiz bekor qilindi.`).catch(e => { console.error(`[Telegram] Patient notification failed:`, e.message); });
+          sendBgTelegramMessage(finalTgChatId, `❌ *Diqqat!* \n\nSizning *#${item.number}* sonli navbatingiz bekor qilindi.`).catch(e => { console.error(`[Telegram] Patient notification failed:`, e.message); });
         }
       }
 
@@ -1269,6 +1305,7 @@ const botSessions: Record<number, {
 }> = gSessions._botSessions;
 
 async function startTelegramBot() {
+  await loadTelegramCreds();
   console.log("[Telegram Bot] Launching Dual Polling Bot Service for Patient and Doctor bots...");
   let patientOffset = 0;
   let doctorOffset = 0;
@@ -1465,15 +1502,19 @@ async function sendPatientWelcomeMessage(token: string, chatId: number, firstNam
         }
       ],
       [
-        { text: "📝 Bot orqali Ro'yxatdan O'tish", callback_data: "bot_register" },
-        { text: "🎟 Mening faol navbatim", callback_data: "my_queue" }
+        { text: "🔐 Tizimga Ulanish (Login)", callback_data: "patient_login" },
+        { text: "📝 Ro'yxatdan O'tish", callback_data: "bot_register" }
       ],
       [
-        { text: "📝 Bot orqali Navbat Olish", callback_data: "book_queue" },
+        { text: "🎟 Mening faol navbatim", callback_data: "my_queue" },
+        { text: "➕ Yangi Navbat Olish", callback_data: "book_queue" }
+      ],
+      [
         { text: "🦷 AI Diagnostika", callback_data: "ai_help" }
       ],
       [
-        { text: "🏥 Klinikalarimiz", callback_data: "list_clinics" }
+        { text: "🏥 Klinikalarimiz", callback_data: "list_clinics" },
+        { text: "🖼 Web App QR Kodi", callback_data: "app_qr" }
       ],
       [
         { text: "ℹ️ Qo'llanma", callback_data: "patient_guide" }
@@ -1707,6 +1748,58 @@ async function handleRegistrationStep(token: string, chatId: number, session: an
         text: "❌ *Login yoki parol xato!* Iltimos, login nomingizni qaytadan kiriting:"
       });
     }
+  } else if (session.step === 'patient_login_passport') {
+    if (!text || text.trim().length < 5) {
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: "⚠️ Pasport formati noto'g'ri. Iltimos qaytadan kiriting (Masalan: AA1234567):"
+      });
+      return;
+    }
+    const passport = text.trim().toUpperCase();
+    const patDb = await getPatients();
+    const pat = patDb.find((p: any) => p.passportSerial?.toUpperCase() === passport);
+    if (!pat) {
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: `❌ Bunday pasport seriya bilan ro'yxatdan o'tgan bemor topilmadi.\nIltimos, qaytadan urinib ko'ring yoki "Ro'yxatdan o'tish" tugmasini ishlating.`
+      });
+      return;
+    }
+    session.tempPatientId = pat.id;
+    session.step = 'patient_login_password';
+    await tgApi(token, 'sendMessage', {
+      chat_id: chatId,
+      text: `🔑 *Parolni kiriting:*\n\nIltimos, DStoma tizimidagi shaxsiy parolingizni yozib yuboring:`,
+      parse_mode: 'Markdown'
+    });
+  } else if (session.step === 'patient_login_password') {
+    if (!text || text.trim().length === 0) {
+      await tgApi(token, 'sendMessage', { chat_id: chatId, text: "⚠️ Iltimos, parolingizni kiriting:" });
+      return;
+    }
+    const patDb = await getPatients();
+    const pat = patDb.find((p: any) => p.id === session.tempPatientId);
+    if (pat && pat.password === text.trim()) {
+      pat.telegramChatId = String(chatId);
+      await savePatient(pat);
+      delete botSessions[chatId];
+
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: `🎉 *Tizimga muvaffaqiyatli ulandingiz!*\n\n` +
+          `👤 *Bemor:* ${pat.fullName}\n` +
+          `Endi navbatingiz o'zgarganda bu yerda xabarnomalar olasiz! Siz menyu orqali yangi navbatlar band qilishingiz ham mumkin.`,
+        parse_mode: 'Markdown'
+      });
+    } else {
+      session.step = 'patient_login_passport';
+      delete session.tempPatientId;
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: `❌ *Parol xato!* Iltimos, boshidan boshlab parport raqamingizni qaytadan kiriting:`
+      });
+    }
   }
 }
 
@@ -1933,6 +2026,31 @@ async function handleDoctorCallbackQuery(token: string, chatId: number, callback
 async function handleCallbackQuery(token: string, chatId: number, callbackData: string, firstName: string) {
   const apiBase = "http://127.0.0.1:3000";
 
+  if (callbackData === 'patient_login') {
+    const patDb = await getPatients();
+    const existing = patDb.find((p: any) => String(p.telegramChatId || '') === String(chatId));
+    if (existing) {
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: `✅ *Siz allaqachon tizimga ulanib bo'lgansiz!*\n\n` +
+          `👤 *Ismingiz:* ${existing.fullName}\n` +
+          `📞 *Telefon:* ${existing.phone}\n` +
+          `📇 *Pasport:* ${existing.passportSerial}\n\n` +
+          `Siz bemalol navbat olishingiz yoki holatini kuzatishingiz mumkin.`,
+        parse_mode: 'Markdown'
+      });
+      return;
+    }
+
+    botSessions[chatId] = { step: 'patient_login_passport' };
+    await tgApi(token, 'sendMessage', {
+      chat_id: chatId,
+      text: `🔐 *Tizimga Ulanish (Login):* \n\nIltimos, DStoma tizimidagi qayd etilgan *Pasport seriya va raqamingizni* kiriting (masalan: AA1234567):`,
+      parse_mode: 'Markdown'
+    });
+    return;
+  }
+
   if (callbackData === 'bot_register') {
     // Check if patient exists
     const patDb = await getPatients();
@@ -2101,12 +2219,19 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
 
   } else if (callbackData === 'my_queue') {
     try {
+      const patDb = await getPatients();
+      const existingPat = patDb.find((p: any) => String(p.telegramChatId || '') === String(chatId));
+
       const res = await fetch(`${apiBase}/api/queues`);
       if (!res.ok) throw new Error("API status down");
       const queues = await res.json();
       
       const myQueues = Array.isArray(queues) 
-        ? queues.filter((q: any) => String(q.telegram_chat_id || q.telegramChatId) === String(chatId))
+        ? queues.filter((q: any) => {
+            const isChatMatch = String(q.telegram_chat_id || q.telegramChatId) === String(chatId);
+            const isPassportMatch = existingPat && existingPat.passportSerial && String(q.passport_serial || q.passportSerial) === existingPat.passportSerial;
+            return isChatMatch || isPassportMatch;
+          })
         : [];
 
       if (myQueues.length > 0) {
@@ -2204,6 +2329,17 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
     });
 
   } else if (callbackData === 'book_queue') {
+    const patDb = await getPatients();
+    const existing = patDb.find((p: any) => String(p.telegramChatId || '') === String(chatId));
+    if (!existing) {
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: `⚠️ *Diqqat!*\n\nNavbat olish uchun avval bot orqali Ro'yxatdan o'tishingiz yoki Tizimga ulanishingiz kerak.`,
+        parse_mode: 'Markdown'
+      });
+      return;
+    }
+
     // Stage 1: select clinic branch
     const text = "🏥 *1/3-Qadam: Navbat olish uchun klinikamiz filialini tanlang:*";
     const replyMarkup = {
@@ -2373,10 +2509,13 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
         'srv_tk_1': "80,000 UZS", 'srv_tk_2': "3,000,000 UZS", 'srv_tk_3': "4,200,000 UZS", 'srv_tk_4': "300,000 UZS"
       };
 
-      // Create booking directly in Django Database or JSON system via fetch
+      const patDb = await getPatients();
+      const existingPat = patDb.find((p: any) => String(p.telegramChatId || '') === String(chatId));
+
       const postUrl = `${apiBase}/api/queues`;
-      const patientName = `${firstName} (Bot Bemor)`;
-      const patientPhone = `+998(BOT)${chatId.toString().slice(-6)}`;
+      const patientName = existingPat ? existingPat.fullName : `${firstName} (Bot Bemor)`;
+      const patientPhone = existingPat ? existingPat.phone : `+998(BOT)${chatId.toString().slice(-6)}`;
+      const passportSerial = existingPat ? existingPat.passportSerial : '';
 
       const response = await fetch(postUrl, {
         method: 'POST',
@@ -2387,6 +2526,7 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
           service_id: serviceId,
           patient_name: patientName,
           patient_phone: patientPhone,
+          passport_serial: passportSerial,
           telegram_chat_id: String(chatId),
           status: 'pending'
         })
@@ -2397,7 +2537,7 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
 
       const successText = `🎉 *Muvaffaqiyatli navbatga yozildingiz!* 🎉\n\n` +
         `🎫 *Smart E-Ticket: #${createdItem.number || '108'}*\n` +
-        `👤 Bemor: *${firstName}*\n` +
+        `👤 Bemor: *${patientName}*\n` +
         `🏥 Klinikangiz: *${clinicLabel[clinicId] || 'DStoma Clinic'}*\n` +
         `👨‍⚕️ Shifokor: *${doctorLabel[doctorId] || 'Tashrif shifokori'}*\n` +
         `🦷 Muolaja: *${serviceLabel[serviceId] || 'Ko\'rik konsultatsiya'}*\n` +

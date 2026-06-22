@@ -1002,7 +1002,8 @@ export default function ClientDashboard({
       number: ticketNo,
       status: 'pending',
       createdAt: new Date().toISOString(),
-      telegramChatId: currentUser?.telegramChatId || telegramIdInput || undefined
+      telegramChatId: currentUser?.telegramChatId || telegramIdInput || undefined,
+      passportSerial: currentUser?.passportSerial || ''
     };
 
     // Add locally
