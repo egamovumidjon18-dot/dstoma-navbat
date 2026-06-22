@@ -377,6 +377,22 @@ export function useAppState() {
       } catch (err) {
         console.warn("[AppState Hook] Error loading queues from server:", err);
       }
+      try {
+        const pRes = await fetch('/api/payments');
+        if (pRes.ok) {
+          const pList = await pRes.json();
+          pList.sort((a: any, b: any) => new Date(b.dueDate || 0).getTime() - new Date(a.dueDate || 0).getTime());
+          if (active && !isSyncingRef.current) {
+            setSaasPayments(prev => {
+              const prevSorted = [...prev].sort((a, b) => new Date(b.dueDate || 0).getTime() - new Date(a.dueDate || 0).getTime());
+              return JSON.stringify(prevSorted) === JSON.stringify(pList) ? prev : pList;
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("[AppState Hook] Error loading payments from server:", err);
+      }
+
       isInitialLoad = false;
       if (active) setIsAppLoading(false);
     };
@@ -635,7 +651,7 @@ export function useAppState() {
     }
   };
 
-  const handlePaySubscriptionSimulate = (clinicId: string) => {
+  const handlePaySubscriptionSimulate = async (clinicId: string) => {
     const targetClinic = clinics.find(c => c.id === clinicId);
     if (!targetClinic) return;
 
@@ -649,17 +665,38 @@ export function useAppState() {
     };
 
     setSaasPayments(prev => [newPayment, ...prev]);
+    try {
+      await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPayment)
+      });
+    } catch (e) {
+      console.warn(e);
+    }
   };
 
-  const handleApproveSaaSPayment = (paymentId: string) => {
+  const handleApproveSaaSPayment = async (paymentId: string) => {
     const targetPay = saasPayments.find(p => p.id === paymentId);
     if (!targetPay) return;
 
-    setSaasPayments(prev => prev.map(p => p.id === paymentId ? {
-      ...p,
-      status: 'confirmed',
+    const updatedPayment = {
+      ...targetPay,
+      status: 'confirmed' as const,
       paymentDate: new Date().toISOString().split('T')[0]
-    } : p));
+    };
+
+    setSaasPayments(prev => prev.map(p => p.id === paymentId ? updatedPayment : p));
+
+    try {
+      await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedPayment)
+      });
+    } catch (e) {
+      console.warn(e);
+    }
 
     setClinics(prev => prev.map(c => {
       if (c.id === targetPay.clinicId) {
@@ -735,6 +772,16 @@ export function useAppState() {
       status: 'confirmed'
     };
     setSaasPayments(prev => [trialInvoice, ...prev]);
+
+    try {
+      await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(trialInvoice)
+      });
+    } catch (e) {
+      console.warn(e);
+    }
   };
 
   const handleAddDoctor = async (newDoc: Doctor) => {

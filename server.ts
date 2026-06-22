@@ -123,7 +123,7 @@ if (!g._serverServices) {
 
 // FIREBASE INIT
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import firebaseConfig from './firebase-applet-config.json';
 
 let fDb: any = null;
@@ -234,6 +234,70 @@ async function deleteService(id: string) {
 }
 
 
+async function getPayments() {
+  if (fDb) {
+    const s = await getDocs(collection(fDb, "payments"));
+    return s.docs.map((d: any) => ({ ...d.data(), id: d.id }));
+  }
+  return g._serverPayments || [];
+}
+async function savePayment(c: any) {
+  if (fDb) await setDoc(doc(fDb, "payments", c.id), c);
+  else {
+    if (!g._serverPayments) g._serverPayments = [];
+    g._serverPayments = g._serverPayments.filter((x:any) => x.id !== c.id);
+    g._serverPayments.push(c);
+  }
+}
+async function getReports() {
+  if (fDb) {
+    const s = await getDocs(collection(fDb, "reports"));
+    return s.docs.map((d: any) => ({ ...d.data(), id: d.id }));
+  }
+  return g._serverReports || [];
+}
+async function saveReport(c: any) {
+  if (fDb) await setDoc(doc(fDb, "reports", c.id), c);
+  else {
+    if (!g._serverReports) g._serverReports = [];
+    g._serverReports = g._serverReports.filter((x:any) => x.id !== c.id);
+    g._serverReports.push(c);
+  }
+}
+async function getAdminCreds() {
+  if (fDb) {
+    try {
+      const d = await getDoc(doc(fDb, "admin", "superadmin"));
+      if (d.exists()) {
+        const data = d.data();
+        let pass = data.password;
+        if (pass && pass.startsWith('b64:')) {
+           pass = Buffer.from(pass.substring(4), 'base64').toString('utf8');
+        }
+        return { login: data.login, password: pass };
+      }
+    } catch(err) {
+      console.warn("Failed to get admin creds", err);
+    }
+  }
+  return { 
+    login: (globalThis as any)._serverAdminLogin || process.env.ADMIN_USER || "superadmin", 
+    password: (globalThis as any)._serverAdminPassword || process.env.ADMIN_PASS || "demo123" 
+  };
+}
+async function saveAdminCreds(login: string, pass: string) {
+  (globalThis as any)._serverAdminLogin = login;
+  (globalThis as any)._serverAdminPassword = pass;
+  if (fDb) {
+    try {
+      const b64 = 'b64:' + Buffer.from(pass).toString('base64');
+      await setDoc(doc(fDb, "admin", "superadmin"), { login, password: b64 });
+    } catch (e) {
+      console.error(e);
+    }
+  }
+}
+
 // Dynamic variables to hold active Telegram Bot Tokens in memory for cross-client synchrony
 let activeTelegramToken = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "";
 let activeDoctorBotToken = process.env.DOCTOR_BOT_TOKEN || "";
@@ -248,26 +312,27 @@ if (!gAdmin.superadminLogin) gAdmin.superadminLogin = process.env.ADMIN_USER || 
 if (!gAdmin.superadminPassword) gAdmin.superadminPassword = process.env.ADMIN_PASS || "demo123";
 
 // POST endpoint for secure superadmin login to prevent plain text password on client-side
-app.post("/api/admin-login", rateLimiter(5, 60 * 1000), (req, res) => {
+app.post("/api/admin-login", rateLimiter(5, 60 * 1000), async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ ok: false, error: "Username and password are required" });
   }
-  if (username.toLowerCase() === gAdmin.superadminLogin.toLowerCase() && password === gAdmin.superadminPassword) {
+  const creds = await getAdminCreds();
+  if (username.toLowerCase() === creds.login.toLowerCase() && password === creds.password) {
     return res.json({ ok: true, name: "SuperAdmin" });
   }
   return res.status(401).json({ ok: false, error: "Incorrect credentials" });
 });
 
 // POST endpoint to update admin credentials dynamically
-app.post("/api/admin-update-creds", rateLimiter(3, 60 * 1000), (req, res) => {
+app.post("/api/admin-update-creds", rateLimiter(3, 60 * 1000), async (req, res) => {
   const { currentPassword, newLogin, newPassword } = req.body;
-  if (!currentPassword || currentPassword !== gAdmin.superadminPassword) {
+  const creds = await getAdminCreds();
+  if (!currentPassword || currentPassword !== creds.password) {
     return res.status(401).json({ ok: false, error: "Joriy parol noto'g'ri (Current password incorrect)" });
   }
   if (newLogin && newLogin.trim() && newPassword && newPassword.trim()) {
-    gAdmin.superadminLogin = newLogin.trim();
-    gAdmin.superadminPassword = newPassword.trim();
+    await saveAdminCreds(newLogin.trim(), newPassword.trim());
     return res.json({ ok: true });
   }
   return res.status(400).json({ ok: false, error: "Invalid login or password" });
@@ -450,6 +515,26 @@ app.get("/api/patients", async (req, res) => {
   res.json(await getPatients());
 });
 
+app.get("/api/payments", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.json(await getPayments());
+});
+app.post("/api/payments", rateLimiter(30, 60 * 1000), async (req, res) => {
+  const p = req.body;
+  await savePayment(p);
+  res.status(201).json(p);
+});
+
+app.get("/api/reports", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.json(await getReports());
+});
+app.post("/api/reports", rateLimiter(30, 60 * 1000), async (req, res) => {
+  const r = req.body;
+  await saveReport(r);
+  res.status(201).json(r);
+});
+
 app.post("/api/patients", rateLimiter(30, 60 * 1000), async (req, res) => {
   const newPatient = { ...req.body };
   if (!newPatient.id) {
@@ -591,6 +676,44 @@ app.patch("/api/queues/:id", async (req, res) => {
           sendBgTelegramMessage(item.telegramChatId, `❌ *Diqqat!* \n\nSizning *#${item.number}* sonli navbatingiz bekor qilindi.`).catch(e => { console.error(`[Telegram] Patient notification failed:`, e.message); });
         }
       }
+
+      // Generate daily report snapshot
+      if (item.status === 'completed' || item.status === 'cancelled') {
+        try {
+          const dStr = new Date().toISOString().split('T')[0];
+          const repId = `rep_${item.clinicId}_${dStr}`;
+          
+          let updatedQDb = qDb;
+          const uIdx = updatedQDb.findIndex(q => q.id === item.id);
+          if (uIdx >= 0) updatedQDb[uIdx] = item;
+          else updatedQDb.push(item);
+          
+          const allQ = updatedQDb.filter(q => q.clinicId === item.clinicId && q.createdAt?.startsWith(dStr));
+          const srvDocs = await getServices();
+          let income = 0;
+          let cCount = 0;
+          
+          allQ.forEach(q => {
+            if (q.status === 'completed') {
+              cCount++;
+              const s = srvDocs.find((x: any) => x.id === q.serviceId);
+              if (s) income += (s.price || 0);
+            }
+          });
+          
+          await saveReport({
+             id: repId,
+             clinicId: item.clinicId,
+             date: dStr,
+             totalQueues: allQ.length,
+             completedQueues: cCount,
+             totalRevenue: income
+          });
+        } catch(repErr) {
+          console.error("Failed to generate report snapshot", repErr);
+        }
+      }
+
       res.json(updatedItem);
     } else {
       res.status(404).json({ error: "Queue not found" });
