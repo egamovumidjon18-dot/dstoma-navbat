@@ -9,6 +9,7 @@ export function useAppState() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [queues, setQueues] = useState<QueueItem[]>([]);
+  const [patients, setPatients] = useState<any[]>([]);
   
   // Navigation
   const [activeTab, setActiveTab] = useState<'bemor' | 'shifokor' | 'boshliq' | 'superadmin'>('bemor');
@@ -378,6 +379,22 @@ export function useAppState() {
         console.warn("[AppState Hook] Error loading queues from server:", err);
       }
       try {
+        const patRes = await fetch('/api/patients');
+        if (patRes.ok) {
+          const patList = await patRes.json();
+          patList.sort((a: any, b: any) => a.id.localeCompare(b.id));
+          if (active && !isSyncingRef.current) {
+            setPatients(prev => {
+              const prevSorted = [...prev].sort((a, b) => a.id.localeCompare(b.id));
+              return JSON.stringify(prevSorted) === JSON.stringify(patList) ? prev : patList;
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("[AppState Hook] Error loading patients from server:", err);
+      }
+
+      try {
         const pRes = await fetch('/api/payments');
         if (pRes.ok) {
           const pList = await pRes.json();
@@ -564,15 +581,19 @@ export function useAppState() {
     }
   };
 
-  const handleUpdateQueueStatus = async (id: string, newStatus: QueueItem['status']) => {
+  const handleUpdateQueueStatus = async (id: string, newStatus: QueueItem['status'], serviceId?: string, medicalNotes?: string) => {
     isSyncingRef.current = true;
-    setQueues(prev => prev.map(q => q.id === id ? { ...q, status: newStatus } : q));
+    setQueues(prev => prev.map(q => q.id === id ? { ...q, status: newStatus, ...(serviceId ? { serviceId } : {}), ...(medicalNotes ? { medicalNotes } : {}) } : q));
 
     try {
+      const payload: any = { status: newStatus };
+      if (serviceId) payload.service_id = serviceId;
+      if (medicalNotes) payload.medical_notes = medicalNotes;
+      
       await fetch(`/api/queues/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify(payload)
       });
     } catch (err) {
       console.warn("[AppState Hook] Status mutation sync failed", err);
@@ -854,6 +875,7 @@ export function useAppState() {
     doctors,
     services,
     queues,
+    patients,
     activeTab,
     setActiveTab,
     selectedClinic,

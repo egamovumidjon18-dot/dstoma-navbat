@@ -68,19 +68,33 @@ function sanitizeString(str: string): string {
 }
 
 // Centralized In-Memory Database for Synchronized Clinic Operations
+interface ClinicVisit {
+  id: string;
+  date: string;
+  doctorId: string;
+  doctorName: string;
+  serviceId: string;
+  serviceName: string;
+  complaint?: string;
+  medicalNotes?: string;
+  price?: number;
+}
+
 interface Patient {
   id: string;
   clinicId: string;
   fullName: string;
   passportSerial: string;
   phone: string;
-  birthDate: string;
+  birthDate?: string;
   password?: string;
-  bloodGroup: string;
+  bloodGroup?: string;
   allergies?: string;
   chronicDiseases?: string;
   hasInfection?: boolean;
   telegramChatId?: string;
+  medicalHistory?: any[];
+  clinicVisits?: ClinicVisit[];
 }
 
 interface QueueItem {
@@ -98,6 +112,7 @@ interface QueueItem {
   medicalNotes?: string;
   passportSerial?: string;
   telegramChatId?: string;
+  complaint?: string;
 }
 
 const g = globalThis as any;
@@ -599,13 +614,14 @@ app.get("/api/queues", async (req, res) => {
 });
 
 app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
-  const q = req.body;
-  const clinicId = sanitizeString(q.clinic_id || q.clinicId || 'samarqand');
+  try {
+    const q = req.body;
+    const clinicId = sanitizeString(q.clinic_id || q.clinicId || 'samarqand');
   const doctorId = sanitizeString(q.doctor_id || q.doctorId || 'doc_sm_1');
   const serviceId = sanitizeString(q.service_id || q.serviceId || 'srv_sm_1');
   const patientName = sanitizeString(q.patient_name || q.patientName || 'Mehmon');
   const patientPhone = sanitizeString(q.patient_phone || q.patientPhone || '');
-  const telegramChatId = q.telegram_chat_id || q.telegramChatId || undefined;
+  const telegramChatId = q.telegram_chat_id || q.telegramChatId || null;
   const hasInfection = q.has_infection ?? q.hasInfection ?? false;
   const medicalNotes = sanitizeString(q.medical_notes ?? q.medicalNotes ?? '');
   const passportSerial = sanitizeString(q.passport_serial ?? q.passportSerial ?? '');
@@ -613,7 +629,7 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
   const qDb = await getQueues();
   const ticketNo = qDb.filter(item => item.clinicId === clinicId).length + 104;
 
-  const newQueueItem: QueueItem = {
+  const newQueueItem: any = {
     id: q.id || 'q_' + Math.random().toString(36).substr(2, 9),
     clinicId,
     patientName,
@@ -625,11 +641,17 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
     createdAt: new Date().toISOString(),
     hasInfection,
     medicalNotes,
-    passportSerial,
-    telegramChatId
+    passportSerial
   };
+  
+  if (telegramChatId) {
+    newQueueItem.telegramChatId = telegramChatId;
+  }
+  if (q.complaint) {
+    newQueueItem.complaint = sanitizeString(q.complaint);
+  }
 
-  await saveQueue(newQueueItem);
+  await saveQueue(newQueueItem as QueueItem);
   
   // Send active notification to assigned doctor if linked on Telegram
   const docChatId = g._doctorTelegramChats?.[doctorId];
@@ -659,6 +681,10 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
     passport_serial: passportSerial
   };
   res.status(201).json(responseData);
+  } catch (e: any) {
+    console.error("[Queue Create Error]", e);
+    res.status(500).json({ error: e.message || "Failed to create queue" });
+  }
 });
 
 app.patch("/api/queues/:id", async (req, res) => {
@@ -673,7 +699,9 @@ app.patch("/api/queues/:id", async (req, res) => {
     if (itemMatch) {
       updatedItem = {
         ...itemMatch,
-        status: updateFields.status !== undefined ? updateFields.status : itemMatch.status
+        status: updateFields.status !== undefined ? updateFields.status : itemMatch.status,
+        serviceId: updateFields.service_id !== undefined ? updateFields.service_id : itemMatch.serviceId,
+        ...(updateFields.medical_notes !== undefined ? { medicalNotes: sanitizeString(updateFields.medical_notes) } : {})
       };
       await saveQueue(updatedItem);
       
@@ -695,12 +723,49 @@ app.patch("/api/queues/:id", async (req, res) => {
       
       // Notify patient
       let finalTgChatId = item.telegramChatId;
-      if (!finalTgChatId && item.passportSerial) {
+      let patientObj: Patient | null = null;
+      if (item.passportSerial) {
          try {
            const patDb = await getPatients();
            const pat = patDb.find((p: any) => p.passportSerial === item.passportSerial);
-           if (pat && pat.telegramChatId) finalTgChatId = pat.telegramChatId;
+           if (pat) {
+             patientObj = pat;
+             if (pat.telegramChatId) finalTgChatId = pat.telegramChatId;
+           }
          } catch(e) {}
+      } else if (item.telegramChatId) {
+         try {
+           const patDb = await getPatients();
+           const pat = patDb.find((p: any) => p.telegramChatId === item.telegramChatId);
+           if (pat) {
+             patientObj = pat;
+           }
+         } catch(e) {}
+      }
+
+      if (patientObj && item.status === 'completed' && itemMatch.status !== 'completed') {
+        const srvDb = await getServices();
+        const docDb = await getDoctors();
+        const srvObj = srvDb.find((s: any) => s.id === (item.serviceId || ''));
+        const doctorObj = docDb.find((d: any) => d.id === item.doctorId);
+        
+        const visit: ClinicVisit = {
+          id: 'v_' + Math.random().toString(36).substr(2, 9),
+          date: new Date().toISOString(),
+          doctorId: item.doctorId,
+          doctorName: doctorObj ? doctorObj.name : 'Shifokor',
+          serviceId: item.serviceId || '',
+          serviceName: srvObj ? srvObj.name : 'Tibbiy xizmat',
+          complaint: item.complaint,
+          medicalNotes: item.medicalNotes,
+          price: srvObj ? srvObj.price : 0
+        };
+        
+        const updatedPat = { 
+          ...patientObj, 
+          clinicVisits: [...(patientObj.clinicVisits || []), visit] 
+        };
+        await savePatient(updatedPat);
       }
 
       if (finalTgChatId) {
@@ -903,17 +968,21 @@ Patient reported symptoms or diagnostic logs: "${symptoms || 'None - routine sca
 Target language for all text strings: ${requestedLang === 'uz' ? 'Uzbek (uz)' : requestedLang === 'ru' ? 'Russian (ru)' : 'English (en)'}`;
 
     if (image && image.data && image.mimeType) {
-      promptText += `\n\n[IMAGE INCLUDED] A physical picture / X-ray of the tooth/mouth has been provided by the patient. Please visually inspect this image carefully for any visible dental pathology (such as cavities, fractures, discoloration, dental plaque, tartar, gum recession, swelling or signs of infection). Reflect your visual findings of this image in your response, especially in 'diagnosticText' and 'recommendedTreatment'.`;
+      promptText += `\n\n[IMAGE INCLUDED] A physical picture has been provided by the patient. 
+FIRST, critically verify if the image actually contains teeth, a mouth, or a dental X-ray. 
+If the image is completely unrelated to dentistry (e.g., a car, a landscape, an animal), you MUST clearly state in the 'diagnosticText' that the provided image does not appear to be dental-related and cannot be analyzed. 
+If it IS a dental image, please visually inspect it carefully for any visible dental pathology (such as cavities, fractures, discoloration, dental plaque, tartar, gum recession, swelling or signs of infection). Reflect your findings in your response.`;
     }
 
     promptText += `\n\nPlease analyze the symptoms, tooth location, pathic indicators, and generate a strict, clean clinical assessment.
 All content text in the response must be written entirely in the requested language.
+IMPORTANT MINIMUM REQUIREMENT: The 'healthFactor' field MUST include a specific percentage value strictly formatted with a '%' symbol (e.g., "O'rta (65%)", "Yaxshi (92%)", "Critical (42%)"). This exact numerical percentage is required to update the interactive 3D indicators.
 
 Return the JSON response adhering strictly to this schema:
 {
   "enamelAbrasion": "Wear/Damage metric (e.g. '15% abrasion', 'Moderate attrition', 'Normal')",
-  "healthFactor": "Condition score (e.g., 'Excellent (96%)', 'Fair (72%)', 'Critical (35%)')",
-  "recommendedTreatment": "Individially suggested clinic treatment (e.g., 'Composite Plomba', 'Root Canal Therapy', 'Routine professional cleaning')",
+  "healthFactor": "Condition score with a MANDATORY percentage (e.g., 'Excellent (96%)', 'Fair (72%)', 'Critical (35%)')",
+  "recommendedTreatment": "Individually suggested clinic treatment (e.g., 'Composite Plomba', 'Root Canal Therapy', 'Routine professional cleaning')",
   "diagnosticText": "Detailed explanatory diagnostic summary, pathophysiology notes and local dental care guidance",
   "actionPlan": ["Short actionable guidance item 1", "Short actionable guidance item 2", "Short actionable guidance item 3"]
 }`;
@@ -930,7 +999,7 @@ Return the JSON response adhering strictly to this schema:
     parts.push({ text: promptText });
 
     const response = await aiInstance.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.5-flash",
       contents: { parts: parts },
       config: {
         responseMimeType: "application/json",
@@ -1290,11 +1359,13 @@ if (!gSessions._botSessions) {
   gSessions._botSessions = {};
 }
 const botSessions: Record<number, {
-  step?: 'register_name' | 'register_phone' | 'register_passport' | 'register_password' | 'register_blood' | 'doctor_login' | 'doctor_password';
+  step?: 'register_name' | 'register_phone' | 'register_passport' | 'register_password' | 'register_blood' | 'doctor_login' | 'doctor_password' | 'patient_login_passport' | 'patient_login_password' | 'book_queue_complaint';
   tempDoctorLogin?: string;
+  tempPatientId?: string;
   tempUser?: {
     id?: string;
     clinicId?: string;
+    doctorId?: string;
     fullName?: string;
     passportSerial?: string;
     phone?: string;
@@ -1800,6 +1871,93 @@ async function handleRegistrationStep(token: string, chatId: number, session: an
         text: `❌ *Parol xato!* Iltimos, boshidan boshlab parport raqamingizni qaytadan kiriting:`
       });
     }
+  } else if (session.step === 'book_queue_complaint') {
+    const complaint = text === '⏭ O\'tkazib yuborish' ? '' : text.trim();
+    const clinicId = session.tempUser?.clinicId || 'samarqand';
+    const doctorId = session.tempUser?.doctorId || 'doc_sm_1';
+    delete botSessions[chatId]; // form submitted
+    
+    // Process queue creation
+    await proceedQueueBooking(token, chatId, clinicId, doctorId, complaint);
+  }
+}
+
+// Extract booking continuation function
+async function proceedQueueBooking(token: string, chatId: number, clinicId: string, doctorId: string, complaint: string) {
+  const apiBase = "http://127.0.0.1:3000";
+  
+  await tgApi(token, 'sendMessage', {
+    chat_id: chatId,
+    text: "⚡ *DStoma Elektron Navbat Serveriga chipta so'rovi yuborilmoqda, iltimos kuting...*"
+  });
+
+  try {
+    const clinicLabel: Record<string, string> = {
+      'samarqand': "Samarqand Filiali",
+      'buxoro': "Fergana / Buxoro Filiali",
+      'toshkent': "Toshkent Smart Markazi"
+    };
+    
+    const doctorLabel: Record<string, string> = {
+      'doc_sm_1': "Dr. Jasur Shodiyev",
+      'doc_sm_2': "Dr. Maftunaxon Sobirova",
+      'doc_sm_3': "Dr. Akbar Salimov",
+      'doc_bx_1': "Dr. Dilshod Karimov",
+      'doc_bx_2': "Dr. Sabina Aliyeva",
+      'doc_tk_1': "Dr. Sardor Rustamov",
+      'doc_tk_2': "Dr. Shaxlo Qosimova",
+      'doc_tk_3': "Dr. Umidjon Egamov"
+    };
+
+    const patDb = await getPatients();
+    const existingPat = patDb.find((p: any) => String(p.telegramChatId || '') === String(chatId));
+
+    const postUrl = `${apiBase}/api/queues`;
+    const patientName = existingPat ? existingPat.fullName : `Bot Bemor`;
+    const patientPhone = existingPat ? existingPat.phone : `+998(BOT)${chatId.toString().slice(-6)}`;
+    const passportSerial = existingPat ? existingPat.passportSerial : '';
+
+    const response = await fetch(postUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clinic_id: clinicId,
+        doctor_id: doctorId,
+        patient_name: patientName,
+        patient_phone: patientPhone,
+        passport_serial: passportSerial,
+        telegram_chat_id: String(chatId),
+        complaint: complaint,
+        status: 'pending'
+      })
+    });
+
+    if (response.ok) {
+      const createdItem = await response.json();
+
+      const successText = `🎉 *Muvaffaqiyatli navbatga yozildingiz!* 🎉\n\n` +
+        `🎫 *Smart E-Ticket: #${createdItem.number || '108'}*\n` +
+        `👤 Bemor: *${patientName}*\n` +
+        `🏥 Klinikangiz: *${clinicLabel[clinicId] || 'DStoma Clinic'}*\n` +
+        `👨‍⚕️ Shifokor: *${doctorLabel[doctorId] || 'Tashrif shifokori'}*\n` +
+        (complaint ? `💬 Shikoyat: *${complaint}*\n` : '') +
+        `\nUshbu elektron ro'yxat raqami orqali klinika qabulxonasida yoki *Mening navbatim* menyusi orqali tasdiqlash jarayonlarini kuzatib borishingiz mumkin.`;
+
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: successText,
+        parse_mode: 'Markdown'
+      });
+      // Return to main menu
+      await sendPatientWelcomeMessage(token, chatId, patientName);
+    } else {
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: `❌ *Navbat ma'lumotlarini serverga ulab bo'lmadi!* Iltimos keyinroq qayta urinib ko'ring.`
+      });
+    }
+  } catch (error: any) {
+    console.error("[Bot] create queue error", error.message);
   }
 }
 
@@ -1866,7 +2024,7 @@ async function handlePatientBotDiagnosticMessage(token: string, chatId: number, 
         parts.push({ text: `Analyze this question: "${userPrompt}"\n\nSystem Instruction: ${systemPrompt}` });
       }
       response = await aiInstance.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-3.5-flash",
         contents: { parts: parts }
       });
     }
@@ -2422,163 +2580,31 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
     const clinicId = parts[0];
     const doctorId = parts[1] + '_' + parts[2] + '_' + parts[3]; // handle standard doc_sm_1 formatting
 
-    const text = "🦷 *3/3-Qadam: Kerakli stomatologik davolash yoki muolaja turini tanlang:*";
-    let replyMarkup = { inline_keyboard: [] as any[] };
-
-    if (clinicId === 'samarqand') {
-      replyMarkup.inline_keyboard = [
-        [{ text: "⚙️ Konsultatsiya — 50,000 UZS", callback_data: `bk_srv_${clinicId}_${doctorId}_srv_sm_1` }],
-        [{ text: "⚙️ Tish tozalash — 250,000 UZS", callback_data: `bk_srv_${clinicId}_${doctorId}_srv_sm_2` }],
-        [{ text: "⚙️ Plomba qo'yish — 400,000 UZS", callback_data: `bk_srv_${clinicId}_${doctorId}_srv_sm_3` }],
-        [{ text: "⚙️ Tish sug'urish — 150,000 UZS", callback_data: `bk_srv_${clinicId}_${doctorId}_srv_sm_4` }]
-      ];
-    } else if (clinicId === 'buxoro') {
-      replyMarkup.inline_keyboard = [
-        [{ text: "⚙️ Konsultatsiya uchrashuvi — 45,000 UZS", callback_data: `bk_srv_${clinicId}_${doctorId}_srv_bx_1` }],
-        [{ text: "⚙️ Plomba Qoyish — 200,000 UZS", callback_data: `bk_srv_${clinicId}_${doctorId}_srv_bx_2` }],
-        [{ text: "⚙️ Kanal tozalash — 350,050 UZS", callback_data: `bk_srv_${clinicId}_${doctorId}_srv_bx_3` }],
-        [{ text: "⚙️ Shvedcha Oqartirish — 1,200,000 UZS", callback_data: `bk_srv_${clinicId}_${doctorId}_srv_bx_4` }]
-      ];
-    } else {
-      replyMarkup.inline_keyboard = [
-        [{ text: "⚙️ Ortodont ko'rigi — 80,000 UZS", callback_data: `bk_srv_${clinicId}_${doctorId}_srv_tk_1` }],
-        [{ text: "⚙️ Keramik Vinir — 3,000,000 UZS", callback_data: `bk_srv_${clinicId}_${doctorId}_srv_tk_2` }],
-        [{ text: "⚙️ Dental Implant — 4,200,000 UZS", callback_data: `bk_srv_${clinicId}_${doctorId}_srv_tk_3` }],
-        [{ text: "⚙️ Sillig'lash — 300,000 UZS", callback_data: `bk_srv_${clinicId}_${doctorId}_srv_tk_4` }]
-      ];
-    }
-    replyMarkup.inline_keyboard.push([{ text: "↩️ Shifokorlarni Qayta ko'rish", callback_data: `book_cl_${clinicId}` }]);
+    botSessions[chatId] = {
+      step: 'book_queue_complaint',
+      tempUser: { clinicId, doctorId }
+    };
 
     await tgApi(token, 'sendMessage', {
       chat_id: chatId,
-      text: text,
+      text: "✏️ *3/3-Qadam: Shikoyatingiz* (Masalan: tishim ogriyapti, plomba tushdi...)\n\nIxtiyoriy yozib qoldiring yohuud 'O'tkazib yuborish' uchun pastdagi tugmani bosing:",
       parse_mode: 'Markdown',
-      reply_markup: replyMarkup
+      reply_markup: {
+        inline_keyboard: [[{ text: "⏭ O'tkazib yuborish", callback_data: `bk_skip_${clinicId}_${doctorId}` }]]
+      }
     });
 
-  } else if (callbackData.startsWith('bk_srv_')) {
-    // Stage 4: Booking the actual ticket instantly in real-time
-    // bk_srv_[clinicId]_[doctorId]_[serviceId]
-    const info = callbackData.replace('bk_srv_', '').split('_');
+  } else if (callbackData.startsWith('bk_skip_')) {
+    const info = callbackData.replace('bk_skip_', '').split('_');
     const clinicId = info[0];
     const doctorId = info[1] + '_' + info[2] + '_' + info[3];
-    const serviceId = info[4] + '_' + info[5] + '_' + info[6];
 
+    delete botSessions[chatId];
     await tgApi(token, 'sendMessage', {
       chat_id: chatId,
       text: "⚡ *DStoma Elektron Navbat Serveriga chipta so'rovi yuborilmoqda, iltimos kuting...*"
     });
-
-    try {
-      // Dynamic mapping labels
-      const clinicLabel: Record<string, string> = {
-        'samarqand': "Samarqand Filiali",
-        'buxoro': "Fergana / Buxoro Filiali",
-        'toshkent': "Toshkent Smart Markazi"
-      };
-      
-      const doctorLabel: Record<string, string> = {
-        'doc_sm_1': "Dr. Jasur Shodiyev",
-        'doc_sm_2': "Dr. Maftunaxon Sobirova",
-        'doc_sm_3': "Dr. Akbar Salimov",
-        'doc_bx_1': "Dr. Dilshod Karimov",
-        'doc_bx_2': "Dr. Sabina Aliyeva",
-        'doc_tk_1': "Dr. Sardor Rustamov",
-        'doc_tk_2': "Dr. Shaxlo Qosimova",
-        'doc_tk_3': "Dr. Umidjon Egamov"
-      };
-
-      const serviceLabel: Record<string, string> = {
-        'srv_sm_1': "Konsultatsiya",
-        'srv_sm_2': "Tish tozalash",
-        'srv_sm_3': "Plomba qo'yish",
-        'srv_sm_4': "Tish sug'urish",
-        'srv_bx_1': "Birlamchi Ko'rik",
-        'srv_bx_2': "Plomba Qoyish",
-        'srv_bx_3': "Kanal Tozalash",
-        'srv_bx_4': "Tishlarni Oqartirish",
-        'srv_tk_1': "Ortodont Ko'rigi",
-        'srv_tk_2': "Premium Keramik Vinir",
-        'srv_tk_3': "Implantatsiya",
-        'srv_tk_4': "Sillig'lash"
-      };
-
-      const pricesList: Record<string, string> = {
-        'srv_sm_1': "50,000 UZS", 'srv_sm_2': "250,000 UZS", 'srv_sm_3': "400,000 UZS", 'srv_sm_4': "150,000 UZS",
-        'srv_bx_1': "45,000 UZS", 'srv_bx_2': "200,000 UZS", 'srv_bx_3': "350,050 UZS", 'srv_bx_4': "1,200,000 UZS",
-        'srv_tk_1': "80,000 UZS", 'srv_tk_2': "3,000,000 UZS", 'srv_tk_3': "4,200,000 UZS", 'srv_tk_4': "300,000 UZS"
-      };
-
-      const patDb = await getPatients();
-      const existingPat = patDb.find((p: any) => String(p.telegramChatId || '') === String(chatId));
-
-      const postUrl = `${apiBase}/api/queues`;
-      const patientName = existingPat ? existingPat.fullName : `${firstName} (Bot Bemor)`;
-      const patientPhone = existingPat ? existingPat.phone : `+998(BOT)${chatId.toString().slice(-6)}`;
-      const passportSerial = existingPat ? existingPat.passportSerial : '';
-
-      const response = await fetch(postUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clinic_id: clinicId,
-          doctor_id: doctorId,
-          service_id: serviceId,
-          patient_name: patientName,
-          patient_phone: patientPhone,
-          passport_serial: passportSerial,
-          telegram_chat_id: String(chatId),
-          status: 'pending'
-        })
-      });
-
-      if (!response.ok) throw new Error("Database reservation rejected");
-      const createdItem = await response.json();
-
-      const successText = `🎉 *Muvaffaqiyatli navbatga yozildingiz!* 🎉\n\n` +
-        `🎫 *Smart E-Ticket: #${createdItem.number || '108'}*\n` +
-        `👤 Bemor: *${patientName}*\n` +
-        `🏥 Klinikangiz: *${clinicLabel[clinicId] || 'DStoma Clinic'}*\n` +
-        `👨‍⚕️ Shifokor: *${doctorLabel[doctorId] || 'Tashrif shifokori'}*\n` +
-        `🦷 Muolaja: *${serviceLabel[serviceId] || 'Ko\'rik konsultatsiya'}*\n` +
-        `💰 Standart Narxi: *${pricesList[serviceId] || 'Ko\'rsatilmagan'}*\n` +
-        `⏳ Navbat Holati: *⏳ Navbatingizni kuting*\n\n` +
-        `📱 Ushbu navbatning batafsil sensor analitikasini bilish yoki tish skanerdan o'tish uchun quyidagi Mini Appni ochishingiz mumkin:`;
-
-      await tgApi(token, 'sendMessage', {
-        chat_id: chatId,
-        text: successText,
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "📱 DStoma Mini App-ni ochish", web_app: { url: getSecureWebAppUrl() } }],
-            [{ text: "🎟 Chiptalarim ro'yxati", callback_data: "my_queue" }]
-          ]
-        }
-      });
-
-    } catch (bookingError) {
-      console.error("[Telegram booking error]:", bookingError);
-      
-      // Resilient fallback ticket generation to guarantee smooth user evaluation
-      const mockTicketNum = 100 + Math.floor(Math.random() * 50);
-      const fallbackText = `🎉 *Muvaffaqiyatli navbatga yozildingiz!* 🎉\n\n` +
-        `🎫 *Smart E-Ticket: #${mockTicketNum}*\n` +
-        `👤 Bemor: *${firstName}*\n` +
-        `⏳ Navbat Holati: *⏳ Navbatingizni kuting*\n\n` +
-        `DStoma tizimi buyrtmangizni tasdiqladi! Shifokor qabuliga chaqirilganda bevosita ushbu chat orqali xabar yuboramiz. 😊`;
-
-      await tgApi(token, 'sendMessage', {
-        chat_id: chatId,
-        text: fallbackText,
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "📱 DStoma Mini App-ni ochish", web_app: { url: getSecureWebAppUrl() } }]
-          ]
-        }
-      });
-    }
+    await proceedQueueBooking(token, chatId, clinicId, doctorId, '');
   }
 }
 
@@ -2606,6 +2632,26 @@ async function startServer() {
     
     // Launch Telegram Smart Polling bot service asynchronously
     startTelegramBot();
+    
+    // Ensure Demo Patient for testing
+    setTimeout(async () => {
+      try {
+        const patients = await getPatients();
+        const demoExists = patients.find(p => p.passportSerial === 'AA1234567');
+        if (!demoExists) {
+          const demoPatient = {
+            id: 'pat_demo_1',
+            clinicId: 'samarqand',
+            fullName: 'Testov Test',
+            passportSerial: 'AA1234567',
+            phone: '+998901234567',
+            password: 'demo'
+          };
+          await savePatient(demoPatient);
+          console.log('[Seed] Demo patient created: pasport AA1234567, password: demo');
+        }
+      } catch (e) {}
+    }, 1000);
   });
 }
 

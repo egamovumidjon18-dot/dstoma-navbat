@@ -55,6 +55,18 @@ export interface ToothDiagnosis {
   actionPlan: string[];
 }
 
+export interface ClinicVisit {
+  id: string;
+  date: string;
+  doctorId: string;
+  doctorName: string;
+  serviceId: string;
+  serviceName: string;
+  complaint?: string;
+  medicalNotes?: string;
+  price?: number;
+}
+
 export interface Patient {
   id: string;
   clinicId: string;
@@ -69,6 +81,8 @@ export interface Patient {
   chronicDiseases?: string;
   hasInfection?: boolean;
   diagnoses?: ToothDiagnosis[];
+  medicalHistory?: any[];
+  clinicVisits?: ClinicVisit[];
 }
 
 export interface QueueItem {
@@ -77,7 +91,7 @@ export interface QueueItem {
   patientName: string;
   patientPhone: string;
   doctorId: string;
-  serviceId: string;
+  serviceId?: string;
   number: number;
   status: 'pending' | 'calling' | 'in_progress' | 'completed' | 'cancelled';
   rating?: number; // feedback stars 1-5
@@ -86,6 +100,7 @@ export interface QueueItem {
   medicalNotes?: string;  // Django models matching
   passportSerial?: string; // Django models matching
   telegramChatId?: string; // Telegram Chat ID for automated updates
+  complaint?: string; // Patient complaint
 }
 
 export interface SaaSPayment {

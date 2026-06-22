@@ -246,7 +246,7 @@ export default function ClientDashboard({
   // Cabinet Specific States
   const [telegramIdInput, setTelegramIdInput] = useState('57896431');
   const [bookingDoctorId, setBookingDoctorId] = useState('doc_sm_1');
-  const [bookingServiceId, setBookingServiceId] = useState('srv_sm_1');
+  const [complaint, setComplaint] = useState('');
   const [isLanguageOpen, setIsLanguageOpen] = useState(false);
 
   // --- FUTURISTIC 3D DENTAL SCANNER METRIC STATES ---
@@ -462,10 +462,10 @@ export default function ClientDashboard({
   const handleFileChange = (file: File) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setToastMsg({
-        type: 'error',
-        text: language === 'uz' ? 'Faqat rasm formatidagi fayllarni yuklashingiz mumkin!' : language === 'ru' ? 'Вы можете загружать только изображения!' : 'Only image files are allowed!'
-      });
+      showToast(
+        language === 'uz' ? 'Faqat rasm formatidagi fayllarni yuklashingiz mumkin!' : language === 'ru' ? 'Вы можете загружать только изображения!' : 'Only image files are allowed!',
+        'error'
+      );
       return;
     }
     const reader = new FileReader();
@@ -476,10 +476,10 @@ export default function ClientDashboard({
         data: base64String
       });
       setImageFileName(file.name);
-      setToastMsg({
-        type: 'success',
-        text: language === 'uz' ? 'Rasm muvaffaqiyatli yuklandi!' : language === 'ru' ? 'Изображение успешно загружено!' : 'Image uploaded successfully!'
-      });
+      showToast(
+        language === 'uz' ? 'Rasm muvaffaqiyatli yuklandi!' : language === 'ru' ? 'Изображение успешно загружено!' : 'Image uploaded successfully!',
+        'success'
+      );
     };
     reader.readAsDataURL(file);
   };
@@ -540,19 +540,19 @@ export default function ClientDashboard({
       const matchPct = hStr.match(/(\d+)%/);
       const pct = matchPct ? parseInt(matchPct[1]) : null;
       
-      if (hStr.includes('kritik') || hStr.includes('critical') || hStr.includes('42%') || (pct && pct < 50)) {
-        parsedHealth = pct || 42;
-        parsedCaries = 58;
+      if (hStr.includes('kritik') || hStr.includes('critical') || hStr.includes('42%') || (pct !== null && pct < 50)) {
+        parsedHealth = pct !== null ? pct : 42;
+        parsedCaries = Math.max(0, 100 - parsedHealth);
         parsedEnamel = 72;
         parsedDentin = 55;
         parsedPulp = 42;
-      } else if (hStr.includes('o\'rta') || hStr.includes('o‘rta') || hStr.includes('fair') || hStr.includes('65%') || (pct && pct < 85)) {
-        parsedHealth = pct || 60;
-        parsedCaries = 40;
+      } else if (hStr.includes('o\'rta') || hStr.includes('o‘rta') || hStr.includes('fair') || hStr.includes('65%') || (pct !== null && pct < 85)) {
+        parsedHealth = pct !== null ? pct : 60;
+        parsedCaries = Math.max(0, 100 - parsedHealth);
         parsedEnamel = 68;
         parsedDentin = 75;
         parsedPulp = 82;
-      } else if (pct) {
+      } else if (pct !== null) {
         parsedHealth = pct;
         parsedCaries = Math.max(0, 100 - pct);
         parsedEnamel = Math.max(0, pct - (idx % 4));
@@ -623,10 +623,10 @@ export default function ClientDashboard({
       setAiOutput(data);
       applyAiDiagnosticToTooth(selectedToothIndex, data);
       await saveDiagnosisForPatient(data);
-      setToastMsg({
-        type: 'success',
-        text: language === 'uz' ? 'AI diagnostika muvaffaqiyatli yakunlandi!' : language === 'ru' ? 'ИИ диагностика завершена успешно!' : 'AI diagnostics computed successfully!'
-      });
+      showToast(
+        language === 'uz' ? 'AI diagnostika muvaffaqiyatli yakunlandi!' : language === 'ru' ? 'ИИ диагностика завершена успешно!' : 'AI diagnostics computed successfully!',
+        'success'
+      );
     } catch (e: any) {
       console.error('AI telemetry processing error, falling back to local diagnostics', e);
       
@@ -755,10 +755,10 @@ export default function ClientDashboard({
       applyAiDiagnosticToTooth(selectedToothIndex, localFallback);
       await saveDiagnosisForPatient(localFallback);
       
-      setToastMsg({
-        type: 'success',
-        text: language === 'uz' ? 'Offline Diagnostika muvaffaqiyatli yakunlandi!' : language === 'ru' ? 'Автономная диагностика завершена!' : 'Offline diagnostics computed successfully!'
-      });
+      showToast(
+        language === 'uz' ? 'Offline Diagnostika muvaffaqiyatli yakunlandi!' : language === 'ru' ? 'Автономная диагностика завершена!' : 'Offline diagnostics computed successfully!',
+        'success'
+      );
     } finally {
       setIsAiLoading(false);
     }
@@ -838,17 +838,6 @@ export default function ClientDashboard({
   }, [queues, currentUser]);
 
   // Dynamically select the first available service and doctor when active clinic or services list changes
-  React.useEffect(() => {
-    const activeClinic = selectedClinic || clinics[0];
-    const clinicServices = services.filter(s => s.clinicId === activeClinic?.id);
-    if (clinicServices.length > 0) {
-      const exists = clinicServices.some(s => s.id === bookingServiceId);
-      if (!exists) {
-        setBookingServiceId(clinicServices[0].id);
-      }
-    }
-  }, [selectedClinic, clinics, services, bookingServiceId]);
-
   React.useEffect(() => {
     const activeClinic = selectedClinic || clinics[0];
     const clinicDoctors = doctors.filter(d => d.clinicId === activeClinic?.id);
@@ -982,13 +971,9 @@ export default function ClientDashboard({
 
   const handleBookQueue = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bookingDoctorId || !bookingServiceId) {
-      showToast("Iltimos, Shifokor va Xizmat turini tanlang!", "error");
-      return;
-    }
 
-    const doc = doctors.find(d => d.id === bookingDoctorId);
-    const srv = services.find(s => s.id === bookingServiceId);
+    const selectedDocId = bookingDoctorId || clinicDoctors[0]?.id || doctors[0]?.id;
+    const doc = doctors.find(d => d.id === selectedDocId);
 
     const ticketNo = queues.length + myQueues.length + 107;
 
@@ -997,14 +982,16 @@ export default function ClientDashboard({
       clinicId: activeClinic?.id || 'samarqand',
       patientName: currentUser?.fullName || 'Mehmon',
       patientPhone: currentUser?.phone || phone,
-      doctorId: bookingDoctorId,
-      serviceId: bookingServiceId,
+      doctorId: selectedDocId,
+      complaint: complaint,
       number: ticketNo,
       status: 'pending',
       createdAt: new Date().toISOString(),
-      telegramChatId: currentUser?.telegramChatId || telegramIdInput || undefined,
       passportSerial: currentUser?.passportSerial || ''
     };
+    if (currentUser?.telegramChatId || telegramIdInput) {
+      newQueue.telegramChatId = currentUser?.telegramChatId || telegramIdInput;
+    }
 
     // Add locally
     setMyQueues([newQueue, ...myQueues]);
@@ -2161,7 +2148,7 @@ export default function ClientDashboard({
                 <form onSubmit={handleBookQueue} className="grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">
                   <div className="md:col-span-2">
                     <label className="text-xs font-black text-slate-700 block mb-1.5">
-                      Shifokorni tanlang *
+                      Shifokorni tanlag (ixtiyoriy)
                     </label>
                     <select
                       value={bookingDoctorId}
@@ -2178,187 +2165,17 @@ export default function ClientDashboard({
                   </div>
 
 
-                  {/* INTEGRATED SERVICE SELECTOR (LIGHT/CLEAN THEME) */}
+                  {/* COMPLAINT TEXTAREA */}
                   <div className="md:col-span-2 mt-4">
-                    <div className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 space-y-5 shadow-sm relative overflow-hidden">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-                        <div>
-                          <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                            <span className="text-emerald-500 text-lg">🏥</span> {language === 'uz' ? "Klinika Xizmatlar Katalogi" : "Catalog of Services"}
-                          </h4>
-                          <p className="text-xs font-semibold text-slate-500 mt-1">
-                            {language === 'uz' ? "O'zingizga kerakli tibbiy muolajani tanlang" : "Select your required treatment"}
-                          </p>
-                        </div>
-                        <span className="text-[11px] text-slate-500 font-bold bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-                          {language === 'uz' ? "Jami" : "Total"}: <strong className="text-slate-800">{clinicServices.length}</strong>
-                        </span>
-                      </div>
-
-                      <div className="relative z-10">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                          <Search className="w-4.5 h-4.5" />
-                        </span>
-                        <input 
-                          type="text" 
-                          placeholder={language === 'uz' ? "Xizmat nomini qidiring (Masalan: tish olish, plomba...)" : "Поиск услуг..."}
-                          value={servicesSearchTerm}
-                          onChange={e => setServicesSearchTerm(e.target.value)}
-                          className="w-full bg-slate-50 text-slate-800 border border-slate-200 rounded-xl pl-12 pr-4 py-3.5 text-sm font-semibold focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none transition-all placeholder-slate-400"
-                        />
-                      </div>
-
-                      {clinicServices.length === 0 ? (
-                        <div className="text-center py-6 text-sm text-slate-500 font-bold">
-                          {language === 'uz' ? "Ushbu filialda hozircha faol tibbiy xizmatlar topilmadi." : "No active medical services have been found for this branch yet."}
-                        </div>
-                      ) : (
-                        <div className="space-y-5 relative z-10">
-                          {/* Popular Services Section */}
-                          {!servicesSearchTerm && groupedServicesData.popular.length > 0 && (
-                            <div className="border border-orange-200 rounded-2xl overflow-hidden bg-white">
-                              <button 
-                                onClick={(e) => { e.preventDefault(); setOpenServiceCategory(openServiceCategory === "Mashhur xizmatlar" ? "" : "Mashhur xizmatlar"); }}
-                                className="w-full flex items-center justify-between p-4 bg-orange-50/50 hover:bg-orange-50 transition-colors cursor-pointer"
-                                type="button"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <span className="text-orange-500 text-lg">🔥</span>
-                                  <span className="text-sm font-black uppercase tracking-wider text-orange-600">
-                                    {language === 'uz' ? "Mashhur xizmatlar" : "Popular services"}
-                                  </span>
-                                </div>
-                                {openServiceCategory === "Mashhur xizmatlar" ? <ChevronUp className="w-5 h-5 text-orange-500" /> : <ChevronDown className="w-5 h-5 text-orange-400" />}
-                              </button>
-                              
-                              <AnimatePresence>
-                                {openServiceCategory === "Mashhur xizmatlar" && (
-                                  <motion.div 
-                                    initial={{ height: 0, opacity: 0 }}
-                                    animate={{ height: 'auto', opacity: 1 }}
-                                    exit={{ height: 0, opacity: 0 }}
-                                    className="overflow-hidden"
-                                  >
-                                    <div className="p-3 grid grid-cols-1 gap-3 border-t border-orange-100 bg-white">
-                                      {groupedServicesData.popular.map(srv => {
-                                        const isSelected = bookingServiceId === srv.id;
-                                        return (
-                                        <div 
-                                          key={`pop-${srv.id}`} 
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setBookingServiceId(isSelected ? '' : srv.id);
-                                          }}
-                                          className={`cursor-pointer border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all group relative bg-white ${isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md' : 'border-slate-200 hover:border-emerald-300 hover:shadow-sm'}`}
-                                        >
-                                           <div>
-                                            <h5 className={`text-[15px] font-bold mb-1.5 leading-snug transition-colors pr-6 ${isSelected ? 'text-emerald-700' : 'text-slate-800'}`}>
-                                              {translateMedicalText(srv.name, language)}
-                                            </h5>
-                                            <span className="text-lg font-black text-emerald-600">
-                                               {srv.price.toLocaleString('uz-UZ')} <span className="text-[12px] font-bold lowercase text-emerald-600">uzs</span>
-                                            </span>
-                                           </div>
-                                           <div className="shrink-0 flex items-center justify-end">
-                                              <button
-                                                type="button"
-                                                className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${isSelected ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'bg-transparent text-emerald-600 border border-emerald-500 group-hover:bg-emerald-50'}`}
-                                              >
-                                                {isSelected ? "✅ TANLANGAN" : "NAVBAT OLISH"}
-                                              </button>
-                                           </div>
-                                        </div>
-                                      )})}
-                                    </div>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                            </div>
-                          )}
-
-                          {/* Render Categories in a single unified list */}
-                          {sortedCategories.length > 0 && (
-                            <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white divide-y divide-slate-100">
-                              {sortedCategories.map(cat => (
-                                <div key={cat} className="bg-white">
-                                  <button 
-                                    onClick={(e) => { e.preventDefault(); setOpenServiceCategory(openServiceCategory === cat ? "" : cat); }}
-                                    className="w-full flex items-center justify-between p-4 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
-                                    type="button"
-                                  >
-                                    <div className="flex items-center gap-3.5">
-                                      <span className="text-xl flex items-center justify-center w-8">
-                                        {cat === "Diagnostika" && "🔬"}
-                                        {cat === "Terapevtik stomatologiya" && "🦷"}
-                                        {cat === "Tishlarni oqartirish" && "✨"}
-                                        {cat === "Vinirlar" && "💎"}
-                                        {cat === "Xirurgiya" && "🩸"}
-                                        {cat === "Protezlash" && "🦿"}
-                                        {cat === "Ortodontiya" && "⚙️"}
-                                        {cat === "Bolalar stomatologiyasi" && "🧸"}
-                                        {cat === "Implantatsiya" && "🔩"}
-                                        {cat === "Profilaktika" && "🧼"}
-                                        {cat === "Boshqa xizmatlar" && "📌"}
-                                      </span>
-                                      <span className="text-sm font-black uppercase tracking-widest text-[#1e293b] text-left">
-                                        {translateMedicalText(cat, language)}
-                                      </span>
-                                      <span className="bg-slate-100/80 text-slate-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-slate-200/60 ml-1">
-                                        {groupedServicesData.categories[cat].length}
-                                      </span>
-                                    </div>
-                                    {openServiceCategory === cat ? <ChevronUp className="w-5 h-5 text-slate-300 shrink-0" /> : <ChevronDown className="w-5 h-5 text-slate-300 shrink-0" />}
-                                  </button>
-
-                                  <AnimatePresence>
-                                    {(openServiceCategory === cat || servicesSearchTerm) && (
-                                      <motion.div 
-                                        initial={{ height: 0, opacity: 0 }}
-                                        animate={{ height: 'auto', opacity: 1 }}
-                                        exit={{ height: 0, opacity: 0 }}
-                                        className="overflow-hidden bg-slate-50 flex flex-col"
-                                      >
-                                        <div className="p-3 grid grid-cols-1 gap-3 border-t border-slate-100">
-                                          {groupedServicesData.categories[cat].map(srv => {
-                                            const isSelected = bookingServiceId === srv.id;
-                                            return (
-                                            <div 
-                                              key={srv.id} 
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setBookingServiceId(isSelected ? '' : srv.id);
-                                              }}
-                                              className={`cursor-pointer border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all group relative bg-white ${isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md' : 'border-slate-200 hover:border-emerald-300 hover:shadow-sm'}`}
-                                            >
-                                              <div>
-                                                <h5 className={`text-[15px] font-bold mb-1.5 leading-snug transition-colors pr-6 ${isSelected ? 'text-emerald-700' : 'text-slate-800'}`}>
-                                                  {translateMedicalText(srv.name, language)}
-                                                </h5>
-                                                <span className="text-lg font-black text-emerald-600">
-                                                  {srv.price.toLocaleString('uz-UZ')} <span className="text-[12px] font-bold lowercase text-emerald-600">uzs</span>
-                                                </span>
-                                              </div>
-                                              <div className="shrink-0 flex items-center justify-end">
-                                                  <button
-                                                    type="button"
-                                                    className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${isSelected ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'bg-transparent text-emerald-600 border border-emerald-500 group-hover:bg-emerald-50'}`}
-                                                  >
-                                                    {isSelected ? "✅ TANLANGAN" : "NAVBAT OLISH"}
-                                                  </button>
-                                              </div>
-                                            </div>
-                                          )})}
-                                        </div>
-                                      </motion.div>
-                                    )}
-                                  </AnimatePresence>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    <label className="text-xs font-black text-slate-700 block mb-1.5">
+                      {language === 'uz' ? "Shikoyatingiz (Masalan: tish og'rig'i, sezuvchanlik) - ixtiyoriy" : "Complaint (e.g., toothache) - optional"}
+                    </label>
+                    <textarea
+                      value={complaint}
+                      onChange={(e) => setComplaint(e.target.value)}
+                      placeholder={language === 'uz' ? "Shikoyatingizni qisqacha yozing..." : "Write your complaint..."}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-sans min-h-[100px] resize-y"
+                    ></textarea>
                   </div>
 
 
@@ -2505,6 +2322,77 @@ export default function ClientDashboard({
                 </div>
               </div>
 
+              {/* Medical History Section */}
+              <div className="bg-white text-slate-800 rounded-3xl p-6 border border-slate-150 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_40px_rgba(15,23,42,0.04)] transition-all">
+                <div className="flex items-center justify-between mb-5 border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">📁</span>
+                    <h3 className="text-sm font-black text-slate-950 uppercase tracking-wider">
+                      {language === 'uz' ? 'Tibbiy Tarix & Diagnostikalar' : language === 'ru' ? 'История болезни и Диагностика' : 'Medical History & Diagnostics'}
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="space-y-4 text-left">
+                  {/* Clinic Visits */}
+                  {currentUser.clinicVisits && currentUser.clinicVisits.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-black text-slate-500 uppercase flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>{language === 'uz' ? 'Shifokor Ko\'riklari' : 'Clinic Visits'}</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {currentUser.clinicVisits.map((visit: any) => (
+                          <div key={visit.id} className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex flex-col gap-2">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="text-xs font-black text-slate-800">{visit.serviceName}</p>
+                                <p className="text-[10px] text-slate-500 font-bold">{visit.doctorName}</p>
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-mono bg-white px-2 py-0.5 rounded shadow-xs">{new Date(visit.date).toLocaleDateString()}</span>
+                            </div>
+                            {visit.medicalNotes && (
+                              <p className="text-[11px] text-slate-600 bg-white p-2.5 border border-slate-100 rounded-xl mt-1 italic leading-relaxed">
+                                "{visit.medicalNotes}"
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* AI Diagnostics */}
+                  {currentUser.diagnoses && currentUser.diagnoses.length > 0 && (
+                    <div className="space-y-3 mt-6">
+                      <h4 className="text-xs font-black text-slate-500 uppercase flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>{language === 'uz' ? 'AI Diagnostika Natijalari' : 'AI Diagnostics'}</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {currentUser.diagnoses.map((diag: any, i: number) => (
+                          <div key={diag.id || i} className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl flex flex-col gap-2">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="text-xs font-black text-slate-800">Tish #{diag.toothNumber} ({diag.healthFactor})</p>
+                                <p className="text-[10px] text-emerald-600 font-bold flex gap-1 items-center mt-0.5">
+                                  <span>⚡ AI DStoma Tahlili</span>
+                                </p>
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-mono bg-white px-2 py-0.5 rounded shadow-xs">{new Date(diag.createdAt).toLocaleDateString()}</span>
+                            </div>
+                            <div className="text-[11px] text-slate-700 bg-white p-2.5 border border-slate-100 rounded-xl mt-1">
+                              <p className="font-extrabold text-emerald-700 mb-1">{diag.recommendedTreatment}</p>
+                              <p className="opacity-90 leading-relaxed text-[10px] text-slate-600 font-medium">{diag.diagnosticText}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(!currentUser.clinicVisits || currentUser.clinicVisits.length === 0) && (!currentUser.diagnoses || currentUser.diagnoses.length === 0) && (
+                    <div className="text-center py-8 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
+                      <span className="text-2xl text-slate-300 block mb-2">📂</span>
+                      <p className="text-xs text-slate-400 font-bold">{language === 'uz' ? 'Tibbiy tarix mavjud emas.' : 'No medical history found.'}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
           </div>

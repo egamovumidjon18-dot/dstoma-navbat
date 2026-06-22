@@ -15,6 +15,7 @@ export default function App() {
     doctors,
     services,
     queues,
+    patients,
     activeTab,
     setActiveTab,
     selectedClinic,
@@ -240,6 +241,7 @@ export default function App() {
                 doctors={doctors}
                 services={services}
                 queues={queues}
+                patients={patients}
                 onUpdateQueueStatus={handleUpdateQueueStatus}
                 selectedClinic={selectedClinic}
                 setActiveTab={setActiveTab}

@@ -344,7 +344,7 @@ export default function DirectorDashboard({
   const currentClinicId = clinicId || 'samarqand';
   const clinicDoctors = doctors.filter(d => d.clinicId === currentClinicId);
   const clinicServices = services.filter(s => s.clinicId === currentClinicId);
-  const clinicQueues = queues.filter(q => q.clinicId === currentClinicId);
+  const clinicQueues = queues.filter(q => q.clinicId === currentClinicId && q.passportSerial !== 'AA1234567');
 
   // Filter queues by status
   const pendingQueues = clinicQueues.filter(q => q.status === 'pending');

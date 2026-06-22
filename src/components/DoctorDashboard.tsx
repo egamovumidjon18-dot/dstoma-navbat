@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clinic, Doctor, Service, QueueItem } from '../types';
+import { Clinic, Doctor, Service, QueueItem, Patient } from '../types';
 import { TRANSLATIONS, Language, translateMedicalText } from '../translations';
 import { 
   Check, 
@@ -23,7 +23,10 @@ import {
   CalendarCheck2,
   Sparkles,
   Brain,
-  Info
+  Info,
+  Search,
+  ChevronDown,
+  FolderOpen
 } from 'lucide-react';
 
 interface DoctorDashboardProps {
@@ -31,7 +34,8 @@ interface DoctorDashboardProps {
   doctors: Doctor[];
   services: Service[];
   queues: QueueItem[];
-  onUpdateQueueStatus: (id: string, newStatus: QueueItem['status']) => void;
+  patients: Patient[];
+  onUpdateQueueStatus: (id: string, newStatus: QueueItem['status'], serviceId?: string, medicalNotes?: string) => void;
   selectedClinic: Clinic | null;
   setActiveTab?: (tab: 'bemor' | 'shifokor' | 'boshliq' | 'kod' | 'superadmin') => void;
   currentUser?: {
@@ -48,6 +52,7 @@ export default function DoctorDashboard({
   doctors,
   services,
   queues,
+  patients,
   onUpdateQueueStatus,
   selectedClinic,
   setActiveTab,
@@ -56,6 +61,7 @@ export default function DoctorDashboard({
 }: DoctorDashboardProps) {
   // Set current doctor based on logged in user or first doctor
   const [activeDoctorId, setActiveDoctorId] = useState<string>(currentUser?.id || 'doc_sm_1');
+  const [serviceSelections, setServiceSelections] = useState<Record<string, string>>({});
   const currentDoctor = doctors.find((d) => d.id === activeDoctorId) || doctors[0];
 
   // Translation Helper
@@ -152,6 +158,44 @@ export default function DoctorDashboard({
   const [avatarUrl, setAvatarUrl] = useState(currentDoctor?.image || '');
   const [password, setPassword] = useState('123456');
   const [profileSuccessMsg, setProfileSuccessMsg] = useState('');
+
+  // Service Selector Search
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [serviceSearchTerm, setServiceSearchTerm] = useState('');
+  const [openServiceCategory, setOpenServiceCategory] = useState<string>('');
+  const [medicalNotes, setMedicalNotes] = useState<Record<string, string>>({});
+  const [openPatientHistory, setOpenPatientHistory] = useState<Record<string, boolean>>({});
+
+  const getServiceCategory = (name: string): string => {
+    const n = name.toLowerCase();
+    if (n.includes('diagnostika') || n.includes('konsultatsiya') || n.includes('rentgen') || n.includes('snimka') || n.includes('kt')) return 'Diagnostika';
+    if (n.includes('oqartirish') || n.includes('zoom') || n.includes('bleaching')) return 'Tishlarni oqartirish';
+    if (n.includes('vinir') || n.includes('komponir') || n.includes('lyuminir')) return 'Vinirlar';
+    if (n.includes('implant') || n.includes('all-on-4') || n.includes('mega gen') || n.includes('osstem')) return 'Implantatsiya';
+    if (n.includes('protez') || n.includes('koronka') || n.includes('metallokera') || n.includes('sirqoniy') || n.includes('plastmassa')) return 'Protezlash';
+    if (n.includes('breket') || n.includes('plastinka') || n.includes('elayner') || n.includes('reteyner')) return 'Ortodontiya';
+    if (n.includes('bolalar') || n.includes('sut tish') || n.includes('karies s')) return 'Bolalar stomatologiyasi';
+    if (n.includes('olish') || n.includes('xirurg') || n.includes('operasiya') || n.includes('operatsiya') || n.includes('rezeksiya') || n.includes('kista') || n.includes('sinus')) return 'Xirurgiya';
+    if (n.includes('tosh') || n.includes('tozalash') || n.includes('gigiyena') || n.includes('polirovka') || n.includes('ftor') || n.includes('air flow')) return 'Profilaktika';
+    if (n.includes('karies') || n.includes('plomba') || n.includes('pulpit') || n.includes('abssess') || n.includes('davolash')) return 'Terapevtik stomatologiya';
+    return 'Boshqa xizmatlar';
+  };
+
+  const myClinicServices = services.filter(s => s.clinicId === currentDoctor?.clinicId);
+  const filteredServices = myClinicServices.filter(s => translateMedicalText(s.name, language).toLowerCase().includes(serviceSearchTerm.toLowerCase()));
+
+  const groupedServices: Record<string, typeof services> = {};
+  filteredServices.forEach(s => {
+    const cat = getServiceCategory(translateMedicalText(s.name, language));
+    if (!groupedServices[cat]) groupedServices[cat] = [];
+    groupedServices[cat].push(s);
+  });
+
+  const sortedCategories = [
+    "Diagnostika", "Terapevtik stomatologiya", "Tishlarni oqartirish", 
+    "Vinirlar", "Xirurgiya", "Protezlash", "Ortodontiya", 
+    "Bolalar stomatologiyasi", "Implantatsiya", "Profilaktika", "Boshqa xizmatlar"
+  ].filter(c => groupedServices[c] && groupedServices[c].length > 0);
 
   // Sync state if currentUser changes
   React.useEffect(() => {
@@ -527,48 +571,216 @@ export default function DoctorDashboard({
             {activeConsultingQueues.map((item) => {
               const srv = getServiceInfo(item.serviceId);
               const isCalling = item.status === 'calling';
+              const patientObj = patients.find(p => p.passportSerial === item.passportSerial || p.phone === item.patientPhone || (p.telegramChatId && p.telegramChatId === item.telegramChatId));
 
               return (
-                <div key={item.id} className="p-4 bg-emerald-50/40 border border-emerald-150/80 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="px-4 py-3 bg-emerald-600 text-white font-mono font-extrabold text-2xl rounded-2xl">
-                      #{item.number}
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-extrabold text-emerald-950">{item.patientName}</h4>
-                      <p className="text-xs text-slate-500 mt-1">
-                        {t("Xizmat")}: <strong className="text-slate-800">{translateMedicalText(srv?.name || '', language)}</strong> | {t("Telefon")}: <strong>{item.patientPhone}</strong>
-                      </p>
-                      
-                      <div className="mt-2.5 flex items-center gap-2">
-                        {isCalling ? (
-                          <span className="px-2.5 py-0.5 bg-orange-100 border border-orange-200 text-orange-850 text-[9px] font-extrabold rounded-md animate-pulse">
-                            {t("📣 KABINETGA CHAQIRILMOQDA (Signal monitorida yonmoqda)")}
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-0.5 bg-sky-100 border border-sky-200 text-sky-850 text-[9px] font-extrabold rounded-md">
-                            {t("🦷 QABUL REJIMIDA (Davolash ishlari faol bajarilmoqda)")}
-                          </span>
-                        )}
+                <div key={item.id} className="p-4 bg-emerald-50/40 border border-emerald-150/80 rounded-2xl flex flex-col gap-4">
+                  <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="px-4 py-3 bg-emerald-600 text-white font-mono font-extrabold text-2xl rounded-2xl">
+                        #{item.number}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-extrabold text-emerald-950">{item.patientName}</h4>
+                          {patientObj && (patientObj.clinicVisits?.length || patientObj.diagnoses?.length) ? (
+                            <button 
+                              onClick={() => setOpenPatientHistory(prev => ({...prev, [item.id]: !prev[item.id]}))}
+                              className="px-2 py-0.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 text-[10px] font-bold rounded flex items-center gap-1 transition-colors"
+                            >
+                              <FolderOpen className="w-3 h-3" /> Tarixni Ko'rish
+                            </button>
+                          ) : null}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {t("Xizmat")}: <strong className="text-slate-800">{translateMedicalText(srv?.name || '', language)}</strong> | {t("Telefon")}: <strong>{item.patientPhone}</strong>
+                        </p>
+                        
+                        <div className="mt-2.5 flex items-center gap-2">
+                          {isCalling ? (
+                            <span className="px-2.5 py-0.5 bg-orange-100 border border-orange-200 text-orange-850 text-[9px] font-extrabold rounded-md animate-pulse">
+                              {t("📣 KABINETGA CHAQIRILMOQDA (Signal monitorida yonmoqda)")}
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 bg-sky-100 border border-sky-200 text-sky-850 text-[9px] font-extrabold rounded-md">
+                              {t("🦷 QABUL REJIMIDA (Davolash ishlari faol bajarilmoqda)")}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => onUpdateQueueStatus(item.id, 'cancelled')}
-                      className="px-4 py-2 border border-slate-200 hover:bg-rose-50 hover:text-rose-600 text-rose-500 text-xs font-bold rounded-xl transition-all cursor-pointer"
-                    >
-                      {t("Bekor qilish")}
-                    </button>
+                  <div className="flex flex-col items-end gap-2">
+                    <div className="flex items-center gap-2 relative">
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenDropdownId(openDropdownId === item.id ? null : item.id);
+                            setServiceSearchTerm('');
+                          }}
+                          className="w-48 px-3 py-2 bg-white border border-slate-200 hover:border-emerald-400 rounded-lg text-xs font-bold text-left flex justify-between items-center transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                        >
+                          <span className="truncate pr-2 text-slate-700">
+                            {(serviceSelections[item.id] || item.serviceId) ? 
+                              translateMedicalText(services.find(s => s.id === (serviceSelections[item.id] || item.serviceId))?.name || '', language) 
+                              : t("-- Xizmatni tanlang --")}
+                          </span>
+                          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                        </button>
+                        
+                        {openDropdownId === item.id && (
+                          <div className="absolute top-full right-0 mt-2 w-64 md:w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden" onMouseLeave={() => setOpenDropdownId(null)}>
+                            <div className="p-2 border-b border-slate-100 bg-slate-50 relative">
+                              <input 
+                                type="text"
+                                autoFocus
+                                placeholder={t("Xizmatni qidiring...")}
+                                value={serviceSearchTerm}
+                                onChange={(e) => setServiceSearchTerm(e.target.value)}
+                                className="w-full text-xs font-bold py-2.5 pl-8 pr-3 bg-white border border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all placeholder-slate-400 text-slate-800"
+                              />
+                              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-4 top-5" />
+                            </div>
+                            <div className="max-h-64 overflow-y-auto w-full overscroll-contain bg-white">
+                              {sortedCategories.length === 0 ? (
+                                <div className="p-4 text-center text-xs font-bold text-slate-400">{t("Katalogda bunday nomli xizmat topilmadi 🔍")}</div>
+                              ) : (
+                                <div className="divide-y divide-slate-100">
+                                  {sortedCategories.map(cat => (
+                                    <div key={cat} className="bg-white">
+                                      {/* Category Header */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenServiceCategory(openServiceCategory === cat ? '' : cat);
+                                        }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+                                      >
+                                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${openServiceCategory === cat ? 'rotate-180' : ''}`} />
+                                        <div className="flex items-center gap-2 flex-1">
+                                          <span className="text-sm">
+                                            {cat === "Diagnostika" && "🔬"}
+                                            {cat === "Terapevtik stomatologiya" && "🦷"}
+                                            {cat === "Tishlarni oqartirish" && "✨"}
+                                            {cat === "Vinirlar" && "💎"}
+                                            {cat === "Xirurgiya" && "💉"}
+                                            {cat === "Protezlash" && "⚙️"}
+                                            {cat === "Ortodontiya" && "🪥"}
+                                            {cat === "Bolalar stomatologiyasi" && "🧸"}
+                                            {cat === "Implantatsiya" && "🔩"}
+                                            {cat === "Profilaktika" && "🫧"}
+                                            {cat === "Boshqa xizmatlar" && "📁"}
+                                          </span>
+                                          <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider">{cat}</span>
+                                        </div>
+                                      </button>
+                                      
+                                      {/* Services inside Category */}
+                                      {(openServiceCategory === cat || serviceSearchTerm !== '') && (
+                                        <div className="divide-y divide-slate-50 bg-white">
+                                          {groupedServices[cat].map(s => (
+                                            <button
+                                              key={s.id}
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setServiceSelections({...serviceSelections, [item.id]: s.id});
+                                                setOpenDropdownId(null);
+                                              }}
+                                              className="w-full text-left px-4 py-2.5 hover:bg-emerald-50 transition-colors flex flex-col justify-center gap-1 group"
+                                            >
+                                              <span className="text-[11px] font-bold text-slate-800 group-hover:text-emerald-700 transition-colors leading-tight">{translateMedicalText(s.name, language)}</span>
+                                              <span className="text-[10px] font-mono font-bold text-emerald-600">{s.price.toLocaleString('uz-UZ')} UZS</span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {(serviceSelections[item.id] || item.serviceId) && (
+                        <span className="text-xs font-bold text-emerald-600 ml-2 whitespace-nowrap">
+                          {services.find(s => s.id === (serviceSelections[item.id] || item.serviceId))?.price.toLocaleString('uz-UZ')} UZS
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onUpdateQueueStatus(item.id, 'cancelled')}
+                        className="px-4 py-2 border border-slate-200 hover:bg-rose-50 hover:text-rose-600 text-rose-500 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                      >
+                        {t("Bekor qilish")}
+                      </button>
 
-                    <button
-                      onClick={() => onUpdateQueueStatus(item.id, 'completed')}
-                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-extrabold rounded-xl shadow-md transition-all cursor-pointer"
-                    >
-                      {t("Davolashni yakunlash ✓")}
-                    </button>
+                      <button
+                        disabled={!serviceSelections[item.id] && !item.serviceId}
+                        onClick={() => onUpdateQueueStatus(item.id, 'completed', serviceSelections[item.id] || item.serviceId, medicalNotes[item.id])}
+                        className={`px-5 py-2.5 text-white text-xs font-extrabold rounded-xl shadow-md transition-all cursor-pointer ${(!serviceSelections[item.id] && !item.serviceId) ? 'bg-slate-300 pointer-events-none' : 'bg-emerald-600 hover:bg-emerald-700 active:scale-95'}`}
+                      >
+                        {t("Davolashni yakunlash ✓")}
+                      </button>
+                    </div>
                   </div>
+                  </div>
+                  {/* Medical Notes Input */}
+                  <div className="mt-4 pt-3 border-t border-slate-100">
+                    <textarea 
+                      placeholder={t("bemorning tibbiy tarixi uchun qaydlar... (ixtiyoriy)")} 
+                      className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400" 
+                      rows={2}
+                      value={medicalNotes[item.id] || ''}
+                      onChange={(e) => setMedicalNotes(prev => ({...prev, [item.id]: e.target.value}))}
+                    ></textarea>
+                  </div>
+                  {/* Patient History Accordion */}
+                  {openPatientHistory[item.id] && patientObj && (
+                    <div className="mt-3 pt-3 border-t border-slate-100/60 text-left bg-white rounded-xl p-4 shadow-sm border">
+                      <h4 className="text-xs font-black text-slate-700 uppercase tracking-widest mb-3 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-indigo-500"></span>{t("Tibbiy Tarix (Medical History)")}</h4>
+                      
+                      {patientObj.clinicVisits && patientObj.clinicVisits.length > 0 && (
+                        <div className="space-y-2 mb-4">
+                          <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t("Shifokor Ko'riklari")}</h5>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {patientObj.clinicVisits.map((v: any, i: number) => (
+                              <div key={v.id || i} className="p-3 bg-slate-50 border border-slate-100 rounded-lg">
+                                <div className="flex justify-between">
+                                  <span className="text-[11px] font-black">{v.serviceName}</span>
+                                  <span className="text-[9px] text-slate-400 font-mono">{new Date(v.date).toLocaleDateString()}</span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 mt-0.5">Dr. {v.doctorName}</div>
+                                {v.medicalNotes && <p className="text-[10px] text-slate-600 mt-1 italic border-l-2 border-indigo-300 pl-2">"{v.medicalNotes}"</p>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {patientObj.diagnoses && patientObj.diagnoses.length > 0 && (
+                        <div className="space-y-2">
+                          <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t("AI Diagnostika Natijalari")}</h5>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {patientObj.diagnoses.map((d: any, i: number) => (
+                              <div key={d.id || i} className="p-3 bg-emerald-50 border border-emerald-100 rounded-lg">
+                                <div className="flex justify-between">
+                                  <span className="text-[11px] font-black text-emerald-800">Tish #{d.toothNumber} ({d.healthFactor})</span>
+                                  <span className="text-[9px] text-emerald-600 font-mono">{new Date(d.createdAt).toLocaleDateString()}</span>
+                                </div>
+                                <div className="text-[10px] font-bold text-emerald-700 mt-1">{d.recommendedTreatment}</div>
+                                <p className="text-[9px] text-slate-600 mt-1">{d.diagnosticText}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
