@@ -970,8 +970,10 @@ Target language for all text strings: ${requestedLang === 'uz' ? 'Uzbek (uz)' : 
     if (image && image.data && image.mimeType) {
       promptText += `\n\n[IMAGE INCLUDED] A physical picture has been provided by the patient. 
 FIRST, critically verify if the image actually contains teeth, a mouth, or a dental X-ray. 
-If the image is completely unrelated to dentistry (e.g., a car, a landscape, an animal), you MUST clearly state in the 'diagnosticText' that the provided image does not appear to be dental-related and cannot be analyzed. 
-If it IS a dental image, please visually inspect it carefully for any visible dental pathology (such as cavities, fractures, discoloration, dental plaque, tartar, gum recession, swelling or signs of infection). Reflect your findings in your response.`;
+If the image is completely unrelated to dentistry (e.g., a car, a landscape, an animal, a random object), you MUST set 'isDentalRelated' to false and clearly state in the 'diagnosticText' that the provided image does not appear to be dental-related. 
+If it IS a dental image, set 'isDentalRelated' to true and carefully analyze it for any visible dental pathology (cavities, fractures, discoloration). Reflect your findings.`;
+    } else {
+      promptText += `\n\n[NO IMAGE PROVIDED] The user has not provided an image. Set 'isDentalRelated' to true.`;
     }
 
     promptText += `\n\nPlease analyze the symptoms, tooth location, pathic indicators, and generate a strict, clean clinical assessment.
@@ -1005,8 +1007,9 @@ Return the JSON response adhering strictly to this schema:
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
-          required: ["enamelAbrasion", "healthFactor", "recommendedTreatment", "diagnosticText", "actionPlan"],
+          required: ["isDentalRelated", "enamelAbrasion", "healthFactor", "recommendedTreatment", "diagnosticText", "actionPlan"],
           properties: {
+            isDentalRelated: { type: Type.BOOLEAN, description: "Set to false ONLY if an image is provided and it does NOT picture teeth, dental x-rays, or oral cavity." },
             enamelAbrasion: { type: Type.STRING },
             healthFactor: { type: Type.STRING },
             recommendedTreatment: { type: Type.STRING },

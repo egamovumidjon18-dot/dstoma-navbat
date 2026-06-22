@@ -621,12 +621,23 @@ export default function ClientDashboard({
       }
       const data = await response.json();
       setAiOutput(data);
-      applyAiDiagnosticToTooth(selectedToothIndex, data);
+      
+      if (data.isDentalRelated === false) {
+        showToast(
+          language === 'uz' ? 'Diqqat: Yuklangan rasm tishlarga taalluqli emas!' : language === 'ru' ? 'Внимание: Загруженное изображение не относится к зубам!' : 'Warning: Uploaded image is not related to teeth!',
+          'error'
+        );
+      } else {
+        applyAiDiagnosticToTooth(selectedToothIndex, data);
+      }
+      
       await saveDiagnosisForPatient(data);
-      showToast(
-        language === 'uz' ? 'AI diagnostika muvaffaqiyatli yakunlandi!' : language === 'ru' ? 'ИИ диагностика завершена успешно!' : 'AI diagnostics computed successfully!',
-        'success'
-      );
+      if (data.isDentalRelated !== false) {
+        showToast(
+          language === 'uz' ? 'AI diagnostika muvaffaqiyatli yakunlandi!' : language === 'ru' ? 'ИИ диагностика завершена успешно!' : 'AI diagnostics computed successfully!',
+          'success'
+        );
+      }
     } catch (e: any) {
       console.error('AI telemetry processing error, falling back to local diagnostics', e);
       
@@ -1082,6 +1093,7 @@ export default function ClientDashboard({
       <AnimatePresence>
         {toastMsg && (
           <motion.div
+            key="toast"
             initial={{ opacity: 0, y: -50, x: "-50%", scale: 0.95 }}
             animate={{ opacity: 1, y: 0, x: "-50%", scale: 1 }}
             exit={{ opacity: 0, y: -20, x: "-50%", scale: 0.95 }}
