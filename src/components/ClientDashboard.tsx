@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clinic, Doctor, Service, QueueItem, Patient, ToothDiagnosis } from '../types';
 import { DjangoAPI, getApiUrl } from '../services/api';
-import { TRANSLATIONS, Language } from '../translations';
+import { TRANSLATIONS, Language, translateMedicalText } from '../translations';
 import ThreeDentalModel from './ThreeDentalModel';
 import ClinicMap from './ClinicMap';
 import { 
@@ -1032,26 +1032,26 @@ export default function ClientDashboard({
   const getServiceCategory = (name: string): string => {
     const n = name.toLowerCase();
     
-    if (n.includes('diagnostika') || n.includes('konsultasiya') || n.includes('rentgen') || n.includes('snimk')) return 'Diagnostika';
-    if (n.includes('oqartirish') || n.includes('bleaching') || n.includes('zoom')) return 'Tishlarni oqartirish';
+    if (n.includes('diagnostika') || n.includes('konsultatsiya') || n.includes('rentgen') || n.includes('snimka')) return 'Diagnostika';
+    if (n.includes('oqartirish') || n.includes('zoom') || n.includes('bleaching')) return 'Tishlarni oqartirish';
     if (n.includes('vinir') || n.includes('komponir') || n.includes('lyuminir')) return 'Vinirlar';
-    if (n.includes('implant') || n.includes('all-on-4') || n.includes('mega gen') || n.includes('osstem') || n.includes('implantatsiya')) return 'Implantatsiya';
-    if (n.includes('protez') || n.includes('koronka') || n.includes('metallokera') || n.includes('sirkoniy') || n.includes('sirqoniy') || n.includes('plastmassa koronka')) return 'Protezlash';
-    if (n.includes('breket') || n.includes('plastinka') || n.includes('reteyner') || n.includes('elayner')) return 'Ortodontiya';
-    if (n.includes('bolalar') || n.includes('sut tish') || n.includes('bolalarda')) return 'Bolalar stomatologiyasi';
-    if (n.includes('olish') || n.includes('xirurg') || n.includes('operasiya') || n.includes('operatsiya') || n.includes('rezeksiya') || n.includes('kista') || n.includes('sinus') || n.includes('loskut')) return 'Xirurgiya';
+    if (n.includes('implant') || n.includes('all-on-4') || n.includes('mega gen') || n.includes('osstem')) return 'Implantatsiya';
+    if (n.includes('protez') || n.includes('koronka') || n.includes('metallokera') || n.includes('sirqoniy') || n.includes('plastmassa')) return 'Protezlash';
+    if (n.includes('breket') || n.includes('plastinka') || n.includes('elayner') || n.includes('reteyner')) return 'Ortodontiya';
+    if (n.includes('bolalar') || n.includes('sut tish')) return 'Bolalar stomatologiyasi';
+    if (n.includes('olish') || n.includes('xirurg') || n.includes('operasiya') || n.includes('operatsiya') || n.includes('rezeksiya') || n.includes('kista') || n.includes('sinus')) return 'Xirurgiya';
     if (n.includes('tosh') || n.includes('tozalash') || n.includes('gigiyena') || n.includes('polirovka') || n.includes('ftor') || n.includes('air flow')) return 'Profilaktika';
-    if (n.includes('karies') || n.includes('plomba') || n.includes('pulpit') || n.includes('abssess')) return 'Terapevtik stomatologiya';
+    if (n.includes('karies') || n.includes('plomba') || n.includes('pulpit') || n.includes('abssess') || n.includes('davolash')) return 'Terapevtik stomatologiya';
     
-    return 'Boshqa';
+    return 'Boshqa xizmatlar';
   };
 
   const isPopularService = (name: string): boolean => {
     const n = name.toLowerCase();
-    if ((n.includes('karies') || n.includes('davolash')) && !n.includes('bolalar')) return true;
+    if (n.includes('karies') || n.includes('kariesni davolash')) return true;
     if (n.includes('tish olish') && !n.includes('bolalar')) return true;
-    if (n.includes('kompozit') && n.includes('plomba')) return true;
-    if (n.includes('tish tosh') || n.includes('toshlarini')) return true;
+    if (n.includes('kompozit plomba') || n.includes('plomba')) return true;
+    if (n.includes('tish toshlarini') || n.includes('tozalash')) return true;
     return false;
   };
 
@@ -2121,39 +2121,7 @@ export default function ClientDashboard({
                 </div>
               </div>
 
-              {/* Bot settings container card */}
-              <div className="bg-white text-slate-800 rounded-3xl p-6 border border-slate-150 shadow-[0_10px_30px_rgba(0,0,0,0.02)] hover:shadow-[0_15px_40px_rgba(0,0,0,0.04)] transition-all">
-                <div className="flex items-center gap-2.5 mb-3">
-                  <span className="text-2xl">🤖</span>
-                  <h3 className="text-xs font-black text-slate-950 uppercase tracking-widest">
-                    Telegram Bot Xizmati
-                  </h3>
-                </div>
-                <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
-                  Navbat holatini telegram orqali tekshirish uchun: <a href="https://t.me/dstoma_bot" target="_blank" rel="noreferrer" className="text-indigo-650 font-bold underline hover:text-indigo-850">@dstoma_bot</a> ga o'tib, <code className="bg-slate-100 px-1 py-0.5 font-bold font-mono text-[10px] rounded text-indigo-600">/start</code> yozing va Chat ID ni kiriting.
-                </p>
-
-                <div className="space-y-2.5">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
-                    Telegram Chat ID
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={telegramIdInput}
-                      onChange={(e) => setTelegramIdInput(e.target.value)}
-                      placeholder="Masalan: 57896431"
-                      className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-black text-slate-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 flex-1"
-                    />
-                    <button
-                      onClick={handleSaveTelegram}
-                      className="px-4 bg-emerald-500 hover:bg-emerald-600 font-extrabold text-xs text-white rounded-xl transition-all cursor-pointer shadow-sm shadow-emerald-250/20 active:scale-95 text-center"
-                    >
-                      Ulash
-                    </button>
-                  </div>
-                </div>
-              </div>
+              {/* Bot settings container card removed */}
 
             </div>
 
@@ -2161,23 +2129,35 @@ export default function ClientDashboard({
             <div className="lg:col-span-8 space-y-6">
               
               {/* Online queue booking container form */}
-              <div id="booking_registration_form_anchor" className="bg-gradient-to-br from-white to-slate-50 text-slate-800 rounded-3xl p-6 md:p-8 border border-slate-150 shadow-[0_10px_35px_rgba(30,41,59,0.03)] hover:shadow-[0_15px_45px_rgba(15,23,42,0.06)] transition-all">
-                <div className="flex items-center justify-between mb-6 border-b border-indigo-50 pb-4">
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-2xl">⚡</span>
+              <div id="booking_registration_form_anchor" className="relative bg-white text-slate-800 rounded-[2rem] p-6 text-left md:p-8 border border-white/40 shadow-[0_15px_60px_-15px_rgba(0,0,0,0.05),0_0_0_1px_rgba(226,232,240,0.5)] hover:shadow-[0_20px_80px_-15px_rgba(0,0,0,0.08),0_0_0_1px_rgba(99,102,241,0.2)] transition-all overflow-hidden duration-500">
+                {/* Decorative background elements */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-indigo-100/40 via-purple-100/20 to-transparent rounded-bl-full pointer-events-none -mr-8 -mt-8" />
+                <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-emerald-100/30 via-teal-50/10 to-transparent rounded-tr-full pointer-events-none -ml-8 -mb-8" />
+                
+                <div className="flex items-center justify-between mb-8 border-b border-indigo-50/60 pb-5 relative z-10">
+                  <div className="flex items-center gap-3.5">
+                    <div className="relative flex items-center justify-center w-12 h-12 bg-gradient-to-tr from-orange-400 to-amber-300 rounded-2xl shadow-lg shadow-orange-500/20 rotate-3">
+                      <span className="text-2xl drop-shadow-md -rotate-3">⚡</span>
+                    </div>
                     <div>
-                      <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider leading-none">
-                        Tezkor Navbat Olish
+                      <h3 className="text-base font-black text-slate-900 uppercase tracking-widest leading-none mb-1.5 flex items-center gap-2">
+                        {language === 'uz' ? "Tezkor Navbat Olish" : "Quick Booking"}
                       </h3>
-                      <p className="text-[10px] text-emerald-600 font-bold mt-1.5 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> Hozir navbat yo'nalishlarida bo'sh joylar talaygina!
+                      <p className="text-[11px] text-slate-500 font-bold flex items-center gap-1.5">
+                        <span className="relative flex h-2.5 w-2.5 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-sm shadow-emerald-500/50"></span>
+                        </span>
+                        {language === 'uz' ? "Hozir navbat yo'nalishlarida bo'sh joylar talaygina!" : "There are many empty spots open for queues!"}
                       </p>
                     </div>
                   </div>
-                  <span className="px-3 py-1 bg-amber-50 text-amber-700 text-[9px] font-black tracking-widest uppercase rounded-lg">E-TICKET</span>
+                  <span className="shrink-0 px-3.5 py-1.5 bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 text-[10px] font-black tracking-widest uppercase rounded-xl border border-amber-200/50 shadow-inner">
+                    E-TICKET
+                  </span>
                 </div>
 
-                <form onSubmit={handleBookQueue} className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <form onSubmit={handleBookQueue} className="grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">
                   <div className="md:col-span-2">
                     <label className="text-xs font-black text-slate-700 block mb-1.5">
                       Shifokorni tanlang *
@@ -2197,59 +2177,57 @@ export default function ClientDashboard({
                   </div>
 
 
-                  {/* INTEGRATED PREMIUM SERVICE SELECTOR (DARK MODE) */}
+                  {/* INTEGRATED SERVICE SELECTOR (LIGHT/CLEAN THEME) */}
                   <div className="md:col-span-2 mt-4">
-                    <div className="bg-[#0b1226]/90 border border-[#1e2f50] rounded-3xl p-5 md:p-6 space-y-4 shadow-[0_15px_40px_rgba(0,0,0,0.15)] relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
-                      
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#132039] pb-3.5 relative z-10">
+                    <div className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 space-y-5 shadow-sm relative overflow-hidden">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
                         <div>
-                          <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-lg border border-emerald-500/20 flex items-center gap-1.5 w-max">
-                             <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></div>
-                             {language === 'uz' ? "Klinika Xizmatlar Katalogi" : "Catalog of Services"}
-                          </span>
-                          <h4 className="text-xs font-black text-slate-100 uppercase tracking-widest mt-2 block">
-                            {language === 'uz' ? "Muolajani tanlang:" : "Select Treatment:"}
+                          <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                            <span className="text-emerald-500 text-lg">🏥</span> {language === 'uz' ? "Klinika Xizmatlar Katalogi" : "Catalog of Services"}
                           </h4>
+                          <p className="text-xs font-semibold text-slate-500 mt-1">
+                            {language === 'uz' ? "O'zingizga kerakli tibbiy muolajani tanlang" : "Select your required treatment"}
+                          </p>
                         </div>
-                        <span className="text-[10.5px] text-slate-400 font-semibold bg-[#111a33] px-3 py-1.5 rounded-lg border border-[#1e2f50]">
-                          {language === 'uz' ? "Jami" : "Total"}: <strong className="text-emerald-400 font-mono">{clinicServices.length}</strong>
+                        <span className="text-[11px] text-slate-500 font-bold bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                          {language === 'uz' ? "Jami" : "Total"}: <strong className="text-slate-800">{clinicServices.length}</strong>
                         </span>
                       </div>
 
-                      <div className="relative mb-5 z-10">
+                      <div className="relative z-10">
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                          <Search className="w-4 h-4" />
+                          <Search className="w-4.5 h-4.5" />
                         </span>
                         <input 
                           type="text" 
                           placeholder={language === 'uz' ? "Xizmat nomini qidiring (Masalan: tish olish, plomba...)" : "Поиск услуг..."}
                           value={servicesSearchTerm}
                           onChange={e => setServicesSearchTerm(e.target.value)}
-                          className="w-full bg-[#0d1428] text-slate-100 border border-[#263b65] rounded-xl pl-11 pr-4 py-3.5 text-xs font-semibold focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none transition-all placeholder-slate-500"
+                          className="w-full bg-slate-50 text-slate-800 border border-slate-200 rounded-xl pl-12 pr-4 py-3.5 text-sm font-semibold focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none transition-all placeholder-slate-400"
                         />
                       </div>
 
                       {clinicServices.length === 0 ? (
-                        <div className="text-center py-6 text-xs text-slate-500 font-bold relative z-10">
+                        <div className="text-center py-6 text-sm text-slate-500 font-bold">
                           {language === 'uz' ? "Ushbu filialda hozircha faol tibbiy xizmatlar topilmadi." : "No active medical services have been found for this branch yet."}
                         </div>
                       ) : (
-                        <div className="space-y-3 relative z-10">
+                        <div className="space-y-5 relative z-10">
+                          {/* Popular Services Section */}
                           {!servicesSearchTerm && groupedServicesData.popular.length > 0 && (
-                            <div className="border border-[#172545] rounded-2xl overflow-hidden bg-[#0a1020]/90">
+                            <div className="border border-orange-200 rounded-2xl overflow-hidden bg-white">
                               <button 
                                 onClick={(e) => { e.preventDefault(); setOpenServiceCategory(openServiceCategory === "Mashhur xizmatlar" ? "" : "Mashhur xizmatlar"); }}
-                                className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-[#111a33] to-[#0a1020] hover:bg-[#15203f] transition-colors cursor-pointer"
+                                className="w-full flex items-center justify-between p-4 bg-orange-50/50 hover:bg-orange-50 transition-colors cursor-pointer"
                                 type="button"
                               >
-                                <div className="flex items-center gap-2.5">
-                                  <span className="text-amber-400">🔥</span>
-                                  <span className="text-xs font-black uppercase tracking-wider text-slate-100">
-                                    Mashhur xizmatlar
+                                <div className="flex items-center gap-3">
+                                  <span className="text-orange-500 text-lg">🔥</span>
+                                  <span className="text-sm font-black uppercase tracking-wider text-orange-600">
+                                    {language === 'uz' ? "Mashhur xizmatlar" : "Popular services"}
                                   </span>
                                 </div>
-                                {openServiceCategory === "Mashhur xizmatlar" ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                                {openServiceCategory === "Mashhur xizmatlar" ? <ChevronUp className="w-5 h-5 text-orange-500" /> : <ChevronDown className="w-5 h-5 text-orange-400" />}
                               </button>
                               
                               <AnimatePresence>
@@ -2260,7 +2238,7 @@ export default function ClientDashboard({
                                     exit={{ height: 0, opacity: 0 }}
                                     className="overflow-hidden"
                                   >
-                                    <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-[#172545]/50">
+                                    <div className="p-3 grid grid-cols-1 gap-3 border-t border-orange-100 bg-white">
                                       {groupedServicesData.popular.map(srv => {
                                         const isSelected = bookingServiceId === srv.id;
                                         return (
@@ -2268,24 +2246,25 @@ export default function ClientDashboard({
                                           key={`pop-${srv.id}`} 
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            setBookingServiceId(srv.id);
+                                            setBookingServiceId(isSelected ? '' : srv.id);
                                           }}
-                                          className={`cursor-pointer border rounded-xl p-3.5 flex flex-col justify-between transition-all group relative overflow-hidden ${isSelected ? 'bg-[#152445] border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : 'bg-[#101830] border-[#1b2a4e] hover:border-[#2b4175]'}`}
+                                          className={`cursor-pointer border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all group relative bg-white ${isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md' : 'border-slate-200 hover:border-emerald-300 hover:shadow-sm'}`}
                                         >
-                                           {isSelected && (
-                                              <div className="absolute top-2 right-2 flex items-center justify-center w-5 h-5 bg-emerald-500 text-slate-900 rounded-lg text-[10px] font-black">
-                                                ✓
-                                              </div>
-                                           )}
                                            <div>
-                                            <h5 className={`text-sm font-black mb-2 leading-tight transition-colors pr-6 ${isSelected ? 'text-emerald-400' : 'text-white group-hover:text-amber-200'}`}>
-                                              {srv.name}
+                                            <h5 className={`text-[15px] font-bold mb-1.5 leading-snug transition-colors pr-6 ${isSelected ? 'text-emerald-700' : 'text-slate-800'}`}>
+                                              {translateMedicalText(srv.name, language)}
                                             </h5>
+                                            <span className="text-lg font-black text-emerald-600">
+                                               {srv.price.toLocaleString('uz-UZ')} <span className="text-[12px] font-bold lowercase text-emerald-600">uzs</span>
+                                            </span>
                                            </div>
-                                           <div className="flex items-end justify-between mt-3 pt-3 border-t border-[#1b2a4e]/50">
-                                             <span className={`text-base font-black tracking-tight ${isSelected ? 'text-emerald-400' : 'text-emerald-500/80'}`}>
-                                               {srv.price.toLocaleString('uz-UZ')} <span className="text-[10px] font-semibold uppercase">UZS</span>
-                                             </span>
+                                           <div className="shrink-0 flex items-center justify-end">
+                                              <button
+                                                type="button"
+                                                className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${isSelected ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'bg-transparent text-emerald-600 border border-emerald-500 group-hover:bg-emerald-50'}`}
+                                              >
+                                                {isSelected ? "✅ TANLANGAN" : "NAVBAT OLISH"}
+                                              </button>
                                            </div>
                                         </div>
                                       )})}
@@ -2296,81 +2275,86 @@ export default function ClientDashboard({
                             </div>
                           )}
 
-                          {/* Render Categories */}
-                          {sortedCategories.map(cat => (
-                            <div key={cat} className="border border-[#172545] rounded-2xl overflow-hidden bg-[#0a1020]/90">
-                              <button 
-                                onClick={(e) => { e.preventDefault(); setOpenServiceCategory(openServiceCategory === cat ? "" : cat); }}
-                                className="w-full flex items-center justify-between p-4 bg-[#0d1428] hover:bg-[#121c38] transition-colors cursor-pointer"
-                                type="button"
-                              >
-                                <div className="flex items-center gap-2.5">
-                                  <span className="text-slate-400">
-                                     {cat === "Diagnostika" && "🔬"}
-                                     {cat === "Terapevtik stomatologiya" && "🦷"}
-                                     {cat === "Tishlarni oqartirish" && "✨"}
-                                     {cat === "Vinirlar" && "💎"}
-                                     {cat === "Xirurgiya" && "🩸"}
-                                     {cat === "Protezlash" && "🦿"}
-                                     {cat === "Ortodontiya" && "🗜️"}
-                                     {cat === "Bolalar stomatologiyasi" && "🧸"}
-                                     {cat === "Implantatsiya" && "🔩"}
-                                     {cat === "Profilaktika" && "🧼"}
-                                     {cat === "Boshqa" && "📌"}
-                                  </span>
-                                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-200 text-left">
-                                    {cat}
-                                  </span>
-                                  <span className="bg-[#172545] text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full ml-1">
-                                    {groupedServicesData.categories[cat].length}
-                                  </span>
-                                </div>
-                                {openServiceCategory === cat ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
-                              </button>
-
-                              <AnimatePresence>
-                                {(openServiceCategory === cat || servicesSearchTerm) && (
-                                  <motion.div 
-                                    initial={{ height: 0, opacity: 0 }}
-                                    animate={{ height: 'auto', opacity: 1 }}
-                                    exit={{ height: 0, opacity: 0 }}
-                                    className="overflow-hidden bg-[#080c18]"
+                          {/* Render Categories in a single unified list */}
+                          {sortedCategories.length > 0 && (
+                            <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white divide-y divide-slate-100">
+                              {sortedCategories.map(cat => (
+                                <div key={cat} className="bg-white">
+                                  <button 
+                                    onClick={(e) => { e.preventDefault(); setOpenServiceCategory(openServiceCategory === cat ? "" : cat); }}
+                                    className="w-full flex items-center justify-between p-4 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
+                                    type="button"
                                   >
-                                    <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-[#172545]/50">
-                                      {groupedServicesData.categories[cat].map(srv => {
-                                        const isSelected = bookingServiceId === srv.id;
-                                        return (
-                                        <div 
-                                          key={srv.id} 
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setBookingServiceId(srv.id);
-                                          }}
-                                          className={`cursor-pointer border rounded-xl p-3.5 flex flex-col justify-between transition-all group relative ${isSelected ? 'bg-[#152445] border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : 'bg-[#11192b] border-[#1b2a4e] hover:border-[#2b4175]'}`}
-                                        >
-                                          {isSelected && (
-                                              <div className="absolute top-2 right-2 flex items-center justify-center w-5 h-5 bg-emerald-500 text-slate-900 rounded-lg text-[10px] font-black">
-                                                ✓
-                                              </div>
-                                           )}
-                                           <div>
-                                            <h5 className={`text-sm font-bold mb-2 leading-snug transition-colors pr-6 ${isSelected ? 'text-emerald-400' : 'text-slate-200 group-hover:text-white'}`}>
-                                              {srv.name}
-                                            </h5>
-                                           </div>
-                                           <div className="flex items-end justify-between mt-3 pt-3 border-t border-[#1b2a4e]/50">
-                                             <span className={`text-[15px] font-black tracking-tight ${isSelected ? 'text-emerald-400' : 'text-emerald-500/80'}`}>
-                                               {srv.price.toLocaleString('uz-UZ')} <span className="text-[9px] font-semibold uppercase tracking-widest ml-0.5">UZS</span>
-                                             </span>
-                                           </div>
-                                        </div>
-                                      )})}
+                                    <div className="flex items-center gap-3.5">
+                                      <span className="text-xl flex items-center justify-center w-8">
+                                        {cat === "Diagnostika" && "🔬"}
+                                        {cat === "Terapevtik stomatologiya" && "🦷"}
+                                        {cat === "Tishlarni oqartirish" && "✨"}
+                                        {cat === "Vinirlar" && "💎"}
+                                        {cat === "Xirurgiya" && "🩸"}
+                                        {cat === "Protezlash" && "🦿"}
+                                        {cat === "Ortodontiya" && "⚙️"}
+                                        {cat === "Bolalar stomatologiyasi" && "🧸"}
+                                        {cat === "Implantatsiya" && "🔩"}
+                                        {cat === "Profilaktika" && "🧼"}
+                                        {cat === "Boshqa xizmatlar" && "📌"}
+                                      </span>
+                                      <span className="text-sm font-black uppercase tracking-widest text-[#1e293b] text-left">
+                                        {translateMedicalText(cat, language)}
+                                      </span>
+                                      <span className="bg-slate-100/80 text-slate-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-slate-200/60 ml-1">
+                                        {groupedServicesData.categories[cat].length}
+                                      </span>
                                     </div>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
+                                    {openServiceCategory === cat ? <ChevronUp className="w-5 h-5 text-slate-300 shrink-0" /> : <ChevronDown className="w-5 h-5 text-slate-300 shrink-0" />}
+                                  </button>
+
+                                  <AnimatePresence>
+                                    {(openServiceCategory === cat || servicesSearchTerm) && (
+                                      <motion.div 
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        className="overflow-hidden bg-slate-50 flex flex-col"
+                                      >
+                                        <div className="p-3 grid grid-cols-1 gap-3 border-t border-slate-100">
+                                          {groupedServicesData.categories[cat].map(srv => {
+                                            const isSelected = bookingServiceId === srv.id;
+                                            return (
+                                            <div 
+                                              key={srv.id} 
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setBookingServiceId(isSelected ? '' : srv.id);
+                                              }}
+                                              className={`cursor-pointer border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all group relative bg-white ${isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md' : 'border-slate-200 hover:border-emerald-300 hover:shadow-sm'}`}
+                                            >
+                                              <div>
+                                                <h5 className={`text-[15px] font-bold mb-1.5 leading-snug transition-colors pr-6 ${isSelected ? 'text-emerald-700' : 'text-slate-800'}`}>
+                                                  {translateMedicalText(srv.name, language)}
+                                                </h5>
+                                                <span className="text-lg font-black text-emerald-600">
+                                                  {srv.price.toLocaleString('uz-UZ')} <span className="text-[12px] font-bold lowercase text-emerald-600">uzs</span>
+                                                </span>
+                                              </div>
+                                              <div className="shrink-0 flex items-center justify-end">
+                                                  <button
+                                                    type="button"
+                                                    className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${isSelected ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'bg-transparent text-emerald-600 border border-emerald-500 group-hover:bg-emerald-50'}`}
+                                                  >
+                                                    {isSelected ? "✅ TANLANGAN" : "NAVBAT OLISH"}
+                                                  </button>
+                                              </div>
+                                            </div>
+                                          )})}
+                                        </div>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                          )}
                         </div>
                       )}
                     </div>
@@ -2446,27 +2430,27 @@ export default function ClientDashboard({
                               {doc?.name || 'Dr. Umidjon'}
                             </td>
                             <td className="px-4 py-4 text-slate-650 font-semibold">
-                              {srv?.name || 'Konsultatsiya'}
+                              {translateMedicalText(srv?.name || 'Konsultatsiya', language)}
                             </td>
                             <td className="px-4 py-4 text-slate-500 font-mono text-center">
-                              Bugun
+                              {language === 'uz' ? 'Bugun' : language === 'ru' ? 'Сегодня' : 'Today'}
                             </td>
                             <td className="px-4 py-4 text-center">
                               {item.status === 'completed' ? (
                                 <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 font-bold rounded-full text-[10px] inline-flex items-center gap-1 border border-emerald-200/50">
-                                  ✔ Tugagan
+                                  ✔ {language === 'uz' ? 'Tugagan' : language === 'ru' ? 'Завершено' : 'Completed'}
                                 </span>
                               ) : item.status === 'cancelled' ? (
                                 <span className="px-2.5 py-1 bg-slate-100 text-slate-400 font-bold rounded-full text-[10px] inline-flex items-center gap-1">
-                                  ✕ Bekor qilingan
+                                  ✕ {language === 'uz' ? 'Bekor qilingan' : language === 'ru' ? 'Отменено' : 'Cancelled'}
                                 </span>
                               ) : item.status === 'in_progress' || item.status === 'calling' ? (
                                 <span className="px-2.5 py-1 bg-blue-50 text-blue-700 font-bold rounded-full text-[10px] inline-flex items-center gap-1 border border-blue-200 animate-pulse">
-                                  缾 Shifokor qabulida
+                                  {language === 'uz' ? '缾 Shifokor qabulida' : language === 'ru' ? '缾 На приеме' : '缾 In progress'}
                                 </span>
                               ) : (
                                 <span className="px-2.5 py-1 bg-amber-50 text-amber-700 font-bold rounded-full text-[10px] inline-flex items-center gap-1 border border-amber-250/55">
-                                  ⏳ Kutmoqda
+                                  ⏳ {language === 'uz' ? 'Kutmoqda' : language === 'ru' ? 'Ожидание' : 'Waiting'}
                                 </span>
                               )}
                             </td>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Clinic, Doctor, Service, QueueItem } from '../types';
-import { TRANSLATIONS, Language } from '../translations';
+import { TRANSLATIONS, Language, translateMedicalText } from '../translations';
 import { 
   Check, 
   X, 
@@ -537,7 +537,7 @@ export default function DoctorDashboard({
                     <div>
                       <h4 className="text-sm font-extrabold text-emerald-950">{item.patientName}</h4>
                       <p className="text-xs text-slate-500 mt-1">
-                        {t("Xizmat")}: <strong className="text-slate-800">{srv?.name}</strong> | {t("Telefon")}: <strong>{item.patientPhone}</strong>
+                        {t("Xizmat")}: <strong className="text-slate-800">{translateMedicalText(srv?.name || '', language)}</strong> | {t("Telefon")}: <strong>{item.patientPhone}</strong>
                       </p>
                       
                       <div className="mt-2.5 flex items-center gap-2">
@@ -610,7 +610,7 @@ export default function DoctorDashboard({
                           <span className="font-extrabold text-slate-800 text-xs">{item.patientName}</span>
                         </div>
                         <p className="text-[10px] text-slate-400 font-bold font-mono mt-1">📞 {item.patientPhone}</p>
-                        <p className="text-[11px] text-slate-600 mt-1">{t("Xizmat")}: <strong>{srv?.name}</strong></p>
+                        <p className="text-[11px] text-slate-600 mt-1">{t("Xizmat")}: <strong>{translateMedicalText(srv?.name || '', language)}</strong></p>
                       </div>
 
                       <div className="flex items-center gap-1.5">
@@ -659,7 +659,7 @@ export default function DoctorDashboard({
                           <span className="font-extrabold text-slate-800 text-xs">{item.patientName}</span>
                         </div>
                         <p className="text-[10px] text-slate-400 font-bold font-mono mt-1">📞 {item.patientPhone}</p>
-                        <p className="text-[11px] text-slate-600 mt-1">{t("Xizmat")}: <strong>{srv?.name}</strong></p>
+                        <p className="text-[11px] text-slate-600 mt-1">{t("Xizmat")}: <strong>{translateMedicalText(srv?.name || '', language)}</strong></p>
                       </div>
 
                       <div className="flex items-center gap-1.5">
@@ -704,7 +704,7 @@ export default function DoctorDashboard({
                 <div key={item.id} className="py-3 flex justify-between items-center text-xs">
                   <div>
                     <h4 className="font-extrabold text-slate-800 text-xs">#{item.number} | {item.patientName}</h4>
-                    <p className="text-[10px] text-slate-400">{srv?.name} — {getServicePrice(item.serviceId).toLocaleString('uz-UZ')} {language === 'en' ? 'UZS' : language === 'ru' ? 'сум' : "so'm"}</p>
+                    <p className="text-[10px] text-slate-400">{translateMedicalText(srv?.name || '', language)} — {getServicePrice(item.serviceId).toLocaleString('uz-UZ')} {language === 'en' ? 'UZS' : language === 'ru' ? 'сум' : "so'm"}</p>
                   </div>
                   <div className="flex items-center gap-1">
                     {item.rating ? (

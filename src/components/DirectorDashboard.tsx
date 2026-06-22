@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Clinic, Doctor, Service, QueueItem, SaaSPayment } from '../types';
-import { TRANSLATIONS, Language } from '../translations';
+import { TRANSLATIONS, Language, translateMedicalText } from '../translations';
 import { 
   Users, 
   DollarSign, 
@@ -19,8 +20,10 @@ import {
   ArrowLeft,
   HeartPulse,
   ChevronDown,
+  ChevronUp,
   Wrench,
-  Sparkles
+  Sparkles,
+  LogOut
 } from 'lucide-react';
 
 interface DirectorDashboardProps {
@@ -34,6 +37,8 @@ interface DirectorDashboardProps {
   onUpdateService?: (updatedService: Service) => void;
   onAddService?: (newService: Service) => void;
   onDeleteService?: (serviceId: string) => void;
+  onCancelQueue?: (id: string) => void;
+  onLogout?: () => void;
   clinicId?: string;
   onSimulatePayment?: (clinicId: string) => void;
   saasPayments?: SaaSPayment[];
@@ -212,6 +217,8 @@ export default function DirectorDashboard({
   onUpdateService,
   onAddService,
   onDeleteService,
+  onCancelQueue,
+  onLogout,
   clinicId,
   onSimulatePayment,
   saasPayments = [],
@@ -236,6 +243,11 @@ export default function DirectorDashboard({
       "birorta ham bemor topilmadi.": { ru: "Пациенты не найдены.", en: "No patients found." },
       "yopish": { ru: "Закрыть", en: "Close" },
       "bugun": { ru: "Сегодня", en: "Today" },
+      "kunlik": { ru: "Ежедневный", en: "Daily" },
+      "hisobotlar": { ru: "Отчеты", en: "Reports" },
+      "haftalik": { ru: "Еженедельно", en: "Weekly" },
+      "oylik": { ru: "Ежемесячно", en: "Monthly" },
+      "yillik": { ru: "Ежегодно", en: "Yearly" },
       "haftalik hisobot": { ru: "Еженедельный отчет", en: "Weekly report" },
       "shifokorlar kpi": { ru: "KPI Врачей", en: "Doctors KPI" },
       "⚙ tibbiy xizmatlar & narxlar": { ru: "⚙ Медицинские Услуги и Цены", en: "⚙ Medical Services & Prices" },
@@ -277,7 +289,6 @@ export default function DirectorDashboard({
       "obuna": { ru: "подписка", en: "subscription" },
       "sozlamalar": { ru: "настройки", en: "settings" },
       "shifokorlar": { ru: "врачи", en: "doctors" },
-      "haftalik": { ru: "еженедельно", en: "weekly" },
       "Obuna statusi": { ru: "Статус подписки", en: "Subscription status" }
     };
 
@@ -294,8 +305,9 @@ export default function DirectorDashboard({
     return text;
   };
 
-  // Tab-specific view model: 'bugun', 'haftalik', 'shifokorlar', 'sozlamalar', 'obuna'
-  const [activeSubTab, setActiveSubTab] = useState<'bugun' | 'haftalik' | 'shifokorlar' | 'sozlamalar' | 'obuna'>('bugun');
+  // Tab-specific view model: 'bugun', 'hisobot', 'shifokorlar', 'sozlamalar', 'obuna'
+  const [activeSubTab, setActiveSubTab] = useState<'bugun' | 'hisobot' | 'shifokorlar' | 'sozlamalar' | 'obuna'>('bugun');
+  const [reportPeriod, setReportPeriod] = useState<'kunlik' | 'haftalik' | 'oylik' | 'yillik'>('haftalik');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [serviceToDelete, setServiceToDelete] = useState<any>(null);
@@ -320,6 +332,9 @@ export default function DirectorDashboard({
   const [showAddServiceForm, setShowAddServiceForm] = useState(false);
   const [selectedPatientTab, setSelectedPatientTab] = useState<'yangi' | 'jami'>('yangi');
 
+  const [openServiceCategory, setOpenServiceCategory] = useState<string>("Diagnostika");
+  const [addedServicesSearchTerm, setAddedServicesSearchTerm] = useState('');
+
   // Pre-defined catalog selection & search states
   const [selectedCatalogCategory, setSelectedCatalogCategory] = useState<number>(0);
   const [catalogSearchQuery, setCatalogSearchQuery] = useState('');
@@ -336,51 +351,103 @@ export default function DirectorDashboard({
   const callingQueues = clinicQueues.filter(q => q.status === 'calling' || q.status === 'in_progress');
   const completedQueues = clinicQueues.filter(q => q.status === 'completed');
 
-  // Weekly historical table data dynamically calculated
-  const getDailyStats = () => {
+  // Generating report charts data
+  const getReportStats = (period: 'kunlik' | 'haftalik' | 'oylik' | 'yillik') => {
     const reportList = [];
     const today = new Date();
-    // Generate data for the last 7 days (including today)
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      const isToday = i === 0;
-      
-      const dayNameUz = ['Yakshanba', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'][d.getDay()];
-      const dayNameRu = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'][d.getDay()];
-      const dayNameEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()];
-      
-      let dayName = language === 'ru' ? dayNameRu : language === 'en' ? dayNameEn : dayNameUz;
-      if (isToday) {
-         dayName = language === 'ru' ? 'Сегодня' : language === 'en' ? 'Today' : 'Bugun';
+    const getPrice = (id: string) => services.find(s => s.id === id)?.price || 0;
+
+    if (period === 'kunlik') {
+      // Create hours for today (e.g., last 8 hours or fixed working hours 09:00 - 18:00)
+      for (let i = 11; i <= 18; i++) {
+        const hourQueues = clinicQueues.filter(q => {
+          if (q.status !== 'completed') return false;
+          const qDate = q.createdAt ? new Date(q.createdAt) : new Date();
+          return qDate.getDate() === today.getDate() && qDate.getMonth() === today.getMonth() && qDate.getFullYear() === today.getFullYear() && qDate.getHours() === i;
+        });
+
+        const patientsCount = hourQueues.length;
+        const revenue = hourQueues.reduce((sum, q) => sum + getPrice(q.serviceId), 0);
+        const avgRating = hourQueues.filter(q => q.rating).length > 0 
+          ? hourQueues.reduce((sum, q) => sum + (q.rating || 5), 0) / hourQueues.filter(q => q.rating).length 
+          : 5.0;
+
+        reportList.push({ dayName: `${i}:00`, dateStr: `Bugun`, patientsCount, revenue, avgRating });
       }
+    } else if (period === 'haftalik') {
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const isToday = i === 0;
+        
+        const dayNameUz = ['Yakshanba', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'][d.getDay()];
+        const dayNameRu = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'][d.getDay()];
+        const dayNameEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()];
+        let dayName = language === 'ru' ? dayNameRu : language === 'en' ? dayNameEn : dayNameUz;
+        if (isToday) dayName = language === 'ru' ? 'Сегодня' : language === 'en' ? 'Today' : 'Bugun';
 
-      const dateStr = d.toLocaleDateString('ru-RU');
-      
-      // Filter completed queues for this specific day
-      const dayQueues = clinicQueues.filter(q => {
-        if (q.status !== 'completed') return false;
-        // fallback to today if createdAt doesn't exist, though it should
-        const qDate = q.createdAt ? new Date(q.createdAt) : new Date();
-        return qDate.getDate() === d.getDate() && qDate.getMonth() === d.getMonth() && qDate.getFullYear() === d.getFullYear();
-      });
+        const dateStr = d.toLocaleDateString('ru-RU');
+        
+        const dayQueues = clinicQueues.filter(q => {
+          if (q.status !== 'completed') return false;
+          const qDate = q.createdAt ? new Date(q.createdAt) : new Date();
+          return qDate.getDate() === d.getDate() && qDate.getMonth() === d.getMonth() && qDate.getFullYear() === d.getFullYear();
+        });
 
-      const getPrice = (id: string) => {
-        return services.find(s => s.id === id)?.price || 0;
-      };
+        const patientsCount = dayQueues.length;
+        const revenue = dayQueues.reduce((sum, q) => sum + getPrice(q.serviceId), 0);
+        const avgRating = dayQueues.filter(q => q.rating).length > 0 
+          ? dayQueues.reduce((sum, q) => sum + (q.rating || 5), 0) / dayQueues.filter(q => q.rating).length 
+          : 5.0;
 
-      const patientsCount = dayQueues.length;
-      const revenue = dayQueues.reduce((sum, q) => sum + getPrice(q.serviceId), 0);
-      const avgRating = dayQueues.filter(q => q.rating).length > 0 
-        ? dayQueues.reduce((sum, q) => sum + (q.rating || 5), 0) / dayQueues.filter(q => q.rating).length 
-        : 5.0;
+        reportList.push({ dayName, dateStr, patientsCount, revenue, avgRating });
+      }
+    } else if (period === 'oylik') {
+      // 4 weeks breakdown
+      for (let i = 3; i >= 0; i--) {
+        const wStart = new Date(today);
+        wStart.setDate(today.getDate() - (i * 7 + 7));
+        const wEnd = new Date(today);
+        wEnd.setDate(today.getDate() - (i * 7));
+        
+        const weekQueues = clinicQueues.filter(q => {
+          if (q.status !== 'completed') return false;
+          const qDate = q.createdAt ? new Date(q.createdAt) : new Date();
+          return qDate > wStart && qDate <= wEnd;
+        });
 
-      reportList.push({ dayName, dateStr, patientsCount, revenue, avgRating });
+        const patientsCount = weekQueues.length;
+        const revenue = weekQueues.reduce((sum, q) => sum + getPrice(q.serviceId), 0);
+        const avgRating = weekQueues.filter(q => q.rating).length > 0 
+          ? weekQueues.reduce((sum, q) => sum + (q.rating || 5), 0) / weekQueues.filter(q => q.rating).length 
+          : 5.0;
+
+        reportList.push({ dayName: `${4 - i}-Hafta`, dateStr: `${wStart.getDate()}-${wEnd.getDate()}`, patientsCount, revenue, avgRating });
+      }
+    } else if (period === 'yillik') {
+      for (let i = 6; i >= 0; i--) {
+        const mDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const mQueues = clinicQueues.filter(q => {
+          if (q.status !== 'completed') return false;
+          const qDate = q.createdAt ? new Date(q.createdAt) : new Date();
+          return qDate.getMonth() === mDate.getMonth() && qDate.getFullYear() === mDate.getFullYear();
+        });
+        
+        const patientsCount = mQueues.length;
+        const revenue = mQueues.reduce((sum, q) => sum + getPrice(q.serviceId), 0);
+        const avgRating = mQueues.filter(q => q.rating).length > 0 
+          ? mQueues.reduce((sum, q) => sum + (q.rating || 5), 0) / mQueues.filter(q => q.rating).length 
+          : 5.0;
+
+        const monthNames = ['Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun', 'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr'];
+        reportList.push({ dayName: monthNames[mDate.getMonth()], dateStr: mDate.getFullYear().toString(), patientsCount, revenue, avgRating });
+      }
     }
+
     return reportList;
   };
 
-  const weeklyReportData = getDailyStats();
+  const weeklyReportData = getReportStats(reportPeriod);
   const weeklyTotalRevenue = weeklyReportData.reduce((sum, d) => sum + d.revenue, 0);
   const weeklyTotalPatients = weeklyReportData.reduce((sum, d) => sum + d.patientsCount, 0);
 
@@ -393,7 +460,6 @@ export default function DirectorDashboard({
   };
 
   const todayRevenue = completedQueues.reduce((sum, q) => sum + getServicePrice(q.serviceId), 0);
-  const totalRegisteredPatientsCount = 205 + queues.length; // From screenshot 5 'Jami ro'yxatdagi bemorlar' is 205
 
   // Calculations per doctor for today's grid
   const getDocTodayStats = (docId: string) => {
@@ -512,17 +578,6 @@ export default function DirectorDashboard({
   };
 
   // Patient database arrays
-  const totalBazaPatients = [
-    { fullName: 'Anvar Alimov', phone: '+998 (99) 441-23-45', passport: 'AA1234567', gender: 'Erkak', age: 34, lastVisit: 'Bugun', visitsCount: 4, source: 'PWA Ilova' },
-    { fullName: 'Malika Sobirova', phone: '+998 (90) 789-11-22', passport: 'AB9876543', gender: 'Ayol', age: 28, lastVisit: 'Kecha', visitsCount: 2, source: 'CRM Operator' },
-    { fullName: 'Jasur Bekmurodov', phone: '+998 (97) 124-55-66', passport: 'AC4561239', gender: 'Erkak', age: 41, lastVisit: 'Bugun', visitsCount: 7, source: 'PWA Ilova' },
-    { fullName: 'Shahzod Yo\'ldoshev', phone: '+998 (93) 120-40-50', passport: 'AD3216549', gender: 'Erkak', age: 29, lastVisit: '2 kun oldin', visitsCount: 3, source: 'Tezkor Chipta' },
-    { fullName: 'Sardor Qodirov', phone: '+998 (99) 850-60-70', passport: 'AE7894561', gender: 'Erkak', age: 36, lastVisit: '1 hafta oldin', visitsCount: 5, source: 'CRM Operator' },
-    { fullName: 'Kamola Fayzullayeva', phone: '+998 (90) 250-10-30', passport: 'AF4567891', gender: 'Ayol', age: 22, lastVisit: '3 kun oldin', visitsCount: 1, source: 'PWA Ilova' },
-    { fullName: 'Bekzod Abdullayev', phone: '+998 (94) 555-12-34', passport: 'AG1593572', gender: 'Erkak', age: 50, lastVisit: '5 kun oldin', visitsCount: 9, source: 'Tezkor Chipta' },
-    { fullName: 'Umida Karimova', phone: '+998 (97) 444-99-88', passport: 'AH7531590', gender: 'Ayol', age: 31, lastVisit: '2 hafta oldin', visitsCount: 2, source: 'PWA Ilova' }
-  ];
-
   // Merge current day queue tickets to construct dynamic list
   const dynamicQueuedPatients = clinicQueues.map(q => ({
     fullName: q.patientName,
@@ -536,7 +591,7 @@ export default function DirectorDashboard({
   }));
 
   const uniquePhones = new Set<string>();
-  const mergedPatients: typeof totalBazaPatients = [];
+  const mergedPatients: typeof dynamicQueuedPatients = [];
 
   dynamicQueuedPatients.forEach(p => {
     if (!uniquePhones.has(p.phone)) {
@@ -545,12 +600,47 @@ export default function DirectorDashboard({
     }
   });
 
-  totalBazaPatients.forEach(p => {
-    if (!uniquePhones.has(p.phone)) {
-      uniquePhones.add(p.phone);
-      mergedPatients.push(p);
-    }
-  });
+  const totalRegisteredPatientsCount = mergedPatients.length; // Dynamically calculated based on real patients
+
+  const getServiceCategory = (name: string): string => {
+    const n = name.toLowerCase();
+    
+    if (n.includes('diagnostika') || n.includes('konsultatsiya') || n.includes('rentgen') || n.includes('snimka') || n.includes('kt')) return 'Diagnostika';
+    if (n.includes('oqartirish') || n.includes('zoom') || n.includes('bleaching')) return 'Tishlarni oqartirish';
+    if (n.includes('vinir') || n.includes('komponir') || n.includes('lyuminir')) return 'Vinirlar';
+    if (n.includes('implant') || n.includes('all-on-4') || n.includes('mega gen') || n.includes('osstem')) return 'Implantatsiya';
+    if (n.includes('protez') || n.includes('koronka') || n.includes('metallokera') || n.includes('sirqoniy') || n.includes('plastmassa')) return 'Protezlash';
+    if (n.includes('breket') || n.includes('plastinka') || n.includes('elayner') || n.includes('reteyner')) return 'Ortodontiya';
+    if (n.includes('bolalar') || n.includes('sut tish') || n.includes('karies s')) return 'Bolalar stomatologiyasi';
+    if (n.includes('olish') || n.includes('xirurg') || n.includes('operasiya') || n.includes('operatsiya') || n.includes('rezeksiya') || n.includes('kista') || n.includes('sinus')) return 'Xirurgiya';
+    if (n.includes('tosh') || n.includes('tozalash') || n.includes('gigiyena') || n.includes('polirovka') || n.includes('ftor') || n.includes('air flow')) return 'Profilaktika';
+    if (n.includes('karies') || n.includes('plomba') || n.includes('pulpit') || n.includes('abssess') || n.includes('davolash')) return 'Terapevtik stomatologiya';
+    
+    return 'Boshqa xizmatlar';
+  };
+
+  const groupServicesByCategory = () => {
+    const filtered = clinicServices.filter(s => 
+      s.name.toLowerCase().includes((addedServicesSearchTerm || '').toLowerCase())
+    );
+    
+    const categories: Record<string, typeof clinicServices> = {};
+    
+    filtered.forEach(s => {
+      const cat = getServiceCategory(s.name);
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat].push(s);
+    });
+
+    return { categories };
+  };
+
+  const groupedAddedServices = groupServicesByCategory();
+  const sortedAddedCategories = [
+    "Diagnostika", "Terapevtik stomatologiya", "Tishlarni oqartirish", 
+    "Vinirlar", "Xirurgiya", "Protezlash", "Ortodontiya", 
+    "Bolalar stomatologiyasi", "Implantatsiya", "Profilaktika", "Boshqa xizmatlar"
+  ].filter(c => groupedAddedServices.categories[c] && groupedAddedServices.categories[c].length > 0);
 
   const myClinic = clinics.find(c => c.id === currentClinicId);
   const clinicNameStr = myClinic ? myClinic.name : "Samarqand Filiali";
@@ -686,14 +776,14 @@ export default function DirectorDashboard({
           {t("Bugun")}
         </button>
         <button
-          onClick={() => setActiveSubTab('haftalik')}
+          onClick={() => setActiveSubTab('hisobot')}
           className={`px-6 py-3 text-xs font-extrabold uppercase tracking-wider relative transition-all shrink-0 cursor-pointer ${
-            activeSubTab === 'haftalik' 
+            activeSubTab === 'hisobot' 
               ? 'text-blue-600 border-b-2 border-blue-600 font-black' 
               : 'text-slate-400 hover:text-slate-800'
           }`}
         >
-          {t("Haftalik hisobot")}
+          {t("Hisobotlar")}
         </button>
         <button
           onClick={() => setActiveSubTab('shifokorlar')}
@@ -730,61 +820,85 @@ export default function DirectorDashboard({
       {/* METRIC CARD DOCK (SCREENSHOT 5) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-slate-800">
         {/* Metric 1 */}
-        <div className="bg-white rounded-2xl p-4.5 border border-slate-150/80 shadow-xs flex items-center justify-between">
+        <div 
+          onClick={() => {
+            setActiveSubTab('bugun');
+            setSelectedPatientTab('yangi');
+            setTimeout(() => document.getElementById('bemorlar-baza')?.scrollIntoView({ behavior: 'smooth' }), 50);
+          }}
+          className="bg-[#0b1226]/90 rounded-2xl p-4.5 border border-[#1e2f50] shadow-[0_10px_30px_rgba(0,0,0,0.15)] flex items-center justify-between group hover:border-emerald-500/30 transition-all cursor-pointer"
+        >
           <div>
-            <span className="text-[11px] text-slate-400 font-extrabold block uppercase tracking-widest">
+            <span className="text-[11px] text-slate-500 font-extrabold block uppercase tracking-widest mb-1.5 group-hover:text-emerald-400 transition-colors">
               {t("Bugun qabul qilingan")}
             </span>
-            <div className="text-2xl font-extrabold text-slate-800 font-mono mt-1">
+            <div className="text-2xl font-black text-emerald-400 font-mono">
               {totalCompletedToday} {t("kishi")}
             </div>
           </div>
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+          <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20 group-hover:scale-110 transition-transform">
             <Users className="w-5 h-5" />
           </div>
         </div>
 
         {/* Metric 2 */}
-        <div className="bg-white rounded-2xl p-4.5 border border-slate-150/80 shadow-xs flex items-center justify-between">
+        <div 
+          onClick={() => { setActiveSubTab('hisobot'); setReportPeriod('kunlik'); }}
+          className="bg-[#0b1226]/90 rounded-2xl p-4.5 border border-[#1e2f50] shadow-[0_10px_30px_rgba(0,0,0,0.15)] flex items-center justify-between group hover:border-emerald-500/30 transition-all cursor-pointer"
+        >
           <div>
-            <span className="text-[11px] text-slate-400 font-extrabold block uppercase tracking-widest">
+            <span className="text-[11px] text-slate-500 font-extrabold block uppercase tracking-widest mb-1.5 group-hover:text-emerald-400 transition-colors">
               {t("Bugun joriy daromad")}
             </span>
-            <div className="text-md font-extrabold text-blue-700 font-mono mt-2">
-              {todayRevenue.toLocaleString('uz-UZ')} {t("so'm")}
+            <div className="text-md font-black text-emerald-400 font-mono flex items-baseline gap-1 mt-2">
+              {todayRevenue.toLocaleString('uz-UZ')} <span className="text-[10px] text-emerald-500/50 uppercase">{t("UZS")}</span>
             </div>
           </div>
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+          <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20 group-hover:scale-110 transition-transform">
             <DollarSign className="w-5 h-5" />
           </div>
         </div>
 
         {/* Metric 3 */}
-        <div className="bg-white rounded-2xl p-4.5 border border-slate-150/80 shadow-xs flex items-center justify-between">
+        <div 
+          onClick={() => {
+            setActiveSubTab('bugun');
+            setSelectedPatientTab('yangi');
+            setTimeout(() => document.getElementById('bemorlar-baza')?.scrollIntoView({ behavior: 'smooth' }), 50);
+          }}
+          className="bg-[#0b1226]/90 rounded-2xl p-4.5 border border-[#1e2f50] shadow-[0_10px_30px_rgba(0,0,0,0.15)] flex items-center justify-between group hover:border-amber-500/30 transition-all cursor-pointer"
+        >
           <div>
-            <span className="text-[11px] text-slate-400 font-extrabold block uppercase tracking-widest">
+            <span className="text-[11px] text-slate-500 font-extrabold block uppercase tracking-widest mb-1.5 group-hover:text-amber-400 transition-colors">
               {t("Hozir kutayotgan")}
             </span>
-            <div className="text-2xl font-extrabold text-slate-800 font-mono mt-1">
+            <div className="text-2xl font-black text-amber-400 font-mono mt-1">
               {currentWaitingCount} {t("kishi")}
             </div>
           </div>
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+          <div className="p-3 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20 group-hover:scale-110 transition-transform">
             <Clock className="w-5 h-5" />
           </div>
         </div>
 
         {/* Metric 4 */}
-        <div className="bg-white rounded-2xl p-4.5 border border-slate-150/80 shadow-xs flex items-center justify-between">
+        <div 
+          onClick={() => { 
+            setActiveSubTab('bugun');
+            setSelectedPatientTab('jami'); 
+            setTimeout(() => document.getElementById('bemorlar-baza')?.scrollIntoView({ behavior: 'smooth' }), 50);
+          }}
+          className="bg-[#0b1226]/90 rounded-2xl p-4.5 border border-[#1e2f50] shadow-[0_10px_30px_rgba(0,0,0,0.15)] flex items-center justify-between group hover:border-indigo-500/30 transition-all cursor-pointer"
+        >
           <div>
-            <span className="text-[11px] text-slate-400 font-extrabold block uppercase tracking-widest">
+            <span className="text-[11px] text-slate-500 font-extrabold block uppercase tracking-widest mb-1.5 group-hover:text-indigo-400 transition-colors">
               {t("Jami ro'yxatdagi bemorlar")}
             </span>
-            <div className="text-2xl font-extrabold text-slate-800 font-mono mt-1">
+            <div className="text-2xl font-black text-indigo-400 font-mono mt-1">
               {totalRegisteredPatientsCount} {t("ta")}
             </div>
           </div>
-          <div className="p-2.5 bg-indigo-50 text-indigo-650 rounded-xl">
+          <div className="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20 group-hover:scale-110 transition-transform group-hover:rotate-12">
             <HeartPulse className="w-5 h-5 animate-pulse" />
           </div>
         </div>
@@ -859,31 +973,99 @@ export default function DirectorDashboard({
             </div>
 
             {/* Xizmatlar (bugun) (Tab 1 right part) */}
-            <div className="lg:col-span-4 bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/80 shadow-md">
-              <h3 className="text-sm font-extrabold text-slate-850 uppercase tracking-widest mb-4 border-b border-slate-50 pb-2">
-                📋 Bugungi mashhur xizmatlar
-              </h3>
+            <div className="lg:col-span-4 bg-white text-slate-800 rounded-[2rem] p-5 lg:p-6 border border-slate-150/80 shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] flex flex-col h-full max-h-[650px] relative overflow-hidden group/catalog">
+              {/* Decorative backgrounds */}
+              <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-indigo-50/50 via-sky-50/30 to-transparent rounded-bl-full pointer-events-none -mr-8 -mt-8 transition-transform duration-700 group-hover/catalog:scale-110" />
               
-              <div className="divide-y divide-slate-100">
-                {clinicServices.map(srv => {
-                  const callCount = completedQueues.filter(q => q.serviceId === srv.id).length;
-                  return (
-                    <div key={srv.id} className="py-3 flex items-center justify-between first:pt-1 last:pb-1 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[#0284c7]">✔</span>
-                        <span className="font-extrabold text-slate-700">{srv.name}</span>
+              <div className="flex items-center justify-between mb-5 border-b border-indigo-50/60 pb-4 relative z-10">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-tr from-sky-400 to-indigo-500 rounded-xl shadow-lg shadow-sky-500/20 -rotate-3 transition-transform duration-500 group-hover/catalog:rotate-0">
+                    <span className="text-xl rotate-3 transition-transform duration-500 group-hover/catalog:-rotate-3 drop-shadow-sm">📋</span>
+                  </div>
+                  <div>
+                    <h3 className="text-[13px] font-black text-slate-900 uppercase tracking-widest leading-none mb-1">
+                      Katalog
+                    </h3>
+                    <p className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5">
+                      Bugungi mashhur xizmatlar
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="overflow-y-auto pr-2 pb-2 space-y-4 flex-1 relative z-10">
+                {(() => {
+                  // Pre-calculate call counts and sort
+                  const servicesWithCounts = clinicServices.map(srv => {
+                    const callCount = completedQueues.filter(q => q.serviceId === srv.id).length;
+                    return { ...srv, callCount };
+                  }).sort((a,b) => b.callCount - a.callCount); // Most popular first
+
+                  // Group by category
+                  const popularCategories: Record<string, typeof servicesWithCounts> = {};
+                  servicesWithCounts.forEach(s => {
+                    const cat = getServiceCategory(s.name);
+                    if (!popularCategories[cat]) popularCategories[cat] = [];
+                    popularCategories[cat].push(s);
+                  });
+
+                  // Only show categories that have items, sorted by category with highest call counts
+                  const sortedCats = Object.keys(popularCategories).sort((a,b) => {
+                    return popularCategories[b][0].callCount - popularCategories[a][0].callCount;
+                  });
+
+                  if (sortedCats.length === 0) {
+                    return (
+                      <div className="text-center py-10 text-slate-400 font-bold text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                        Xizmatlar mavjud emas
                       </div>
-                      <div className="flex items-center gap-4">
-                        <span className="font-mono bg-slate-50 border border-slate-100 px-2 py-0.5 rounded text-slate-500 font-bold">
-                          {callCount} ta
+                    );
+                  }
+
+                  return sortedCats.map(cat => (
+                    <div key={cat} className="bg-slate-50/50 rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-md hover:border-slate-200/80 transition-all duration-300">
+                      <div className="bg-white border-b border-slate-100 p-3 flex items-center gap-3">
+                        <span className="text-base flex items-center justify-center w-8 h-8 rounded-xl bg-slate-50 shadow-sm border border-slate-100">
+                          {cat === "Diagnostika" && "🔬"}
+                          {cat === "Terapevtik stomatologiya" && "🦷"}
+                          {cat === "Tishlarni oqartirish" && "✨"}
+                          {cat === "Vinirlar" && "💎"}
+                          {cat === "Xirurgiya" && "🩸"}
+                          {cat === "Protezlash" && "🦿"}
+                          {cat === "Ortodontiya" && "⚙️"}
+                          {cat === "Bolalar stomatologiyasi" && "🧸"}
+                          {cat === "Implantatsiya" && "🔩"}
+                          {cat === "Profilaktika" && "🧼"}
+                          {cat === "Boshqa xizmatlar" && "📌"}
                         </span>
-                        <span className="font-extrabold text-slate-800 font-mono">
-                          {srv.price.toLocaleString('uz-UZ')} UZS
+                        <h4 className="text-[11px] font-black uppercase text-slate-800 tracking-widest flex-1 leading-snug">{translateMedicalText(cat, language)}</h4>
+                        <span className="text-[10px] font-black text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 shadow-inner">
+                          {popularCategories[cat].length}
                         </span>
+                      </div>
+                      <div className="p-2.5 grid grid-cols-1 gap-2">
+                        {popularCategories[cat].map(srv => (
+                          <div key={srv.id} className="flex flex-col gap-1.5 p-3 bg-white rounded-[14px] border border-slate-100 hover:border-sky-200 hover:shadow-[0_4px_15px_-5px_rgba(14,165,233,0.15)] transition-all duration-300 group">
+                            <div className="flex items-start justify-between gap-3">
+                              <span className="font-bold text-xs text-slate-700 leading-snug group-hover:text-sky-600 transition-colors pt-0.5">
+                                {translateMedicalText(srv.name, language)}
+                              </span>
+                              <span className={`font-mono px-2 py-1 rounded-lg flex-shrink-0 text-[10px] font-black ${srv.callCount > 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}>
+                                {srv.callCount} ta
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-50 mt-1">
+                              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">ID: {srv.id.split('_').pop()}</span>
+                              <span className="font-black text-indigo-600 text-[11px] font-mono bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100/50">
+                                {srv.price.toLocaleString('uz-UZ')} UZS
+                              </span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  );
-                })}
+                  ));
+                })()}
               </div>
             </div>
 
@@ -891,7 +1073,7 @@ export default function DirectorDashboard({
 
           {/* Full width: bugungi barcha navbatlar list */}
           {/* BEMORLAR TAHLILI - YANGI VS JAMI ALOHIDA (CREATIVE TABBED LAYOUT) */}
-          <div className="bg-white text-slate-800 rounded-3xl p-6 border border-slate-150/80 shadow-lg space-y-6">
+          <div id="bemorlar-baza" className="bg-white text-slate-800 rounded-3xl p-6 border border-slate-150/80 shadow-lg space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-widest text-[#0ea5e9]">👥 Bemorlar Ma'lumot BAZASI</span>
@@ -901,28 +1083,48 @@ export default function DirectorDashboard({
               </div>
 
               {/* Toggle controls with premium style */}
-              <div className="flex bg-slate-100/80 p-1 rounded-2xl border border-slate-200/50 self-start sm:self-center select-none">
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <div className="flex bg-slate-100/80 p-1 rounded-2xl border border-slate-200/50 select-none">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPatientTab('yangi')}
+                    className={`px-4.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                      selectedPatientTab === 'yangi'
+                        ? 'bg-white text-blue-700 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-700'
+                    }`}
+                  >
+                    🌟 Yangi Ro'yxatdan O'tganlar ({clinicQueues.length} ta)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPatientTab('jami')}
+                    className={`px-4.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                      selectedPatientTab === 'jami'
+                        ? 'bg-white text-blue-700 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-700'
+                    }`}
+                  >
+                    🗄️ Jami Ro'yxatbaza ({mergedPatients.length} kishi)
+                  </button>
+                </div>
+                
                 <button
                   type="button"
-                  onClick={() => setSelectedPatientTab('yangi')}
-                  className={`px-4.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                    selectedPatientTab === 'yangi'
-                      ? 'bg-white text-blue-700 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-700'
-                  }`}
+                  onClick={() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    setSearchQuery('');
+                  }}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2"
                 >
-                  🌟 Yangi Ro'yxatdan O'tganlar ({clinicQueues.length} ta)
+                  <ArrowLeft className="w-3.5 h-3.5" /> Qaytish
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedPatientTab('jami')}
-                  className={`px-4.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                    selectedPatientTab === 'jami'
-                      ? 'bg-white text-blue-700 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-700'
-                  }`}
+                  onClick={() => onLogout && onLogout()}
+                  className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-100/50 text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2"
                 >
-                  🗄️ Jami Ro'yxatbaza ({mergedPatients.length} kishi)
+                  <LogOut className="w-3.5 h-3.5" /> Chiqish
                 </button>
               </div>
             </div>
@@ -945,12 +1147,13 @@ export default function DirectorDashboard({
                         <th className="px-4 py-3">Xizmat va Yo'nalish</th>
                         <th className="px-4 py-3">Holati</th>
                         <th className="px-4 py-3 text-right">Reyting/Baho</th>
+                        <th className="px-4 py-3 text-center">Amallar</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
                       {clinicQueues.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="text-center py-8 text-slate-400 font-medium">Bugun birorta ham yangi chipta olingani yo'q.</td>
+                          <td colSpan={8} className="text-center py-8 text-slate-400 font-medium">Bugun birorta ham yangi chipta olingani yo'q.</td>
                         </tr>
                       ) : (
                         clinicQueues.map((item) => {
@@ -996,6 +1199,15 @@ export default function DirectorDashboard({
                               <td className="px-4 py-3 text-right text-amber-400 text-xs">
                                 {item.rating ? '★'.repeat(item.rating) : <span className="text-slate-350 font-normal font-mono text-[10px]">-</span>}
                               </td>
+                              <td className="px-4 py-3 text-center">
+                                <button 
+                                  onClick={() => onCancelQueue && onCancelQueue(item.id)}
+                                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded shrink-0 text-[10px] font-extrabold uppercase transition-all"
+                                  title="O'chirish (Fake bemorni olib tashlash)"
+                                >
+                                  O'chirish
+                                </button>
+                              </td>
                             </tr>
                           );
                         })
@@ -1011,7 +1223,7 @@ export default function DirectorDashboard({
                     💡 <strong>Klinika Passport Bemorlar BAZASI (CRM):</strong> Quyida klinika terminali, telefon va mobil ilova orqali bugungacha ro'yxatdan o'tgan barcha tarixiy va faol bemorlar bazasining sinxron tahlili keltirilgan.
                   </div>
                   <div className="px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 font-mono font-bold text-[10.5px] rounded-lg">
-                    Jami ma'lumotlar hajmi: {205 + dynamicQueuedPatients.length} ta bemor
+                    Jami ma'lumotlar hajmi: {totalRegisteredPatientsCount} ta bemor
                   </div>
                 </div>
 
@@ -1026,6 +1238,7 @@ export default function DirectorDashboard({
                         <th className="px-4 py-3 text-center font-mono">Tashriflar</th>
                         <th className="px-4 py-3">Ro'yxat manbasi</th>
                         <th className="px-4 py-3 text-right font-sans">Oxirgi qabul</th>
+                        <th className="px-4 py-3 text-center">Amallar</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
@@ -1054,6 +1267,17 @@ export default function DirectorDashboard({
                           <td className="px-4 py-3 text-right font-mono text-blue-600 text-[10.5px]">
                             {pt.lastVisit}
                           </td>
+                          <td className="px-4 py-3 text-center">
+                            <button 
+                              onClick={() => {
+                                // fake patient deletion
+                              }}
+                              className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded shrink-0 text-[10px] font-extrabold uppercase transition-all"
+                              title="Tizimdan o'chirish"
+                            >
+                              O'chirish
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1066,15 +1290,42 @@ export default function DirectorDashboard({
       )}
 
 
-      {/* -------------------- TAB 2: HAFTALIK HISOBOT VIEW (SCREENSHOT 6, 7, 8) -------------------- */}
-      {activeSubTab === 'haftalik' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
-          {/* Left Side: Kunlik tafsilot table (Screenshot 7 detail) */}
-          <div className="lg:col-span-5 bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/80 shadow-md">
-            <h3 className="text-sm font-extrabold text-slate-850 uppercase tracking-widest mb-4 border-b border-slate-50 pb-2 flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-blue-500" /> Haftalik kunlik tafsilot
-            </h3>
+      {/* -------------------- TAB 2: HISOBOT VIEW -------------------- */}
+      {activeSubTab === 'hisobot' && (
+        <div className="space-y-6">
+          {/* Period Toggle Header */}
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-3xl border border-slate-150 shadow-sm">
+            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-blue-500" /> Dinamik Hisobotlar
+            </h2>
+            <div className="flex bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+              {['kunlik', 'haftalik', 'oylik', 'yillik'].map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setReportPeriod(p as any)}
+                  className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    reportPeriod === p
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {t(p)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            {/* Left Side: Tafsilot table */}
+            <div className="lg:col-span-5 bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/80 shadow-md">
+              <h3 className="text-sm font-extrabold text-slate-850 uppercase tracking-widest mb-4 border-b border-slate-50 pb-2 flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-blue-500" /> 
+                {reportPeriod === 'kunlik' && "Bugungi kunlik tafsilot"}
+                {reportPeriod === 'haftalik' && "Haftalik kunlik tafsilot"}
+                {reportPeriod === 'oylik' && "Oylik haftalar tafsiloti"}
+                {reportPeriod === 'yillik' && "Yillik oylar tafsiloti"}
+              </h3>
 
             <div className="overflow-x-auto text-[11px] font-semibold text-slate-700">
               <table className="w-full text-left border-collapse">
@@ -1107,14 +1358,15 @@ export default function DirectorDashboard({
           {/* Right Side: Graph grids utilizing gorgeous SVG charts */}
           <div className="lg:col-span-7 space-y-6">
             
-            {/* Chart 1: Kunlik daromad line chart */}
-            <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/80 shadow-md">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest leading-none">
-                  Kunlik daromad grafigi (so'm)
+            {/* Chart 1: daromad line chart */}
+            <div id="chart-1-revenue" className="bg-gradient-to-br from-white to-blue-50/40 text-slate-800 rounded-3xl p-6 border border-blue-100/50 shadow-[0_10px_40px_rgba(37,99,235,0.06)] relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-400/5 rounded-full blur-3xl -mr-10 -mt-10 transition-all duration-500 group-hover:bg-blue-400/10"></div>
+              <div className="flex justify-between items-center mb-6 relative z-10">
+                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest leading-none flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div> Daromad grafigi (so'm)
                 </h4>
-                <span className="text-[11px] bg-blue-50 text-blue-800 font-mono font-extrabold px-2 py-0.5 rounded-full">
-                  Haftalik jami: {weeklyTotalRevenue.toLocaleString('uz-UZ')} UZS
+                <span className="text-[11.5px] bg-white text-blue-700 border border-blue-100 shadow-sm font-mono font-extrabold px-3 py-1 rounded-full">
+                  Jami: {weeklyTotalRevenue.toLocaleString('uz-UZ')} UZS
                 </span>
               </div>
 
@@ -1136,9 +1388,10 @@ export default function DirectorDashboard({
                   
                   {(() => {
                     const maxRevenue = Math.max(...weeklyReportData.map(d => d.revenue), 1000000);
+                    const spacingArea = 420;
+                    const spc = spacingArea / Math.max(1, weeklyReportData.length - 1);
                     const points = weeklyReportData.map((d, index) => {
-                      const x = 40 + index * 70;
-                      // ensure y doesn't break if maxRevenue is 0
+                      const x = 40 + index * spc;
                       const yOffset = maxRevenue > 0 ? (d.revenue / maxRevenue) * 105 : 0;
                       const y = 130 - yOffset;
                       return { x, y, day: d.dayName, val: d.revenue };
@@ -1176,14 +1429,15 @@ export default function DirectorDashboard({
               </div>
             </div>
 
-            {/* Chart 2: Kunlik bemorlar count line chart */}
-            <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/80 shadow-md">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest leading-none">
-                  Kunlik tashrif buyurgan bemorlar soni
+            {/* Chart 2: bemorlar count line chart */}
+            <div id="chart-2-patients" className="bg-gradient-to-br from-white to-emerald-50/40 text-slate-800 rounded-3xl p-6 border border-emerald-100/50 shadow-[0_10px_40px_rgba(16,185,129,0.06)] relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-400/5 rounded-full blur-3xl -mr-10 -mt-10 transition-all duration-500 group-hover:bg-emerald-400/10"></div>
+              <div className="flex justify-between items-center mb-6 relative z-10">
+                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest leading-none flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> Tashrif buyurgan bemorlar soni
                 </h4>
-                <span className="text-[11px] bg-emerald-50 text-emerald-800 font-mono font-extrabold px-2 py-0.5 rounded-full">
-                  Haftalik jami: {weeklyTotalPatients} bemor
+                <span className="text-[11.5px] bg-white text-emerald-700 border border-emerald-100 shadow-sm font-mono font-extrabold px-3 py-1 rounded-full">
+                  Jami: {weeklyTotalPatients} bemor
                 </span>
               </div>
 
@@ -1205,8 +1459,10 @@ export default function DirectorDashboard({
                   
                   {(() => {
                     const maxPatients = Math.max(...weeklyReportData.map(d => d.patientsCount), 5);
+                    const spacingArea = 420;
+                    const spc = spacingArea / Math.max(1, weeklyReportData.length - 1);
                     const points = weeklyReportData.map((d, index) => {
-                      const x = 40 + index * 70;
+                      const x = 40 + index * spc;
                       const yOffset = maxPatients > 0 ? (d.patientsCount / maxPatients) * 105 : 0;
                       const y = 130 - yOffset;
                       return { x, y, day: d.dayName, val: d.patientsCount };
@@ -1245,6 +1501,7 @@ export default function DirectorDashboard({
             </div>
 
           </div>
+        </div>
         </div>
       )}
 
@@ -1632,7 +1889,7 @@ export default function DirectorDashboard({
           {editingServiceId && (
             <div className="bg-[#0a1020] border border-amber-500/40 rounded-2xl p-5 space-y-4 shadow-[0_0_20px_rgba(245,158,11,0.08)] relative z-10 w-full mt-4">
               <h4 className="text-xs font-black text-amber-500 uppercase tracking-widest border-b border-[#1e2f50] pb-2">
-                {language === 'uz' ? "📝 Xizmat narxini va nomini o'zgartirish oynas" : language === 'ru' ? "📝 Окно редактирования названия и цены услуги" : "📝 Modify Service Name and Price Window"}
+                {language === 'uz' ? "📝 Xizmat narxini va nomini o'zgartirish oynasi" : language === 'ru' ? "📝 Окно редактирования названия и цены услуги" : "📝 Modify Service Name and Price Window"}
               </h4>
 
               <form onSubmit={handleUpdateServiceSubmit} className="flex flex-col sm:flex-row items-end gap-3 pt-1">
@@ -1677,39 +1934,115 @@ export default function DirectorDashboard({
             </div>
           )}
 
-          {/* List of services in a table */}
-          <div className="divide-y divide-[#1e2f50] border border-[#1e2f50] rounded-2xl overflow-hidden shadow-lg shadow-[#0b1226]/50 bg-[#0d1428]">
-            {clinicServices.map((srv) => (
-              <div key={srv.id} className="p-4 hover:bg-[#152445] flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
-                <div>
-                  <h4 className="text-[13px] font-bold text-slate-100">{srv.name}</h4>
-                  <span className="text-[10px] text-emerald-500/60 font-bold uppercase tracking-wider font-mono mt-1 block">
-                    {myClinic?.name || currentClinicId} | ID: {srv.id}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2.5 self-end sm:self-center flex-wrap">
-                  <span className="text-[13px] font-black font-mono text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 shadow-inner">
-                    {srv.price.toLocaleString('uz-UZ')} <span className="text-[9px] uppercase tracking-wider">UZS</span>
-                  </span>
-
-                  <button
-                    onClick={() => startEditingService(srv)}
-                    className="px-4 py-2 border border-[#263b65] hover:border-amber-400/50 hover:bg-amber-500/10 text-slate-300 hover:text-amber-400 rounded-xl text-xs font-bold cursor-pointer transition-all shrink-0"
-                  >
-                    {language === 'uz' ? "Tahrirlash" : language === 'ru' ? "Редактировать" : "Edit"}
-                  </button>
-
-                  <button
-                    onClick={() => setServiceToDelete(srv)}
-                    className="px-4 py-2 border border-[#263b65] hover:border-rose-400/50 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 rounded-xl text-xs font-bold cursor-pointer transition-all shrink-0"
-                  >
-                    {language === 'uz' ? "O'chirish" : language === 'ru' ? "Удалить" : "Delete"}
-                  </button>
-                </div>
-              </div>
-            ))}
+          {/* Added Services Search Input */}
+          <div className="relative mt-8 mb-4">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-[#4a5f8a]" />
+            </div>
+            <input
+              type="text"
+              className="w-full bg-[#111a33] border border-[#263b65] focus:border-emerald-500 text-sm font-bold text-slate-100 rounded-2xl pl-12 pr-4 py-3.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all placeholder-[#4a5f8a]"
+              placeholder={language === 'uz' ? "Klinikaga qo'shilgan xizmatlar ichidan qidirish..." : "Search inside added services..."}
+              value={addedServicesSearchTerm}
+              onChange={(e) => setAddedServicesSearchTerm(e.target.value)}
+            />
           </div>
+
+          {/* List of services in a categorized accordion list */}
+          {sortedAddedCategories.length > 0 ? (
+            <div className="border border-[#1e2f50] rounded-2xl overflow-hidden bg-[#0a1020] shadow-xl shadow-[#0b1226]/50 divide-y divide-[#1e2f50]">
+              {sortedAddedCategories.map(cat => (
+                <div key={cat} className="bg-[#0a1020]">
+                  <button 
+                    onClick={(e) => { e.preventDefault(); setOpenServiceCategory(openServiceCategory === cat ? "" : cat); }}
+                    className="w-full flex items-center justify-between p-5 bg-[#0d1428] hover:bg-[#152445] transition-colors cursor-pointer"
+                    type="button"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <span className="text-xl flex items-center justify-center w-8 text-slate-300">
+                        {cat === "Diagnostika" && "🔬"}
+                        {cat === "Terapevtik stomatologiya" && "🦷"}
+                        {cat === "Tishlarni oqartirish" && "✨"}
+                        {cat === "Vinirlar" && "💎"}
+                        {cat === "Xirurgiya" && "🩸"}
+                        {cat === "Protezlash" && "🦿"}
+                        {cat === "Ortodontiya" && "⚙️"}
+                        {cat === "Bolalar stomatologiyasi" && "🧸"}
+                        {cat === "Implantatsiya" && "🔩"}
+                        {cat === "Profilaktika" && "🧼"}
+                        {cat === "Boshqa xizmatlar" && "📌"}
+                      </span>
+                      <span className="text-sm font-black uppercase tracking-widest text-slate-100 text-left">
+                        {translateMedicalText(cat, language)}
+                      </span>
+                      <span className="bg-[#1e2f50] text-[#a0b0d0] text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-[#263b65] ml-1 shadow-inner">
+                        {groupedAddedServices.categories[cat].length}
+                      </span>
+                    </div>
+                    {openServiceCategory === cat ? <ChevronUp className="w-5 h-5 text-[#a0b0d0] shrink-0" /> : <ChevronDown className="w-5 h-5 text-[#4a5f8a] shrink-0" />}
+                  </button>
+
+                  <AnimatePresence>
+                    {(openServiceCategory === cat || addedServicesSearchTerm) && (
+                      <motion.div 
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden bg-[#0d1428] flex flex-col"
+                      >
+                        <div className="p-3 grid grid-cols-1 gap-3 border-t border-[#1e2f50]">
+                          {groupedAddedServices.categories[cat].map(srv => (
+                            <div 
+                              key={srv.id} 
+                              className="border border-[#1e2f50] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all group relative bg-[#0a1020] hover:border-emerald-500/50 hover:shadow-lg hover:shadow-emerald-500/10"
+                            >
+                              <div>
+                                <h5 className="text-[14px] font-bold mb-1.5 leading-snug transition-colors pr-6 text-slate-100 group-hover:text-emerald-400">
+                                  {translateMedicalText(srv.name, language)}
+                                </h5>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-lg font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20 shadow-inner inline-block">
+                                    {srv.price.toLocaleString('uz-UZ')} <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-500/70">UZS</span>
+                                  </span>
+                                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider font-mono">
+                                    ID: {srv.id}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="shrink-0 flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => startEditingService(srv)}
+                                  className="px-4 py-2 border border-[#263b65] hover:border-amber-400/50 hover:bg-amber-500/10 text-slate-300 hover:text-amber-400 rounded-xl text-xs font-bold cursor-pointer transition-all shrink-0 flex items-center gap-1.5"
+                                >
+                                  {language === 'uz' ? "Tahrirlash" : language === 'ru' ? "Редактир." : "Edit"}
+                                </button>
+                                <button
+                                  onClick={() => setServiceToDelete(srv)}
+                                  className="px-4 py-2 border border-[#263b65] hover:border-rose-400/50 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 rounded-xl text-xs font-bold cursor-pointer transition-all shrink-0 flex items-center gap-1.5"
+                                >
+                                  {language === 'uz' ? "O'chirish" : language === 'ru' ? "Удалить" : "Delete"}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-[#a0b0d0] border border-[#1e2f50] rounded-2xl bg-[#0d1428] shadow-lg shadow-[#0b1226]/50">
+              <span className="text-4xl block mb-4">🏥</span>
+              <p className="font-bold text-sm tracking-wide">
+                {language === 'uz' ? "Siz klinika uchun birorta ham xizmat kiritmagansiz" : "No services added to the clinic yet"}
+              </p>
+              <p className="text-xs text-[#4a5f8a] mt-2 max-w-sm mx-auto">
+                {language === 'uz' ? "Tepadan xizmat nomini izlang yoki qatorni bosib xizmat qo'shib oling." : "Search from Top or add a new custom service row."}
+              </p>
+            </div>
+          )}
         </div>
       )}
 

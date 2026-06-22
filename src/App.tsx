@@ -268,6 +268,8 @@ export default function App() {
                 onUpdateService={handleUpdateService}
                 onAddService={handleAddService}
                 onDeleteService={handleDeleteService}
+                onCancelQueue={handleCancelQueue}
+                onLogout={handleLogout}
                 clinicId={currentUser?.clinicId || 'samarqand'}
                 onSimulatePayment={handlePaySubscriptionSimulate}
                 saasPayments={saasPayments}

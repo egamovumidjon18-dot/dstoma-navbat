@@ -44,55 +44,71 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
   }, [userLat, userLng, gpsStatus, locationRef]);
 
   const locateUserExact = (isAuto = false) => {
-    if (navigator.geolocation) {
-      setGpsStatus('detecting');
-      
-      const updateMapPos = (lat: number, lng: number) => {
-        locationRef.current.initialized = true;
-        setUserLat(lat);
-        setUserLng(lng);
-        setGpsStatus('active');
-        if (leafletMapRef.current && (activeTab === 'leaflet' || activeTab === 'google')) {
-          leafletMapRef.current.setView([lat, lng], 14);
-        } else if (dgisMapRef.current && activeTab === 'dgis') {
-          dgisMapRef.current.setView([lat, lng], 14);
-        }
-      };
-
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          updateMapPos(position.coords.latitude, position.coords.longitude);
-        },
-        (error) => {
-          console.warn('Geolocation exact lookup high-accuracy failed:', error);
-          
-          if (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE) {
-            // Try with low accuracy
-            navigator.geolocation.getCurrentPosition(
-              (pos) => updateMapPos(pos.coords.latitude, pos.coords.longitude),
-              (err2) => {
-                locationRef.current.initialized = true;
-                setGpsStatus('denied');
-                setUserLat(39.6542);
-                setUserLng(66.9597);
-                if (!isAuto) alert(language === 'uz' ? 'Joylashuvni aniqlab bo\'lmadi. Samarqand koordinatasiga qaytilmoqda.' : 'Location could not be determined. Falling back to Samarqand.');
-              },
-              { enableHighAccuracy: false, timeout: 10000, maximumAge: Infinity }
-            );
-          } else {
-             locationRef.current.initialized = true;
-             setGpsStatus('denied');
-             setUserLat(39.6542);
-             setUserLng(66.9597);
-             if (!isAuto) alert(language === 'uz' ? 'Joylashuvni aniqlashga ruxsat etilmagan yoki xatolik yuz berdi. Samarqand koordinatasiga qaytilmoqda.' : 'Location access denied or failed. Falling back to Samarqand.');
-          }
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-    } else {
+    setGpsStatus('detecting');
+    
+    const updateMapPos = (lat: number, lng: number) => {
       locationRef.current.initialized = true;
-      setGpsStatus('denied');
-      if (!isAuto) alert(language === 'uz' ? 'Brauzeringiz geolokatsiyani qo\'llab-quvvatlamaydi.' : 'Your browser does not support geolocation.');
+      setUserLat(lat);
+      setUserLng(lng);
+      setGpsStatus('active');
+      if (leafletMapRef.current && (activeTab === 'leaflet' || activeTab === 'google')) {
+        leafletMapRef.current.setView([lat, lng], 14);
+      } else if (dgisMapRef.current && activeTab === 'dgis') {
+        dgisMapRef.current.setView([lat, lng], 14);
+      }
+    };
+
+    const fallbackToIP = (errorMsg: string) => {
+      console.warn('GPS failed, trying IP fallback. Reason:', errorMsg);
+      fetch('https://ipapi.co/json/')
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.latitude && data.longitude) {
+            updateMapPos(data.latitude, data.longitude);
+            if (!isAuto) alert(language === 'uz' ? `GPS bloklanganligi sababli IP orqali joylashuv aniqlandi (${data.city}).` : `Located via IP address (${data.city}) because GPS is blocked.`);
+          } else {
+            throw new Error('IP Data Invalid');
+          }
+        })
+        .catch(err => {
+          console.warn('IP fallback failed:', err);
+          locationRef.current.initialized = true;
+          setGpsStatus('denied');
+          setUserLat(39.6542);
+          setUserLng(66.9597);
+          if (!isAuto) alert(language === 'uz' ? 'Joylashuvni aniqlab bo\'lmadi. Standart manzil (Samarqand) ochilmoqda.' : 'Location could not be determined. Falling back to default address.');
+        });
+    };
+
+    if (navigator.geolocation) {
+      try {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            updateMapPos(position.coords.latitude, position.coords.longitude);
+          },
+          (error) => {
+            console.warn('Geolocation exact lookup high-accuracy failed:', error);
+            
+            if (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE) {
+              // Try with low accuracy
+              navigator.geolocation.getCurrentPosition(
+                (pos) => updateMapPos(pos.coords.latitude, pos.coords.longitude),
+                (err2) => {
+                  fallbackToIP('Low accuracy GPS failed');
+                },
+                { enableHighAccuracy: false, timeout: 10000, maximumAge: Infinity }
+              );
+            } else {
+               fallbackToIP('User denied geolocation or other error');
+            }
+          },
+          { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
+        );
+      } catch (err: any) {
+        fallbackToIP(err.message);
+      }
+    } else {
+      fallbackToIP('Geolocation not supported by browser');
     }
   };
 
@@ -173,58 +189,8 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
 
   // Geolocation loader
   useEffect(() => {
-    // Prevent refetching if already initialized
-    if (locationRef.current.initialized) return;
-
-    let mounted = true;
-
-    if (navigator.geolocation) {
-      setGpsStatus('detecting');
-      
-      const geoOptions = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
-      
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          if (!mounted) return;
-          locationRef.current.initialized = true;
-          setUserLat(position.coords.latitude);
-          setUserLng(position.coords.longitude);
-          setGpsStatus('active');
-        },
-        (error) => {
-          if (!mounted) return;
-          console.warn('Geolocation failed or rejected:', error);
-          
-          // Retry once with lower accuracy if timeout or unavailable
-          if (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE) {
-             navigator.geolocation.getCurrentPosition(
-               (pos) => {
-                 if (!mounted) return;
-                 locationRef.current.initialized = true;
-                 setUserLat(pos.coords.latitude);
-                 setUserLng(pos.coords.longitude);
-                 setGpsStatus('active');
-               },
-               (err2) => {
-                 if (!mounted) return;
-                 locationRef.current.initialized = true;
-                 setGpsStatus('denied');
-               },
-               { enableHighAccuracy: false, timeout: 10000, maximumAge: Infinity }
-             );
-          } else {
-            locationRef.current.initialized = true;
-            setGpsStatus('denied');
-          }
-        },
-        geoOptions
-      );
-    } else {
-      locationRef.current.initialized = true;
-      setGpsStatus('denied');
-    }
-    
-    return () => { mounted = false; };
+    // We already fetch geolocation using locateUserExact(true) near line 100.
+    // Redundant geolcation trigger removed to prevent parallel request locks.
   }, []);
 
   // Haversine formula to compute distance in km
