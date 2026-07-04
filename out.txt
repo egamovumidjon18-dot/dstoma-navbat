@@ -1,0 +1,181 @@
+194:      <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col bg-[#111827] border border-slate-700 p-3 rounded-xl shadow-2xl text-xs w-48 z-50 pointer-events-none">
+195:        <div className="font-black text-white text-sm mb-1 border-b border-slate-700 pb-1">Tish #{number}</div>
+196:        <div className="flex justify-between mt-1"><span className="text-slate-400">Holati:</span> <span className="font-bold text-emerald-400">{globalCondition}</span></div>
+199:            <div className="flex justify-between mt-1"><span className="text-slate-400">Oxirgi muolaja:</span> <span className="font-bold text-slate-300">{new Date(lastHistory.date).toLocaleDateString()}</span></div>
+200:            <div className="flex justify-between mt-1"><span className="text-slate-400">Shifokor:</span> <span className="font-bold text-slate-300">{lastHistory.dentist}</span></div>
+203:          <div className="text-slate-500 mt-1 italic text-center">Tarix mavjud emas</div>
+482:      <div className="flex-1 flex flex-col bg-[#020712] rounded-[32px] p-4 md:p-6 text-slate-300 w-full overflow-hidden shadow-2xl relative m-2 md:m-4 mt-2">
+491:          <div className="bg-[#0a0f1d] border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
+495:                 <User className="w-10 h-10 text-slate-400" />
+497:               <h3 className="text-white font-black text-xl">Bemor ID: {patientId.slice(0, 6)}</h3>
+498:               <p className="text-slate-400 text-sm flex items-center justify-center gap-1.5 mt-1 font-medium"><Phone className="w-3.5 h-3.5 text-emerald-500" /> +998 90 123 4567</p>
+501:            <div className="space-y-3 text-sm border-t border-slate-800/80 pt-5">
+503:                <span className="text-slate-500 font-medium">Yosh / Jins</span>
+504:                <span className="text-slate-200 font-bold bg-[#111827] px-3 py-1 rounded-lg">32, Erkak</span>
+507:                <span className="text-slate-500 font-medium">Qon guruhi</span>
+508:                <span className="text-slate-200 font-bold bg-[#111827] px-3 py-1 rounded-lg">II (A) +</span>
+511:                <span className="text-slate-500 font-medium">Allergiya</span>
+519:          <div className="bg-[#0a0f1d] border border-slate-800 rounded-3xl p-6 shadow-xl">
+520:            <h4 className="text-white font-bold mb-5 flex items-center gap-2 text-sm uppercase tracking-wider"><DollarSign className="w-4 h-4 text-emerald-500" /> Moliyaviy Holat</h4>
+523:                 <div className="flex justify-between text-xs font-bold text-slate-400 mb-2">
+525:                   <span className="text-white">4,500,000 UZS</span>
+527:                 <div className="w-full bg-[#111827] rounded-full h-2 overflow-hidden border border-slate-800">
+528:                   <div className="bg-slate-500 h-full rounded-full w-full"></div>
+532:                 <div className="flex justify-between text-xs font-bold text-slate-400 mb-2">
+536:                 <div className="w-full bg-[#111827] rounded-full h-2 overflow-hidden border border-slate-800">
+540:               <div className="flex justify-between items-center pt-4 border-t border-slate-800/80">
+541:                  <span className="text-sm font-bold text-slate-400">Qoldiq qarz:</span>
+547:          <div className="bg-[#0a0f1d] border border-slate-800 rounded-3xl p-6 shadow-xl">
+548:            <h4 className="text-white font-bold mb-4 text-sm uppercase tracking-wider flex items-center gap-2">
+552:              <button className="flex flex-col items-center justify-center p-4 bg-[#111827] border border-slate-800 hover:border-emerald-500/50 hover:bg-[#162032] rounded-2xl transition-all gap-2 text-xs font-bold text-slate-300 group">
+555:              <button className="flex flex-col items-center justify-center p-4 bg-[#111827] border border-slate-800 hover:border-blue-500/50 hover:bg-[#162032] rounded-2xl transition-all gap-2 text-xs font-bold text-slate-300 group">
+558:              <button className="flex flex-col items-center justify-center p-4 bg-[#111827] border border-slate-800 hover:border-amber-500/50 hover:bg-[#162032] rounded-2xl transition-all gap-2 text-xs font-bold text-slate-300 group">
+561:              <button className="flex flex-col items-center justify-center p-4 bg-[#111827] border border-slate-800 hover:border-cyan-500/50 hover:bg-[#162032] rounded-2xl transition-all gap-2 text-xs font-bold text-slate-300 group">
+564:              <button className="col-span-2 mt-1 flex items-center justify-center py-3 bg-indigo-500 hover:bg-indigo-600 text-white rounded-2xl text-sm font-bold gap-2 transition-colors shadow-lg shadow-indigo-500/20">
+782:                        className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-colors border ${highlightCondition === null ? 'bg-green-500 text-white border-green-500 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+804:                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-colors border ${highlightCondition === f.id ? 'bg-green-500 text-white border-green-500 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+814:                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+837:                <div className="bg-[#0a0f1d] rounded-3xl border border-slate-800 flex-1 flex flex-col overflow-hidden shadow-2xl animate-fade-in relative">
+840:                  <div className="p-6 border-b border-slate-800/80 flex flex-col gap-4 bg-gradient-to-br from-[#111827] to-[#0a0f1d] relative z-10">
+844:                          <h4 className="text-3xl font-black text-white drop-shadow-md">Tish #{selectedTooth}</h4>
+860:                        <span className="text-slate-500 font-bold">Tashxis</span>
+861:                        <span className="text-white font-medium">{currentToothData?.condition === 'Pulpitis' ? 'Pulpit' : (currentToothData?.condition === 'Initial Caries' ? "Boshlang'ich karies" : (currentToothData?.condition === 'Deep Caries' ? 'Chuqur karies' : "Sog'lom"))}</span>
+864:                        <span className="text-slate-500 font-bold">ICD-10</span>
+865:                        <span className="text-white font-medium">{currentToothData?.condition === 'Pulpitis' ? 'K04.0' : (currentToothData?.condition === 'Initial Caries' ? 'K02.0' : (currentToothData?.condition === 'Deep Caries' ? 'K02.1' : 'K00.0'))}</span>
+868:                        <span className="text-slate-500 font-bold">Shifokor</span>
+869:                        <span className="text-white font-medium">{currentToothData?.history?.[0]?.dentist || doctorName || 'Biriktirilmagan'}</span>
+872:                        <span className="text-slate-500 font-bold">Oxirgi tashrif</span>
+873:                        <span className="text-white font-medium">{currentToothData?.history?.[0]?.date ? new Date(currentToothData.history[0].date).toLocaleDateString('ru-RU') : 'Kiritilmagan'}</span>
+876:                        <span className="text-slate-500 font-bold">Davolash narxi</span>
+880:                        <span className="text-slate-500 font-bold">To'lov holati</span>
+887:                      className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 text-sm font-bold mt-2"
+904:                           <button onClick={runAiAnalysis} className="text-xs bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-1.5 rounded-lg font-bold transition-all shadow-md hover:shadow-indigo-500/25">Tahlil qilish</button>
+921:                               <span className="text-slate-400">Ishonch:</span>
+926:                             <button className="flex-[2] bg-emerald-500 text-white py-2 rounded-xl text-xs font-bold transition-all hover:bg-emerald-600 shadow-md">Tasdiqlash</button>
+927:                             <button className="flex-1 bg-slate-800 text-slate-300 hover:bg-slate-700 py-2 rounded-xl text-xs font-bold transition-all">Rad etish</button>
+935:                      <h5 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
+939:                         <div className="aspect-video bg-[#111827] border border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 hover:border-emerald-500/50 hover:text-emerald-500 transition-colors cursor-pointer group">
+943:                         <div className="aspect-video bg-[#111827] border border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 hover:border-blue-500/50 hover:text-blue-500 transition-colors cursor-pointer group">
+947:                         <div className="aspect-video bg-[#111827] border border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 hover:border-amber-500/50 hover:text-amber-500 transition-colors cursor-pointer group">
+951:                         <div className="aspect-video bg-[#111827] border border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 hover:border-purple-500/50 hover:text-purple-500 transition-colors cursor-pointer group">
+957:                        <button className="flex items-center justify-center gap-1.5 p-2 bg-[#111827] border border-slate-800 rounded-xl hover:bg-slate-800 text-[10px] font-bold text-slate-400 hover:text-white transition-colors">
+960:                        <button className="flex items-center justify-center gap-1.5 p-2 bg-[#111827] border border-slate-800 rounded-xl hover:bg-emerald-500/20 hover:border-emerald-500/30 text-[10px] font-bold text-slate-400 hover:text-emerald-400 transition-colors">
+963:                        <button className="flex items-center justify-center gap-1.5 p-2 bg-[#111827] border border-slate-800 rounded-xl hover:bg-rose-500/20 hover:border-rose-500/30 text-[10px] font-bold text-slate-400 hover:text-rose-400 transition-colors">
+971:                      <h5 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6">
+975:                        <div className="relative border-l-2 border-slate-800 ml-4 space-y-8 pb-6">
+979:                              <div className="bg-[#111827] p-5 rounded-2xl border border-slate-800 hover:border-emerald-500/30 transition-colors group shadow-md">
+981:                                  <h6 className="text-sm font-black text-white pr-4 leading-snug group-hover:text-emerald-400 transition-colors">{h.treatment}</h6>
+987:                                {h.notes && <p className="text-xs text-slate-400 mb-4 bg-[#0a0f1d] p-3 rounded-xl border border-slate-800/50 leading-relaxed">{h.notes}</p>}
+989:                                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 font-bold mb-3">
+990:                                  <span className="flex items-center gap-1.5 bg-[#020712] px-3 py-1.5 rounded-lg border border-slate-800">
+991:                                    <Calendar className="w-3.5 h-3.5 text-slate-400" /> {new Date(h.date).toLocaleDateString('ru-RU')}
+993:                                  <span className="flex items-center gap-1.5 bg-[#020712] px-3 py-1.5 rounded-lg border border-slate-800">
+997:                                    <span className="flex items-center gap-1.5 bg-[#020712] px-3 py-1.5 rounded-lg border border-slate-800">
+1002:                                    <span className="flex items-center gap-1.5 bg-[#020712] px-3 py-1.5 rounded-lg border border-slate-800">
+1012:                        <div className="text-center py-12 bg-[#111827] rounded-2xl border border-dashed border-slate-700 text-slate-500 text-sm font-bold flex flex-col items-center gap-3">
+1021:                <div className="bg-[#0a0f1d] rounded-3xl border border-slate-800 flex-1 flex flex-col items-center justify-center p-8 text-center shadow-2xl">
+1022:                  <div className="w-24 h-24 bg-[#111827] border border-slate-800 rounded-full flex items-center justify-center mb-6 shadow-inner relative group">
+1024:                    <Info className="w-10 h-10 text-slate-500 group-hover:text-emerald-500 transition-colors relative z-10" />
+1026:                  <h4 className="text-white font-black text-xl mb-3">Tish Tanlanmagan</h4>
+1027:                  <p className="text-sm text-slate-400 max-w-[280px] leading-relaxed font-medium">
+1035:          <div className="flex-1 bg-white rounded-3xl border border-slate-100 p-8 overflow-y-auto custom-scrollbar">
+1047:                <div key={i} className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+1048:                  <div className="text-xs font-bold text-slate-500 mb-1">{item.label}</div>
+1054:            <div className="bg-white rounded-2xl border border-slate-100 p-6">
+1055:              <h3 className="text-lg font-black text-slate-800 mb-4">Muolaja Tarixi (Barcha tishlar)</h3>
+1060:                <div key={h.id} className="flex items-center justify-between py-3 border-b border-slate-50 last:border-0">
+1062:                    <span className="font-bold text-slate-800">#{h.toothId}</span>
+1063:                    <span className="text-slate-500 ml-2">
+1069:                    <div className="text-xs text-slate-400">{new Date(h.date).toLocaleDateString()}</div>
+1070:                    <div className="font-bold text-slate-800">{h.cost.toLocaleString()} UZS</div>
+1077:          <div className="flex-1 bg-slate-50 rounded-3xl p-8 overflow-y-auto custom-scrollbar">
+1079:              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+1080:                <div className="text-sm font-bold text-slate-500 mb-2">Jami davolash narxi</div>
+1081:                <div className="text-3xl font-black text-slate-800">4,500,000 UZS</div>
+1083:              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm border-l-4 border-l-emerald-500">
+1084:                <div className="text-sm font-bold text-slate-500 mb-2">To'langan</div>
+1087:              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm border-l-4 border-l-red-500">
+1088:                <div className="text-sm font-bold text-slate-500 mb-2">Qoldiq qarz</div>
+1093:            <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
+1095:                <h3 className="text-lg font-black text-slate-800">To'lov tarixi</h3>
+1096:                <button className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold transition-colors">
+1100:              <div className="text-center py-12 text-slate-400 font-medium bg-slate-50 rounded-xl">
+1106:          <div className="flex-1 bg-white rounded-3xl border border-slate-100 p-8 overflow-y-auto custom-scrollbar">
+1107:            <h3 className="text-2xl font-black text-slate-800 mb-6 flex items-center gap-3">
+1110:            <div className="relative border-l-2 border-slate-100 ml-4 space-y-8">
+1117:                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 hover:border-emerald-200 transition-colors shadow-sm">
+1120:                        <h6 className="text-lg font-black text-slate-800">Tish #{h.toothId}: {h.treatment}</h6>
+1121:                        <p className="text-sm text-slate-500 font-bold">{h.condition}</p>
+1127:                    {h.notes && <p className="text-sm text-slate-600 mb-4 bg-white p-3 rounded-xl border border-slate-100">{h.notes}</p>}
+1128:                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 font-bold">
+1129:                      <span className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-slate-100"><Calendar className="w-3.5 h-3.5 text-blue-500" /> {new Date(h.date).toLocaleDateString()}</span>
+1130:                      <span className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-slate-100"><Stethoscope className="w-3.5 h-3.5 text-emerald-500" /> {h.dentist}</span>
+1131:                      {h.material && <span className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-slate-100"><Layers className="w-3.5 h-3.5 text-purple-500" /> {h.material}</span>}
+1139:          <div className="flex-1 bg-white rounded-3xl border border-slate-100 p-8 overflow-y-auto custom-scrollbar">
+1141:              <h3 className="text-2xl font-black text-slate-800 flex items-center gap-3"><ListTodo className="w-6 h-6 text-blue-500" /> Davolash Rejasi</h3>
+1142:              <button className="bg-blue-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-blue-600 transition-colors">+ Reja Qo'shish</button>
+1146:                 <div key={i} className="bg-slate-50 border border-slate-100 p-5 rounded-2xl flex items-center justify-between group">
+1148:                     <div className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center font-bold text-slate-400 group-hover:text-blue-500 group-hover:border-blue-200 transition-colors">{i+1}</div>
+1150:                       <h4 className="font-bold text-slate-800">{plan}</h4>
+1151:                       <p className="text-xs font-bold text-slate-500 mt-1">Rejalashtirilgan: {new Date(Date.now() + 86400000 * (i+2)).toLocaleDateString()}</p>
+1155:                     <button className="p-2 bg-white rounded-lg border border-slate-200 hover:border-emerald-500 hover:text-emerald-600 transition-colors"><Check className="w-4 h-4" /></button>
+1156:                     <button className="p-2 bg-white rounded-lg border border-slate-200 hover:border-red-500 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
+1163:          <div className="flex-1 bg-slate-900 rounded-3xl border border-slate-800 p-8 overflow-y-auto custom-scrollbar text-white">
+1168:              <button className="bg-slate-800 border border-slate-700 hover:bg-slate-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2">
+1174:                 <div key={i} className="group relative aspect-square bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 hover:border-slate-500 transition-all cursor-pointer">
+1177:                     <p className="text-xs text-slate-300">12.06.2026</p>
+1189:          <div className="flex-1 bg-slate-50 rounded-3xl border border-slate-100 p-8 overflow-y-auto custom-scrollbar">
+1191:              <h3 className="text-2xl font-black text-slate-800 flex items-center gap-3"><Pill className="w-6 h-6 text-amber-500" /> Retseptlar</h3>
+1192:              <button className="bg-amber-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-amber-600 transition-colors">+ Yangi Retsept</button>
+1195:               <div className="bg-white border border-slate-200 p-6 rounded-2xl flex justify-between items-start">
+1197:                   <h4 className="text-lg font-black text-slate-800">Amoksitsillin 500mg, Nimesil 100mg</h4>
+1198:                   <p className="text-sm font-bold text-slate-500 mt-2">Ovqatdan so'ng, kuniga 2 mahal, 5 kun davomida.</p>
+1200:                     <span className="text-xs font-bold text-slate-400">Sana: 12.06.2026</span>
+1201:                     <span className="text-xs font-bold text-slate-400">Shifokor: Dr. Asilbek</span>
+1204:                 <button className="p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors"><Printer className="w-5 h-5 text-slate-600" /></button>
+1209:          <div className="flex-1 bg-white rounded-3xl border border-slate-100 p-8 overflow-y-auto custom-scrollbar">
+1210:            <h3 className="text-2xl font-black text-slate-800 flex items-center gap-3 mb-8"><PieChart className="w-6 h-6 text-purple-500" /> Bemor Statistikasi</h3>
+1212:              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+1213:                <div className="text-slate-500 font-bold mb-2">Jami Tashriflar</div>
+1214:                <div className="text-3xl font-black text-slate-800">12 ta</div>
+1216:              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+1217:                <div className="text-slate-500 font-bold mb-2">Bajarilgan Muolajalar</div>
+1218:                <div className="text-3xl font-black text-slate-800">8 ta</div>
+1220:              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+1221:                <div className="text-slate-500 font-bold mb-2">Sarflangan Vaqt</div>
+1222:                <div className="text-3xl font-black text-slate-800">14 soat</div>
+1224:              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+1225:                <div className="text-slate-500 font-bold mb-2">Sodiqlik Darajasi</div>
+1236:          <div className="bg-[#0a0f1d] rounded-[32px] border border-slate-700 shadow-2xl w-full max-w-2xl p-2 relative overflow-hidden">
+1239:              <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-800">
+1241:                  <h3 className="text-2xl font-black text-white">Yangi Muolaja</h3>
+1246:                <button onClick={() => setShowAddTreatment(false)} className="text-slate-500 hover:text-white bg-[#0a0f1d] hover:bg-rose-500/20 p-3 rounded-xl transition-colors border border-slate-800">
+1256:                      className="w-6 h-6 rounded-md border-slate-700 bg-[#111827] text-emerald-500 focus:ring-emerald-500 focus:ring-offset-[#0a0f1d]"
+1262:                      <div className="text-sm font-black text-white">Faqat tanlangan yuza uchun</div>
+1263:                      <div className="text-xs text-slate-400 font-medium mt-1">Muolaja faqatgina tanlangan yuzaga ({selectedSurface || 'tanlanmagan'}) ta'sir qiladi.</div>
+1270:                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Holat / Tashxis</label>
+1274:                      className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner appearance-none"
+1280:                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Muolaja nomi</label>
+1286:                      className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner"
+1293:                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Material</label>
+1299:                      className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner"
+1303:                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Tish Rangi (Shade)</label>
+1309:                      className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner"
+1316:                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Davomiyligi (Daqiqa)</label>
+1321:                      className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner"
+1325:                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Sana</label>
+1330:                      className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner"
+1337:                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Narxi (UZS)</label>
+1344:                        className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl pl-12 pr-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner"
+1346:                      <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-500" />
+1350:                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Chegirma (%)</label>
+1356:                      className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner"
+1363:                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Shifokor</label>
+1368:                      className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-slate-400 outline-none shadow-inner"
+1372:                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Assistent</label>
+1378:                      className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner"
+1384:                  <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Klinik Eslatma</label>
+1390:                    className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-4 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner resize-none custom-scrollbar"
+1394:                <div className="pt-6 flex gap-4 border-t border-slate-800">
+1397:                    className="flex-1 py-4 bg-[#0a0f1d] border border-slate-700 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors"
+1404:                    className="flex-[2] py-4 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black rounded-xl transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-3 text-lg"

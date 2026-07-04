@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "outputDirectory": "dist",
+  "functions": {
+    "api/**/*": {
+      "includeFiles": "firebase-applet-config.json"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

@@ -1,0 +1,307 @@
+const fs = require('fs');
+let code = fs.readFileSync('src/components/DoctorDashboard.tsx', 'utf8');
+
+const startIndex = code.indexOf('{activeView === "bemorlar" && (');
+if (startIndex === -1) throw new Error("Could not find start");
+
+let openCount = 0;
+let endIndex = -1;
+for (let i = startIndex; i < code.length; i++) {
+    if (code[i] === '{' || code[i] === '(') openCount++;
+    if (code[i] === '}' || code[i] === ')') {
+        openCount--;
+        if (openCount === 0) {
+            endIndex = i;
+            break;
+        }
+    }
+}
+
+if (endIndex !== -1) {
+    const newContent = `{activeView === "bemorlar" && (
+  <div className="space-y-6">
+    {/* Top Stats Cards */}
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+        <div className="p-3 bg-emerald-50 text-emerald-500 rounded-2xl"><Users className="w-6 h-6" /></div>
+        <div>
+          <p className="text-[10px] font-bold text-slate-500 mb-1">Barcha bemorlar</p>
+          <div className="flex items-end gap-2">
+            <span className="text-2xl font-black text-slate-800 leading-none">1 248</span>
+            <span className="text-[10px] font-bold text-emerald-500">+24 yangi</span>
+          </div>
+        </div>
+      </div>
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+        <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl"><UserCheck className="w-6 h-6" /></div>
+        <div>
+          <p className="text-[10px] font-bold text-slate-500 mb-1">Faol bemorlar</p>
+          <div className="flex items-end gap-2">
+            <span className="text-2xl font-black text-slate-800 leading-none">842</span>
+            <span className="text-[10px] font-bold text-slate-400">67.6%</span>
+          </div>
+        </div>
+      </div>
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+        <div className="p-3 bg-purple-50 text-purple-500 rounded-2xl"><CalendarClock className="w-6 h-6" /></div>
+        <div>
+          <p className="text-[10px] font-bold text-slate-500 mb-1">Bugun tashrif buyuradi</p>
+          <div className="flex items-end gap-2">
+            <span className="text-2xl font-black text-slate-800 leading-none">12</span>
+            <span className="text-[10px] font-bold text-slate-400">1.4%</span>
+          </div>
+        </div>
+      </div>
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+        <div className="p-3 bg-amber-50 text-amber-500 rounded-2xl"><AlertCircle className="w-6 h-6" /></div>
+        <div>
+          <p className="text-[10px] font-bold text-slate-500 mb-1">Qarzdor bemorlar</p>
+          <div className="flex items-end gap-2">
+            <span className="text-2xl font-black text-slate-800 leading-none">78</span>
+            <span className="text-[10px] font-bold text-slate-400">6.2%</span>
+          </div>
+        </div>
+      </div>
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+        <div className="p-3 bg-rose-50 text-rose-500 rounded-2xl"><CreditCard className="w-6 h-6" /></div>
+        <div>
+          <p className="text-[10px] font-bold text-slate-500 mb-1">Umumiy qarzdorlik</p>
+          <div className="flex items-end gap-1">
+            <span className="text-xl font-black text-slate-800 leading-none">23 450 000</span>
+            <span className="text-[10px] font-bold text-slate-500">so'm</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Main Content Area */}
+    <div className="flex flex-col xl:flex-row gap-6">
+       {/* Table Area */}
+       <div className="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm p-5 flex flex-col">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-5">
+             <div className="flex items-center gap-3">
+               <h3 className="font-bold text-slate-800 text-lg">Bemorlar ro'yxati</h3>
+               <span className="text-xs font-semibold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full">1 248 bemor</span>
+             </div>
+             <div className="flex items-center gap-3 w-full sm:w-auto">
+               <div className="relative w-full sm:w-72">
+                 <input type="text" placeholder="Ism, telefon yoki ID bo'yicha qidirish..." className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-xs outline-none focus:border-emerald-500/50 transition-colors" />
+                 <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5" />
+               </div>
+               <button className="hidden sm:flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-700 font-bold text-xs rounded-lg hover:bg-slate-50 transition-colors">
+                 <Filter className="w-3.5 h-3.5" /> Filter
+               </button>
+               <button className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors shadow-md shadow-emerald-500/20">
+                 <Plus className="w-4 h-4" /> Yangi bemor
+               </button>
+             </div>
+          </div>
+
+          <div className="overflow-x-auto">
+             <table className="w-full text-left text-xs whitespace-nowrap">
+               <thead className="text-slate-400 border-b border-slate-100 bg-slate-50/50">
+                 <tr>
+                   <th className="font-semibold py-3 px-4 rounded-l-lg">#</th>
+                   <th className="font-semibold py-3 px-3">Bemor</th>
+                   <th className="font-semibold py-3 px-3">Telefon</th>
+                   <th className="font-semibold py-3 px-3">Tug'ilgan sana</th>
+                   <th className="font-semibold py-3 px-3">Oxirgi tashrif</th>
+                   <th className="font-semibold py-3 px-3 text-center">Tashriflar soni</th>
+                   <th className="font-semibold py-3 px-3 text-right">Qarzdorlik</th>
+                   <th className="font-semibold py-3 px-3 text-center">Holati</th>
+                   <th className="font-semibold py-3 px-4 text-right rounded-r-lg">Amallar</th>
+                 </tr>
+               </thead>
+               <tbody className="divide-y divide-slate-50">
+                  {[
+                    { id: 1, name: "Aliyev Jasurbek", code: "B1001248", phone: "+998 90 123 45 67", dob: "12.05.1995", lastVisit: "24.06.2026", visits: 8, debt: 0, status: "Faol" },
+                    { id: 2, name: "Karimov Behzod", code: "B1001247", phone: "+998 99 887 65 43", dob: "29.05.1995", lastVisit: "24.06.2026", visits: 12, debt: 1200000, status: "Qarzdor" },
+                    { id: 3, name: "Ergashev Sardor", code: "B1001246", phone: "+998 90 555 11 22", dob: "15.03.1993", lastVisit: "20.06.2026", visits: 6, debt: 0, status: "Faol" },
+                    { id: 4, name: "Usmonova Dildora", code: "B1001245", phone: "+998 91 234 56 78", dob: "05.07.1996", lastVisit: "18.06.2026", visits: 4, debt: 800000, status: "Qarzdor" },
+                    { id: 5, name: "To'rayev Jahongir", code: "B1001244", phone: "+998 97 654 32 10", dob: "22.11.1994", lastVisit: "15.06.2026", visits: 3, debt: 0, status: "Faol" },
+                    { id: 6, name: "Normurodov Aziz", code: "B1001243", phone: "+998 99 777 88 66", dob: "30.01.1992", lastVisit: "10.06.2026", visits: 7, debt: 2500000, status: "Qarzdor" },
+                    { id: 7, name: "Ro'ziqulov Mansur", code: "B1001242", phone: "+998 91 111 22 33", dob: "18.08.1995", lastVisit: "05.06.2026", visits: 5, debt: 0, status: "Faol" },
+                    { id: 8, name: "Yusupova Nilufar", code: "B1001241", phone: "+998 93 456 78 90", dob: "09.02.1997", lastVisit: "02.06.2026", visits: 6, debt: 1150000, status: "Qarzdor" },
+                    { id: 9, name: "Abdullayev Sardorbek", code: "B1001240", phone: "+998 91 234 56 78", dob: "11.04.1993", lastVisit: "30.05.2026", visits: 9, debt: 0, status: "Faol" },
+                    { id: 10, name: "Saidova Malika", code: "B1001239", phone: "+998 90 123 45 67", dob: "28.12.1996", lastVisit: "28.05.2026", visits: 2, debt: 500000, status: "Qarzdor" },
+                  ].map((patient, index) => (
+                    <tr key={patient.id} className="hover:bg-slate-50 transition-colors group cursor-pointer">
+                      <td className="py-3 px-4 font-medium text-slate-500">{index + 1}</td>
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-3">
+                          <img src={\`https://api.dicebear.com/7.x/adventurer/svg?seed=\${patient.id}\`} className="w-8 h-8 rounded-full bg-slate-100" alt={patient.name} />
+                          <div>
+                            <p className="font-bold text-slate-800">{patient.name}</p>
+                            <p className="text-[9px] text-slate-400 font-mono">ID: #{patient.code}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-slate-600 font-mono text-[11px] font-medium">{patient.phone}</td>
+                      <td className="py-3 px-3 text-slate-600">{patient.dob}</td>
+                      <td className="py-3 px-3 text-slate-600">{patient.lastVisit}</td>
+                      <td className="py-3 px-3 text-center text-slate-600 font-semibold">{patient.visits}</td>
+                      <td className="py-3 px-3 text-right">
+                         <span className={\`font-bold \${patient.debt > 0 ? 'text-rose-500' : 'text-emerald-500'}\`}>
+                            {patient.debt > 0 ? \`\${patient.debt.toLocaleString()} so'm\` : "0 so'm"}
+                         </span>
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                         <span className={\`text-[10px] font-bold px-2.5 py-1 rounded uppercase \${patient.status === 'Faol' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}\`}>
+                            {patient.status}
+                         </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Eye className="w-4 h-4" /></button>
+                          <button className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4" /></button>
+                          <button className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"><MoreVertical className="w-4 h-4" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+               </tbody>
+             </table>
+          </div>
+          
+          {/* Pagination */}
+          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span className="text-slate-500 font-medium">1-10 / 1 248 bemor</span>
+            <div className="flex items-center gap-2">
+               <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors">&lt;</button>
+               <button className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-600 text-white font-bold">1</button>
+               <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-colors">2</button>
+               <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-colors">3</button>
+               <span className="text-slate-400">...</span>
+               <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-colors">125</button>
+               <button className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors">&gt;</button>
+               
+               <select className="ml-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-lg px-2 py-1.5 outline-none font-medium cursor-pointer">
+                 <option>10 / sahifa</option>
+                 <option>20 / sahifa</option>
+                 <option>50 / sahifa</option>
+               </select>
+            </div>
+          </div>
+       </div>
+
+       {/* Right Sidebar */}
+       <div className="w-full xl:w-[320px] shrink-0 space-y-6">
+          {/* Filters Panel */}
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+             <div className="flex items-center justify-between mb-5">
+               <h3 className="font-bold text-slate-800 text-base">Filterlar</h3>
+               <button className="text-[11px] font-bold text-slate-400 hover:text-slate-600">Tozalash</button>
+             </div>
+             <div className="space-y-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-800 mb-1.5">Holati</label>
+                  <select className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:border-emerald-500/50 transition-colors font-medium">
+                     <option>Barchasi</option>
+                     <option>Faol</option>
+                     <option>Qarzdor</option>
+                     <option>Arxiv</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-800 mb-1.5">Qarzdorlik</label>
+                  <select className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:border-emerald-500/50 transition-colors font-medium">
+                     <option>Barchasi</option>
+                     <option>Qarzdorlar</option>
+                     <option>Qarzi yo'qlar</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-800 mb-1.5">Shifokor</label>
+                  <select className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:border-emerald-500/50 transition-colors font-medium">
+                     <option>Barchasi</option>
+                     <option>Dr. Asilbek Xolmirzayev</option>
+                     <option>Dr. Shohrux Rahmonov</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-800 mb-1.5">Ro'yxatdan o'tgan sana</label>
+                  <div className="flex items-center gap-2">
+                     <div className="relative flex-1">
+                        <input type="text" placeholder="dd.mm.yyyy" className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-[11px] font-mono outline-none" />
+                        <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5" />
+                     </div>
+                     <span className="text-slate-400">-</span>
+                     <div className="relative flex-1">
+                        <input type="text" placeholder="dd.mm.yyyy" className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-[11px] font-mono outline-none" />
+                        <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5" />
+                     </div>
+                  </div>
+                </div>
+                <button className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-emerald-500/20 mt-2">
+                  Qidirish
+                </button>
+             </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+             <h3 className="font-bold text-slate-800 text-base mb-4">Tezkor amallar</h3>
+             <div className="space-y-2">
+                <button className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-colors text-left group">
+                   <div className="p-2 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-100 transition-colors"><UserPlus className="w-4 h-4" /></div>
+                   <div>
+                     <h4 className="font-bold text-slate-800 text-xs">Yangi bemor qo'shish</h4>
+                     <p className="text-[10px] text-slate-500">Bemor ma'lumotlarini kiriting</p>
+                   </div>
+                </button>
+                <button className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-colors text-left group">
+                   <div className="p-2 bg-amber-50 text-amber-500 rounded-lg group-hover:bg-amber-100 transition-colors"><FileText className="w-4 h-4" /></div>
+                   <div>
+                     <h4 className="font-bold text-slate-800 text-xs">Bemor kartasini ochish</h4>
+                     <p className="text-[10px] text-slate-500">Mavjud bemorni tanlang</p>
+                   </div>
+                </button>
+                <button className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-colors text-left group">
+                   <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-100 transition-colors"><FileDown className="w-4 h-4" /></div>
+                   <div>
+                     <h4 className="font-bold text-slate-800 text-xs">Excel'ga eksport qilish</h4>
+                     <p className="text-[10px] text-slate-500">Barcha bemorlarni yuklab oling</p>
+                   </div>
+                </button>
+                <button className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-colors text-left group">
+                   <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-100 transition-colors"><Send className="w-4 h-4" /></div>
+                   <div>
+                     <h4 className="font-bold text-slate-800 text-xs">Telegram'ga xabar yuborish</h4>
+                     <p className="text-[10px] text-slate-500">Tanlangan bemorlarga xabar</p>
+                   </div>
+                </button>
+             </div>
+          </div>
+
+          {/* Info */}
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+             <h3 className="font-bold text-slate-800 text-base mb-4">Ma'lumot</h3>
+             <div className="space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                   <span className="text-slate-500 font-medium">O'rtacha tashrif soni</span>
+                   <span className="font-bold text-slate-800">5.7 marta</span>
+                </div>
+                <div className="flex items-center justify-between">
+                   <span className="text-slate-500 font-medium">Eng ko'p tashrif buyurgan bemor</span>
+                   <span className="font-bold text-slate-800">12 marta</span>
+                </div>
+                <div className="flex items-center justify-between">
+                   <span className="text-slate-500 font-medium">Eng ko'p qarzdor bemor</span>
+                   <span className="font-bold text-slate-800">2 500 000 so'm</span>
+                </div>
+                <div className="flex items-center justify-between">
+                   <span className="text-slate-500 font-medium">Yangi bemorlar (bu oy)</span>
+                   <span className="font-bold text-slate-800">24 ta</span>
+                </div>
+             </div>
+          </div>
+       </div>
+    </div>
+  </div>
+)}`;
+    code = code.substring(0, startIndex) + newContent + code.substring(endIndex + 1);
+    fs.writeFileSync('src/components/DoctorDashboard.tsx', code);
+    console.log("Updated Bemorlar successfully");
+} else {
+    console.log("Could not find matching end parenthesis.");
+}

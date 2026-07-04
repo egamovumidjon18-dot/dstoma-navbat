@@ -1,0 +1,3297 @@
+import React, { useState, useMemo, useEffect } from "react";
+import { collection, onSnapshot } from "firebase/firestore";
+import { db } from "../services/firebase";
+import PatientProfile from "./PatientProfile";
+import DentalChart from "./DentalChart";
+import TreatmentPlan, { TreatmentItem } from "./TreatmentPlan";
+import XRayCenter, { XRay } from "./XRayCenter";
+import TreatmentHistory from "./TreatmentHistory";
+import PhotoGallery from "./PhotoGallery";
+import Statistics from "./Statistics";
+import Prescriptions from "./Prescriptions";
+import SettingsView from "./Settings";
+import { Clinic, Doctor, Service, QueueItem, Patient, DoctorClinicLink } from "../types";
+import { decodeLegacyEntities } from "../utils/textFormat";
+import { TRANSLATIONS, Language, translateMedicalText } from "../translations";
+import {
+  Check,
+  X,
+  Phone,
+  Play,
+  TrendingUp,
+  Users,
+  Star,
+  Award,
+  DollarSign,
+  Clock,
+  ShieldAlert,
+  Lock,
+  Building,
+  ArrowLeft,
+  User,
+  Settings,
+  CircleDot,
+  UserCheck2,
+  CalendarCheck2,
+  Sparkles,
+  Brain,
+  Info,
+  Search,
+  ChevronDown,
+  FolderOpen,
+  Home,
+  List,
+  Activity,
+  FileText,
+  Image as ImageIcon,
+  History,
+  Bell,
+  BarChart2,
+  PenTool,
+  LogOut,
+  Menu,
+  Send,
+  Wallet,
+  CheckCircle2,
+  CheckCircle,
+  Trash2,
+  Maximize2,
+  MoreVertical,
+  MessageSquare,
+  Plus,
+  Tag,
+  UserCheck,
+  Calendar,
+  CreditCard,
+  Filter,
+  Eye,
+  Edit2,
+  FileDown,
+  UserPlus,
+  MoreHorizontal,
+  AlertCircle,
+  CalendarClock,
+  Package,
+} from "lucide-react";
+import MaterialsInventory from "./MaterialsInventory";
+
+interface DoctorDashboardProps {
+  clinics: Clinic[];
+  doctors: Doctor[];
+  services: Service[];
+  queues: QueueItem[];
+  patients: Patient[];
+  doctorClinicLinks?: DoctorClinicLink[];
+  activeDoctorClinicId?: string | null;
+  setActiveDoctorClinicId?: (clinicId: string) => void;
+  onUpdateQueueStatus: (
+    id: string,
+    newStatus: QueueItem["status"],
+    serviceId?: string,
+    medicalNotes?: string,
+    appointmentDate?: string,
+    appointmentTime?: string
+  ) => void;
+  selectedClinic: Clinic | null;
+  setActiveTab?: (
+    tab: "bemor" | "shifokor" | "boshliq" | "kod" | "superadmin",
+  ) => void;
+  currentUser?: {
+    type: "superadmin" | "director" | "doctor";
+    id?: string;
+    clinicId?: string;
+    name?: string;
+  } | null;
+  language: Language;
+  onRequestPremiumUpgrade?: (clinicId: string) => void;
+  staffToken?: string | null;
+}
+
+type DoctorDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
+const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
+  sozlamalar: { ru: "Настройки", en: "Settings", kk: "Баптаулар", ky: "Жөндөөлөр", tg: "Танзимот", tk: "Sazlamalar" },
+  chiqish: { ru: "Выход", en: "Log Out", kk: "Шығу", ky: "Чыгуу", tg: "Баромадан", tk: "Çykmak" },
+  dashboard: { ru: "Панель управления", en: "Dashboard", kk: "Басқару тақтасы", ky: "Башкаруу панели", tg: "Тахтаи идоракунӣ", tk: "Dolandyryş paneli" },
+  navbatlar: { ru: "Очереди", en: "Queues", kk: "Кезектер", ky: "Кезектер", tg: "Навбатҳо", tk: "Nobatlar" },
+  bemorlar: { ru: "Пациенты", en: "Patients", kk: "Пациенттер", ky: "Бейтаптар", tg: "Беморон", tk: "Näsaglar" },
+  "material va anjomlar": { ru: "Материалы и оборудование", en: "Materials & Equipment", kk: "Материалдар мен жабдықтар", ky: "Материалдар жана жабдыктар", tg: "Маводу таҷҳизот", tk: "Serişdeler we enjamlar" },
+  statistika: { ru: "Статистика", en: "Statistics", kk: "Статистика", ky: "Статистика", tg: "Омор", tk: "Statistika" },
+  onlayn: { ru: "Онлайн", en: "Online", kk: "Онлайн", ky: "Онлайн", tg: "Онлайн", tk: "Onlaýn" },
+  vaqt: { ru: "Время", en: "Time", kk: "Уақыт", ky: "Убакыт", tg: "Вақт", tk: "Wagt" },
+  bemor: { ru: "Пациент", en: "Patient", kk: "Пациент", ky: "Бейтап", tg: "Бемор", tk: "Näsag" },
+  allergiya: { ru: "Аллергия", en: "Allergy", kk: "Аллергия", ky: "Аллергия", tg: "Аллергия", tk: "Allergiýa" },
+  kasalliklar: { ru: "Заболевания", en: "Diseases", kk: "Аурулар", ky: "Оорулар", tg: "Бемориҳо", tk: "Keseller" },
+  shikoyat: { ru: "Жалоба", en: "Complaint", kk: "Шағым", ky: "Арыз", tg: "Шикоят", tk: "Şikaýat" },
+  tish: { ru: "Зуб", en: "Tooth", kk: "Тіс", ky: "Тиш", tg: "Дандон", tk: "Diş" },
+  muolaja: { ru: "Процедура", en: "Treatment", kk: "Емдеу", ky: "Дарылоо", tg: "Муолиҷа", tk: "Bejergi" },
+  "bekor qilindi": { ru: "Отменено", en: "Cancelled", kk: "Бас тартылды", ky: "Жокко чыгарылды", tg: "Бекор карда шуд", tk: "Ýatyryldy" },
+  jarayonda: { ru: "В процессе", en: "In progress", kk: "Барысында", ky: "Жүрүшүндө", tg: "Дар ҷараён", tk: "Dowamynda" },
+  kutmoqda: { ru: "Ожидает", en: "Waiting", kk: "Күтуде", ky: "Күтүүдө", tg: "Интизор аст", tk: "Garaşylýar" },
+  "sana bo'yicha": { ru: "По дате", en: "By date", kk: "Күні бойынша", ky: "Күнү боюнча", tg: "Аз рӯи сана", tk: "Sene boýunça" },
+  barchasi: { ru: "Все", en: "All", kk: "Барлығы", ky: "Баары", tg: "Ҳама", tk: "Ählisi" },
+  "eslatma yaratildi": { ru: "Напоминание создано", en: "Reminder created", kk: "Ескерту жасалды", ky: "Эскертүү түзүлдү", tg: "Ёдоварӣ сохта шуд", tk: "Duýduryş döredildi" },
+  "holati bo'yicha": { ru: "По статусу", en: "By status", kk: "Мәртебесі бойынша", ky: "Абалы боюнча", tg: "Аз рӯи ҳолат", tk: "Ýagdaýy boýunça" },
+  belgilangan: { ru: "Запланировано", en: "Scheduled", kk: "Белгіленген", ky: "Белгиленген", tg: "Таъиншуда", tk: "Bellenen" },
+  qabulda: { ru: "На приеме", en: "In consultation", kk: "Қабылдауда", ky: "Кабылдоодо", tg: "Дар қабул", tk: "Kabulda" },
+  yakunlangan: { ru: "Завершено", en: "Completed", kk: "Аяқталды", ky: "Аяктады", tg: "Анҷомёфта", tk: "Tamamlanan" },
+  holati: { ru: "Статус", en: "Status", kk: "Мәртебесі", ky: "Абалы", tg: "Ҳолат", tk: "Ýagdaýy" },
+  faol: { ru: "Активен", en: "Active", kk: "Белсенді", ky: "Активдүү", tg: "Фаъол", tk: "Işjeň" },
+  qarzdor: { ru: "Должник", en: "Debtor", kk: "Қарызданушы", ky: "Карызкор", tg: "Қарздор", tk: "Bergili" },
+  arxiv: { ru: "Архив", en: "Archive", kk: "Мұрағат", ky: "Архив", tg: "Бойгонӣ", tk: "Arhiw" },
+  qarzdorlar: { ru: "Должники", en: "Debtors", kk: "Қарыздарлар", ky: "Карызкорлор", tg: "Қарздорон", tk: "Bergililer" },
+  "qarzi yo'qlar": { ru: "Без долгов", en: "No debt", kk: "Қарызы жоқтар", ky: "Карызы жоктор", tg: "Бидуни қарз", tk: "Bergisi ýoklar" },
+  "iltimos, dental chart ko'rish uchun bemorni tanlang": { ru: "Пожалуйста, выберите пациента для просмотра дентальной карты", en: "Please select a patient to view the dental chart", kk: "Өтінеміз, дентал картаны көру үшін пациентті таңдаңыз", ky: "Сураныч, дентал картаны көрүү үчүн бейтапты тандаңыз", tg: "Лутфан, барои дидани харитаи дандон беморро интихоб кунед", tk: "Haýyş, dental kartany görmek üçin näsagy saýlaň" },
+  "bemorlar ro'yxatiga o'tish": { ru: "Перейти к списку пациентов", en: "Go to patients list", kk: "Пациенттер тізіміне өту", ky: "Бейтаптар тизмесине өтүү", tg: "Гузаштан ба рӯйхати беморон", tk: "Näsaglar sanawyna geçmek" },
+  "iltimos, davolash rejasini ko'rish uchun bemorni tanlang": { ru: "Пожалуйста, выберите пациента для просмотра плана лечения", en: "Please select a patient to view the treatment plan", kk: "Өтінеміз, емдеу жоспарын көру үшін пациентті таңдаңыз", ky: "Сураныч, дарылоо планын көрүү үчүн бейтапты тандаңыз", tg: "Лутфан, барои дидани нақшаи муолиҷа беморро интихоб кунед", tk: "Haýyş, bejergi meýilnamasyny görmek üçin näsagy saýlaň" },
+  "iltimos, rentgenlarni ko'rish uchun bemorni tanlang": { ru: "Пожалуйста, выберите пациента для просмотра рентгенов", en: "Please select a patient to view X-rays", kk: "Өтінеміз, рентгендерді көру үшін пациентті таңдаңыз", ky: "Сураныч, рентгендерди көрүү үчүн бейтапты тандаңыз", tg: "Лутфан, барои дидани рентгенҳо беморро интихоб кунед", tk: "Haýyş, rentgenleri görmek üçin näsagy saýlaň" },
+  "iltimos, muolaja tarixini ko'rish uchun bemorni tanlang": { ru: "Пожалуйста, выберите пациента для просмотра истории лечения", en: "Please select a patient to view treatment history", kk: "Өтінеміз, емдеу тарихын көру үшін пациентті таңдаңыз", ky: "Сураныч, дарылоо тарыхын көрүү үчүн бейтапты тандаңыз", tg: "Лутфан, барои дидани таърихи муолиҷа беморро интихоб кунед", tk: "Haýyş, bejergi taryhyny görmek üçin näsagy saýlaň" },
+  "iltimos, foto galereyani ko'rish uchun bemorni tanlang": { ru: "Пожалуйста, выберите пациента для просмотра фотогалереи", en: "Please select a patient to view the photo gallery", kk: "Өтінеміз, фотогалереяны көру үшін пациентті таңдаңыз", ky: "Сураныч, фотогалереяны көрүү үчүн бейтапты тандаңыз", tg: "Лутфан, барои дидани галереяи расмҳо беморро интихоб кунед", tk: "Haýyş, surat galereýasyny görmek üçin näsagy saýlaň" },
+  "iltimos, retseptlarni ko'rish uchun bemorni tanlang": { ru: "Пожалуйста, выберите пациента для просмотра рецептов", en: "Please select a patient to view prescriptions", kk: "Өтінеміз, рецепттерді көру үшін пациентті таңдаңыз", ky: "Сураныч, рецепттерди көрүү үчүн бейтапты тандаңыз", tg: "Лутфан, барои дидани рецептҳо беморро интихоб кунед", tk: "Haýyş, resepti görmek üçin näsagy saýlaň" },
+  "qabul kuni": { ru: "День приема", en: "Appointment day", kk: "Қабылдау күні", ky: "Кабылдоо күнү", tg: "Рӯзи қабул", tk: "Kabul güni" },
+  "qabul vaqti": { ru: "Время приема", en: "Appointment time", kk: "Қабылдау уақыты", ky: "Кабылдоо убактысы", tg: "Вақти қабул", tk: "Kabul wagty" },
+  "qon guruhi": { ru: "Группа крови", en: "Blood group", kk: "Қан тобы", ky: "Кан тобу", tg: "Гурӯҳи хун", tk: "Gan topary" },
+  infeksiya: { ru: "Инфекция", en: "Infection", kk: "Инфекция", ky: "Инфекция", tg: "Сироят", tk: "Ýokanç" },
+  "surunkali kasalliklar": { ru: "Хронические заболевания", en: "Chronic diseases", kk: "Созылмалы аурулар", ky: "Уланма ооруулар", tg: "Бемориҳои музмин", tk: "Dowamly keseller" },
+  "tashriflar tarixi": { ru: "История посещений", en: "Visit history", kk: "Келу тарихы", ky: "Келүү тарыхы", tg: "Таърихи ташрифҳо", tk: "Gelen-gidenler taryhy" },
+  "hali tashrif qayd etilmagan.": { ru: "Визиты еще не зарегистрированы.", en: "No visits recorded yet.", kk: "Әзірге келу тіркелмеген.", ky: "Азырынча келүү катталган эмес.", tg: "Ҳанӯз ягон ташриф сабт нашудааст.", tk: "Heniz gelen-gideniň ýazgysy ýok." },
+  "yangi bemor qo'shish": { ru: "Добавить нового пациента", en: "Add new patient", kk: "Жаңа пациент қосу", ky: "Жаңы бейтап кошуу", tg: "Илова кардани бемори нав", tk: "Täze näsag goşmak" },
+  "pasport seriyasi": { ru: "Серия паспорта", en: "Passport series", kk: "Төлқұжат сериясы", ky: "Паспорт сериясы", tg: "Силсилаи шиноснома", tk: "Pasport seriýasy" },
+  "bemor qidirish...": { ru: "Поиск пациента...", en: "Search patient...", kk: "Пациент іздеу...", ky: "Бейтап издөө...", tg: "Ҷустуҷӯи бемор...", tk: "Näsag gözlemek..." },
+  "bemor ismi, tel yoki navbat raqami...": { ru: "Имя пациента, телефон или номер очереди...", en: "Patient name, phone, or queue number...", kk: "Пациент аты, телефоны немесе кезек нөмірі...", ky: "Бейтап аты, телефону же кезек номери...", tg: "Номи бемор, телефон ё рақами навбат...", tk: "Näsagyň ady, telefon ýa-da nobat belgisi..." },
+  "ism, telefon yoki id bo'yicha qidirish...": { ru: "Поиск по имени, телефону или ID...", en: "Search by name, phone, or ID...", kk: "Аты, телефоны немесе ID бойынша іздеу...", ky: "Аты, телефону же ID боюнча издөө...", tg: "Ҷустуҷӯ бо ном, телефон ё ID...", tk: "Ady, telefony ýa-da ID boýunça gözlemek..." },
+  "telefon raqami yoki pasport seriyasi...": { ru: "Номер телефона или серия паспорта...", en: "Phone number or passport series...", kk: "Телефон нөмірі немесе төлқұжат сериясы...", ky: "Телефон номери же паспорт сериясы...", tg: "Рақами телефон ё силсилаи шиноснома...", tk: "Telefon belgisi ýa-da pasport seriýasy..." },
+  "ism familiya": { ru: "Имя Фамилия", en: "Full Name", kk: "Аты-жөні", ky: "Аты-жөнү", tg: "Ному насаб", tk: "Ady familiýasy" },
+  "faol klinikani tanlang": { ru: "Выберите активную клинику", en: "Select active clinic", kk: "Белсенді клиниканы таңдаңыз", ky: "Активдүү клиниканы тандаңыз", tg: "Клиникаи фаъолро интихоб кунед", tk: "Işjeň klinikany saýlaň" },
+  "muolaja va vaqt belgilash": { ru: "Указать процедуру и время", en: "Set treatment and time", kk: "Емдеу мен уақытты белгілеу", ky: "Дарылоо жана убакытты белгилөө", tg: "Таъини муолиҷа ва вақт", tk: "Bejergini we wagty bellemek" },
+  "qabulni boshlash": { ru: "Начать прием", en: "Start consultation", kk: "Қабылдауды бастау", ky: "Кабылдоону баштоо", tg: "Оғози қабул", tk: "Kabuly başlamak" },
+  yakunlash: { ru: "Завершить", en: "Finish", kk: "Аяқтау", ky: "Аяктоо", tg: "Ба итмом расонидан", tk: "Tamamlamak" },
+  "bugungi bemorlar": { ru: "Пациенты сегодня", en: "Today's patients", kk: "Бүгінгі пациенттер", ky: "Бүгүнкү бейтаптар", tg: "Беморони имрӯза", tk: "Şu günki näsaglar" },
+  yangi: { ru: "новых", en: "new", kk: "жаңа", ky: "жаңы", tg: "нав", tk: "täze" },
+  "hozir qabulda": { ru: "Сейчас на приеме", en: "Currently in consultation", kk: "Қазір қабылдауда", ky: "Азыр кабылдоодо", tg: "Ҳозир дар қабул", tk: "Häzir kabulda" },
+  "qabul davom etmoqda": { ru: "Прием продолжается", en: "Consultation in progress", kk: "Қабылдау жалғасуда", ky: "Кабылдоо уланууда", tg: "Қабул идома дорад", tk: "Kabul dowam edýär" },
+  "bugungi tushum": { ru: "Доход сегодня", en: "Today's revenue", kk: "Бүгінгі табыс", ky: "Бүгүнкү киреше", tg: "Даромади имрӯза", tk: "Şu günki girdeji" },
+  kutilayotgan: { ru: "Ожидающие", en: "Pending", kk: "Күтілуде", ky: "Күтүлүүдө", tg: "Интизор", tk: "Garaşylýan" },
+  navbatda: { ru: "в очереди", en: "in queue", kk: "кезекте", ky: "кезекте", tg: "дар навбат", tk: "nobatda" },
+  "tugatilgan qabul": { ru: "Завершенный прием", en: "Completed consultation", kk: "Аяқталған қабылдау", ky: "Аяктаган кабылдоо", tg: "Қабули анҷомёфта", tk: "Tamamlanan kabul" },
+  bugun: { ru: "сегодня", en: "today", kk: "бүгін", ky: "бүгүн", tg: "имрӯз", tk: "şu gün" },
+  "o'rtacha qabul vaqti": { ru: "Среднее время приема", en: "Average consultation time", kk: "Орташа қабылдау уақыты", ky: "Орточо кабылдоо убактысы", tg: "Вақти миёнаи қабул", tk: "Ortaça kabul wagty" },
+  daqiqa: { ru: "минут", en: "minutes", kk: "минут", ky: "мүнөт", tg: "дақиқа", tk: "minut" },
+  "bugungi navbatlar": { ru: "Очереди сегодня", en: "Today's queues", kk: "Бүгінгі кезектер", ky: "Бүгүнкү кезектер", tg: "Навбатҳои имрӯза", tk: "Şu günki nobatlar" },
+  "barcha navbatlar": { ru: "Все очереди", en: "All queues", kk: "Барлық кезектер", ky: "Бардык кезектер", tg: "Ҳамаи навбатҳо", tk: "Ähli nobatlar" },
+  "hozircha navbatda bemorlar yo'q": { ru: "В очереди пока нет пациентов", en: "No patients in queue yet", kk: "Қазіргі уақытта кезекте пациенттер жоқ", ky: "Азыркы учурда кезекте бейтаптар жок", tg: "Дар навбат ҳанӯз бемор нест", tk: "Nobatda heniz näsag ýok" },
+  "ko'rik": { ru: "Осмотр", en: "Checkup", kk: "Қарау", ky: "Кароо", tg: "Муоина", tk: "Gözden geçiriş" },
+  "ushbu filtrga mos navbat topilmadi": { ru: "Очередь по этому фильтру не найдена", en: "No queue matches this filter", kk: "Осы сүзгіге сәйкес кезек табылмады", ky: "Бул фильтрге дал келген кезек табылган жок", tg: "Бо ин филтр навбат ёфт нашуд", tk: "Bu süzgüje laýyk nobat tapylmady" },
+  tozalash: { ru: "Очистить", en: "Clear", kk: "Тазалау", ky: "Тазалоо", tg: "Тоза кардан", tk: "Arassalamak" },
+  "doimiy tishlar": { ru: "Постоянные зубы", en: "Permanent teeth", kk: "Тұрақты тістер", ky: "Туруктуу тиштер", tg: "Дандонҳои доимӣ", tk: "Hemişelik dişler" },
+  "sut tishlar": { ru: "Молочные зубы", en: "Baby teeth", kk: "Сүт тістер", ky: "Сүт тиштер", tg: "Дандонҳои ширӣ", tk: "Süýt dişleri" },
+  "sog'lom": { ru: "Здоровый", en: "Healthy", kk: "Дені сау", ky: "Соо", tg: "Солим", tk: "Sagdyn" },
+  karies: { ru: "Кариес", en: "Caries", kk: "Кариес", ky: "Кариес", tg: "Кариес", tk: "Kariýes" },
+  pulpit: { ru: "Пульпит", en: "Pulpitis", kk: "Пульпит", ky: "Пульпит", tg: "Пульпит", tk: "Pulpit" },
+  "kanal davolangan": { ru: "Канал вылечен", en: "Root canal treated", kk: "Канал емделген", ky: "Канал дарыланган", tg: "Каналаш муолиҷашуда", tk: "Kanal bejerilen" },
+  plomba: { ru: "Пломба", en: "Filling", kk: "Пломба", ky: "Пломба", tg: "Пломба", tk: "Plomba" },
+  koronka: { ru: "Коронка", en: "Crown", kk: "Коронка", ky: "Коронка", tg: "Тоҷ", tk: "Koronka" },
+  implant: { ru: "Имплант", en: "Implant", kk: "Имплант", ky: "Имплант", tg: "Имплант", tk: "Implant" },
+  "olib tashlangan": { ru: "Удален", en: "Removed", kk: "Алынып тасталған", ky: "Алынып салынган", tg: "Хориҷшуда", tk: "Aýrylan" },
+  "bemor kartasi": { ru: "Карта пациента", en: "Patient card", kk: "Пациент картасы", ky: "Бейтап картасы", tg: "Харитаи бемор", tk: "Näsag kartasy" },
+  "hozirda qabulda faol bemor yo'q": { ru: "Сейчас нет пациента на приеме", en: "No active patient in consultation now", kk: "Қазір қабылдауда белсенді пациент жоқ", ky: "Азыр кабылдоодо активдүү бейтап жок", tg: "Ҳозир беморе дар қабул нест", tk: "Häzir kabulda işjeň näsag ýok" },
+  "davolash rejasi": { ru: "План лечения", en: "Treatment plan", kk: "Емдеу жоспары", ky: "Дарылоо планы", tg: "Нақшаи муолиҷа", tk: "Bejergi meýilnamasy" },
+  "yangi reja": { ru: "Новый план", en: "New plan", kk: "Жаңа жоспар", ky: "Жаңы план", tg: "Нақшаи нав", tk: "Täze meýilnama" },
+  "narx (so'm)": { ru: "Цена (сум)", en: "Price (UZS)", kk: "Баға (сом)", ky: "Баа (сом)", tg: "Нарх (сӯм)", tk: "Baha (sim)" },
+  menda: { ru: "У меня", en: "Mine", kk: "Менде", ky: "Менде", tg: "Дар назди ман", tk: "Mende" },
+  "shifokorlar bo'yicha": { ru: "По врачам", en: "By doctors", kk: "Дәрігерлер бойынша", ky: "Дарыгерлер боюнча", tg: "Аз рӯи духтурон", tk: "Lukmanlar boýunça" },
+  "sana oralig'i:": { ru: "Диапазон дат:", en: "Date range:", kk: "Күн аралығы:", ky: "Күн диапазону:", tg: "Диапазони сана:", tk: "Sene aralygy:" },
+  "eslatma turi:": { ru: "Тип напоминания:", en: "Reminder type:", kk: "Ескерту түрі:", ky: "Эскертүү түрү:", tg: "Навъи ёдоварӣ:", tk: "Duýduryş görnüşi:" },
+  "eslatma qo'shish": { ru: "Добавить напоминание", en: "Add reminder", kk: "Ескерту қосу", ky: "Эскертүү кошуу", tg: "Илова кардани ёдоварӣ", tk: "Duýduryş goşmak" },
+  "muddati o'tgan": { ru: "Просрочено", en: "Overdue", kk: "Мерзімі өтті", ky: "Мөөнөтү өттү", tg: "Мӯҳлат гузашт", tk: "Möhleti geçen" },
+  "eslatma tafsilotlari": { ru: "Детали напоминания", en: "Reminder details", kk: "Ескерту мәліметтері", ky: "Эскертүү тафсилаттары", tg: "Тафсилоти ёдоварӣ", tk: "Duýduryş jikme-jikligi" },
+  "eslatma turi": { ru: "Тип напоминания", en: "Reminder type", kk: "Ескерту түрі", ky: "Эскертүү түрү", tg: "Навъи ёдоварӣ", tk: "Duýduryş görnüşi" },
+  "eslatma sanasi": { ru: "Дата напоминания", en: "Reminder date", kk: "Ескерту күні", ky: "Эскертүү күнү", tg: "Санаи ёдоварӣ", tk: "Duýduryş senesi" },
+  vaqti: { ru: "Время", en: "Time", kk: "Уақыты", ky: "Убактысы", tg: "Вақташ", tk: "Wagty" },
+  "eslatma matni": { ru: "Текст напоминания", en: "Reminder text", kk: "Ескерту мәтіні", ky: "Эскертүү тексти", tg: "Матни ёдоварӣ", tk: "Duýduryş teksti" },
+  shifokor: { ru: "Врач", en: "Doctor", kk: "Дәрігер", ky: "Дарыгер", tg: "Духтур", tk: "Lukman" },
+  "eslatma tarixi": { ru: "История напоминаний", en: "Reminder history", kk: "Ескертулер тарихы", ky: "Эскертүүлөр тарыхы", tg: "Таърихи ёдоварӣ", tk: "Duýduryş taryhy" },
+  "bemorga telegram orqali eslatildi": { ru: "Пациенту напомнили через Telegram", en: "Patient reminded via Telegram", kk: "Пациентке Telegram арқылы еске салынды", ky: "Бейтапка Telegram аркылуу эскертилди", tg: "Ба бемор тавассути Telegram ёдоварӣ шуд", tk: "Näsaga Telegram arkaly duýduryldy" },
+  tahrirlash: { ru: "Редактировать", en: "Edit", kk: "Өңдеу", ky: "Түзөтүү", tg: "Таҳрир", tk: "Üýtgetmek" },
+  "bajarildi deb belgilash": { ru: "Отметить как выполнено", en: "Mark as done", kk: "Орындалды деп белгілеу", ky: "Аткарылды деп белгилөө", tg: "Иҷрошуда қайд кардан", tk: "Ýerine ýetirildi diýip bellemek" },
+  "qabul qilinganlar": { ru: "Принятые", en: "Admitted", kk: "Қабылданғандар", ky: "Кабылдангандар", tg: "Қабулшудагон", tk: "Kabul edilenler" },
+  kutilayotganlar: { ru: "Ожидающие", en: "Pending", kk: "Күтушілер", ky: "Күтүүчүлөр", tg: "Интизоршавандагон", tk: "Garaşýanlar" },
+  kechiktirilganlar: { ru: "Задержанные", en: "Delayed", kk: "Кешіктірілгендер", ky: "Кечиктирилгендер", tg: "Дертамондашудагон", tk: "Gijikdirilenler" },
+  "bekor qilinganlar": { ru: "Отмененные", en: "Cancelled", kk: "Бас тартылғандар", ky: "Жокко чыгарылгандар", tg: "Бекоршудагон", tk: "Ýatyrylanlar" },
+  "navbat raqami": { ru: "Номер очереди", en: "Queue number", kk: "Кезек нөмірі", ky: "Кезек номери", tg: "Рақами навбат", tk: "Nobat belgisi" },
+  amallar: { ru: "Действия", en: "Actions", kk: "Әрекеттер", ky: "Аракеттер", tg: "Амалҳо", tk: "Hereketler" },
+  "muolaja va vaqt": { ru: "Процедура и время", en: "Treatment and time", kk: "Емдеу мен уақыт", ky: "Дарылоо жана убакыт", tg: "Муолиҷа ва вақт", tk: "Bejergi we wagt" },
+  "to'liq ko'rish": { ru: "Смотреть полностью", en: "View in full", kk: "Толық көру", ky: "Толук көрүү", tg: "Пурра дидан", tk: "Doly görmek" },
+  "allergiya:": { ru: "Аллергия:", en: "Allergy:", kk: "Аллергия:", ky: "Аллергия:", tg: "Аллергия:", tk: "Allergiýa:" },
+  "kasalliklar:": { ru: "Заболевания:", en: "Diseases:", kk: "Аурулар:", ky: "Оорулар:", tg: "Бемориҳо:", tk: "Keseller:" },
+  "shikoyat:": { ru: "Жалоба:", en: "Complaint:", kk: "Шағым:", ky: "Арыз:", tg: "Шикоят:", tk: "Şikaýat:" },
+  "yo'q": { ru: "Нет", en: "None", kk: "Жоқ", ky: "Жок", tg: "Нест", tk: "Ýok" },
+  bor: { ru: "Есть", en: "Yes", kk: "Бар", ky: "Бар", tg: "Ҳаст", tk: "Bar" },
+  yuklash: { ru: "Загрузить", en: "Upload", kk: "Жүктеу", ky: "Жүктөө", tg: "Бор кардан", tk: "Ýüklemek" },
+  "ushbu bemor uchun rentgen yuklanmagan": { ru: "Для этого пациента рентген не загружен", en: "No X-rays uploaded for this patient", kk: "Бұл пациент үшін рентген жүктелмеген", ky: "Бул бейтап үчүн рентген жүктөлгөн эмес", tg: "Барои ин бемор рентген бор карда нашудааст", tk: "Bu näsag üçin rentgen ýüklenmedi" },
+  "faol bemor tanlanmagan": { ru: "Активный пациент не выбран", en: "No active patient selected", kk: "Белсенді пациент таңдалмаған", ky: "Активдүү бейтап тандалган эмес", tg: "Бемори фаъол интихоб нашудааст", tk: "Işjeň näsag saýlanmady" },
+  "barcha bemorlar": { ru: "Все пациенты", en: "All patients", kk: "Барлық пациенттер", ky: "Бардык бейтаптар", tg: "Ҳамаи беморон", tk: "Ähli näsaglar" },
+  "faol bemorlar": { ru: "Активные пациенты", en: "Active patients", kk: "Белсенді пациенттер", ky: "Активдүү бейтаптар", tg: "Беморони фаъол", tk: "Işjeň näsaglar" },
+  "bugun tashrif buyuradi": { ru: "Посетят сегодня", en: "Visiting today", kk: "Бүгін келеді", ky: "Бүгүн келишет", tg: "Имрӯз ташриф меоранд", tk: "Şu gün gelýär" },
+  "jami tashriflar": { ru: "Всего визитов", en: "Total visits", kk: "Барлық тәшрифтер", ky: "Бардык келүүлөр", tg: "Ҳамаи ташрифҳо", tk: "Jemi gelen-gidenler" },
+  "umumiy tushum": { ru: "Общий доход", en: "Total revenue", kk: "Жалпы табыс", ky: "Жалпы киреше", tg: "Даромади умумӣ", tk: "Umumy girdeji" },
+  "bemorlar ro'yxati": { ru: "Список пациентов", en: "Patients list", kk: "Пациенттер тізімі", ky: "Бейтаптар тизмеси", tg: "Рӯйхати беморон", tk: "Näsaglar sanawy" },
+  filter: { ru: "Фильтр", en: "Filter", kk: "Сүзгі", ky: "Чыпка", tg: "Филтр", tk: "Süzgüç" },
+  "🌐 boshqa klinikadan qidirish": { ru: "🌐 Поиск из другой клиники", en: "🌐 Search from another clinic", kk: "🌐 Басқа клиникадан іздеу", ky: "🌐 Башка клиникадан издөө", tg: "🌐 Ҷустуҷӯ аз клиникаи дигар", tk: "🌐 Başga klinikadan gözlemek" },
+  "yangi bemor": { ru: "Новый пациент", en: "New patient", kk: "Жаңа пациент", ky: "Жаңы бейтап", tg: "Бемори нав", tk: "Täze näsag" },
+  "qidirilmoqda...": { ru: "Идет поиск...", en: "Searching...", kk: "Ізделуде...", ky: "Изделүүдө...", tg: "Ҷустуҷӯ дар ҷараён...", tk: "Gözlenilýär..." },
+  qidirish: { ru: "Поиск", en: "Search", kk: "Іздеу", ky: "Издөө", tg: "Ҷустуҷӯ", tk: "Gözlemek" },
+  "hech qanday klinikada bunday bemor topilmadi.": { ru: "Такой пациент не найден ни в одной клинике.", en: "No such patient found in any clinic.", kk: "Бұндай пациент ешбір клиникада табылмады.", ky: "Мындай бейтап эч бир клиникада табылган жок.", tg: "Чунин бемор дар ягон клиника ёфт нашуд.", tk: "Şeýle näsag hiç bir klinikada tapylmady." },
+  "ta tashrif →": { ru: "визитов →", en: "visits →", kk: "тәшриф →", ky: "келүү →", tg: "ташриф →", tk: "gelen-giden →" },
+  "tug'ilgan sana": { ru: "Дата рождения", en: "Date of birth", kk: "Туған күні", ky: "Туулган күнү", tg: "Санаи таваллуд", tk: "Doglan senesi" },
+  "oxirgi tashrif": { ru: "Последний визит", en: "Last visit", kk: "Соңғы тәшриф", ky: "Акыркы келүү", tg: "Ташрифи охирин", tk: "Soňky gelen-gideni" },
+  "tashriflar soni": { ru: "Количество визитов", en: "Number of visits", kk: "Тәшриф саны", ky: "Келүүлөр саны", tg: "Шумораи ташрифҳо", tk: "Gelen-gidenler sany" },
+  qarzdorlik: { ru: "Задолженность", en: "Debt", kk: "Қарыз", ky: "Карыз", tg: "Қарз", tk: "Bergi" },
+  "bemorlar topilmadi": { ru: "Пациенты не найдены", en: "No patients found", kk: "Пациенттер табылмады", ky: "Бейтаптар табылган жок", tg: "Беморон ёфт нашуданд", tk: "Näsaglar tapylmady" },
+  filterlar: { ru: "Фильтры", en: "Filters", kk: "Сүзгілер", ky: "Чыпкалар", tg: "Филтрҳо", tk: "Süzgüçler" },
+  "ro'yxatdan o'tgan sana": { ru: "Дата регистрации", en: "Registration date", kk: "Тіркелген күн", ky: "Катталган күн", tg: "Санаи бақайдгирӣ", tk: "Hasaba durlan senesi" },
+  "tezkor amallar": { ru: "Быстрые действия", en: "Quick actions", kk: "Жылдам әрекеттер", ky: "Ыкчам аракеттер", tg: "Амалҳои зуд", tk: "Çalt hereketler" },
+  "bemor ma'lumotlarini kiriting": { ru: "Введите данные пациента", en: "Enter patient details", kk: "Пациент деректерін енгізіңіз", ky: "Бейтап маалыматтарын киргизиңиз", tg: "Маълумоти беморро ворид кунед", tk: "Näsagyň maglumatlaryny giriziň" },
+  "bemor kartasini ochish": { ru: "Открыть карту пациента", en: "Open patient card", kk: "Пациент картасын ашу", ky: "Бейтап картасын ачуу", tg: "Кушодани харитаи бемор", tk: "Näsag kartasyny açmak" },
+  "mavjud bemorni tanlang": { ru: "Выберите существующего пациента", en: "Select existing patient", kk: "Бар пациентті таңдаңыз", ky: "Бар болгон бейтапты тандаңыз", tg: "Бемори мавҷударо интихоб кунед", tk: "Bar bolan näsagy saýlaň" },
+  "excel'ga eksport qilish": { ru: "Экспортировать в Excel", en: "Export to Excel", kk: "Excel-ге экспорттау", ky: "Excel'ге экспорттоо", tg: "Содирот ба Excel", tk: "Excel-e eksport etmek" },
+  "barcha bemorlarni yuklab oling": { ru: "Скачать всех пациентов", en: "Download all patients", kk: "Барлық пациенттерді жүктеп алыңыз", ky: "Бардык бейтаптарды жүктөп алыңыз", tg: "Ҳамаи беморонро бор кунед", tk: "Ähli näsaglary ýükläň" },
+  "yuborilmoqda...": { ru: "Отправляется...", en: "Sending...", kk: "Жіберілуде...", ky: "Жөнөтүлүүдө...", tg: "Фиристода мешавад...", tk: "Iberilýär..." },
+  "telegram'ga xabar yuborish": { ru: "Отправить сообщение в Telegram", en: "Send Telegram message", kk: "Telegram-ға хабар жіберу", ky: "Telegram'га билдирүү жөнөтүү", tg: "Фиристодани хабар ба Telegram", tk: "Telegram-a habar ibermek" },
+  "ulangan barcha bemorlarga xabar": { ru: "Сообщение всем подключенным пациентам", en: "Message to all connected patients", kk: "Қосылған барлық пациенттерге хабар", ky: "Туташкан бардык бейтаптарга билдирүү", tg: "Хабар ба ҳамаи беморони пайвастшуда", tk: "Birikdirilen ähli näsaglara habar" },
+  "ma'lumot": { ru: "Информация", en: "Info", kk: "Ақпарат", ky: "Маалымат", tg: "Маълумот", tk: "Maglumat" },
+  "o'rtacha tashrif soni": { ru: "Среднее количество визитов", en: "Average visit count", kk: "Орташа тәшриф саны", ky: "Орточо келүү саны", tg: "Шумораи миёнаи ташрифҳо", tk: "Ortaça gelen-gideni sany" },
+  marta: { ru: "раз", en: "times", kk: "рет", ky: "жолу", tg: "маротиба", tk: "gezek" },
+  "eng ko'p tashrif buyurgan bemor": { ru: "Пациент с наибольшим числом визитов", en: "Patient with most visits", kk: "Ең көп тәшриф жасаған пациент", ky: "Эң көп келген бейтап", tg: "Бемор бо бештарин ташриф", tk: "Iň köp gelen-giden näsag" },
+  "o'rtacha muolaja narxi": { ru: "Средняя цена процедуры", en: "Average treatment price", kk: "Орташа емдеу бағасы", ky: "Орточо дарылоо баасы", tg: "Нархи миёнаи муолиҷа", tk: "Ortaça bejergi bahasy" },
+  "jami diagnozlar": { ru: "Всего диагнозов", en: "Total diagnoses", kk: "Барлық диагноздар", ky: "Бардык диагноздор", tg: "Ҳамаи ташхисҳо", tk: "Jemi diagnozlar" },
+  "qabulni rejalashtirish": { ru: "Запланировать прием", en: "Schedule consultation", kk: "Қабылдауды жоспарлау", ky: "Кабылдоону пландаштыруу", tg: "Банақшагирии қабул", tk: "Kabuly meýilleşdirmek" },
+  "muolaja / xizmat": { ru: "Процедура / Услуга", en: "Treatment / Service", kk: "Емдеу / Қызмет", ky: "Дарылоо / Кызмат", tg: "Муолиҷа / Хизмат", tk: "Bejergi / Hyzmat" },
+  "— muolajani tanlang —": { ru: "— Выберите процедуру —", en: "— Select treatment —", kk: "— Емдеуді таңдаңыз —", ky: "— Дарылоону тандаңыз —", tg: "— Муолиҷаро интихоб кунед —", tk: "— Bejergini saýlaň —" },
+  tasdiqlash: { ru: "Подтвердить", en: "Confirm", kk: "Растау", ky: "Ырастоо", tg: "Тасдиқ кардан", tk: "Tassyklamak" },
+  "ma'lumot yo'q": { ru: "Нет данных", en: "No data", kk: "Деректер жоқ", ky: "Маалымат жок", tg: "Маълумот нест", tk: "Maglumat ýok" },
+  "qo'shilmoqda...": { ru: "Добавляется...", en: "Adding...", kk: "Қосылуда...", ky: "Кошулууда...", tg: "Илова карда мешавад...", tk: "Goşulýar..." },
+  "ushbu klinikaga qo'shish": { ru: "Добавить в эту клинику", en: "Add to this clinic", kk: "Осы клиникаға қосу", ky: "Ушул клиникага кошуу", tg: "Илова кардан ба ин клиника", tk: "Şu klinika goşmak" },
+  "to'liq ism *": { ru: "Полное имя *", en: "Full name *", kk: "Толық аты *", ky: "Толук аты *", tg: "Номи пурра *", tk: "Doly ady *" },
+  "saqlanmoqda...": { ru: "Сохраняется...", en: "Saving...", kk: "Сақталуда...", ky: "Сакталууда...", tg: "Захира карда мешавад...", tk: "Ýatda saklanýar..." },
+  "ushbu bemor uchun davolash rejasi kiritilmagan": { ru: "Для этого пациента план лечения не составлен", en: "No treatment plan entered for this patient", kk: "Бұл пациент үшін емдеу жоспары енгізілмеген", ky: "Бул бейтап үчүн дарылоо планы киргизилген эмес", tg: "Барои ин бемор нақшаи муолиҷа ворид нашудааст", tk: "Bu näsag üçin bejergi meýilnamasy girizilmedi" },
+  "jami:": { ru: "Итого:", en: "Total:", kk: "Барлығы:", ky: "Баары:", tg: "Ҷамъ:", tk: "Jemi:" },
+  "to'liq rejani ko'rish": { ru: "Смотреть план полностью", en: "View full plan", kk: "Толық жоспарды көру", ky: "Толук планды көрүү", tg: "Пурра дидани нақша", tk: "Doly meýilnamany görmek" },
+  "barcha eslatmalar": { ru: "Все напоминания", en: "All reminders", kk: "Барлық ескертулер", ky: "Бардык эскертүүлөр", tg: "Ҳамаи ёдоварӣ", tk: "Ähli duýduryşlar" },
+  "7 kun ichida": { ru: "В течение 7 дней", en: "Within 7 days", kk: "7 күн ішінде", ky: "7 күн ичинде", tg: "Дар давоми 7 рӯз", tk: "7 günüň dowamynda" },
+  "30 kun ichida": { ru: "В течение 30 дней", en: "Within 30 days", kk: "30 күн ішінде", ky: "30 күн ичинде", tg: "Дар давоми 30 рӯз", tk: "30 günüň dowamynda" },
+  "klinika rejimi": { ru: "Режим клиники", en: "Clinic mode", kk: "Клиника режимі", ky: "Клиника режими", tg: "Реҷаи клиника", tk: "Klinika rejimi" },
+  rentgenlar: { ru: "Рентгены", en: "X-rays", kk: "Рентгендер", ky: "Рентгендер", tg: "Рентгенҳо", tk: "Rentgenler" },
+  "profilni tahrirlash & shaxsiy sozlamalar": {
+    ru: "Редактировать профиль и личные настройки",
+    en: "Edit Profile & Personal Settings",
+    kk: "Профильди өңдеу және жеке баптаулар",
+    ky: "Профилди түзөтүү жана жеке жөндөөлөр",
+    tg: "Таҳрири профил ва танзимоти шахсӣ",
+    tk: "Profili üýtgetmek we şahsy sazlamalar",
+  },
+  "statusni belgilash": { ru: "Выбрать статус", en: "Select Status", kk: "Мәртебені белгілеу", ky: "Статусту белгилөө", tg: "Таъини ҳолат", tk: "Statusy bellemek" },
+  "yangi parol o'rnatish": {
+    ru: "Установить новый пароль",
+    en: "Set New Password",
+    kk: "Жаңа құпия сөз орнату",
+    ky: "Жаңы сырсөз коюу",
+    tg: "Гузоштани пароли нав",
+    tk: "Täze parol goýmak",
+  },
+  "parolingizni o'zgartiring": {
+    ru: "Сменить пароль",
+    en: "Change Password",
+    kk: "Құпия сөзіңізді өзгертіңіз",
+    ky: "Сырсөзүңүздү өзгөртүңүз",
+    tg: "Пароли худро тағйир диҳед",
+    tk: "Parolyňyzy üýtgediň",
+  },
+  "bekor qilish": { ru: "Отмена", en: "Cancel", kk: "Бас тарту", ky: "Жокко чыгаруу", tg: "Бекор кардан", tk: "Ýatyrmak" },
+  saqlash: { ru: "Сохранить", en: "Save", kk: "Сақтау", ky: "Сактоо", tg: "Захира кардан", tk: "Ýatda saklamak" },
+  "bo'sh": { ru: "Свободен", en: "Idle", kk: "Бос", ky: "Бош", tg: "Холӣ", tk: "Boş" },
+  band: { ru: "Занят", en: "Busy", kk: "Бос емес", ky: "Бош эмес", tg: "Машғул", tk: "Meşgul" },
+  away: { ru: "Не в сети", en: "Away", kk: "Желіде емес", ky: "Тармакта эмес", tg: "Офлайн", tk: "Oflaýn" },
+  "profil ma'lumotlari muvaffaqiyatli saqlandi! (parol yangilandi)": {
+    ru: "Профиль успешно изменен! (Пароль обновлен)",
+    en: "Profile saved successfully! (Password updated)",
+    kk: "Профиль деректері сәтті сақталды! (Құпия сөз жаңартылды)",
+    ky: "Профиль маалыматтары ийгиликтүү сакталды! (Сырсөз жаңыланды)",
+    tg: "Маълумоти профил бомуваффақият захира шуд! (Парол нав шуд)",
+    tk: "Profil maglumatlary üstünlikli ýatda saklandy! (Parol täzelendi)",
+  },
+  "faol / bo'sh": { ru: "активен / свободен", en: "active / idle", kk: "белсенді / бос", ky: "активдүү / бош", tg: "фаъол / холӣ", tk: "işjeň / boş" },
+  tushlikda: { ru: "обед", en: "lunch break", kk: "түскі аста", ky: "түшкү тамакта", tg: "дар вақти хӯроки нисфирӯзӣ", tk: "günortan naharynda" },
+  "tizimda barcha kelayotgan navbatlarni muvaffaqiyatli qabul qiling va davolash holatini belgilang":
+    {
+      ru: "Успешно принимайте всех поступающих пациентов и управляйте ходом лечения",
+      en: "Successfully admit all incoming patients and manage treatment status",
+      kk: "Тізімдегі барлық келетін кезектерді сәтті қабылдаңыз және емдеу жағдайын белгілеңіз",
+      ky: "Тизимдеги бардык келе жаткан кезектерди ийгиликтүү кабыл алыңыз жана дарылоо абалын белгилеңиз",
+      tg: "Ҳамаи навбатҳои ояндаро дар низом бомуваффақият қабул кунед ва ҳолати муолиҷаро таъин кунед",
+      tk: "Ulgamdaky ähli gelýän nobatlary üstünlikli kabul ediň we bejergi ýagdaýyny belläň",
+    },
+  "shaxsiy rasm yuklash (fayl yoki rasm)": {
+    ru: "Загрузить фото профиля (Перетащите файл)",
+    en: "Upload profile photo (Drag & drop)",
+    kk: "Жеке сурет жүктеу (файл немесе сурет)",
+    ky: "Жеке сүрөт жүктөө (файл же сүрөт)",
+    tg: "Боркунии сурати шахсӣ (файл ё расм)",
+    tk: "Şahsy surat ýüklemek (faýl ýa-da surat)",
+  },
+  "rasmni almashtirish": { ru: "Изменить фото", en: "Change Photo", kk: "Суретті алмастыру", ky: "Сүрөттү алмаштыруу", tg: "Иваз кардани расм", tk: "Suraty çalyşmak" },
+  "rasm tanlang yoki tashlang": {
+    ru: "Выберите или перетащите фото",
+    en: "Choose or drop photo",
+    kk: "Суретті таңдаңыз немесе тастаңыз",
+    ky: "Сүрөттү тандаңыз же таштаңыз",
+    tg: "Расмро интихоб кунед ё партоед",
+    tk: "Suraty saýlaň ýa-da taşlaň",
+  },
+  "png, jpg formatlari": { ru: "Форматы PNG, JPG", en: "PNG, JPG formats", kk: "PNG, JPG форматтары", ky: "PNG, JPG форматтары", tg: "Форматҳои PNG, JPG", tk: "PNG, JPG formatlary" },
+  "navbat kutayotganlar": { ru: "Ожидают очереди", en: "Awaiting queue", kk: "Кезек күтушілер", ky: "Кезек күтүүчүлөр", tg: "Дар навбат интизорон", tk: "Nobata garaşýanlar" },
+  "bugun qabul qilindi": { ru: "Принято сегодня", en: "Admitted today", kk: "Бүгін қабылданды", ky: "Бүгүн кабылданды", tg: "Имрӯз қабул шуд", tk: "Şu gün kabul edildi" },
+  "bugungi daromad": { ru: "Дневной доход", en: "Daily revenue", kk: "Бүгінгі табыс", ky: "Бүгүнкү киреше", tg: "Даромади имрӯза", tk: "Şu günki girdeji" },
+  "o'rtacha baho": { ru: "Средняя оценка", en: "Average rating", kk: "Орташа баға", ky: "Орточо баа", tg: "Баҳои миёна", tk: "Ortaça baha" },
+  "ta chipta": { ru: "билетов", en: "tickets", kk: "билет", ky: "билет", tg: "чипта", tk: "petek" },
+  nafar: { ru: "человек", en: "people", kk: "адам", ky: "адам", tg: "нафар", tk: "adam" },
+  "xonada chaqirilayotgan / davolanayotgan faol bemor": {
+    ru: "В КЛИНИЧЕСКОЙ КОМНАТЕ / АКТИВНЫЙ ПАЦИЕНТ",
+    en: "IN CONSULTATION ROOM / ACTIVE PATIENT",
+    kk: "БӨЛМЕГЕ ШАҚЫРЫЛУДА / БЕЛСЕНДІ ПАЦИЕНТ",
+    ky: "БӨЛМӨГӨ ЧАКЫРЫЛУУДА / АКТИВДҮҮ БЕЙТАП",
+    tg: "ДАР ХОНА ДАЪВАТ КАРДА МЕШАВАД / БЕМОРИ ФАЪОЛ",
+    tk: "OTAGA ÇAGYRYLÝAR / IŞJEŇ NÄSAG",
+  },
+  xizmat: { ru: "Услуга", en: "Service", kk: "Қызмет", ky: "Кызмат", tg: "Хизмат", tk: "Hyzmat" },
+  telefon: { ru: "Телефон", en: "Phone", kk: "Телефон", ky: "Телефон", tg: "Телефон", tk: "Telefon" },
+  "📣 kabinetga chaqirilmoqda (signal monitorida yonmoqda)": {
+    ru: "📣 ВЫЗЫВАЕТСЯ В КАБИНЕТ (Мигает на мониторе)",
+    en: "📣 SUMMONING TO ROOM (Flashing on signal monitor)",
+    kk: "📣 КАБИНЕТКЕ ШАҚЫРЫЛУДА (Мониторда жыпылықтайды)",
+    ky: "📣 КАБИНЕТКЕ ЧАКЫРЫЛУУДА (Монитордо жанып турат)",
+    tg: "📣 БА КАБИНЕТ ДАЪВАТ КАРДА МЕШАВАД (Дар монитор чашмак мезанад)",
+    tk: "📣 KABINETE ÇAGYRYLÝAR (Monitorda ýanýar)",
+  },
+  "🦷 qabul rejimida (davolash ishlari faol bajarilmoqda)": {
+    ru: "🦷 РЕЖИМ ПРИЕМА (Активно выполняется лечение)",
+    en: "🦷 UNDER CONSULTATION (Active treatment process)",
+    kk: "🦷 ҚАБЫЛДАУ РЕЖИМІНДЕ (Емдеу белсенді орындалуда)",
+    ky: "🦷 КАБЫЛДОО РЕЖИМИНДЕ (Дарылоо активдүү аткарылууда)",
+    tg: "🦷 ДАР РЕЖИМИ ҚАБУЛ (Муолиҷа фаъолона иҷро мешавад)",
+    tk: "🦷 KABUL REJIMINDE (Bejergi işjeň amala aşyrylýar)",
+  },
+  "davolashni yakunlash ✓": {
+    ru: "Завершить работу ✓",
+    en: "Complete treatment ✓",
+    kk: "Емдеуді аяқтау ✓",
+    ky: "Дарылоону аяктоо ✓",
+    tg: "Ба итмом расонидани муолиҷа ✓",
+    tk: "Bejergini tamamlamak ✓",
+  },
+  "📊 navbatni boshqarish paneli (smart taqsimlash)": {
+    ru: "📊 Панель управления очередью (Умное распределение)",
+    en: "📊 Queue Management Panel (Smart Division)",
+    kk: "📊 Кезекті басқару панелі (Ақылды бөлу)",
+    ky: "📊 Кезекти башкаруу панели (Акылдуу бөлүштүрүү)",
+    tg: "📊 Панели идоракунии навбат (Тақсимоти оқилона)",
+    tk: "📊 Nobat dolandyryş paneli (Akylly bölüşdirmek)",
+  },
+  "yangi mijozlar (birlamchi ko'rik)": {
+    ru: "Новые пациенты (Первичные)",
+    en: "New Patients (First visit)",
+    kk: "Жаңа пациенттер (Алғашқы қарау)",
+    ky: "Жаңы бейтаптар (Алгачкы кароо)",
+    tg: "Беморони нав (Муоинаи аввалин)",
+    tk: "Täze näsaglar (Ilkinji gözden geçiriş)",
+  },
+  "doimiy bemorlar (tashrif tarixdagilar)": {
+    ru: "Постоянные пациенты (Повторные)",
+    en: "Regular Patients (Follow-up)",
+    kk: "Тұрақты пациенттер (Қайталама)",
+    ky: "Туруктуу бейтаптар (Кайталануучу)",
+    tg: "Беморони доимӣ (Такрорӣ)",
+    tk: "Hemişelik näsaglar (Gaýtalanýan)",
+  },
+  ta: { ru: "шт", en: "items", kk: "дана", ky: "даана", tg: "дона", tk: "sany" },
+  "hozircha yangi bemorlar navbati yo'q.": {
+    ru: "В настоящее время список новых очередей пуст.",
+    en: "No new clinic queue items currently.",
+    kk: "Қазіргі уақытта жаңа кезек тізімі жоқ.",
+    ky: "Азыркы учурда жаңы кезек тизмеси жок.",
+    tg: "Дар айни замон рӯйхати навбати нав нест.",
+    tk: "Häzirlikçe täze nobat sanawy ýok.",
+  },
+  "hozircha doimiy bemorlar navbati yo'q.": {
+    ru: "В настоящее время список повторных очередей пуст.",
+    en: "No regular clinic queue items currently.",
+    kk: "Қазіргі уақытта тұрақты кезек тізімі жоқ.",
+    ky: "Азыркы учурда туруктуу кезек тизмеси жок.",
+    tg: "Дар айни замон рӯйхати навбати доимӣ нест.",
+    tk: "Häzirlikçe hemişelik nobat sanawy ýok.",
+  },
+  chaqirish: { ru: "Вызвать", en: "Call", kk: "Шақыру", ky: "Чакыруу", tg: "Даъват кардан", tk: "Çagyrmak" },
+  "tugatilgan qabullar ro'yxati (bugun)": {
+    ru: "Список завершенных приемов (Сегодня)",
+    en: "List of completed consultations (Today)",
+    kk: "Аяқталған қабылдаулар тізімі (Бүгін)",
+    ky: "Аяктаган кабылдоолор тизмеси (Бүгүн)",
+    tg: "Рӯйхати қабулҳои анҷомёфта (Имрӯз)",
+    tk: "Tamamlanan kabullaryň sanawy (Şu gün)",
+  },
+  "bugun hali qabul sobiq qilinmadi.": {
+    ru: "Сегодня приемов еще не было.",
+    en: "No patients were admitted today yet.",
+    kk: "Бүгін әлі қабылдау болған жоқ.",
+    ky: "Бүгүн азырынча кабылдоо болгон жок.",
+    tg: "Имрӯз ҳанӯз қабул сурат нагирифтааст.",
+    tk: "Şu gün heniz kabul bolmady.",
+  },
+  kutilmoqda: { ru: "ожидание", en: "pending", kk: "күтілуде", ky: "күтүлүүдө", tg: "интизор", tk: "garaşylýar" },
+  "telegram bot xizmati": {
+    ru: "Сервис Telegram-Бота",
+    en: "Telegram Bot Service",
+    kk: "Telegram бот қызметі",
+    ky: "Telegram бот кызматы",
+    tg: "Хизмати боти Telegram",
+    tk: "Telegram bot hyzmaty",
+  },
+  "tizimga ulanish": { ru: "Подключить кабинет", en: "Connect Cabinet", kk: "Кабинетті қосу", ky: "Кабинетти туташтыруу", tg: "Пайваст кардани кабинет", tk: "Kabineti birikdirmek" },
+  "shifokorlar uchun telegram yordamchisi. yangi bemorlar yozilganda zudlik bilan bildirishnomalar oling va navbatlarni bevosita telegramda boshqaring!":
+    {
+      ru: "Telegram-помощник для врачей. Получайте мгновенные уведомления о записи пациентов и управляйте очередью прямо в Telegram!",
+      en: "Telegram assistant for doctors. Get instant notifications when patients register and manage your queue directly inside Telegram!",
+      kk: "Дәрігерлер үшін Telegram көмекшісі. Жаңа пациенттер жазылғанда дереу хабарландыру алыңыз және кезектерді тікелей Telegram-да басқарыңыз!",
+      ky: "Дарыгерлер үчүн Telegram жардамчысы. Жаңы бейтаптар жазылганда дароо билдирүү алыңыз жана кезектерди түз Telegram-да башкарыңыз!",
+      tg: "Ёрдамчии Telegram барои духтурон. Ҳангоми сабти беморони нав фавран огоҳинома гиред ва навбатҳоро мустақим дар Telegram идора кунед!",
+      tk: "Lukmanlar üçin Telegram kömekçisi. Täze näsaglar ýazylanda derrew habarnama alyň we nobatlary göni Telegram-da dolandyryň!",
+    },
+  "faollashtirish qadamlari:": {
+    ru: "Шаги для активации:",
+    en: "Activation Steps:",
+    kk: "Белсендіру қадамдары:",
+    ky: "Активдештирүү кадамдары:",
+    tg: "Қадамҳои фаъолсозӣ:",
+    tk: "Işjeňleşdirmek ädimleri:",
+  },
+  "1. telegramda @dstoma_doctor_bot yordamchisiga o'ting va /start ni bosing.":
+    {
+      ru: "1. Перейдите в Telegram-бот @dstoma_doctor_bot и отправьте /start.",
+      en: "1. Open Telegram bot @dstoma_doctor_bot and send /start.",
+      kk: "1. Telegram-да @dstoma_doctor_bot көмекшісіне өтіп, /start басыңыз.",
+      ky: "1. Telegram-да @dstoma_doctor_bot жардамчысына өтүп, /start басыңыз.",
+      tg: "1. Дар Telegram ба ёрдамчии @dstoma_doctor_bot гузаред ва /start-ро пахш кунед.",
+      tk: "1. Telegram-da @dstoma_doctor_bot kömekçisine geçiň we /start basyň.",
+    },
+  "2. /doctor buyrug'ini yuboring va xonadagi login parolingizni kiriting.":
+    {
+      ru: "2. Отправьте команду /doctor и введите ваши логин и пароль.",
+      en: "2. Send command /doctor and enter your clinic login/password credentials.",
+      kk: "2. /doctor команданы жіберіп, логин мен құпия сөзіңізді енгізіңіз.",
+      ky: "2. /doctor буйругун жөнөтүп, логин жана сырсөзүңүздү киргизиңиз.",
+      tg: "2. Фармони /doctor-ро фиристед ва логин ва пароли худро ворид кунед.",
+      tk: "2. /doctor buýrugyny iberiň we login-parolyňyzy giriziň.",
+    },
+  "3. tayyor! yangi navbatlar xabari shu yerga keladi.": {
+    ru: "3. Готово! Уведомления о новых пациентах теперь будут поступать туда.",
+    en: "3. Ready! Success alerts and queue calls will land directly in your chat.",
+    kk: "3. Дайын! Жаңа кезектер туралы хабарлар осы жерге келеді.",
+    ky: "3. Даяр! Жаңы кезектер тууралуу билдирүүлөр ушул жерге келет.",
+    tg: "3. Тайёр! Огоҳиномаҳои навбати нав ба ин ҷо мерасанд.",
+    tk: "3. Taýýar! Täze nobatlar barada habarlar şu ýere geler.",
+  },
+  "telegram botni ochish 💬": {
+    ru: "Открыть Telegram Bot 💬",
+    en: "Open Telegram Bot 💬",
+    kk: "Telegram Bot ашу 💬",
+    ky: "Telegram Bot ачуу 💬",
+    tg: "Кушодани Telegram Bot 💬",
+    tk: "Telegram Bot açmak 💬",
+  },
+};
+
+export default function DoctorDashboard({
+  clinics,
+  doctors,
+  queues,
+  patients,
+  services,
+  doctorClinicLinks = [],
+  activeDoctorClinicId,
+  setActiveDoctorClinicId,
+  currentUser,
+  language,
+  onUpdateQueueStatus,
+  selectedClinic,
+  setActiveTab,
+  onRequestPremiumUpgrade,
+  staffToken
+}: DoctorDashboardProps) {
+  // Translation Helper
+  const localLang: keyof DoctorDictEntry | null =
+    (language === "ru" || language === "en" || language === "kk" || language === "ky" || language === "tg" || language === "tk")
+      ? language
+      : null;
+
+  const t = (text: string) => {
+    if (!language) return text;
+
+    // Look up in global configurations if text acts as a key
+    if (TRANSLATIONS[language] && text in TRANSLATIONS[language]) {
+      return TRANSLATIONS[language][text as keyof (typeof TRANSLATIONS)["uz"]];
+    }
+
+    const cleanText = text.trim().toLowerCase().replace(/\s+/g, " ");
+    const entry = DOCTOR_TRANSLATIONS[cleanText] || DOCTOR_TRANSLATIONS[text];
+    if (entry) {
+      if (localLang) return entry[localLang];
+      // uz (or an unsupported language) — dict keys are stored lowercase for
+      // matching, so restore the sentence-case convention used everywhere else
+      // in the app (capitalize the first letter only; skip any leading emoji).
+      const idx = text.search(/[a-zA-Zʻʼ'’]/);
+      if (idx === -1) return text;
+      return text.slice(0, idx) + text.charAt(idx).toUpperCase() + text.slice(idx + 1);
+    }
+
+    return text;
+  };
+
+  const currentDoctor = doctors.find((d) => d.id === currentUser?.id);
+
+  // Clinics this doctor is currently affiliated with (their home clinic + any active links)
+  const myActiveLinks = doctorClinicLinks.filter((l) => l.doctorId === currentDoctor?.id && l.status === "active");
+  const myClinicIds = Array.from(
+    new Set([currentDoctor?.clinicId, ...myActiveLinks.map((l) => l.clinicId)].filter(Boolean) as string[])
+  );
+  // Which clinic this doctor is currently working in — switchable when they have more than one
+  const effectiveClinicId =
+    activeDoctorClinicId && myClinicIds.includes(activeDoctorClinicId)
+      ? activeDoctorClinicId
+      : currentDoctor?.clinicId || selectedClinic?.id || null;
+  const effectiveClinic = clinics.find((c) => c.id === effectiveClinicId) || selectedClinic;
+
+  const [docStatus, setDocStatus] = useState<"idle" | "busy" | "away">("idle");
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState("dashboard");
+  const [activeDoctorId, setActiveDoctorId] = useState(currentDoctor?.id || "");
+  const [patientListSearch, setPatientListSearch] = useState("");
+  const [showQuickAddPatient, setShowQuickAddPatient] = useState(false);
+  const [quickAddPatient, setQuickAddPatient] = useState({ fullName: "", phone: "", passportSerial: "" });
+  const [isSavingQuickAddPatient, setIsSavingQuickAddPatient] = useState(false);
+  const [isSendingBulkTelegram, setIsSendingBulkTelegram] = useState(false);
+  const [showCrossClinicSearch, setShowCrossClinicSearch] = useState(false);
+  const [crossClinicQuery, setCrossClinicQuery] = useState("");
+  const [crossClinicResults, setCrossClinicResults] = useState<Patient[]>([]);
+  const [crossClinicSearching, setCrossClinicSearching] = useState(false);
+  const [crossClinicSearched, setCrossClinicSearched] = useState(false);
+  const [crossClinicViewPatient, setCrossClinicViewPatient] = useState<Patient | null>(null);
+  const [isAddingCrossClinicVisit, setIsAddingCrossClinicVisit] = useState(false);
+  const [queueListRange, setQueueListRange] = useState<'today' | 'all'>('today');
+  const [queueListSearch, setQueueListSearch] = useState('');
+  const [queueListStatusFilter, setQueueListStatusFilter] = useState('');
+
+  // Real patient roster for the "Bemorlar" tab, scoped to the active clinic. A patient
+  // "belongs" here if they have a recorded visit at this clinic, or (for freshly
+  // registered patients with no visits yet) if this is their home clinic.
+  const clinicPatients = useMemo(() => {
+    if (!effectiveClinicId) return patients;
+    return patients.filter((p) => {
+      const visits = p.clinicVisits || [];
+      if (visits.length === 0) return p.clinicId === effectiveClinicId;
+      return visits.some((v) => (v.clinicId || p.clinicId) === effectiveClinicId);
+    });
+  }, [patients, effectiveClinicId]);
+  const filteredClinicPatients = useMemo(() => {
+    const q = patientListSearch.trim().toLowerCase();
+    if (!q) return clinicPatients;
+    return clinicPatients.filter(
+      (p) =>
+        (p.fullName || "").toLowerCase().includes(q) ||
+        (p.phone || "").includes(q) ||
+        (p.id || "").toLowerCase().includes(q)
+    );
+  }, [clinicPatients, patientListSearch]);
+  const patientStats = useMemo(() => {
+    const total = clinicPatients.length;
+    const active = clinicPatients.filter((p) => (p.clinicVisits?.length || 0) > 0).length;
+    const totalVisits = clinicPatients.reduce((sum, p) => sum + (p.clinicVisits?.length || 0), 0);
+    const totalRevenue = clinicPatients.reduce(
+      (sum, p) => sum + (p.clinicVisits || []).reduce((s, v) => s + (v.price || 0), 0),
+      0
+    );
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const clinicQueues = effectiveClinicId ? queues.filter((q) => q.clinicId === effectiveClinicId) : queues;
+    const todayVisits = clinicQueues.filter((q) => q.appointmentDate === todayStr).length;
+    return {
+      total,
+      active,
+      activePct: total > 0 ? ((active / total) * 100).toFixed(1) : "0.0",
+      totalVisits,
+      totalRevenue,
+      todayVisits,
+    };
+  }, [clinicPatients, queues, effectiveClinicId]);
+
+  // Resolve a queue entry to a real patient record (queues only store name/phone, not a patient ID)
+  const resolvePatientIdFromQueue = (q: QueueItem): string | null => {
+    const normalizedQueuePhone = (q.patientPhone || "").replace(/\D/g, "");
+    const match =
+      clinicPatients.find(
+        (p) => normalizedQueuePhone && p.phone && p.phone.replace(/\D/g, "") === normalizedQueuePhone
+      ) || clinicPatients.find((p) => p.fullName === q.patientName);
+    return match ? match.id : null;
+  };
+
+  const handleQuickAddPatient = async () => {
+    if (!quickAddPatient.fullName.trim() || !effectiveClinicId) return;
+    setIsSavingQuickAddPatient(true);
+    try {
+      const res = await fetch("/api/patients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clinicId: effectiveClinicId,
+          fullName: quickAddPatient.fullName.trim(),
+          phone: quickAddPatient.phone.trim(),
+          passportSerial: quickAddPatient.passportSerial.trim(),
+        }),
+      });
+      if (res.ok) {
+        setQuickAddPatient({ fullName: "", phone: "", passportSerial: "" });
+        setShowQuickAddPatient(false);
+      }
+    } catch (err) {
+      console.warn("[DoctorDashboard] Failed to add patient:", err);
+    } finally {
+      setIsSavingQuickAddPatient(false);
+    }
+  };
+
+  const handleExportPatientsCsv = () => {
+    const header = ["Ism", "Telefon", "Tug'ilgan sana", "Pasport", "Tashriflar soni"];
+    const rows = filteredClinicPatients.map((p) => [
+      decodeLegacyEntities(p.fullName) || "",
+      decodeLegacyEntities(p.phone) || "",
+      p.birthDate || "",
+      decodeLegacyEntities(p.passportSerial) || "",
+      String((p.clinicVisits || []).length),
+    ]);
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `bemorlar_${effectiveClinicId || "klinika"}_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleBulkTelegramMessage = async () => {
+    const text = window.prompt("Barcha Telegram ulangan bemorlarga yuboriladigan xabar matnini kiriting:");
+    if (!text || !text.trim()) return;
+    const recipients = clinicPatients.filter((p) => p.telegramChatId);
+    if (recipients.length === 0) {
+      window.alert("Telegram ulangan bemorlar topilmadi.");
+      return;
+    }
+    setIsSendingBulkTelegram(true);
+    try {
+      const res = await fetch('/api/telegram/bulk-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatIds: recipients.map((p) => p.telegramChatId), text: text.trim() }),
+      });
+      const data = await res.json();
+      window.alert(data.ok ? `${data.sent} / ${data.total} bemorga xabar yuborildi.` : `Xatolik: ${data.error || 'Nomalum xato'}`);
+    } catch (e: any) {
+      window.alert(`Xatolik: ${e.message}`);
+    } finally {
+      setIsSendingBulkTelegram(false);
+    }
+  };
+
+  // Cross-clinic patient lookup: a patient's real medical history follows them
+  // regardless of which clinic they registered at (searched by phone or passport).
+  const handleCrossClinicSearch = async () => {
+    const q = crossClinicQuery.trim();
+    if (!q) return;
+    setCrossClinicSearching(true);
+    setCrossClinicSearched(false);
+    try {
+      const digits = q.replace(/\D/g, "");
+      const params = digits.length >= 7 ? `phone=${encodeURIComponent(digits)}` : `passport=${encodeURIComponent(q)}`;
+      const res = await fetch(`/api/patients/search?${params}`);
+      const data = res.ok ? await res.json() : [];
+      setCrossClinicResults(data);
+    } catch (err) {
+      console.warn("[DoctorDashboard] Cross-clinic search failed:", err);
+      setCrossClinicResults([]);
+    } finally {
+      setCrossClinicSearching(false);
+      setCrossClinicSearched(true);
+    }
+  };
+
+  const handleAddVisitToThisClinic = async (patient: Patient) => {
+    if (!effectiveClinicId) return;
+    setIsAddingCrossClinicVisit(true);
+    try {
+      const newVisit = {
+        id: "visit_" + Math.random().toString(36).slice(2, 10),
+        date: new Date().toISOString(),
+        doctorId: currentDoctor?.id || "",
+        doctorName: currentDoctor?.name || "",
+        serviceId: "",
+        serviceName: "Boshqa klinikadan qabul qilindi",
+        clinicId: effectiveClinicId,
+      };
+      const updatedPatient = {
+        ...patient,
+        clinicVisits: [...(patient.clinicVisits || []), newVisit],
+      };
+      await fetch("/api/patients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedPatient),
+      });
+      setCrossClinicViewPatient(null);
+      setShowCrossClinicSearch(false);
+      setSelectedPatientId(patient.id);
+      setActiveView("bemorlar");
+    } catch (err) {
+      console.warn("[DoctorDashboard] Failed to add cross-clinic visit:", err);
+    } finally {
+      setIsAddingCrossClinicVisit(false);
+    }
+  };
+
+  // Avatar and password states for profile updates
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(currentDoctor?.image || "");
+  const [password, setPassword] = useState("123456");
+  const [profileSuccessMsg, setProfileSuccessMsg] = useState("");
+
+  const [scheduleModal, setScheduleModal] = useState<{isOpen: boolean, queueId: string | null}>({isOpen: false, queueId: null});
+  const [scheduleDate, setScheduleDate] = useState(new Date().toISOString().split('T')[0]);
+  const [scheduleTime, setScheduleTime] = useState('09:00');
+  const [scheduleServiceId, setScheduleServiceId] = useState('');
+
+  // Service Selector Search
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [serviceSearchTerm, setServiceSearchTerm] = useState("");
+  const [openServiceCategory, setOpenServiceCategory] = useState<string>("");
+  const [medicalNotes, setMedicalNotes] = useState<Record<string, string>>({});
+  const [openPatientHistory, setOpenPatientHistory] = useState<
+    Record<string, boolean>
+  >({});
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const getServiceCategory = (name: string): string => {
+    const n = name.toLowerCase();
+    if (
+      n.includes("diagnostika") ||
+      n.includes("konsultatsiya") ||
+      n.includes("rentgen") ||
+      n.includes("snimka") ||
+      n.includes("kt")
+    )
+      return "Diagnostika";
+    if (
+      n.includes("oqartirish") ||
+      n.includes("zoom") ||
+      n.includes("bleaching")
+    )
+      return "Tishlarni oqartirish";
+    if (n.includes("vinir") || n.includes("komponir") || n.includes("lyuminir"))
+      return "Vinirlar";
+    if (
+      n.includes("implant") ||
+      n.includes("all-on-4") ||
+      n.includes("mega gen") ||
+      n.includes("osstem")
+    )
+      return "Implantatsiya";
+    if (
+      n.includes("protez") ||
+      n.includes("koronka") ||
+      n.includes("metallokera") ||
+      n.includes("sirqoniy") ||
+      n.includes("plastmassa")
+    )
+      return "Protezlash";
+    if (
+      n.includes("breket") ||
+      n.includes("plastinka") ||
+      n.includes("elayner") ||
+      n.includes("reteyner")
+    )
+      return "Ortodontiya";
+    if (
+      n.includes("bolalar") ||
+      n.includes("sut tish") ||
+      n.includes("karies s")
+    )
+      return "Bolalar stomatologiyasi";
+    if (
+      n.includes("olish") ||
+      n.includes("xirurg") ||
+      n.includes("operasiya") ||
+      n.includes("operatsiya") ||
+      n.includes("rezeksiya") ||
+      n.includes("kista") ||
+      n.includes("sinus")
+    )
+      return "Xirurgiya";
+    if (
+      n.includes("tosh") ||
+      n.includes("tozalash") ||
+      n.includes("gigiyena") ||
+      n.includes("polirovka") ||
+      n.includes("ftor") ||
+      n.includes("air flow")
+    )
+      return "Profilaktika";
+    if (
+      n.includes("karies") ||
+      n.includes("plomba") ||
+      n.includes("pulpit") ||
+      n.includes("abssess") ||
+      n.includes("davolash")
+    )
+      return "Terapevtik stomatologiya";
+    return "Boshqa xizmatlar";
+  };
+
+  const myClinicServices = services.filter(
+    (s) => s.clinicId === currentDoctor?.clinicId,
+  );
+  const filteredServices = myClinicServices.filter((s) =>
+    translateMedicalText(s.name, language)
+      .toLowerCase()
+      .includes(serviceSearchTerm.toLowerCase()),
+  );
+
+  const groupedServices: Record<string, typeof services> = {};
+  filteredServices.forEach((s) => {
+    const cat = getServiceCategory(translateMedicalText(s.name, language));
+    if (!groupedServices[cat]) groupedServices[cat] = [];
+    groupedServices[cat].push(s);
+  });
+
+  const sortedCategories = [
+    "Diagnostika",
+    "Terapevtik stomatologiya",
+    "Tishlarni oqartirish",
+    "Vinirlar",
+    "Xirurgiya",
+    "Protezlash",
+    "Ortodontiya",
+    "Bolalar stomatologiyasi",
+    "Implantatsiya",
+    "Profilaktika",
+    "Boshqa xizmatlar",
+  ].filter((c) => groupedServices[c] && groupedServices[c].length > 0);
+
+  // Sync state if currentUser changes
+  React.useEffect(() => {
+    if (currentUser?.id) {
+      setActiveDoctorId(currentUser.id);
+      const match = doctors.find((d) => d.id === currentUser.id);
+      if (match) {
+        setAvatarUrl(match.image);
+      }
+    }
+  }, [currentUser, doctors]);
+
+  const handleUpdateProfile = () => {
+    setProfileSuccessMsg(
+      "Profil ma'lumotlari muvaffaqiyatli saqlandi! (Parol yangilandi)",
+    );
+    setTimeout(() => {
+      setProfileSuccessMsg("");
+      setShowProfileSettings(false);
+    }, 2500);
+  };
+
+  // Queues specifically directed to this doctor
+  const doctorQueues = queues.filter(
+    (q) => q.doctorId === activeDoctorId && (!effectiveClinicId || q.clinicId === effectiveClinicId)
+  );
+
+  // States: pending vs calling vs in_progress vs completed
+  const pendingQueues = doctorQueues.filter((q) => q.status === "pending");
+  const activeConsultingQueues = doctorQueues.filter(
+    (q) => q.status === "calling" || q.status === "in_progress",
+  );
+  const completedQueues = doctorQueues.filter((q) => q.status === "completed");
+  const cancelledQueues = doctorQueues.filter((q) => q.status === "cancelled");
+  const scheduledQueues = doctorQueues.filter((q) => q.status === "scheduled");
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const overdueScheduledQueues = scheduledQueues.filter(
+    (q) => q.appointmentDate && q.appointmentDate < todayStr,
+  );
+
+  const visibleQueues = doctorQueues
+    .filter((q) => queueListRange === 'all' || (q.appointmentDate || q.createdAt.slice(0, 10)) === todayStr)
+    .filter((q) => !queueListStatusFilter || q.status === queueListStatusFilter)
+    .filter((q) => {
+      const query = queueListSearch.trim().toLowerCase();
+      if (!query) return true;
+      return (
+        q.patientName.toLowerCase().includes(query) ||
+        (q.patientPhone || '').includes(query) ||
+        String(q.number || '').includes(query)
+      );
+    });
+
+  // The patient currently being called/consulted, resolved to a real patient record
+  // (used by the "Bemor kartasi" widget instead of a hardcoded sample patient)
+  const activeConsultQueue = activeConsultingQueues[0] || null;
+  const activeConsultPatient = activeConsultQueue
+    ? clinicPatients.find((p) => p.id === resolvePatientIdFromQueue(activeConsultQueue)) || null
+    : null;
+
+  // Real treatment plan for the active consult patient (mirrors TreatmentPlan.tsx's data source)
+  const [activePatientPlanItems, setActivePatientPlanItems] = useState<TreatmentItem[]>([]);
+  useEffect(() => {
+    if (!activeConsultPatient?.id) {
+      setActivePatientPlanItems([]);
+      return;
+    }
+    const unsub = onSnapshot(
+      collection(db, `patients/${activeConsultPatient.id}/treatmentPlans`),
+      (snapshot) => {
+        const data: TreatmentItem[] = [];
+        snapshot.forEach((d) => data.push({ id: d.id, ...d.data() } as TreatmentItem));
+        data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setActivePatientPlanItems(data);
+      },
+      () => setActivePatientPlanItems([])
+    );
+    return () => unsub();
+  }, [activeConsultPatient?.id]);
+
+  // Real X-rays for the active consult patient (mirrors XRayCenter.tsx's data source)
+  const [activePatientXrays, setActivePatientXrays] = useState<XRay[]>([]);
+  useEffect(() => {
+    if (!activeConsultPatient?.id) {
+      setActivePatientXrays([]);
+      return;
+    }
+    const unsub = onSnapshot(
+      collection(db, `patients/${activeConsultPatient.id}/xrays`),
+      (snapshot) => {
+        const data: XRay[] = [];
+        snapshot.forEach((d) => data.push({ id: d.id, ...d.data() } as XRay));
+        data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setActivePatientXrays(data);
+      },
+      () => setActivePatientXrays([])
+    );
+    return () => unsub();
+  }, [activeConsultPatient?.id]);
+
+  // Smart Separation of patients: "Yangi mijozlar" & "Doimiy mijozlar"
+  const newPatients = pendingQueues.filter(q => {
+    const priorVisits = queues.filter(
+      other => other.patientName === q.patientName && other.status === "completed"
+    );
+    return priorVisits.length === 0;
+  });
+  const regularPatients = pendingQueues.filter(q => {
+    const priorVisits = queues.filter(
+      other => other.patientName === q.patientName && other.status === "completed"
+    );
+    return priorVisits.length > 0;
+  });
+
+  const getServicePrice = (sId: string) => {
+    const srv = services.find((s) => s.id === sId);
+    return srv ? srv.price : 0;
+  };
+
+  const getServiceInfo = (sId: string) => {
+    return services.find((s) => s.id === sId);
+  };
+
+  const dailyRevenue = completedQueues.reduce(
+    (sum, item) => sum + getServicePrice(item.serviceId),
+    0,
+  );
+  const avgRating = currentDoctor ? currentDoctor.rating : 4.7;
+
+  const SidebarItem = ({ icon: Icon, label, id, badge }: any) => {
+    const isActive = activeView === id;
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setActiveView(id);
+          setIsSidebarOpen(false);
+        }}
+        className={`w-full flex items-center ${isSidebarOpen ? 'justify-between px-4' : 'justify-center px-0'} py-3 rounded-xl transition-all ${
+          isActive
+            ? "bg-blue-600 text-white shadow-md shadow-blue-900/20"
+            : "text-slate-300 hover:bg-[#1a2b56] hover:text-white"
+        }`}
+        title={!isSidebarOpen ? label : ""}
+      >
+        <div className="flex items-center gap-3">
+          <Icon className="w-5 h-5 shrink-0" />
+          {isSidebarOpen && <span className="font-semibold text-sm">{label}</span>}
+        </div>
+        {badge && isSidebarOpen && (
+          <span className="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+            {badge}
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  return (
+    <div className="flex h-screen bg-[#f8f9fa] font-sans overflow-hidden">
+      {/* SIDEBAR */}
+      <div 
+        className={`${isSidebarOpen ? 'w-[280px]' : 'w-[80px]'} transition-all duration-300 ease-in-out bg-[#101b33] text-white flex flex-col shrink-0 h-full overflow-y-auto custom-scrollbar cursor-pointer group z-20`}
+        onClick={() => !isSidebarOpen && setIsSidebarOpen(true)}
+      >
+        {/* Profile Card */}
+        <div className={`p-6 ${!isSidebarOpen ? 'px-2 flex flex-col items-center' : ''}`}>
+          <div className={`flex items-center ${isSidebarOpen ? 'gap-3 mb-8' : 'justify-center mb-8'}`}>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-8 h-8 text-white shrink-0"
+            >
+              <path
+                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"
+                fill="currentColor"
+              />
+              <path
+                d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z"
+                fill="currentColor"
+              />
+            </svg>
+            {isSidebarOpen && (
+              <div className="overflow-hidden whitespace-nowrap">
+                <h1 className="font-bold text-lg leading-tight tracking-tight">
+                  DStoma
+                </h1>
+                <p className="text-[9px] text-slate-400 font-bold tracking-[0.2em] uppercase">
+                  Navbati
+                </p>
+              </div>
+            )}
+          </div>
+          <div className={`flex items-center ${isSidebarOpen ? 'gap-3' : 'justify-center'}`}>
+            <img
+              src={avatarUrl || currentDoctor?.image}
+              alt={currentDoctor?.name}
+              referrerPolicy="no-referrer"
+              className="w-12 h-12 rounded-full object-cover shrink-0"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src =
+                  "https://api.dicebear.com/7.x/adventurer/svg?seed=" +
+                  currentDoctor?.name;
+              }}
+            />
+            {isSidebarOpen && (
+              <div className="overflow-hidden whitespace-nowrap">
+                <h2 className="font-bold text-[13px] leading-tight text-white mb-0.5 truncate max-w-[150px]">
+                  {currentDoctor?.name || "Dr. Asilbek Xolmirzayev"}
+                </h2>
+                <p className="text-[11px] text-slate-400 leading-tight">
+                  {t("Stomatolog-ortoped")}
+                </p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span className="text-[10px] text-emerald-400 font-medium">
+                    {t("onlayn")}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Navigation Links */}
+        <div className={`flex-1 px-4 py-2 space-y-1 ${!isSidebarOpen ? 'px-2' : ''}`}>
+          <SidebarItem icon={Home} label={t("Dashboard")} id="dashboard" />
+          <SidebarItem icon={List} label={t("Navbatlar")} id="navbatlar" />
+          <SidebarItem icon={Users} label={t("Bemorlar")} id="bemorlar" />
+          <SidebarItem icon={Package} label={t("Material va Anjomlar")} id="materiallar" />
+          <SidebarItem icon={BarChart2} label={t("Statistika")} id="statistika" />
+          <SidebarItem icon={Settings} label={t("sozlamalar")} id="sozlamalar" />
+        </div>
+
+        {/* Footer Area */}
+        <div className={`p-4 mt-auto space-y-2 ${!isSidebarOpen ? 'px-2' : ''}`}>
+          {isSidebarOpen && (
+            <div className="bg-[#17254d] p-3 rounded-xl border border-white/5 relative">
+              <span className="text-[10px] text-slate-400 block mb-1 font-semibold">
+                {t("klinika rejimi")}
+              </span>
+              <div className="flex items-center justify-between text-white text-xs font-semibold cursor-pointer">
+                <span>Smile Dentistry</span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              </div>
+            </div>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveTab && setActiveTab("bemor");
+            }}
+            className={`w-full flex items-center ${isSidebarOpen ? 'gap-3 px-3' : 'justify-center px-0'} py-3 text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer rounded-xl`}
+            title={!isSidebarOpen ? t("chiqish") : ""}
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            {isSidebarOpen && <span className="text-sm font-semibold">{t("chiqish")}</span>}
+          </button>
+        </div>
+      </div>
+
+      {/* MAIN CONTENT AREA */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden transition-all duration-300">
+        {/* Top Header */}
+        <div className="bg-white h-[72px] border-b border-slate-200 shrink-0 flex items-center justify-between px-6 z-10">
+          <div className="flex items-center gap-3">
+            <button 
+              className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg lg:hidden"
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <h2 className="font-bold text-xl text-slate-800 capitalize tracking-tight flex items-center gap-2">
+              <button 
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="hover:bg-slate-100 p-1.5 rounded-lg transition-colors cursor-pointer hidden lg:block"
+              >
+                <Menu className="w-5 h-5 text-slate-400" />
+              </button>
+              {activeView.replace("_", " ")}
+            </h2>
+          </div>
+          <div className="flex items-center gap-4">
+            {myClinicIds.length > 1 && (
+              <select
+                value={effectiveClinicId || ""}
+                onChange={(e) => setActiveDoctorClinicId?.(e.target.value)}
+                className="hidden md:block bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold rounded-full py-2 px-4 outline-none cursor-pointer"
+                title={t("faol klinikani tanlang")}
+              >
+                {myClinicIds.map((cid) => {
+                  const c = clinics.find((cl) => cl.id === cid);
+                  return (
+                    <option key={cid} value={cid}>
+                      {c?.name || cid}
+                    </option>
+                  );
+                })}
+              </select>
+            )}
+            <div className="relative hidden md:block">
+              <input
+                type="text"
+                placeholder={t("bemor qidirish...")}
+                className="w-64 bg-slate-100 border border-transparent focus:border-blue-500/30 rounded-full py-2 pl-4 pr-10 text-xs font-medium focus:ring-2 focus:ring-blue-500/20 transition-all outline-none text-slate-700"
+              />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute right-4 top-2.5" />
+            </div>
+            <button className="relative p-2.5 text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer">
+              <Bell className="w-4.5 h-4.5" />
+              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-slate-100"></span>
+            </button>
+            <button className="p-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition-colors shadow-md shadow-blue-500/20 cursor-pointer">
+              <Send className="w-4.5 h-4.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className={`flex-1 relative ${
+          activeView === "dental_chart" ? "overflow-hidden p-0" : "overflow-y-auto"
+        } ${
+          (activeView === "bemorlar" && selectedPatientId)
+            ? "p-0" 
+            : activeView !== "dental_chart" ? "p-6 md:p-8" : ""
+        }`}>
+          {activeView === "dashboard" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {/* Top Cards */}
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                        {t("bugungi bemorlar")}
+                      </h3>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-end gap-2">
+                    <span className="text-3xl font-black text-slate-800">
+                      {doctorQueues.length}
+                    </span>
+                    <span className="text-[11px] font-bold text-emerald-500 mb-1">
+                      +{newPatients.length} {t("yangi")}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-amber-50 text-amber-500 rounded-xl">
+                      <Clock className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                        {t("hozir qabulda")}
+                      </h3>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-col">
+                    <span className="text-3xl font-black text-slate-800">
+                      {activeConsultingQueues.length}
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-400">
+                      {t("qabul davom etmoqda")}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-emerald-50 text-emerald-500 rounded-xl">
+                      <Wallet className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                        {t("bugungi tushum")}
+                      </h3>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-col">
+                    <span className="text-2xl font-black text-slate-800">
+                      {dailyRevenue.toLocaleString('uz-UZ').replace(/,/g, ' ')} <span className="text-sm">so'm</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-purple-50 text-purple-600 rounded-xl">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                        {t("kutilayotgan")}
+                      </h3>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-col">
+                    <span className="text-3xl font-black text-slate-800">
+                      {pendingQueues.length}
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-400">
+                      {t("navbatda")}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-blue-50 text-blue-500 rounded-xl">
+                      <CheckCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                        {t("tugatilgan qabul")}
+                      </h3>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-col">
+                    <span className="text-3xl font-black text-slate-800">
+                      {completedQueues.length}
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-400">
+                      {t("bugun")}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-rose-50 text-rose-500 rounded-xl">
+                      <Clock className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                        {t("o'rtacha qabul vaqti")}
+                      </h3>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-end gap-1">
+                    <span className="text-3xl font-black text-slate-800">
+                      28
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500 mb-1">
+                      {t("daqiqa")}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Layout rows */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Bugungi Navbatlar */}
+                <div className="lg:col-span-4 bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-slate-800 text-base">
+                      {t("bugungi navbatlar")}
+                    </h3>
+                    <button className="text-blue-600 bg-blue-50 px-3 py-1 rounded-full text-xs font-bold hover:bg-blue-100 transition-colors">
+                      {t("barcha navbatlar")}
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="text-slate-400 border-b border-slate-100">
+                        <tr>
+                          <th className="font-medium pb-2">#</th>
+                          <th className="font-medium pb-2">{t("vaqt")}</th>
+                          <th className="font-medium pb-2">{t("bemor")}</th>
+                          <th className="font-medium pb-2">{t("xizmat")}</th>
+                          <th className="font-medium pb-2 text-right">
+                            {t("holati")}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {doctorQueues.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="py-8 text-center text-slate-500 font-medium">
+                              {t("hozircha navbatda bemorlar yo'q")}
+                            </td>
+                          </tr>
+                        ) : (
+                          doctorQueues.slice(0, 5).map((q, idx) => (
+                            <tr key={q.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => { const pid = resolvePatientIdFromQueue(q); if (pid) { setActiveView('bemorlar'); setSelectedPatientId(pid); } }}>
+                              <td className="py-3 font-medium text-slate-500">{idx + 1}</td>
+                              <td className="py-3 text-slate-500 font-medium">
+                                {q.appointmentTime || (q.createdAt ? new Date(q.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--')}
+                              </td>
+                              <td className="py-3 font-semibold text-slate-800">
+                                {q.patientName}
+                                <br />
+                                <span className="text-[9px] text-slate-400 font-normal">
+                                  {q.patientPhone}
+                                </span>
+                              </td>
+                              <td className="py-3 text-slate-500 font-medium">
+                                {services.find((s: any) => s.id === q.serviceId)?.name || t("ko'rik")}
+                              </td>
+                              <td className="py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center justify-end gap-2">
+                                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${
+                                    q.status === 'in_progress' ? 'text-blue-600 bg-blue-50' :
+                                    q.status === 'scheduled' ? 'text-purple-600 bg-purple-50' :
+                                    q.status === 'completed' ? 'text-emerald-600 bg-emerald-50' :
+                                    q.status === 'cancelled' ? 'text-rose-600 bg-rose-50' :
+                                    'text-amber-600 bg-amber-50'
+                                  }`}>
+                                    {q.status === 'in_progress' ? 'Qabulda' :
+                                     q.status === 'scheduled' ? 'Belgilangan' :
+                                     q.status === 'completed' ? 'Yakunlangan' :
+                                     q.status === 'cancelled' ? 'Bekor qilindi' : 'Kutmoqda'}
+                                  </span>
+                                  {q.status === 'pending' || q.status === 'scheduled' ? (
+                                    <>
+                                      <button
+                                        onClick={() => {
+                                          setScheduleServiceId(q.serviceId || '');
+                                          setScheduleDate(q.appointmentDate || new Date().toISOString().split('T')[0]);
+                                          setScheduleTime(q.appointmentTime || '09:00');
+                                          setScheduleModal({ isOpen: true, queueId: q.id! });
+                                        }}
+                                        className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-lg transition-colors tooltip"
+                                        title={t("muolaja va vaqt belgilash")}
+                                      >
+                                        <CalendarClock className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button 
+                                        onClick={() => onUpdateQueueStatus(q.id!, 'in_progress')}
+                                        className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors tooltip"
+                                        title={t("qabulni boshlash")}
+                                      >
+                                        <Play className="w-3.5 h-3.5 fill-current" />
+                                      </button>
+                                    </>
+                                  ) : q.status === 'in_progress' ? (
+                                    <button 
+                                      onClick={() => onUpdateQueueStatus(q.id!, 'completed')}
+                                      className="p-1.5 text-blue-500 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors tooltip"
+                                      title={t("yakunlash")}
+                                    >
+                                      <Check className="w-3.5 h-3.5" />
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Dental Chart */}
+                <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-slate-800 text-base">
+                      Dental Chart
+                    </h3>
+                    <div className="flex gap-2">
+                      <button className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 rounded-lg border border-slate-200 flex items-center gap-1">
+                        <Trash2 className="w-3.5 h-3.5" /> {t("tozalash")}
+                      </button>
+                      <button className="p-1.5 text-slate-600 hover:bg-slate-50 rounded-lg border border-slate-200">
+                        <Settings className="w-4 h-4" />
+                      </button>
+                      <button className="p-1.5 text-slate-600 hover:bg-slate-50 rounded-lg border border-slate-200">
+                        <Maximize2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex justify-center gap-4 mb-6">
+                    <button className="px-6 py-1.5 bg-blue-600 text-white rounded-full text-xs font-semibold shadow-md shadow-blue-500/20">
+                      {t("doimiy tishlar")}
+                    </button>
+                    <button className="px-6 py-1.5 bg-slate-100 text-slate-500 hover:bg-slate-200 rounded-full text-xs font-semibold">
+                      {t("sut tishlar")}
+                    </button>
+                  </div>
+
+                  <div className="h-[200px] flex items-center justify-center bg-slate-50 rounded-2xl mb-6">
+                    <span className="text-slate-400 text-sm font-semibold">
+                      Teeth Model Container
+                    </span>
+                    {/* Here we can place the real ThreeDentalModel later */}
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-2 text-[10px] font-medium text-slate-600">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full border-2 border-slate-300"></span>{" "}
+                      {t("sog'lom")}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full bg-rose-500"></span>{" "}
+                      {t("karies")}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full bg-amber-400"></span>{" "}
+                      {t("pulpit")}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full bg-blue-500"></span>{" "}
+                      {t("kanal davolangan")}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full bg-emerald-500"></span>{" "}
+                      {t("plomba")}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full bg-purple-500"></span>{" "}
+                      {t("koronka")}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full bg-teal-500"></span>{" "}
+                      {t("implant")}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full bg-slate-800"></span>{" "}
+                      {t("olib tashlangan")}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bemor Kartasi & Davolash Rejasi */}
+                <div className="lg:col-span-3 space-y-6">
+                  {/* Bemor Kartasi */}
+                  <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 relative">
+                    <button className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                    <h3 className="font-bold text-slate-800 text-base mb-4">
+                      {t("bemor kartasi")}
+                    </h3>
+                    {activeConsultQueue ? (
+                      <>
+                        <div className="flex items-center gap-3 mb-5">
+                          <img
+                            src={`https://api.dicebear.com/7.x/adventurer/svg?seed=${activeConsultPatient?.id || activeConsultQueue.id}`}
+                            className="w-14 h-14 rounded-full bg-slate-100"
+                          />
+                          <div>
+                            <h4 className="font-bold text-slate-800 text-sm">
+                              {decodeLegacyEntities(activeConsultPatient?.fullName) || activeConsultQueue.patientName}
+                            </h4>
+                            <p className="text-[10px] text-slate-500">
+                              {activeConsultPatient?.birthDate || ""}
+                            </p>
+                            <p className="text-xs font-mono text-slate-600 mt-0.5 font-medium flex items-center gap-1">
+                              <Phone className="w-3 h-3" /> {decodeLegacyEntities(activeConsultPatient?.phone) || activeConsultQueue.patientPhone || "—"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 mb-6">
+                          <button className="flex-1 py-1.5 bg-slate-50 hover:bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center transition-colors">
+                            <Phone className="w-4 h-4" />
+                          </button>
+                          <button className="flex-1 py-1.5 bg-slate-50 hover:bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center transition-colors">
+                            <Send className="w-4 h-4" />
+                          </button>
+                          <button className="flex-1 py-1.5 bg-slate-50 hover:bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center transition-colors">
+                            <MessageSquare className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div className="space-y-2 text-[11px]">
+                          <div className="flex justify-between border-b border-slate-50 pb-1">
+                            <span className="text-slate-500">{t("allergiya")}</span>
+                            <span className="font-medium text-slate-800">
+                              {decodeLegacyEntities(activeConsultPatient?.allergies) || "—"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between border-b border-slate-50 pb-1">
+                            <span className="text-slate-500">{t("kasalliklar")}</span>
+                            <span className="font-medium text-slate-800">
+                              {decodeLegacyEntities(activeConsultPatient?.chronicDiseases) || "—"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">{t("shikoyat")}</span>
+                            <span className="font-medium text-slate-800 text-right w-3/5">
+                              {activeConsultQueue.complaint || "—"}
+                            </span>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-400 py-6 text-center">
+                        {t("hozirda qabulda faol bemor yo'q")}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Davolash Rejasi */}
+                  <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-bold text-slate-800 text-base">
+                        {t("davolash rejasi")}
+                      </h3>
+                      <button className="text-blue-600 flex items-center gap-1 text-[10px] font-bold hover:bg-blue-50 px-2 py-1 rounded">
+                        <Plus className="w-3 h-3" /> {t("yangi reja")}
+                      </button>
+                    </div>
+                    {activePatientPlanItems.length > 0 ? (
+                      <>
+                        <table className="w-full text-left text-[10px]">
+                          <thead className="text-slate-400 border-b border-slate-50">
+                            <tr>
+                              <th className="pb-2 font-medium">{t("tish")}</th>
+                              <th className="pb-2 font-medium">{t("muolaja")}</th>
+                              <th className="pb-2 font-medium text-right">
+                                {t("narx (so'm)")}
+                              </th>
+                              <th className="pb-2 font-medium text-right">
+                                {t("holati")}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50 font-medium">
+                            {activePatientPlanItems.map((item) => (
+                              <tr key={item.id}>
+                                <td className="py-2.5">{item.toothId}</td>
+                                <td className="py-2.5 text-slate-800">
+                                  {item.treatment}
+                                </td>
+                                <td className="py-2.5 text-right text-slate-800">
+                                  {item.price.toLocaleString()}
+                                </td>
+                                <td className="py-2.5 text-right">
+                                  {item.status === "Completed" ? (
+                                    <Check className="w-3.5 h-3.5 text-emerald-500 ml-auto" />
+                                  ) : item.status === "Cancelled" ? (
+                                    <span className="text-rose-500 font-bold">{t("bekor qilindi")}</span>
+                                  ) : item.status === "In Progress" ? (
+                                    <span className="text-blue-500 font-bold">{t("jarayonda")}</span>
+                                  ) : (
+                                    <span className="text-amber-500 font-bold">{t("kutmoqda")}</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="border-t border-slate-100">
+                            <tr>
+                              <td
+                                colSpan={2}
+                                className="pt-3 font-bold text-right text-slate-800 text-xs"
+                              >
+                                {t("jami:")}
+                              </td>
+                              <td
+                                colSpan={2}
+                                className="pt-3 font-bold text-right text-slate-800 text-xs"
+                              >
+                                {activePatientPlanItems
+                                  .filter((i) => i.status !== "Cancelled")
+                                  .reduce((sum, i) => sum + (i.price || 0), 0)
+                                  .toLocaleString()}{" "}
+                                so'm
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                        <button
+                          onClick={() => { setActiveView("bemorlar"); if (activeConsultPatient) setSelectedPatientId(activeConsultPatient.id); }}
+                          className="w-full mt-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-blue-500/20 cursor-pointer"
+                        >
+                          {t("to'liq rejani ko'rish")}
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-400 py-6 text-center">
+                        {activeConsultPatient ? t("ushbu bemor uchun davolash rejasi kiritilmagan") : t("faol bemor tanlanmagan")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeView === "eslatmalar" && (
+            <div className="space-y-6">
+              {/* Eslatmalar Top Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                  <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl">
+                    <Bell className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 mb-1">
+                      {t("barcha eslatmalar")}
+                    </p>
+                    <div className="flex items-end gap-1">
+                      <span className="text-2xl font-black text-slate-800 leading-none">
+                        28
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {t("ta")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                  <div className="p-3 bg-amber-50 text-amber-500 rounded-2xl">
+                    <Clock className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 mb-1">
+                      {t("bugun")}
+                    </p>
+                    <div className="flex items-end gap-1">
+                      <span className="text-2xl font-black text-slate-800 leading-none">
+                        5
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {t("ta")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                  <div className="p-3 bg-emerald-50 text-emerald-500 rounded-2xl">
+                    <CalendarCheck2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 mb-1">
+                      {t("7 kun ichida")}
+                    </p>
+                    <div className="flex items-end gap-1">
+                      <span className="text-2xl font-black text-slate-800 leading-none">
+                        12
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {t("ta")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                  <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl">
+                    <CalendarCheck2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 mb-1">
+                      {t("30 kun ichida")}
+                    </p>
+                    <div className="flex items-end gap-1">
+                      <span className="text-2xl font-black text-slate-800 leading-none">
+                        9
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {t("ta")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                  <div className="p-3 bg-rose-50 text-rose-500 rounded-2xl">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 mb-1">
+                      {t("muddati o'tgan")}
+                    </p>
+                    <div className="flex items-end gap-1">
+                      <span className="text-2xl font-black text-slate-800 leading-none">
+                        2
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {t("ta")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Eslatmalar Main Area */}
+              <div className="flex flex-col lg:flex-row gap-6">
+                {/* Left List */}
+                <div className="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm p-5 flex flex-col">
+                  <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-4">
+                    <div className="flex items-center gap-2">
+                      <button className="px-4 py-1.5 bg-blue-50 text-blue-600 font-bold text-xs rounded-lg">
+                        {t("barchasi")}
+                      </button>
+                      <button className="px-4 py-1.5 text-slate-500 hover:bg-slate-50 font-bold text-xs rounded-lg transition-colors">
+                        {t("menda")}
+                      </button>
+                      <button className="px-4 py-1.5 text-slate-500 hover:bg-slate-50 font-bold text-xs rounded-lg transition-colors">
+                        {t("shifokorlar bo'yicha")}
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <select className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-3 py-1.5 outline-none font-semibold">
+                        <option>{t("sana bo'yicha")}</option>
+                      </select>
+                      <button className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors shadow-md shadow-blue-500/20">
+                        <Plus className="w-3.5 h-3.5" /> {t("eslatma qo'shish")}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 mb-4 text-xs font-semibold text-slate-500 border-b border-slate-100 pb-4">
+                    <div className="flex items-center gap-2">
+                      {t("holati")}:{" "}
+                      <select className="bg-transparent font-bold text-slate-800 outline-none">
+                        <option>{t("barchasi")}</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {t("sana oralig'i:")}{" "}
+                      <span className="bg-slate-50 px-2 py-1 rounded border border-slate-100 font-mono">
+                        dd.mm.yyyy - dd.mm.yyyy{" "}
+                        <CalendarCheck2 className="inline w-3 h-3 ml-1" />
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 ml-auto">
+                      {t("eslatma turi:")}{" "}
+                      <select className="bg-transparent font-bold text-slate-800 outline-none">
+                        <option>{t("barchasi")}</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                    {/* Active Item */}
+                    <div className="border border-amber-300 bg-amber-50/30 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-colors">
+                      <div className="flex items-center gap-4 w-1/3">
+                        <img
+                          src="https://api.dicebear.com/7.x/adventurer/svg?seed=b1"
+                          className="w-12 h-12 rounded-full border-2 border-white shadow-sm bg-slate-100"
+                        />
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-sm">
+                            Karimov Behzod Anvarovich
+                          </h4>
+                          <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                            <Phone className="inline w-3 h-3 mr-1" />
+                            99 987 65 43
+                          </p>
+                        </div>
+                      </div>
+                      <div className="w-1/3">
+                        <h4 className="font-bold text-slate-800 text-xs">
+                          Implant nazorati
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                          36-tishga qo'yilgan implant nazoratini amalga
+                          oshirish.
+                        </p>
+                      </div>
+                      <div className="w-1/6">
+                        <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-1">
+                          <CalendarCheck2 className="w-3.5 h-3.5 text-amber-500" />{" "}
+                          {t("bugun")}
+                        </p>
+                        <p className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-amber-500" /> 10:30
+                        </p>
+                      </div>
+                      <div className="w-1/6 text-right">
+                        <span className="inline-block bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                          {t("bugun")}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Normal Item */}
+                    <div className="border border-slate-100 hover:border-slate-200 bg-white rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-colors">
+                      <div className="flex items-center gap-4 w-1/3">
+                        <img
+                          src="https://api.dicebear.com/7.x/adventurer/svg?seed=b2"
+                          className="w-12 h-12 rounded-full border-2 border-white shadow-sm bg-slate-100"
+                        />
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-sm">
+                            Saidova Malika Rustamovna
+                          </h4>
+                          <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                            <Phone className="inline w-3 h-3 mr-1" />
+                            90 123 45 67
+                          </p>
+                        </div>
+                      </div>
+                      <div className="w-1/3">
+                        <h4 className="font-bold text-slate-800 text-xs">
+                          Ortodontiya nazorati
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                          Breket tizimini faollashtirish va nazorat qilish.
+                        </p>
+                      </div>
+                      <div className="w-1/6">
+                        <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-1">
+                          <CalendarCheck2 className="w-3.5 h-3.5 text-amber-500" />{" "}
+                          {t("bugun")}
+                        </p>
+                        <p className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-amber-500" /> 14:00
+                        </p>
+                      </div>
+                      <div className="w-1/6 text-right">
+                        <span className="inline-block bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                          {t("bugun")}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Overdue Item */}
+                    <div className="border border-slate-100 hover:border-slate-200 bg-white rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-colors">
+                      <div className="flex items-center gap-4 w-1/3">
+                        <img
+                          src="https://api.dicebear.com/7.x/adventurer/svg?seed=b3"
+                          className="w-12 h-12 rounded-full border-2 border-white shadow-sm bg-slate-100"
+                        />
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-sm">
+                            Abdullayev Sardorbek
+                          </h4>
+                          <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                            <Phone className="inline w-3 h-3 mr-1" />
+                            91 234 56 78
+                          </p>
+                        </div>
+                      </div>
+                      <div className="w-1/3">
+                        <h4 className="font-bold text-slate-800 text-xs">
+                          Plomba nazorati
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                          46-tish plombasini nazorat qilish.
+                        </p>
+                      </div>
+                      <div className="w-1/6">
+                        <p className="text-xs font-bold text-rose-500 flex items-center gap-1.5 mb-1">
+                          <CalendarCheck2 className="w-3.5 h-3.5" /> 12.05.2024
+                        </p>
+                        <p className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" /> 11:00
+                        </p>
+                      </div>
+                      <div className="w-1/6 text-right">
+                        <span className="inline-block bg-rose-50 text-rose-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                          {t("muddati o'tgan")}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Future Item */}
+                    <div className="border border-slate-100 hover:border-slate-200 bg-white rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-colors">
+                      <div className="flex items-center gap-4 w-1/3">
+                        <img
+                          src="https://api.dicebear.com/7.x/adventurer/svg?seed=b4"
+                          className="w-12 h-12 rounded-full border-2 border-white shadow-sm bg-slate-100"
+                        />
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-sm">
+                            Ergasheva Nilufar Akbarovna
+                          </h4>
+                          <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                            <Phone className="inline w-3 h-3 mr-1" />
+                            94 567 89 01
+                          </p>
+                        </div>
+                      </div>
+                      <div className="w-1/3">
+                        <h4 className="font-bold text-slate-800 text-xs">
+                          Professional tozalash
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                          Og'iz bo'shlig'ini professional tozalash.
+                        </p>
+                      </div>
+                      <div className="w-1/6">
+                        <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-1">
+                          <CalendarCheck2 className="w-3.5 h-3.5 text-blue-500" />{" "}
+                          14.05.2024
+                        </p>
+                        <p className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" /> 09:30
+                        </p>
+                      </div>
+                      <div className="w-1/6 text-right">
+                        <span className="inline-block bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                          3 kun qoldi
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Details Panel */}
+                <div className="w-full lg:w-[350px] shrink-0 bg-white rounded-3xl border border-slate-100 shadow-sm p-6 flex flex-col">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-bold text-slate-800 text-base">
+                      {t("eslatma tafsilotlari")}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <button className="text-slate-400 hover:text-slate-600">
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                      <button className="text-slate-400 hover:text-slate-600">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 mb-6">
+                    <img
+                      src="https://api.dicebear.com/7.x/adventurer/svg?seed=b1"
+                      className="w-16 h-16 rounded-full bg-slate-100"
+                    />
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-sm leading-tight">
+                        Karimov Behzod Anvarovich
+                      </h4>
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        29 yosh (12.05.1995)
+                      </p>
+                      <div className="flex items-center justify-between mt-1.5">
+                        <p className="text-xs font-mono text-slate-600 font-medium flex items-center gap-1">
+                          <Phone className="w-3 h-3" /> 99 987 65 43
+                        </p>
+                        <div className="flex gap-1.5">
+                          <button className="p-1.5 bg-slate-50 hover:bg-slate-100 text-blue-600 rounded-full">
+                            <Phone className="w-3 h-3" />
+                          </button>
+                          <button className="p-1.5 bg-slate-50 hover:bg-slate-100 text-blue-600 rounded-full">
+                            <Send className="w-3 h-3" />
+                          </button>
+                          <button className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-full">
+                            <MoreVertical className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 text-xs font-medium text-slate-600 border-b border-slate-100 pb-6 mb-6">
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="flex items-center gap-2 text-slate-400">
+                        <Tag className="w-4 h-4" /> {t("eslatma turi")}
+                      </span>
+                      <span className="text-slate-800 text-right">
+                        Implant nazorati
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="flex items-center gap-2 text-slate-400">
+                        <CalendarCheck2 className="w-4 h-4" /> {t("eslatma sanasi")}
+                      </span>
+                      <span className="text-slate-800 text-right">
+                        13.05.2024
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="flex items-center gap-2 text-slate-400">
+                        <Clock className="w-4 h-4" /> {t("vaqti")}
+                      </span>
+                      <span className="text-slate-800 text-right">10:30</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="flex items-center gap-2 text-slate-400">
+                        <CheckCircle className="w-4 h-4" /> {t("holati")}
+                      </span>
+                      <div className="text-right">
+                        <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded">
+                          {t("bugun")}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-2">
+                      <span className="flex items-center gap-2 text-slate-400 mb-1">
+                        <FileText className="w-4 h-4" /> {t("eslatma matni")}
+                      </span>
+                      <p className="text-slate-800 leading-snug">
+                        36-tishga qo'yilgan implant nazoratini amalga oshirish.
+                        Rentgen tekshiruvi va yallig'lanish belgilarini
+                        tekshirish.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mt-4">
+                      <span className="flex items-center gap-2 text-slate-400">
+                        <User className="w-4 h-4" /> {t("shifokor")}
+                      </span>
+                      <span className="text-slate-800 text-right">
+                        Dr. Asilbek Xolmirzayev
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mb-6">
+                    <h4 className="font-bold text-slate-800 text-xs mb-4">
+                      {t("eslatma tarixi")}
+                    </h4>
+                    <div className="space-y-4 relative before:absolute before:inset-0 before:ml-[11px] before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-slate-100">
+                      {/* timeline items */}
+                      <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                        <div className="flex items-center justify-center w-6 h-6 rounded-full border-2 border-white bg-emerald-500 text-white shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm z-10">
+                          <Check className="w-3 h-3" />
+                        </div>
+                        <div className="w-[calc(100%-3rem)] md:w-[calc(50%-1.5rem)] p-3 rounded border border-slate-100 bg-slate-50 text-[10px] font-medium text-slate-800 shadow-sm flex flex-col gap-1">
+                          <span className="text-slate-400">
+                            10.05.2024 09:15
+                          </span>
+                          <span className="font-bold">{t("eslatma yaratildi")}</span>
+                          <span className="text-slate-500">Dr. Asilbek</span>
+                        </div>
+                      </div>
+                      <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                        <div className="flex items-center justify-center w-6 h-6 rounded-full border-2 border-white bg-blue-500 text-white shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm z-10">
+                          <Send className="w-3 h-3" />
+                        </div>
+                        <div className="w-[calc(100%-3rem)] md:w-[calc(50%-1.5rem)] p-3 rounded border border-slate-100 bg-slate-50 text-[10px] font-medium text-slate-800 shadow-sm flex flex-col gap-1">
+                          <span className="text-slate-400">
+                            11.05.2024 09:00
+                          </span>
+                          <span className="font-bold">
+                            {t("bemorga telegram orqali eslatildi")}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-auto space-y-3">
+                    <div className="flex gap-3">
+                      <button className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-bold rounded-xl transition-colors">
+                        {t("tahrirlash")}
+                      </button>
+                      <button className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1">
+                        <Trash2 className="w-3.5 h-3.5" /> {t("o'chirish")}
+                      </button>
+                    </div>
+                    <button className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1">
+                      <CheckCircle className="w-4 h-4" /> {t("bajarildi deb belgilash")}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeView === "navbatlar" && (
+            <div className="space-y-6">
+              {/* Navbatlar Top Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                  <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 mb-1">
+                      {t("barcha navbatlar")}
+                    </p>
+                    <div className="flex items-end gap-1">
+                      <span className="text-2xl font-black text-slate-800 leading-none">
+                        {doctorQueues.length}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {t("ta")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                  <div className="p-3 bg-emerald-50 text-emerald-500 rounded-2xl">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 mb-1">
+                      {t("qabul qilinganlar")}
+                    </p>
+                    <div className="flex items-end gap-1">
+                      <span className="text-2xl font-black text-slate-800 leading-none">
+                        {completedQueues.length}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {t("ta")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                  <div className="p-3 bg-amber-50 text-amber-500 rounded-2xl">
+                    <Clock className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 mb-1">
+                      {t("kutilayotganlar")}
+                    </p>
+                    <div className="flex items-end gap-1">
+                      <span className="text-2xl font-black text-slate-800 leading-none">
+                        {pendingQueues.length}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {t("ta")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                  <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl">
+                    <CalendarCheck2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 mb-1">
+                      {t("kechiktirilganlar")}
+                    </p>
+                    <div className="flex items-end gap-1">
+                      <span className="text-2xl font-black text-slate-800 leading-none">
+                        {overdueScheduledQueues.length}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {t("ta")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                  <div className="p-3 bg-rose-50 text-rose-500 rounded-2xl">
+                    <X className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 mb-1">
+                      {t("bekor qilinganlar")}
+                    </p>
+                    <div className="flex items-end gap-1">
+                      <span className="text-2xl font-black text-slate-800 leading-none">
+                        {cancelledQueues.length}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {t("ta")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Navbatlar Main Table */}
+              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-4">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setQueueListRange('today')}
+                      className={`px-4 py-1.5 font-bold text-xs rounded-lg transition-colors ${queueListRange === 'today' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}
+                    >
+                      {t("bugun")}
+                    </button>
+                    <button
+                      onClick={() => setQueueListRange('all')}
+                      className={`px-4 py-1.5 font-bold text-xs rounded-lg transition-colors ${queueListRange === 'all' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}
+                    >
+                      {t("barcha navbatlar")}
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={queueListSearch}
+                        onChange={(e) => setQueueListSearch(e.target.value)}
+                        placeholder={t("bemor ismi, tel yoki navbat raqami...")}
+                        className="w-64 bg-slate-50 border border-slate-200 rounded-lg py-1.5 pl-3 pr-8 text-xs outline-none"
+                      />
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2" />
+                    </div>
+                    <select
+                      value={queueListStatusFilter}
+                      onChange={(e) => setQueueListStatusFilter(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-3 py-1.5 outline-none font-semibold"
+                    >
+                      <option value="">{t("holati bo'yicha")}</option>
+                      <option value="pending">{t("kutmoqda")}</option>
+                      <option value="scheduled">{t("belgilangan")}</option>
+                      <option value="in_progress">{t("qabulda")}</option>
+                      <option value="completed">{t("yakunlangan")}</option>
+                      <option value="cancelled">{t("bekor qilindi")}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs whitespace-nowrap">
+                    <thead className="text-slate-400 border-b border-slate-100 bg-slate-50/50">
+                      <tr>
+                        <th className="font-semibold py-2.5 px-3 rounded-l-lg">
+                          #
+                        </th>
+                        <th className="font-semibold py-2.5 px-2">{t("vaqt")}</th>
+                        <th className="font-semibold py-2.5 px-2">{t("bemor")}</th>
+                        <th className="font-semibold py-2.5 px-2">{t("xizmat")}</th>
+                        <th className="font-semibold py-2.5 px-2">{t("holati")}</th>
+                        <th className="font-semibold py-2.5 px-2">
+                          {t("navbat raqami")}
+                        </th>
+                        <th className="font-semibold py-2.5 px-3 text-right rounded-r-lg">
+                          {t("amallar")}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {visibleQueues.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-slate-500 font-medium">
+                            {doctorQueues.length === 0 ? t("hozircha navbatda bemorlar yo'q") : t("ushbu filtrga mos navbat topilmadi")}
+                          </td>
+                        </tr>
+                      ) : (
+                        visibleQueues.map((q, idx) => (
+                          <tr key={q.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => { const pid = resolvePatientIdFromQueue(q); if (pid) { setActiveView('bemorlar'); setSelectedPatientId(pid); } }}>
+                            <td className="py-3 px-3 font-medium">{idx + 1}</td>
+                            <td className="py-3 px-2 text-slate-500 font-medium">
+                              {q.appointmentTime || (q.createdAt ? new Date(q.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--')}
+                            </td>
+                            <td className="py-3 px-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-400">
+                                  {q.patientName.charAt(0)}
+                                </div>
+                                <div>
+                                  <p className="font-bold text-slate-800">{q.patientName}</p>
+                                  <p className="text-[9px] text-slate-400 font-mono">{q.patientPhone}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-2 text-slate-600 font-medium">
+                              {services.find((s: any) => s.id === q.serviceId)?.name || t("ko'rik")}
+                            </td>
+                            <td className="py-3 px-2">
+                              <span className={`text-[10px] font-bold px-2.5 py-1 rounded uppercase ${
+                                q.status === 'in_progress' ? 'text-blue-600 bg-blue-100' :
+                                q.status === 'scheduled' ? 'text-purple-600 bg-purple-100' :
+                                q.status === 'completed' ? 'text-emerald-600 bg-emerald-100' :
+                                q.status === 'cancelled' ? 'text-rose-600 bg-rose-100' :
+                                'text-amber-600 bg-amber-100'
+                              }`}>
+                                {q.status === 'in_progress' ? t("qabulda") :
+                                 q.status === 'scheduled' ? t("belgilangan") :
+                                 q.status === 'completed' ? t("yakunlangan") :
+                                 q.status === 'cancelled' ? t("bekor qilindi") : t("kutmoqda")}
+                              </span>
+                            </td>
+                            <td className="py-3 px-2 font-mono font-bold text-slate-700">
+                              {q.number ? `A-${q.number.toString().padStart(3, '0')}` : '---'}
+                            </td>
+                            <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-end gap-1.5">
+                                {q.status === 'pending' || q.status === 'scheduled' ? (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        setScheduleServiceId(q.serviceId || '');
+                                        setScheduleDate(q.appointmentDate || new Date().toISOString().split('T')[0]);
+                                        setScheduleTime(q.appointmentTime || '09:00');
+                                        setScheduleModal({ isOpen: true, queueId: q.id! });
+                                      }}
+                                      className="px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-600 font-bold rounded-lg transition-colors"
+                                    >
+                                      {t("muolaja va vaqt")}
+                                    </button>
+                                    <button 
+                                      onClick={() => onUpdateQueueStatus(q.id!, 'in_progress')}
+                                      className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold rounded-lg transition-colors"
+                                    >
+                                      {t("qabulni boshlash")}
+                                    </button>
+                                  </>
+                                ) : q.status === 'in_progress' ? (
+                                  <button 
+                                    onClick={() => onUpdateQueueStatus(q.id!, 'completed')}
+                                    className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg transition-colors flex items-center gap-1 shadow-sm"
+                                  >
+                                    <Check className="w-3 h-3" /> {t("yakunlash")}
+                                  </button>
+                                ) : null}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Selected Patient Data (Bemor kartasi, Dental Chart, Rentgenlar) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-slate-800 text-base">
+                      {t("bemor kartasi")}
+                    </h3>
+                    <button
+                      onClick={() => { setActiveView("bemorlar"); if (activeConsultPatient) setSelectedPatientId(activeConsultPatient.id); }}
+                      disabled={!activeConsultPatient}
+                      className="text-blue-600 bg-blue-50 px-3 py-1 rounded-full text-xs font-bold hover:bg-blue-100 transition-colors flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <User className="w-3 h-3" /> {t("to'liq ko'rish")}
+                    </button>
+                  </div>
+                  {activeConsultPatient ? (
+                    <>
+                      <div className="flex items-center gap-3 mb-5">
+                        <img
+                          src={`https://api.dicebear.com/7.x/adventurer/svg?seed=${activeConsultPatient.id}`}
+                          className="w-14 h-14 rounded-full bg-slate-100"
+                        />
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-sm">
+                            {decodeLegacyEntities(activeConsultPatient.fullName)}
+                          </h4>
+                          <p className="text-[10px] text-slate-500">
+                            {activeConsultPatient.birthDate || ""}
+                          </p>
+                          <p className="text-xs font-mono text-slate-600 mt-0.5 font-medium flex items-center gap-1">
+                            <Phone className="w-3 h-3" /> {decodeLegacyEntities(activeConsultPatient.phone) || "—"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="space-y-2 text-[11px] bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <div className="flex justify-between border-b border-slate-200 pb-1">
+                          <span className="text-slate-500 font-medium">
+                            {t("allergiya:")}
+                          </span>
+                          <span className="font-bold text-slate-800">{decodeLegacyEntities(activeConsultPatient.allergies) || t("yo'q")}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-200 pb-1">
+                          <span className="text-slate-500 font-medium">
+                            {t("kasalliklar:")}
+                          </span>
+                          <span className="font-bold text-slate-800">{decodeLegacyEntities(activeConsultPatient.chronicDiseases) || t("yo'q")}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 font-medium">
+                            {t("shikoyat:")}
+                          </span>
+                          <span className="font-bold text-slate-800 text-right w-3/5">
+                            {activeConsultQueue?.complaint || "—"}
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-slate-400 py-6 text-center">
+                      {t("hozirda qabulda faol bemor yo'q")}
+                    </p>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-slate-800 text-base">
+                      {t("rentgenlar")}
+                    </h3>
+                    <button
+                      onClick={() => { setActiveView("bemorlar"); if (activeConsultPatient) setSelectedPatientId(activeConsultPatient.id); }}
+                      disabled={!activeConsultPatient}
+                      className="text-blue-600 bg-blue-50 px-3 py-1 rounded-full text-xs font-bold hover:bg-blue-100 transition-colors flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Plus className="w-3 h-3" /> {t("yuklash")}
+                    </button>
+                  </div>
+                  {activePatientXrays.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {activePatientXrays.slice(0, 4).map((xray) => (
+                        <div key={xray.id} className="relative group cursor-pointer aspect-video bg-slate-900 rounded-xl overflow-hidden">
+                          {xray.url ? (
+                            <img src={xray.url} className="absolute inset-0 w-full h-full object-cover" alt={xray.type} />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center text-white/50 group-hover:text-white transition-colors">
+                              <ImageIcon className="w-8 h-8" />
+                            </div>
+                          )}
+                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-2 text-white">
+                            <p className="text-[10px] font-bold">{xray.type}</p>
+                            <p className="text-[8px] text-white/70">{new Date(xray.date).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 py-6 text-center">
+                      {activeConsultPatient ? t("ushbu bemor uchun rentgen yuklanmagan") : t("faol bemor tanlanmagan")}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeView === "bemorlar" &&
+            (selectedPatientId ? (
+              <PatientProfile
+                patientId={selectedPatientId}
+                patient={clinicPatients.find((p) => p.id === selectedPatientId)}
+                onBack={() => setSelectedPatientId(null)}
+                doctorId={currentDoctor?.id}
+                staffToken={staffToken}
+                language={language}
+              />
+            ) : (
+              <div className="space-y-6">
+                {/* Top Stats Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                    <div className="p-3 bg-emerald-50 text-emerald-500 rounded-2xl">
+                      <Users className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-500 mb-1">
+                        {t("barcha bemorlar")}
+                      </p>
+                      <div className="flex items-end gap-2">
+                        <span className="text-2xl font-black text-slate-800 leading-none">
+                          {patientStats.total.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                    <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl">
+                      <UserCheck className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-500 mb-1">
+                        {t("faol bemorlar")}
+                      </p>
+                      <div className="flex items-end gap-2">
+                        <span className="text-2xl font-black text-slate-800 leading-none">
+                          {patientStats.active.toLocaleString()}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-400">
+                          {patientStats.activePct}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                    <div className="p-3 bg-purple-50 text-purple-500 rounded-2xl">
+                      <CalendarClock className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-500 mb-1">
+                        {t("bugun tashrif buyuradi")}
+                      </p>
+                      <div className="flex items-end gap-2">
+                        <span className="text-2xl font-black text-slate-800 leading-none">
+                          {patientStats.todayVisits.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                    <div className="p-3 bg-amber-50 text-amber-500 rounded-2xl">
+                      <AlertCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-500 mb-1">
+                        {t("jami tashriflar")}
+                      </p>
+                      <div className="flex items-end gap-2">
+                        <span className="text-2xl font-black text-slate-800 leading-none">
+                          {patientStats.totalVisits.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                    <div className="p-3 bg-rose-50 text-rose-500 rounded-2xl">
+                      <CreditCard className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-500 mb-1">
+                        {t("umumiy tushum")}
+                      </p>
+                      <div className="flex items-end gap-1">
+                        <span className="text-xl font-black text-slate-800 leading-none">
+                          {patientStats.totalRevenue.toLocaleString()}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-500">
+                          so'm
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main Content Area */}
+                <div className="flex flex-col xl:flex-row gap-6">
+                  {/* Table Area */}
+                  <div className="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm p-5 flex flex-col">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-5">
+                      <div className="flex items-center gap-3">
+                        <h3 className="font-bold text-slate-800 text-lg">
+                          {t("bemorlar ro'yxati")}
+                        </h3>
+                        <span className="text-xs font-semibold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full">
+                          {filteredClinicPatients.length.toLocaleString()} bemor
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 w-full sm:w-auto">
+                        <div className="relative w-full sm:w-72">
+                          <input
+                            type="text"
+                            value={patientListSearch}
+                            onChange={(e) => setPatientListSearch(e.target.value)}
+                            placeholder={t("ism, telefon yoki id bo'yicha qidirish...")}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-xs outline-none focus:border-emerald-500/50 transition-colors"
+                          />
+                          <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5" />
+                        </div>
+                        <button className="hidden sm:flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-700 font-bold text-xs rounded-lg hover:bg-slate-50 transition-colors">
+                          <Filter className="w-3.5 h-3.5" /> {t("filter")}
+                        </button>
+                        <button
+                          onClick={() => setShowCrossClinicSearch((v) => !v)}
+                          className={`shrink-0 flex items-center gap-1.5 px-4 py-2 font-bold text-xs rounded-lg transition-colors border ${showCrossClinicSearch ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50"}`}
+                        >
+                          {t("🌐 boshqa klinikadan qidirish")}
+                        </button>
+                        <button className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors shadow-md shadow-emerald-500/20">
+                          <Plus className="w-4 h-4" /> {t("yangi bemor")}
+                        </button>
+                      </div>
+                    </div>
+
+                    {showCrossClinicSearch ? (
+                      <div className="space-y-4">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={crossClinicQuery}
+                            onChange={(e) => setCrossClinicQuery(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && handleCrossClinicSearch()}
+                            placeholder={t("telefon raqami yoki pasport seriyasi...")}
+                            className="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2.5 px-4 text-sm outline-none focus:border-indigo-500 transition-colors"
+                          />
+                          <button
+                            onClick={handleCrossClinicSearch}
+                            disabled={!crossClinicQuery.trim() || crossClinicSearching}
+                            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-sm rounded-lg transition-colors"
+                          >
+                            {crossClinicSearching ? t("qidirilmoqda...") : t("qidirish")}
+                          </button>
+                        </div>
+
+                        {crossClinicSearched && crossClinicResults.length === 0 && (
+                          <p className="text-sm text-slate-400 text-center py-8">
+                            {t("hech qanday klinikada bunday bemor topilmadi.")}
+                          </p>
+                        )}
+
+                        {crossClinicResults.length > 0 && (
+                          <div className="space-y-2">
+                            {crossClinicResults.map((p) => (
+                              <button
+                                key={p.id}
+                                onClick={() => setCrossClinicViewPatient(p)}
+                                className="w-full text-left flex items-center justify-between p-4 bg-slate-50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 rounded-xl transition-colors"
+                              >
+                                <div>
+                                  <p className="font-bold text-slate-800 text-sm">{decodeLegacyEntities(p.fullName)}</p>
+                                  <p className="text-xs text-slate-500 font-mono">{decodeLegacyEntities(p.phone)}</p>
+                                </div>
+                                <span className="text-xs text-indigo-600 font-bold">
+                                  {(p.clinicVisits || []).length} {t("ta tashrif →")}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                    <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs whitespace-nowrap">
+                        <thead className="text-slate-400 border-b border-slate-100 bg-slate-50/50">
+                          <tr>
+                            <th className="font-semibold py-3 px-4 rounded-l-lg">
+                              #
+                            </th>
+                            <th className="font-semibold py-3 px-3">{t("bemor")}</th>
+                            <th className="font-semibold py-3 px-3">{t("telefon")}</th>
+                            <th className="font-semibold py-3 px-3">
+                              {t("tug'ilgan sana")}
+                            </th>
+                            <th className="font-semibold py-3 px-3">
+                              {t("oxirgi tashrif")}
+                            </th>
+                            <th className="font-semibold py-3 px-3 text-center">
+                              {t("tashriflar soni")}
+                            </th>
+                            <th className="font-semibold py-3 px-3 text-right">
+                              {t("qarzdorlik")}
+                            </th>
+                            <th className="font-semibold py-3 px-3 text-center">
+                              {t("holati")}
+                            </th>
+                            <th className="font-semibold py-3 px-4 text-right rounded-r-lg">
+                              {t("amallar")}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {filteredClinicPatients.length === 0 ? (
+                            <tr>
+                              <td colSpan={9} className="py-10 text-center text-slate-400 text-xs">
+                                {t("bemorlar topilmadi")}
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredClinicPatients.map((patient, index) => {
+                              const visits = patient.clinicVisits || [];
+                              const lastVisit = visits
+                                .slice()
+                                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+                              const fullName = decodeLegacyEntities(patient.fullName);
+                              const phone = decodeLegacyEntities(patient.phone);
+                              return (
+                                <tr
+                                  key={patient.id}
+                                  className="hover:bg-slate-50 transition-colors group cursor-pointer"
+                                  onClick={() => setSelectedPatientId(patient.id)}
+                                >
+                                  <td className="py-3 px-4 font-medium text-slate-500">
+                                    {index + 1}
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <div className="flex items-center gap-3">
+                                      <img
+                                        src={`https://api.dicebear.com/7.x/adventurer/svg?seed=${patient.id}`}
+                                        className="w-8 h-8 rounded-full bg-slate-100"
+                                        alt={fullName}
+                                      />
+                                      <div>
+                                        <p className="font-bold text-slate-800">
+                                          {fullName}
+                                        </p>
+                                        <p className="text-[9px] text-slate-400 font-mono">
+                                          ID: #{patient.id}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3 text-slate-600 font-mono text-[11px] font-medium">
+                                    {phone || "—"}
+                                  </td>
+                                  <td className="py-3 px-3 text-slate-600">
+                                    {patient.birthDate || "—"}
+                                  </td>
+                                  <td className="py-3 px-3 text-slate-600">
+                                    {lastVisit ? lastVisit.date.slice(0, 10) : "—"}
+                                  </td>
+                                  <td className="py-3 px-3 text-center text-slate-600 font-semibold">
+                                    {visits.length}
+                                  </td>
+                                  <td className="py-3 px-3 text-right">
+                                    <span className="font-bold text-slate-400">—</span>
+                                  </td>
+                                  <td className="py-3 px-3 text-center">
+                                    <span
+                                      className={`text-[10px] font-bold px-2.5 py-1 rounded uppercase ${visits.length > 0 ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}
+                                    >
+                                      {visits.length > 0 ? t("faol") : t("yangi")}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-right">
+                                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedPatientId(patient.id);
+                                        }}
+                                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                      >
+                                        <Eye className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Pagination */}
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-medium">
+                        {filteredClinicPatients.length} / {filteredClinicPatients.length} bemor
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-600 text-white font-bold">
+                          1
+                        </button>
+                      </div>
+                    </div>
+                    </>
+                    )}
+                  </div>
+
+                  {/* Right Sidebar */}
+                  <div className="w-full xl:w-[320px] shrink-0 space-y-6">
+                    {/* Filters Panel */}
+                    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+                      <div className="flex items-center justify-between mb-5">
+                        <h3 className="font-bold text-slate-800 text-base">
+                          {t("filterlar")}
+                        </h3>
+                        <button className="text-[11px] font-bold text-slate-400 hover:text-slate-600">
+                          {t("tozalash")}
+                        </button>
+                      </div>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-800 mb-1.5">
+                            {t("holati")}
+                          </label>
+                          <select className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:border-emerald-500/50 transition-colors font-medium">
+                            <option>{t("barchasi")}</option>
+                            <option>{t("faol")}</option>
+                            <option>{t("qarzdor")}</option>
+                            <option>{t("arxiv")}</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-800 mb-1.5">
+                            {t("qarzdorlik")}
+                          </label>
+                          <select className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:border-emerald-500/50 transition-colors font-medium">
+                            <option>{t("barchasi")}</option>
+                            <option>{t("qarzdorlar")}</option>
+                            <option>{t("qarzi yo'qlar")}</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-800 mb-1.5">
+                            {t("shifokor")}
+                          </label>
+                          <select className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:border-emerald-500/50 transition-colors font-medium">
+                            <option>{t("barchasi")}</option>
+                            <option>Dr. Asilbek Xolmirzayev</option>
+                            <option>Dr. Shohrux Rahmonov</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-800 mb-1.5">
+                            {t("ro'yxatdan o'tgan sana")}
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                              <input
+                                type="text"
+                                placeholder="dd.mm.yyyy"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-[11px] font-mono outline-none"
+                              />
+                              <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5" />
+                            </div>
+                            <span className="text-slate-400">-</span>
+                            <div className="relative flex-1">
+                              <input
+                                type="text"
+                                placeholder="dd.mm.yyyy"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-[11px] font-mono outline-none"
+                              />
+                              <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5" />
+                            </div>
+                          </div>
+                        </div>
+                        <button className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-emerald-500/20 mt-2">
+                          {t("qidirish")}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Quick Actions */}
+                    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+                      <h3 className="font-bold text-slate-800 text-base mb-4">
+                        {t("tezkor amallar")}
+                      </h3>
+                      <div className="space-y-2">
+                        <button onClick={() => setShowQuickAddPatient(true)} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-colors text-left group">
+                          <div className="p-2 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-100 transition-colors">
+                            <UserPlus className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-800 text-xs">
+                              {t("yangi bemor qo'shish")}
+                            </h4>
+                            <p className="text-[10px] text-slate-500">
+                              {t("bemor ma'lumotlarini kiriting")}
+                            </p>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => {
+                            const el = document.querySelector('input[placeholder*="Ism, telefon"]') as HTMLInputElement | null;
+                            el?.focus();
+                          }}
+                          className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-colors text-left group"
+                        >
+                          <div className="p-2 bg-amber-50 text-amber-500 rounded-lg group-hover:bg-amber-100 transition-colors">
+                            <FileText className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-800 text-xs">
+                              {t("bemor kartasini ochish")}
+                            </h4>
+                            <p className="text-[10px] text-slate-500">
+                              {t("mavjud bemorni tanlang")}
+                            </p>
+                          </div>
+                        </button>
+                        <button onClick={handleExportPatientsCsv} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-colors text-left group">
+                          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-100 transition-colors">
+                            <FileDown className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-800 text-xs">
+                              {t("excel'ga eksport qilish")}
+                            </h4>
+                            <p className="text-[10px] text-slate-500">
+                              {t("barcha bemorlarni yuklab oling")}
+                            </p>
+                          </div>
+                        </button>
+                        <button onClick={handleBulkTelegramMessage} disabled={isSendingBulkTelegram} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-colors text-left group disabled:opacity-50">
+                          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-100 transition-colors">
+                            <Send className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-800 text-xs">
+                              {isSendingBulkTelegram ? t("yuborilmoqda...") : t("telegram'ga xabar yuborish")}
+                            </h4>
+                            <p className="text-[10px] text-slate-500">
+                              {t("ulangan barcha bemorlarga xabar")}
+                            </p>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Info */}
+                    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+                      <h3 className="font-bold text-slate-800 text-base mb-4">
+                        {t("ma'lumot")}
+                      </h3>
+                      <div className="space-y-3 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 font-medium">
+                            {t("o'rtacha tashrif soni")}
+                          </span>
+                          <span className="font-bold text-slate-800">
+                            {patientStats.total > 0 ? (patientStats.totalVisits / patientStats.total).toFixed(1) : "0"} {t("marta")}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 font-medium">
+                            {t("eng ko'p tashrif buyurgan bemor")}
+                          </span>
+                          <span className="font-bold text-slate-800">
+                            {clinicPatients.length > 0 ? Math.max(0, ...clinicPatients.map((p) => (p.clinicVisits || []).length)) : 0} {t("marta")}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 font-medium">
+                            {t("o'rtacha muolaja narxi")}
+                          </span>
+                          <span className="font-bold text-slate-800">
+                            {patientStats.totalVisits > 0 ? Math.round(patientStats.totalRevenue / patientStats.totalVisits).toLocaleString() : 0} so'm
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 font-medium">
+                            {t("jami diagnozlar")}
+                          </span>
+                          <span className="font-bold text-slate-800">
+                            {clinicPatients.reduce((sum, p) => sum + (p.diagnoses?.length || 0), 0)} {t("ta")}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+          {activeView === "dental_chart" && (
+            selectedPatientId ? (
+              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col h-full overflow-hidden">
+                <DentalChart patientId={selectedPatientId} doctorName={currentDoctor?.name} />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
+                 <p>{t("iltimos, dental chart ko'rish uchun bemorni tanlang")}</p>
+                 <button onClick={() => setActiveView("bemorlar")} className="mt-4 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg font-bold">{t("bemorlar ro'yxatiga o'tish")}</button>
+              </div>
+            )
+          )}
+
+          {activeView === "davolash_rejasi" && (
+            selectedPatientId ? (
+              <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+                <TreatmentPlan patientId={selectedPatientId} />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
+                 <p>{t("iltimos, davolash rejasini ko'rish uchun bemorni tanlang")}</p>
+                 <button onClick={() => setActiveView("bemorlar")} className="mt-4 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg font-bold">{t("bemorlar ro'yxatiga o'tish")}</button>
+              </div>
+            )
+          )}
+
+          {activeView === "rentgenlar" && (
+            selectedPatientId ? (
+              <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+                <XRayCenter patientId={selectedPatientId} clinicId={effectiveClinicId} />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
+                 <p>{t("iltimos, rentgenlarni ko'rish uchun bemorni tanlang")}</p>
+                 <button onClick={() => setActiveView("bemorlar")} className="mt-4 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg font-bold">{t("bemorlar ro'yxatiga o'tish")}</button>
+              </div>
+            )
+          )}
+
+          {activeView === "muolaja_tarixi" && (
+            selectedPatientId ? (
+              <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+                <TreatmentHistory patientId={selectedPatientId} />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
+                 <p>{t("iltimos, muolaja tarixini ko'rish uchun bemorni tanlang")}</p>
+                 <button onClick={() => setActiveView("bemorlar")} className="mt-4 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg font-bold">{t("bemorlar ro'yxatiga o'tish")}</button>
+              </div>
+            )
+          )}
+
+          {activeView === "foto_galereya" && (
+            selectedPatientId ? (
+              <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+                <PhotoGallery patientId={selectedPatientId} />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
+                 <p>{t("iltimos, foto galereyani ko'rish uchun bemorni tanlang")}</p>
+                 <button onClick={() => setActiveView("bemorlar")} className="mt-4 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg font-bold">{t("bemorlar ro'yxatiga o'tish")}</button>
+              </div>
+            )
+          )}
+
+          {activeView === "statistika" && (
+            <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+              <Statistics queues={queues} services={services} doctors={doctors} language={language} />
+            </div>
+          )}
+
+          {activeView === "retseptlar" && (
+            selectedPatientId ? (
+              <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+                <Prescriptions patientId={selectedPatientId} />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
+                 <p>{t("iltimos, retseptlarni ko'rish uchun bemorni tanlang")}</p>
+                 <button onClick={() => setActiveView("bemorlar")} className="mt-4 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg font-bold">{t("bemorlar ro'yxatiga o'tish")}</button>
+              </div>
+            )
+          )}
+
+          {activeView === "sozlamalar" && (
+            <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+              <SettingsView
+                doctor={currentDoctor}
+                clinic={effectiveClinic}
+                clinicPatients={clinicPatients}
+                clinicQueues={doctorQueues}
+                allClinics={clinics}
+                onRequestPremiumUpgrade={onRequestPremiumUpgrade}
+                staffToken={staffToken}
+                language={language}
+              />
+            </div>
+          )}
+
+          {activeView === "materiallar" && (
+            <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+              <MaterialsInventory clinicId={effectiveClinicId || undefined} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {scheduleModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl border border-slate-100 flex flex-col">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <CalendarClock className="w-5 h-5 text-purple-500" />
+                {t("qabulni rejalashtirish")}
+              </h3>
+              <button
+                onClick={() => setScheduleModal({isOpen: false, queueId: null})}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 flex flex-col gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("muolaja / xizmat")}</label>
+                <select
+                  value={scheduleServiceId}
+                  onChange={(e) => setScheduleServiceId(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white"
+                >
+                  <option value="">{t("— muolajani tanlang —")}</option>
+                  {services.filter((s: any) => !effectiveClinicId || s.clinicId === effectiveClinicId).map((s: any) => (
+                    <option key={s.id} value={s.id}>{s.name} — {Number(s.price).toLocaleString()} so'm</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("qabul kuni")}</label>
+                <input
+                  type="date"
+                  value={scheduleDate}
+                  onChange={(e) => setScheduleDate(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("qabul vaqti")}</label>
+                <input
+                  type="time"
+                  value={scheduleTime}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium"
+                />
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+              <button
+                onClick={() => setScheduleModal({isOpen: false, queueId: null})}
+                className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                {t("bekor qilish")}
+              </button>
+              <button
+                onClick={() => {
+                  if (scheduleModal.queueId) {
+                    onUpdateQueueStatus(scheduleModal.queueId, 'scheduled', scheduleServiceId, undefined, scheduleDate, scheduleTime);
+                  }
+                  setScheduleModal({isOpen: false, queueId: null});
+                }}
+                disabled={!scheduleServiceId}
+                className="px-4 py-2 text-sm font-bold bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-colors shadow-md shadow-purple-500/20"
+              >
+                {t("tasdiqlash")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {crossClinicViewPatient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-base font-bold text-slate-800">{decodeLegacyEntities(crossClinicViewPatient.fullName)}</h3>
+                <p className="text-xs text-slate-500 font-mono">{decodeLegacyEntities(crossClinicViewPatient.phone)}</p>
+              </div>
+              <button onClick={() => setCrossClinicViewPatient(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-5 text-xs">
+              <div className="bg-slate-50 rounded-lg p-3">
+                <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">{t("qon guruhi")}</p>
+                <p className="font-bold text-slate-800">{decodeLegacyEntities(crossClinicViewPatient.bloodGroup) || "—"}</p>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-3">
+                <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">{t("infeksiya")}</p>
+                <p className="font-bold text-slate-800">{crossClinicViewPatient.hasInfection ? t("bor") : t("yo'q")}</p>
+              </div>
+              <div className="bg-rose-50 rounded-lg p-3 col-span-2">
+                <p className="text-[10px] text-rose-400 font-bold uppercase mb-1">{t("allergiya")}</p>
+                <p className="font-bold text-rose-700">{decodeLegacyEntities(crossClinicViewPatient.allergies) || t("ma'lumot yo'q")}</p>
+              </div>
+              <div className="bg-amber-50 rounded-lg p-3 col-span-2">
+                <p className="text-[10px] text-amber-500 font-bold uppercase mb-1">{t("surunkali kasalliklar")}</p>
+                <p className="font-bold text-amber-700">{decodeLegacyEntities(crossClinicViewPatient.chronicDiseases) || t("ma'lumot yo'q")}</p>
+              </div>
+            </div>
+
+            <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">{t("tashriflar tarixi")}</h4>
+            <div className="space-y-2 mb-5">
+              {(crossClinicViewPatient.clinicVisits || []).length === 0 ? (
+                <p className="text-xs text-slate-400">{t("hali tashrif qayd etilmagan.")}</p>
+              ) : (
+                [...(crossClinicViewPatient.clinicVisits || [])]
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .map((v) => {
+                    const visitClinicId = v.clinicId || crossClinicViewPatient.clinicId;
+                    const visitClinicName = clinics.find((c) => c.id === visitClinicId)?.name || visitClinicId;
+                    return (
+                      <div key={v.id} className="flex items-center justify-between bg-slate-50 rounded-lg p-3 text-xs">
+                        <div>
+                          <p className="font-bold text-slate-800">{v.serviceName || "—"}</p>
+                          <p className="text-slate-400">{visitClinicName} · {v.doctorName}</p>
+                        </div>
+                        <span className="text-slate-500 font-mono">{new Date(v.date).toLocaleDateString()}</span>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+
+            <button
+              onClick={() => handleAddVisitToThisClinic(crossClinicViewPatient)}
+              disabled={isAddingCrossClinicVisit}
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-sm rounded-xl transition-colors"
+            >
+              {isAddingCrossClinicVisit ? t("qo'shilmoqda...") : t("ushbu klinikaga qo'shish")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showQuickAddPatient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-bold text-slate-800">{t("yangi bemor qo'shish")}</h3>
+              <button onClick={() => setShowQuickAddPatient(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("to'liq ism *")}</label>
+                <input
+                  type="text"
+                  value={quickAddPatient.fullName}
+                  onChange={(e) => setQuickAddPatient({ ...quickAddPatient, fullName: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium"
+                  placeholder={t("ism familiya")}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("telefon")}</label>
+                <input
+                  type="text"
+                  value={quickAddPatient.phone}
+                  onChange={(e) => setQuickAddPatient({ ...quickAddPatient, phone: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium"
+                  placeholder="+998 90 123 45 67"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("pasport seriyasi")}</label>
+                <input
+                  type="text"
+                  value={quickAddPatient.passportSerial}
+                  onChange={(e) => setQuickAddPatient({ ...quickAddPatient, passportSerial: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium"
+                  placeholder="AD1234567"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => setShowQuickAddPatient(false)}
+                className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                {t("bekor qilish")}
+              </button>
+              <button
+                onClick={handleQuickAddPatient}
+                disabled={!quickAddPatient.fullName.trim() || isSavingQuickAddPatient}
+                className="px-4 py-2 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl transition-colors shadow-md shadow-emerald-500/20"
+              >
+                {isSavingQuickAddPatient ? t("saqlanmoqda...") : t("saqlash")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

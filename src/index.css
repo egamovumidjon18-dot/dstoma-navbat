@@ -1,0 +1,112 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --animate-fade-in: fade-in 0.35s ease-out;
+  --animate-float-glow: float-glow 3.5s ease-in-out infinite;
+  --animate-pulse-slow: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float-glow {
+  0%, 100% {
+    transform: translateY(0px) scale(1) rotate(-3deg);
+    filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.4));
+  }
+  50% {
+    transform: translateY(-5px) scale(1.08) rotate(3deg);
+    filter: drop-shadow(0 0 16px rgba(34, 211, 238, 0.9));
+  }
+}
+
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes laser {
+  0% {
+    top: 5%;
+    opacity: 0.2;
+  }
+  50% {
+    top: 95%;
+    opacity: 0.9;
+  }
+  100% {
+    top: 5%;
+    opacity: 0.2;
+  }
+}
+
+@keyframes flicker {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.45; }
+}
+
+.animate-laser {
+  animation: laser 3s ease-in-out infinite;
+}
+
+.animate-flicker {
+  animation: flicker 1.8s ease-in-out infinite;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #020712;
+  color: #f1f5f9;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+}
+
+/* Custom Leaflet overrides for Tailwind CSS image reset conflicts */
+.leaflet-container img {
+  max-width: none !important;
+  max-height: none !important;
+}
+
+.leaflet-pane {
+  z-index: 1 !important;
+}
+
+.leaflet-top, .leaflet-bottom {
+  z-index: 2 !important;
+}
+
+/* Advanced Interactive Tooth HUD Highlights on Hover */
+.interactive-tooth-path {
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.interactive-tooth-path:hover {
+  filter: brightness(1.2) drop-shadow(0 0 10px rgba(0, 242, 254, 0.55));
+  stroke: #00f2fe !important;
+  stroke-width: 1.8px !important;
+  fill-opacity: 0.32 !important;
+}
+
+
+
