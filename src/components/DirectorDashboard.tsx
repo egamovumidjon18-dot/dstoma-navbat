@@ -391,7 +391,7 @@ export default function DirectorDashboard({
   const [serviceToDelete, setServiceToDelete] = useState<any>(null);
   const [doctorToDelete, setDoctorToDelete] = useState<Doctor | null>(null);
   const [linkEditDoctor, setLinkEditDoctor] = useState<Doctor | null>(null);
-  const [linkEditType, setLinkEditType] = useState<'rental' | 'revenue_share'>('revenue_share');
+  const [linkEditType, setLinkEditType] = useState<'rental' | 'revenue_share' | 'independent'>('revenue_share');
   const [linkEditPercent, setLinkEditPercent] = useState('50');
   const [linkEditRent, setLinkEditRent] = useState('0');
 
@@ -1037,7 +1037,14 @@ export default function DirectorDashboard({
                           <td className="px-4 py-3.5 flex items-center gap-3">
                             <img src={doc.image} alt={doc.name} className="w-9 h-9 rounded-full object-cover shrink-0 border border-slate-100 animate-fade-in" referrerPolicy="no-referrer" />
                             <div>
-                              <strong className="text-slate-800 block text-xs">{doc.name}</strong>
+                              <strong className="text-slate-800 flex items-center gap-1.5 text-xs">
+                                {doc.name}
+                                {link?.relationshipType === 'independent' && (
+                                  <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-100">
+                                    🏠 Mustaqil
+                                  </span>
+                                )}
+                              </strong>
                               <span className="text-[10px] text-slate-400 font-semibold">{doc.specialty}</span>
                             </div>
                           </td>
@@ -1522,7 +1529,14 @@ export default function DirectorDashboard({
                   <div className="flex items-center gap-4 border-b border-slate-50 pb-4 mb-4">
                     <img src={doc.image} alt={doc.name} className="w-16 h-16 rounded-2xl object-cover shrink-0 border-2 border-blue-500 shadow-sm" referrerPolicy="no-referrer" />
                     <div>
-                      <h3 className="text-md font-extrabold text-slate-800">{doc.name}</h3>
+                      <h3 className="text-md font-extrabold text-slate-800 flex items-center gap-1.5">
+                        {doc.name}
+                        {link?.relationshipType === 'independent' && (
+                          <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-100">
+                            🏠 Mustaqil
+                          </span>
+                        )}
+                      </h3>
                       <p className="text-xs text-slate-400 font-semibold">{doc.specialty}</p>
 
                       <div className="flex items-center text-amber-500 text-xs mt-1.5 gap-1 font-bold">
@@ -2244,6 +2258,12 @@ export default function DirectorDashboard({
               >
                 Ijara
               </button>
+              <button
+                onClick={() => setLinkEditType('independent')}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-colors ${linkEditType === 'independent' ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-slate-50 text-slate-500 border-slate-200'}`}
+              >
+                Mustaqil
+              </button>
             </div>
 
             {linkEditType === 'revenue_share' ? (
@@ -2261,7 +2281,7 @@ export default function DirectorDashboard({
                   Klinikaning ulushi: {Math.max(0, 100 - (Number(linkEditPercent) || 0))}%
                 </p>
               </div>
-            ) : (
+            ) : linkEditType === 'rental' ? (
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">Oylik ijara to'lovi (so'm)</label>
                 <input
@@ -2273,6 +2293,12 @@ export default function DirectorDashboard({
                 />
                 <p className="text-[10px] text-slate-400 mt-2">
                   Ijara modelida bu shifokorning daromadi va bemorlar soni Boshliq panelida ko'rsatilmaydi — to'liq maxfiy qoladi.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3.5">
+                <p className="text-[11px] text-emerald-700 font-semibold leading-snug">
+                  🏠 Bu klinika ushbu shifokorning shaxsiy klinikasi — butun daromad unga tegishli, ulush yoki ijara yo'q.
                 </p>
               </div>
             )}

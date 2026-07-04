@@ -122,7 +122,9 @@ export interface DoctorClinicLink {
   id: string; // `${doctorId}_${clinicId}` — deterministic, prevents duplicates
   doctorId: string;
   clinicId: string;
-  relationshipType: 'rental' | 'revenue_share';
+  // 'independent' = solo practice: the doctor IS the clinic owner, so there's no
+  // revenue split or rent to track — full stats always show, no privacy gating.
+  relationshipType: 'rental' | 'revenue_share' | 'independent';
   doctorRevenueSharePercent?: number; // doctor's cut 0-100 (revenue_share only); clinic's cut = 100 - this
   monthlyRentFee?: number; // UZS (rental only)
   rentPaymentStatus?: 'paid' | 'unpaid';
@@ -151,6 +153,10 @@ export interface Patient {
   // Family cabinet: if set, this patient is a dependent managed by another
   // patient (the family admin) — id of that admin's Patient record.
   managedBy?: string;
+  // Doctor who registered/owns this patient relationship — keeps the patient
+  // showing up in that doctor's own patient list even after the doctor
+  // switches to a different clinic (set once at creation, never auto-reassigned).
+  primaryDoctorId?: string;
 }
 
 export interface QueueItem {

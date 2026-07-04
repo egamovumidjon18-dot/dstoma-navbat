@@ -36,7 +36,10 @@ import {
   Trash2,
   Pencil,
   Megaphone,
-  Send
+  Send,
+  Bot,
+  LayoutDashboard,
+  ChevronRight
 } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
@@ -68,6 +71,20 @@ interface SuperAdminDashboardProps {
   // session — no need to know that clinic's/doctor's actual password.
   onAdminImpersonate?: (role: 'director' | 'doctor', id: string) => void;
 }
+
+// Sidebar navigation sections for the SuperAdmin dashboard — groups the previously
+// long single-scroll page into tabs (mirrors the SETTINGS_SECTIONS pattern used in
+// Settings.tsx). Each id maps to a case in the JSX below via `activeSection`.
+const SUPERADMIN_SECTIONS = [
+  { id: 'overview', label: "Umumiy ko'rinish", icon: LayoutDashboard },
+  { id: 'onboarding', label: 'Yangi klinika', icon: Plus },
+  { id: 'clinics', label: 'Klinikalar', icon: Building },
+  { id: 'doctors', label: 'Shifokorlar', icon: Users },
+  { id: 'ads', label: 'Reklama', icon: Megaphone },
+  { id: 'telegram', label: 'Telegram bot', icon: Bot },
+  { id: 'security', label: 'Xavfsizlik', icon: Shield },
+  { id: 'audit', label: 'Audit jurnali', icon: ShieldAlert },
+];
 
 export default function SuperAdminDashboard({
   clinics,
@@ -384,6 +401,37 @@ export default function SuperAdminDashboard({
     pass: string;
   } | null>(null);
 
+  // Passwords are hashed (irreversibly) the moment they're saved server-side — see
+  // server.ts hashPassword/isHashedPassword. So the ONLY moment we ever know a real,
+  // human-readable password is right when WE generate/set it on this client, before
+  // the next /api/admin/credentials fetch overwrites it with the hash. This map keeps
+  // that plaintext around for the rest of the browser session (never sent anywhere,
+  // never persisted) so the credentials list can still show/copy it correctly instead
+  // of a useless "scrypt:..." string.
+  const [justSetPasswords, setJustSetPasswords] = useState<Record<string, string>>({});
+  const isHashedPw = (pw: any): boolean => typeof pw === 'string' && pw.startsWith('scrypt:');
+  // One-time "reveal" dialog for a freshly created/reset doctor or clinic login —
+  // mirrors the existing generatedCreds card but generic enough for both entity types
+  // and for password-reset (not just first creation).
+  const [justSetCredential, setJustSetCredential] = useState<{ label: string; login: string; pass: string } | null>(null);
+
+  // What to show in the credentials list: our own remembered plaintext if we have
+  // it, otherwise whatever the server returned (which may already be an
+  // irreversible hash — shown as a friendly placeholder instead of raw gibberish).
+  const getDisplayPassword = (id: string, source: Record<string, string>): string => {
+    const known = justSetPasswords[id] || source[id];
+    if (!known) return superadminToken ? '...' : "Ko'rish uchun qayta kiring";
+    if (isHashedPw(known)) return '🔒 Yashiringan';
+    return known;
+  };
+  // Returns null when there's nothing safe to copy (i.e. all we have is a hash) —
+  // callers should prompt a password reset instead of copying garbage.
+  const getCopyablePassword = (id: string, source: Record<string, string>): string | null => {
+    const known = justSetPasswords[id] || source[id];
+    if (!known || isHashedPw(known)) return null;
+    return known;
+  };
+
   const [copied, setCopied] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -544,6 +592,9 @@ export default function SuperAdminDashboard({
       login: generatedLogin,
       pass: generatedPass
     });
+    // Remember the real plaintext for this clinic — server.ts hashes it irreversibly
+    // on save, so this is the only place we'll ever see it again.
+    setJustSetPasswords(prev => ({ ...prev, [newClinicId]: generatedPass }));
 
     // Reset fields
     setNewClinicName('');
@@ -557,7 +608,12 @@ export default function SuperAdminDashboard({
   const handleUpdateClinicCredsClick = (clinic: Clinic) => {
     setEditingClinicId(clinic.id);
     setClinicLoginVal(clinic.login || `ceo_${clinic.subdomain}`);
-    setClinicPassVal(credentialPasswords.clinics[clinic.id] || '');
+    // If the stored password is already hashed, we can never recover the original —
+    // leave the field blank so the director MUST set a brand-new password instead of
+    // accidentally re-saving the hash string itself (which would double-hash it and
+    // permanently lock the clinic out).
+    const known = justSetPasswords[clinic.id] || credentialPasswords.clinics[clinic.id] || '';
+    setClinicPassVal(isHashedPw(known) ? '' : known);
   };
 
   const handleSaveClinicCredsSubmit = (clinicId: string) => {
@@ -568,7 +624,10 @@ export default function SuperAdminDashboard({
     if (onUpdateClinicCreds) {
       onUpdateClinicCreds(clinicId, clinicLoginVal, clinicPassVal);
       addLog(`Clinic ID [${clinicId}] credentials modified: ${clinicLoginVal}`, 'info');
+      setJustSetPasswords(prev => ({ ...prev, [clinicId]: clinicPassVal }));
       setEditingClinicId(null);
+      const clinic = clinics.find(c => c.id === clinicId);
+      setJustSetCredential({ label: `Klinika: ${clinic?.name || clinicLoginVal}`, login: clinicLoginVal, pass: clinicPassVal });
       triggerToast(tL("Klinika hisob ma'lumotlari yangilandi!"));
     } else {
       triggerToast("Callback not tied yet in parent component");
@@ -578,7 +637,9 @@ export default function SuperAdminDashboard({
   const handleUpdateDoctorCredsClick = (doctor: Doctor) => {
     setEditingDoctorId(doctor.id);
     setDoctorLoginVal(doctor.login || doctor.name.toLowerCase().replace(/\s+/g, ''));
-    setDoctorPassVal(credentialPasswords.doctors[doctor.id] || '');
+    // Same rationale as handleUpdateClinicCredsClick: never prefill with a hash.
+    const known = justSetPasswords[doctor.id] || credentialPasswords.doctors[doctor.id] || '';
+    setDoctorPassVal(isHashedPw(known) ? '' : known);
   };
 
   const handleSaveDoctorCredsSubmit = (docId: string) => {
@@ -589,7 +650,10 @@ export default function SuperAdminDashboard({
     if (onUpdateDoctorCreds) {
       onUpdateDoctorCreds(docId, doctorLoginVal, doctorPassVal);
       addLog(`Doctor ID [${docId}] credentials modified: ${doctorLoginVal}`, 'info');
+      setJustSetPasswords(prev => ({ ...prev, [docId]: doctorPassVal }));
       setEditingDoctorId(null);
+      const doc = doctors.find(d => d.id === docId);
+      setJustSetCredential({ label: `Shifokor: ${doc?.name || doctorLoginVal}`, login: doctorLoginVal, pass: doctorPassVal });
       triggerToast(tL("Shifokor hisob ma'lumotlari yangilandi!"));
     } else {
       triggerToast("Callback not tied yet in parent component");
@@ -604,8 +668,9 @@ export default function SuperAdminDashboard({
     }
     const login = newDoctorName.toLowerCase().replace(/[^a-z0-9]/g, '');
     const pass = `Doc${Math.floor(1000 + Math.random() * 9000)}`;
+    const newDocId = 'doc_' + Math.random().toString(36).substr(2, 9);
     const newDoc: Doctor = {
-      id: 'doc_' + Math.random().toString(36).substr(2, 9),
+      id: newDocId,
       name: newDoctorName,
       specialty: newDoctorSpecialty,
       status: "idle",
@@ -618,6 +683,8 @@ export default function SuperAdminDashboard({
     };
     if (onAddDoctor) {
       onAddDoctor(newDoc);
+      setJustSetPasswords(prev => ({ ...prev, [newDocId]: pass }));
+      setJustSetCredential({ label: `Shifokor: ${newDoctorName}`, login, pass });
       setShowAddDoctorModal(false);
       setNewDoctorName('');
       setNewDoctorSpecialty('');
@@ -634,12 +701,15 @@ export default function SuperAdminDashboard({
     )
   );
 
-  const filteredClinics = (clinics || []).filter(c => 
+  const filteredClinics = (clinics || []).filter(c =>
     c && (
-      (c.name || '').toLowerCase().includes((searchClinicTerm || '').toLowerCase()) || 
+      (c.name || '').toLowerCase().includes((searchClinicTerm || '').toLowerCase()) ||
       (c.ownerName || '').toLowerCase().includes((searchClinicTerm || '').toLowerCase())
     )
   );
+
+  // Sidebar tab state — controls which section's JSX renders in the main content area.
+  const [activeSection, setActiveSection] = useState('overview');
 
   return (
     <div className="space-y-6 font-sans text-left pb-12">
@@ -651,7 +721,7 @@ export default function SuperAdminDashboard({
         </div>
       )}
 
-      {/* HEADER BANNER WITH GRADIENT AND CROWN ACCENT */}
+      {/* HEADER BANNER WITH GRADIENT AND CROWN ACCENT — page identity, always shown above the tabs */}
       <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-900 text-white rounded-3xl p-6 shadow-xl border border-slate-800 relative overflow-hidden">
         <div className="absolute right-0 top-0 w-80 h-80 pointer-events-none opacity-20 bg-[radial-gradient(circle,rgba(6,182,212,0.25),transparent_70%)]"></div>
         <div className="absolute left-1/3 top-1/2 w-40 h-40 pointer-events-none opacity-10 bg-[radial-gradient(circle,rgba(99,102,241,0.2),transparent_70%)]"></div>
@@ -683,6 +753,34 @@ export default function SuperAdminDashboard({
         </div>
       </div>
 
+      {/* TABBED SHELL: left sidebar nav + right main content area (mirrors Settings.tsx) */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* Sidebar Navigation */}
+        <div className="w-full lg:w-64 bg-white border border-slate-150 rounded-3xl shadow-md shrink-0 lg:sticky lg:top-4 overflow-hidden">
+          <div className="p-4 space-y-1">
+            {SUPERADMIN_SECTIONS.map((section) => (
+              <button
+                key={section.id}
+                onClick={() => setActiveSection(section.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
+                  activeSection === section.id
+                    ? 'bg-slate-900 text-white shadow-lg'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                }`}
+              >
+                <section.icon className="w-4 h-4 shrink-0" />
+                <span className="truncate">{section.label}</span>
+                {activeSection === section.id && <ChevronRight className="w-4 h-4 ml-auto shrink-0 opacity-60" />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Main Content Area */}
+        <div className="flex-1 min-w-0 space-y-6">
+
+      {activeSection === 'overview' && (
+        <div className="space-y-6">
       {/* METRICS ROW */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-slate-800">
         <div className="bg-white rounded-2xl p-4.5 border border-slate-150/80 shadow-xs flex items-center justify-between transition-all hover:shadow-md">
@@ -742,10 +840,12 @@ export default function SuperAdminDashboard({
           </div>
         </div>
       </div>
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* LEFT COLUMN: ONBOARD CLINIC */}
-        <div className="lg:col-span-5 space-y-6">
+      {activeSection === 'onboarding' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="lg:col-span-12 space-y-6">
           <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md relative overflow-hidden">
             <div className="absolute right-0 top-0 w-24 h-24 pointer-events-none opacity-20 bg-[radial-gradient(circle,rgba(99,102,241,0.1),transparent_70%)]"></div>
             
@@ -956,7 +1056,13 @@ export default function SuperAdminDashboard({
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
+        </div>
+      )}
 
+      {activeSection === 'audit' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="lg:col-span-12 space-y-6">
           {/* SYSTEM LOGS — real actions taken this session */}
           <div className="bg-slate-900 text-slate-300 p-4.5 rounded-3xl border border-slate-800 space-y-3 shadow-md">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
@@ -981,7 +1087,13 @@ export default function SuperAdminDashboard({
               )}
             </div>
           </div>
+        </div>
+        </div>
+      )}
 
+      {activeSection === 'overview' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="lg:col-span-12 space-y-6">
           {/* SAAS PREMIUM FINANCIAL FORECAST CALCULATOR */}
           <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
@@ -1201,7 +1313,13 @@ export default function SuperAdminDashboard({
               );
             })()}
           </div>
+        </div>
+        </div>
+      )}
 
+      {activeSection === 'security' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="lg:col-span-12 space-y-6">
           {/* ==================== 2. SUPERADMIN PASSWORD UPDATE FORM ==================== */}
           <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4 font-sans text-left">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
@@ -1278,7 +1396,13 @@ export default function SuperAdminDashboard({
               </button>
             </form>
           </div>
+        </div>
+        </div>
+      )}
 
+      {activeSection === 'overview' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="lg:col-span-12 space-y-6">
           {/* ==================== 3. BILLING NOTIFICATIONS — real data from clinics/saasPayments ==================== */}
           <div className="bg-gradient-to-b from-slate-900 to-slate-950 text-white rounded-3xl p-5 border border-slate-800 shadow-xl space-y-3 font-sans text-left">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
@@ -1322,7 +1446,13 @@ export default function SuperAdminDashboard({
               )}
             </div>
           </div>
+        </div>
+        </div>
+      )}
 
+      {activeSection === 'ads' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="lg:col-span-12 space-y-6">
           {/* ==================== ADVERTISING MANAGEMENT (SUPERADMIN-EXCLUSIVE) ==================== */}
           <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4 font-sans text-left">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
@@ -1477,7 +1607,13 @@ export default function SuperAdminDashboard({
               )}
             </div>
           </div>
+        </div>
+        </div>
+      )}
 
+      {activeSection === 'telegram' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="lg:col-span-12 space-y-6">
           {/* ==================== TELEGRAM BOT CONFIGURATION (USER INTEGRATION) ==================== */}
           <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4 font-sans text-left">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
@@ -1798,12 +1934,14 @@ export default function SuperAdminDashboard({
               </p>
             </div>
           </div>
-
         </div>
+        </div>
+      )}
 
-        {/* RIGHT COLUMN: ADVANCED CLINICS & DOCTORS CREDENTIALS CONTROLLER */}
-        <div className="lg:col-span-7 space-y-6">
-          
+      {activeSection === 'clinics' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="lg:col-span-12 space-y-6">
+
           {/* SECTION 1: CLINIC CREDENTIALS & LICENSING BILLING BOX */}
           <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -1920,11 +2058,12 @@ export default function SuperAdminDashboard({
                               />
                             </div>
                             <div>
-                              <label className="text-[9px] font-black text-slate-500 block mb-1">PAROL</label>
+                              <label className="text-[9px] font-black text-slate-500 block mb-1">YANGI PAROL</label>
                               <input
                                 type="text"
                                 value={clinicPassVal}
                                 onChange={(e) => setClinicPassVal(e.target.value)}
+                                placeholder="Xavfsizlik uchun yangi parol kiriting"
                                 className="w-full bg-slate-50 text-[11px] font-bold font-mono text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:border-[#06b6d4] focus:outline-none"
                               />
                             </div>
@@ -1963,7 +2102,7 @@ export default function SuperAdminDashboard({
                             <div className="flex items-center gap-2">
                               <span className="text-[10px] text-slate-400 font-extrabold uppercase font-mono">{t('customPass')}:</span>
                               <code className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-bold font-mono text-[11px] select-all">
-                                {credentialPasswords.clinics[clinic.id] || (superadminToken ? '...' : "Ko'rish uchun qayta kiring")}
+                                {getDisplayPassword(clinic.id, credentialPasswords.clinics)}
                               </code>
                             </div>
                           </div>
@@ -1977,7 +2116,14 @@ export default function SuperAdminDashboard({
                               ⚙️ Tahrirlash
                             </button>
                             <button
-                              onClick={() => handleCopyGeneric(`Login: ${clinic.login || `ceo_${clinic.subdomain}`} | Parol: ${credentialPasswords.clinics[clinic.id] || ''}`)}
+                              onClick={() => {
+                                const pw = getCopyablePassword(clinic.id, credentialPasswords.clinics);
+                                if (!pw) {
+                                  triggerToast("Parol xavfsizlik uchun yashiringan — avval \"Kalitni qayta tiklash\" orqali yangi parol o'rnating.");
+                                  return;
+                                }
+                                handleCopyGeneric(`Login: ${clinic.login || `ceo_${clinic.subdomain}`} | Parol: ${pw}`);
+                              }}
                               className="p-1 text-slate-400 hover:text-slate-600 rounded bg-slate-50 hover:bg-slate-100"
                               title="Nusxalash"
                             >
@@ -2014,7 +2160,13 @@ export default function SuperAdminDashboard({
               })}
             </div>
           </div>
+        </div>
+        </div>
+      )}
 
+      {activeSection === 'doctors' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="lg:col-span-12 space-y-6">
           {/* SECTION 2: DOCTOR CREDENTIALS HUB (EXPLICITLY GIVEN BY OWNER) */}
           <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -2123,11 +2275,12 @@ export default function SuperAdminDashboard({
                               />
                             </div>
                             <div>
-                              <label className="text-[9px] font-black text-slate-500 block mb-0.5">PAROL</label>
+                              <label className="text-[9px] font-black text-slate-500 block mb-0.5">YANGI PAROL</label>
                               <input
                                 type="text"
                                 value={doctorPassVal}
                                 onChange={(e) => setDoctorPassVal(e.target.value)}
+                                placeholder="Xavfsizlik uchun yangi parol kiriting"
                                 className="w-full bg-white text-[11px] font-bold font-mono text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1 focus:border-[#06b6d4] focus:outline-none"
                               />
                             </div>
@@ -2165,14 +2318,21 @@ export default function SuperAdminDashboard({
                             <div className="flex items-center gap-1.5">
                               <span className="text-[10px] text-slate-400 font-extrabold uppercase font-mono">{t('customPass')}:</span>
                               <code className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-bold font-mono text-[11px] select-all">
-                                {credentialPasswords.doctors[doc.id] || (superadminToken ? '...' : "Ko'rish uchun qayta kiring")}
+                                {getDisplayPassword(doc.id, credentialPasswords.doctors)}
                               </code>
                             </div>
                           </div>
 
                           <div className="flex items-center gap-1">
                             <button
-                              onClick={() => handleCopyGeneric(`Shifokor: ${doc.name} | Login: ${doc.login || (doc.name || 'Doc').split(' ')[0].toLowerCase()} | Password: ${credentialPasswords.doctors[doc.id] || ''}`)}
+                              onClick={() => {
+                                const pw = getCopyablePassword(doc.id, credentialPasswords.doctors);
+                                if (!pw) {
+                                  triggerToast("Parol xavfsizlik uchun yashiringan — avval \"Kalitni qayta tiklash\" orqali yangi parol o'rnating.");
+                                  return;
+                                }
+                                handleCopyGeneric(`Shifokor: ${doc.name} | Login: ${doc.login || (doc.name || 'Doc').split(' ')[0].toLowerCase()} | Password: ${pw}`);
+                              }}
                               className="p-1 text-slate-400 hover:text-slate-600 bg-white border border-slate-150 rounded"
                             >
                               <Copy className="w-3.5 h-3.5" />
@@ -2215,7 +2375,50 @@ export default function SuperAdminDashboard({
             </div>
           </div>
         </div>
+        </div>
+      )}
+
+        </div>
       </div>
+
+      {/* ONE-TIME CREDENTIAL REVEAL — shown right after creating a doctor or resetting
+          a doctor/clinic password. This is the ONLY moment the real password is ever
+          visible again, since it's hashed irreversibly the instant it's saved. */}
+      {justSetCredential && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4">
+          <div className="bg-slate-950 text-white p-5 rounded-3xl border border-slate-800 shadow-2xl max-w-sm w-full space-y-4 relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-32 h-32 pointer-events-none opacity-25 bg-[radial-gradient(circle,rgba(6,182,212,0.15),transparent_70%)]"></div>
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <span className="text-[10px] font-extrabold text-cyan-400 tracking-widest uppercase flex items-center gap-1.5 font-mono">
+                🔓 Hisob ma'lumotlari
+              </span>
+              <button onClick={() => setJustSetCredential(null)} className="text-slate-500 hover:text-slate-350 p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+              <p className="text-[11px] text-amber-300 font-semibold leading-snug">
+                ⚠️ Bu parolni hozir saqlab qo'ying — xavfsizlik uchun keyinroq qayta ko'rsatilmaydi.
+              </p>
+            </div>
+            <div className="font-mono text-[11px] space-y-1.5 text-slate-200 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-850 select-all">
+              <p className="text-slate-400">{justSetCredential.label}</p>
+              <hr className="border-slate-800/60 my-2" />
+              <p className="text-cyan-400 font-bold"><span className="text-slate-500">Login:</span> {justSetCredential.login}</p>
+              <p className="text-emerald-400 font-bold"><span className="text-slate-500">Parol:</span> {justSetCredential.pass}</p>
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`Login: ${justSetCredential.login}\nParol: ${justSetCredential.pass}`);
+                triggerToast(tL("Nusxalandi!"));
+              }}
+              className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-700 active:scale-95 text-white font-extrabold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5"
+            >
+              <Copy className="w-4 h-4" /> Nusxalash
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* DETAILED CLINIC EDITING MODAL (USER REQUIREMENT) */}
       {clinicToEdit && (

@@ -237,6 +237,7 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "bemorlar ro'yxati": { ru: "Список пациентов", en: "Patients list", kk: "Пациенттер тізімі", ky: "Бейтаптар тизмеси", tg: "Рӯйхати беморон", tk: "Näsaglar sanawy" },
   filter: { ru: "Фильтр", en: "Filter", kk: "Сүзгі", ky: "Чыпка", tg: "Филтр", tk: "Süzgüç" },
   "🌐 boshqa klinikadan qidirish": { ru: "🌐 Поиск из другой клиники", en: "🌐 Search from another clinic", kk: "🌐 Басқа клиникадан іздеу", ky: "🌐 Башка клиникадан издөө", tg: "🌐 Ҷустуҷӯ аз клиникаи дигар", tk: "🌐 Başga klinikadan gözlemek" },
+  "boshqa klinikadan": { ru: "из другой клиники", en: "from another clinic", kk: "басқа клиникадан", ky: "башка клиникадан", tg: "аз клиникаи дигар", tk: "başga klinikadan" },
   "yangi bemor": { ru: "Новый пациент", en: "New patient", kk: "Жаңа пациент", ky: "Жаңы бейтап", tg: "Бемори нав", tk: "Täze näsag" },
   "qidirilmoqda...": { ru: "Идет поиск...", en: "Searching...", kk: "Ізделуде...", ky: "Изделүүдө...", tg: "Ҷустуҷӯ дар ҷараён...", tk: "Gözlenilýär..." },
   qidirish: { ru: "Поиск", en: "Search", kk: "Іздеу", ky: "Издөө", tg: "Ҷустуҷӯ", tk: "Gözlemek" },
@@ -591,15 +592,18 @@ export default function DoctorDashboard({
 
   // Real patient roster for the "Bemorlar" tab, scoped to the active clinic. A patient
   // "belongs" here if they have a recorded visit at this clinic, or (for freshly
-  // registered patients with no visits yet) if this is their home clinic.
+  // registered patients with no visits yet) if this is their home clinic — OR if this
+  // doctor personally registered them (primaryDoctorId), so a doctor's own patients
+  // keep showing up even after the doctor switches to a different clinic.
   const clinicPatients = useMemo(() => {
     if (!effectiveClinicId) return patients;
     return patients.filter((p) => {
+      if (p.primaryDoctorId === currentDoctor?.id) return true;
       const visits = p.clinicVisits || [];
       if (visits.length === 0) return p.clinicId === effectiveClinicId;
       return visits.some((v) => (v.clinicId || p.clinicId) === effectiveClinicId);
     });
-  }, [patients, effectiveClinicId]);
+  }, [patients, effectiveClinicId, currentDoctor?.id]);
   const filteredClinicPatients = useMemo(() => {
     const q = patientListSearch.trim().toLowerCase();
     if (!q) return clinicPatients;
@@ -653,6 +657,7 @@ export default function DoctorDashboard({
           fullName: quickAddPatient.fullName.trim(),
           phone: quickAddPatient.phone.trim(),
           passportSerial: quickAddPatient.passportSerial.trim(),
+          primaryDoctorId: currentDoctor?.id,
         }),
       });
       if (res.ok) {
@@ -2718,6 +2723,8 @@ export default function DoctorDashboard({
                                 .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
                               const fullName = decodeLegacyEntities(patient.fullName);
                               const phone = decodeLegacyEntities(patient.phone);
+                              const currentClinicId = lastVisit?.clinicId || patient.clinicId;
+                              const isFollowingDoctor = patient.primaryDoctorId === currentDoctor?.id && currentClinicId !== effectiveClinicId;
                               return (
                                 <tr
                                   key={patient.id}
@@ -2735,8 +2742,13 @@ export default function DoctorDashboard({
                                         alt={fullName}
                                       />
                                       <div>
-                                        <p className="font-bold text-slate-800">
+                                        <p className="font-bold text-slate-800 flex items-center gap-1.5">
                                           {fullName}
+                                          {isFollowingDoctor && (
+                                            <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full border border-indigo-100 whitespace-nowrap">
+                                              🔁 {t("boshqa klinikadan")}
+                                            </span>
+                                          )}
                                         </p>
                                         <p className="text-[9px] text-slate-400 font-mono">
                                           ID: #{patient.id}

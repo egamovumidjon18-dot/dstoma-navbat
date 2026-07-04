@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   Building2, Bot, Database, MapPin, Activity, Settings as SettingsIcon,
-  Save, Download, Upload, CheckCircle2, ChevronRight, AlertCircle, User, CreditCard, X
+  Save, Download, Upload, CheckCircle2, ChevronRight, AlertCircle, User, CreditCard, X, Handshake
 } from 'lucide-react';
-import { Doctor, Clinic, Patient, QueueItem, PaymentReceipt } from '../types';
+import { Doctor, Clinic, Patient, QueueItem, PaymentReceipt, DoctorClinicLink } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
 import { getAiAccessStatus } from '../utils/aiAccess';
 import { compressImage } from '../utils/imageCompressor';
@@ -21,6 +21,7 @@ const SETTINGS_SECTIONS = [
   { id: 'profile', label: 'Shaxsiy profil', icon: User },
   { id: 'clinic', label: 'Klinika ma\'lumotlari', icon: Building2 },
   { id: 'branches', label: 'Filiallar', icon: MapPin },
+  { id: 'employment', label: 'Ish shartlari', icon: Handshake },
   { id: 'ai', label: 'AI sozlamalari', icon: Bot },
   { id: 'payment', label: 'To\'lov tizimlari', icon: CreditCard },
   { id: 'backup', label: 'Zaxira va Tiklash', icon: Database },
@@ -129,6 +130,19 @@ const SETTINGS_TRANSLATIONS: Record<string, SettingsDictEntry> = {
   "faqat rasm formatidagi fayllarni yuklashingiz mumkin!": { ru: "Можно загружать только файлы в формате изображения!", en: "You can only upload image files!", kk: "Тек сурет форматындағы файлдарды жүктеуге болады!", ky: "Só сүрөт форматындагы файлдарды гана жүктөөгө болот!", tg: "Танҳо файлҳои дар формати расм иҷозат дода мешавад!", tk: "Diňe surat formatly faýllary ýüklemek bolar!" },
   "rasmni yuklab bo'lmadi. internet aloqasini tekshiring.": { ru: "Не удалось загрузить фото. Проверьте подключение к интернету.", en: "Could not upload photo. Check your internet connection.", kk: "Фотоны жүктеу мүмкін болмады. Интернет байланысын тексеріңіз.", ky: "Сүрөттү жүктөө мүмкүн болгон жок. Интернет байланышын текшериңиз.", tg: "Расм бор нашуд. Пайвасти интернетро тафтиш кунед.", tk: "Surat ýüklenip bolmady. Internet baglanyşygyny barlaň." },
   "chekni belgilab bo'lmadi. internet aloqasini tekshiring.": { ru: "Не удалось отметить чек. Проверьте подключение к интернету.", en: "Could not mark the receipt. Check your internet connection.", kk: "Чекті белгілеу мүмкін болмады. Интернет байланысын тексеріңіз.", ky: "Чекти белгилөө мүмкүн болгон жок. Интернет байланышын текшериңиз.", tg: "Чек қайд карда нашуд. Пайвасти интернетро тафтиш кунед.", tk: "Çek bellenip bolmady. Internet baglanyşygyny barlaň." },
+  "ish shartlari": { ru: "Условия работы", en: "Employment terms", kk: "Жұмыс шарттары", ky: "Иш шарттары", tg: "Шартҳои кор", tk: "Iş şertleri" },
+  "sizning klinikalar bilan ish shartlaringiz — buni faqat klinika direktori yoki tizim egasi o'zgartira oladi.": { ru: "Ваши условия работы с клиниками — изменить их может только директор клиники или владелец системы.", en: "Your work terms with clinics — only the clinic director or system owner can change these.", kk: "Клиникалармен жұмыс шарттарыңыз — оларды тек клиника директоры немесе жүйе иесі өзгерте алады.", ky: "Клиникалар менен иш шарттарыңыз — аларды гана клиника директору же тутум ээси өзгөртө алат.", tg: "Шартҳои кори шумо бо клиникаҳо — онҳоро танҳо директори клиника ё соҳиби система тағйир дода метавонад.", tk: "Klinikalar bilen iş şertleriňiz — olary diňe klinika direktory ýa-da ulgam eýesi üýtgedip biler." },
+  ulush: { ru: "Доля", en: "Revenue share", kk: "Үлес", ky: "Үлүш", tg: "Ҳисса", tk: "Paý" },
+  ijara: { ru: "Аренда", en: "Rental", kk: "Жалдау", ky: "Ижара", tg: "Иҷора", tk: "Kärende" },
+  mustaqil: { ru: "Независимый", en: "Independent", kk: "Тәуелсіз", ky: "Көз карандысыз", tg: "Мустақил", tk: "Garaşsyz" },
+  "sizning ulushingiz:": { ru: "Ваша доля:", en: "Your share:", kk: "Сіздің үлесіңіз:", ky: "Сиздин үлүшүңүз:", tg: "Ҳиссаи шумо:", tk: "Siziň paýyňyz:" },
+  "klinika ulushi:": { ru: "Доля клиники:", en: "Clinic's share:", kk: "Клиника үлесі:", ky: "Клиниканын үлүшү:", tg: "Ҳиссаи клиника:", tk: "Klinikanyň paýy:" },
+  "oylik ijara:": { ru: "Ежемесячная аренда:", en: "Monthly rent:", kk: "Айлық жалдау:", ky: "Айлык ижара:", tg: "Иҷораи моҳона:", tk: "Aýlyk kärende:" },
+  "holat:": { ru: "Статус:", en: "Status:", kk: "Мәртебе:", ky: "Абал:", tg: "Ҳолат:", tk: "Ýagdaý:" },
+  "to'langan": { ru: "Оплачено", en: "Paid", kk: "Төленді", ky: "Төлөндү", tg: "Пардохтшуда", tk: "Tölendi" },
+  "to'lanmagan": { ru: "Не оплачено", en: "Unpaid", kk: "Төленбеді", ky: "Төлөнгөн жок", tg: "Пардохтнашуда", tk: "Tölenmedi" },
+  "bu — sizning shaxsiy klinikangiz. barcha daromad sizga tegishli.": { ru: "Это ваша личная клиника. Весь доход принадлежит вам.", en: "This is your own personal clinic. All revenue belongs to you.", kk: "Бұл — сіздің жеке клиникаңыз. Барлық табыс сізге тиесілі.", ky: "Бул — сиздин жеке клиникаңыз. Бардык киреше сизге таандык.", tg: "Ин — клиникаи шахсии шумост. Тамоми даромад ба шумо тааллуқ дорад.", tk: "Bu — siziň şahsy klinikaňyz. Ähli girdeji size degişli." },
+  "hozircha ish shartlaringiz belgilanmagan — bu haqda klinika direktori bilan bog'laning.": { ru: "Ваши условия работы пока не установлены — обратитесь по этому поводу к директору клиники.", en: "Your employment terms haven't been set yet — please contact your clinic director about this.", kk: "Жұмыс шарттарыңыз әзірге белгіленбеген — бұл туралы клиника директорына хабарласыңыз.", ky: "Иш шарттарыңыз азырынча белгиленген эмес — бул тууралуу клиника директору менен байланышыңыз.", tg: "Шартҳои кори шумо ҳанӯз муайян нашудааст — дар ин бора бо директори клиника тамос гиред.", tk: "Iş şertleriňiz heniz bellenmedi — bu barada klinika direktory bilen habarlaşyň." },
 };
 
 interface SettingsProps {
@@ -192,6 +206,25 @@ export default function Settings({ doctor, clinic, clinicPatients = [], clinicQu
   const [receiptsLoading, setReceiptsLoading] = useState(false);
   const [receiptActionId, setReceiptActionId] = useState<string | null>(null);
   const [viewerReceipt, setViewerReceipt] = useState<PaymentReceipt | null>(null);
+
+  const [myLinks, setMyLinks] = useState<DoctorClinicLink[]>([]);
+  const [myLinksLoading, setMyLinksLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeSection !== 'employment' || !doctor?.id) return;
+    let active = true;
+    setMyLinksLoading(true);
+    fetch(`${getApiUrl()}/api/doctor-clinic-links`, {
+      headers: staffToken ? { Authorization: `Bearer ${staffToken}` } : {},
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: DoctorClinicLink[]) => {
+        if (active) setMyLinks(Array.isArray(data) ? data.filter((l) => l.doctorId === doctor.id) : []);
+      })
+      .catch(() => { if (active) setMyLinks([]); })
+      .finally(() => { if (active) setMyLinksLoading(false); });
+    return () => { active = false; };
+  }, [activeSection, doctor?.id, staffToken]);
 
   useEffect(() => {
     setProfileName(decodeLegacyEntities(doctor?.name) || '');
@@ -669,6 +702,63 @@ export default function Settings({ doctor, clinic, clinicPatients = [], clinicQu
           </div>
         );
 
+      case 'employment':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-xl font-bold text-white mb-1">{t("ish shartlari")}</h3>
+              <p className="text-sm text-slate-500 mb-6">{t("sizning klinikalar bilan ish shartlaringiz — buni faqat klinika direktori yoki tizim egasi o'zgartira oladi.")}</p>
+            </div>
+
+            {myLinksLoading ? (
+              <p className="text-xs text-slate-500">{t('yuklanmoqda...')}</p>
+            ) : myLinks.length === 0 ? (
+              <div className="p-6 bg-[#111827] border border-slate-700 rounded-2xl text-center text-sm text-slate-400">
+                {t("hozircha ish shartlaringiz belgilanmagan — bu haqda klinika direktori bilan bog'laning.")}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {myLinks.map((link) => {
+                  const linkClinic = allClinics.find((c) => c.id === link.clinicId);
+                  return (
+                    <div key={link.id} className="bg-[#111827] border border-slate-700 rounded-2xl p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-bold text-white text-sm">{decodeLegacyEntities(linkClinic?.name) || link.clinicId}</h4>
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase ${
+                          link.relationshipType === 'independent' ? 'bg-emerald-500/10 text-emerald-400' :
+                          link.relationshipType === 'revenue_share' ? 'bg-indigo-500/10 text-indigo-400' :
+                          'bg-slate-500/10 text-slate-400'
+                        }`}>
+                          {link.relationshipType === 'independent' ? `🏠 ${t('mustaqil')}` : link.relationshipType === 'revenue_share' ? t('ulush') : t('ijara')}
+                        </span>
+                      </div>
+                      {link.relationshipType === 'revenue_share' && (
+                        <p className="text-xs text-slate-400">
+                          {t("sizning ulushingiz:")} <strong className="text-white">{link.doctorRevenueSharePercent ?? 50}%</strong>
+                          {' · '}
+                          {t("klinika ulushi:")} <strong className="text-white">{100 - (link.doctorRevenueSharePercent ?? 50)}%</strong>
+                        </p>
+                      )}
+                      {link.relationshipType === 'rental' && (
+                        <p className="text-xs text-slate-400">
+                          {t("oylik ijara:")} <strong className="text-white">{(link.monthlyRentFee ?? 0).toLocaleString('uz-UZ')} so'm</strong>
+                          {' · '}
+                          {t("holat:")} <strong className={link.rentPaymentStatus === 'paid' ? 'text-emerald-400' : 'text-rose-400'}>{link.rentPaymentStatus === 'paid' ? t("to'langan") : t("to'lanmagan")}</strong>
+                        </p>
+                      )}
+                      {link.relationshipType === 'independent' && (
+                        <p className="text-xs text-slate-400">
+                          {t("Bu — sizning shaxsiy klinikangiz. Barcha daromad sizga tegishli.")}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+
       case 'payment':
         return (
           <div className="space-y-6">
@@ -826,7 +916,7 @@ export default function Settings({ doctor, clinic, clinicPatients = [], clinicQu
          </div>
          
          {/* Footer Action Bar */}
-         {!['branches', 'backup'].includes(activeSection) && (
+         {!['branches', 'backup', 'employment'].includes(activeSection) && (
          <div className="p-4 border-t border-slate-800 bg-[#0a0f1d] flex justify-end shrink-0">
            <div className="flex items-center gap-4 max-w-4xl w-full mx-auto px-4">
              {saveError && (

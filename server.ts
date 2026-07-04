@@ -37,46 +37,97 @@ app.use((req, res, next) => {
   next();
 });
 
-// SUPERADMIN SESSION TOKENS — issued on successful /api/admin-login, required by
-// requireSuperAdmin on every superadmin-exclusive endpoint below (clinic create/delete,
-// telegram token config, admin credential changes). In-memory only: restarting the
-// server invalidates all sessions, matching this app's existing in-memory-first patterns.
+// SESSION TOKENS (superadmin + director/doctor) — issued on /api/admin-login,
+// /api/director-login, /api/doctor-login, and /api/admin-impersonate.
+// Persisted to Firestore's "sessions" collection (doc id = token) so they survive
+// Vercel's serverless cold starts — each invocation can land on a brand-new instance
+// with an empty in-memory Map, which used to log everyone out at random. The Maps
+// below are kept purely as a same-instance fast-path cache to avoid a Firestore
+// round-trip on every request; Firestore is always the source of truth.
 const superAdminSessions = new Map<string, number>(); // token -> expiresAt (ms)
 const SUPERADMIN_SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+const staffSessions = new Map<string, { role: 'director' | 'doctor'; clinicId: string; doctorId?: string; expiresAt: number }>();
+const STAFF_SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
-function requireSuperAdmin(req: any, res: any, next: any) {
+// A slow/unreachable Firestore connection must never hang an HTTP response —
+// races any promise against a timeout so callers always get an answer.
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+  ]);
+}
+
+async function saveSuperAdminSession(token: string, expiresAt: number) {
+  superAdminSessions.set(token, expiresAt);
+  // Fire-and-forget: the in-memory Map above already makes login work immediately
+  // on this instance. Firestore persistence (for surviving Vercel cold starts) is
+  // best-effort — never block the login response on it.
+  if (fDb) {
+    setDoc(doc(fDb, "sessions", token), { type: "superadmin", expiresAt }).catch((err) => {
+      console.error("[Session] Failed to persist superadmin session to Firestore:", err);
+    });
+  }
+}
+async function saveStaffSession(token: string, data: { role: 'director' | 'doctor'; clinicId: string; doctorId?: string; expiresAt: number }) {
+  staffSessions.set(token, data);
+  if (fDb) {
+    setDoc(doc(fDb, "sessions", token), stripUndefined({ type: "staff", ...data })).catch((err) => {
+      console.error("[Session] Failed to persist staff session to Firestore:", err);
+    });
+  }
+}
+
+async function getAuthContext(req: any): Promise<{ isSuperAdmin: boolean; staff?: { role: 'director' | 'doctor'; clinicId: string; doctorId?: string } }> {
   const authHeader = String(req.headers["authorization"] || "");
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-  const expiresAt = token ? superAdminSessions.get(token) : undefined;
-  if (!expiresAt || expiresAt < Date.now()) {
-    if (token) superAdminSessions.delete(token);
+  if (!token) return { isSuperAdmin: false };
+
+  const saExpiry = superAdminSessions.get(token);
+  if (saExpiry && saExpiry > Date.now()) return { isSuperAdmin: true };
+  const staff = staffSessions.get(token);
+  if (staff && staff.expiresAt > Date.now()) return { isSuperAdmin: false, staff };
+
+  // Cache miss (e.g. a fresh serverless instance) — fall back to Firestore, the
+  // persistent source of truth, and repopulate the in-memory cache on a hit. Bounded
+  // by a timeout so a slow/flaky Firestore connection degrades to "not authorized"
+  // instead of hanging the request forever.
+  if (fDb) {
+    try {
+      const snap = await withTimeout(getDoc(doc(fDb, "sessions", token)), 3000);
+      if (snap.exists()) {
+        const data: any = snap.data();
+        if (data.expiresAt > Date.now()) {
+          if (data.type === "superadmin") {
+            superAdminSessions.set(token, data.expiresAt);
+            return { isSuperAdmin: true };
+          }
+          if (data.type === "staff") {
+            const staffData = { role: data.role, clinicId: data.clinicId, doctorId: data.doctorId, expiresAt: data.expiresAt };
+            staffSessions.set(token, staffData);
+            return { isSuperAdmin: false, staff: staffData };
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[Session] Firestore session lookup failed/timed out:", err);
+    }
+  }
+  return { isSuperAdmin: false };
+}
+
+async function requireSuperAdmin(req: any, res: any, next: any) {
+  const auth = await getAuthContext(req);
+  if (!auth.isSuperAdmin) {
     return res.status(401).json({ ok: false, error: "Superadmin sessiyasi topilmadi yoki muddati o'tgan. Qayta kiring." });
   }
   next();
 }
 
-// DIRECTOR/DOCTOR SESSION TOKENS — issued on /api/director-login, /api/doctor-login,
-// and /api/admin-impersonate. Scoped to one clinic (director) or one doctor within a
-// clinic (doctor). Used to protect write endpoints that only clinic staff should ever
-// call (adding/removing doctors, deleting patients, managing services, queue status).
-const staffSessions = new Map<string, { role: 'director' | 'doctor'; clinicId: string; doctorId?: string; expiresAt: number }>();
-const STAFF_SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
-
-function getAuthContext(req: any): { isSuperAdmin: boolean; staff?: { role: 'director' | 'doctor'; clinicId: string; doctorId?: string } } {
-  const authHeader = String(req.headers["authorization"] || "");
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-  if (!token) return { isSuperAdmin: false };
-  const saExpiry = superAdminSessions.get(token);
-  if (saExpiry && saExpiry > Date.now()) return { isSuperAdmin: true };
-  const staff = staffSessions.get(token);
-  if (staff && staff.expiresAt > Date.now()) return { isSuperAdmin: false, staff };
-  return { isSuperAdmin: false };
-}
-
 // True if the caller is the superadmin, OR a director of `clinicId`, OR a doctor
 // belonging to `clinicId` (when doctor access should also be allowed).
-function isAuthorizedForClinic(req: any, clinicId: string | undefined, allowDoctor = false): boolean {
-  const auth = getAuthContext(req);
+async function isAuthorizedForClinic(req: any, clinicId: string | undefined, allowDoctor = false): Promise<boolean> {
+  const auth = await getAuthContext(req);
   if (auth.isSuperAdmin) return true;
   if (!auth.staff || !clinicId) return false;
   if (auth.staff.role === 'director') return auth.staff.clinicId === clinicId;
@@ -153,7 +204,7 @@ interface DoctorClinicLink {
   id: string;
   doctorId: string;
   clinicId: string;
-  relationshipType: 'rental' | 'revenue_share';
+  relationshipType: 'rental' | 'revenue_share' | 'independent';
   doctorRevenueSharePercent?: number;
   monthlyRentFee?: number;
   rentPaymentStatus?: 'paid' | 'unpaid';
@@ -179,6 +230,7 @@ interface Patient {
   medicalHistory?: any[];
   clinicVisits?: ClinicVisit[];
   managedBy?: string;
+  primaryDoctorId?: string;
 }
 
 interface QueueItem {
@@ -636,7 +688,7 @@ app.post("/api/admin-login", rateLimiter(5, 60 * 1000), async (req, res) => {
       await saveAdminCreds(creds.login, hashPassword(password), true);
     }
     const token = crypto.randomBytes(32).toString("hex");
-    superAdminSessions.set(token, Date.now() + SUPERADMIN_SESSION_TTL_MS);
+    await saveSuperAdminSession(token, Date.now() + SUPERADMIN_SESSION_TTL_MS);
     return res.json({ ok: true, name: "SuperAdmin", token });
   }
   return res.status(401).json({ ok: false, error: "Incorrect credentials" });
@@ -674,7 +726,7 @@ app.post("/api/director-login", rateLimiter(5, 60 * 1000), async (req, res) => {
   }
   const { password: _pw, ...safeClinic } = matched;
   const token = crypto.randomBytes(32).toString("hex");
-  staffSessions.set(token, { role: 'director', clinicId: matched.id, expiresAt: Date.now() + STAFF_SESSION_TTL_MS });
+  await saveStaffSession(token, { role: 'director', clinicId: matched.id, expiresAt: Date.now() + STAFF_SESSION_TTL_MS });
   return res.json({ ok: true, clinic: safeClinic, token });
 });
 
@@ -694,7 +746,7 @@ app.post("/api/doctor-login", rateLimiter(5, 60 * 1000), async (req, res) => {
   }
   const { password: _pw, ...safeDoctor } = matched;
   const token = crypto.randomBytes(32).toString("hex");
-  staffSessions.set(token, { role: 'doctor', clinicId: matched.clinicId, doctorId: matched.id, expiresAt: Date.now() + STAFF_SESSION_TTL_MS });
+  await saveStaffSession(token, { role: 'doctor', clinicId: matched.clinicId, doctorId: matched.id, expiresAt: Date.now() + STAFF_SESSION_TTL_MS });
   return res.json({ ok: true, doctor: safeDoctor, token });
 });
 
@@ -737,7 +789,7 @@ app.post("/api/admin-impersonate", requireSuperAdmin, async (req, res) => {
     if (!clinic) return res.status(404).json({ ok: false, error: "Klinika topilmadi" });
     const { password, ...safeClinic } = clinic;
     const token = crypto.randomBytes(32).toString("hex");
-    staffSessions.set(token, { role: 'director', clinicId: clinic.id, expiresAt: Date.now() + STAFF_SESSION_TTL_MS });
+    await saveStaffSession(token, { role: 'director', clinicId: clinic.id, expiresAt: Date.now() + STAFF_SESSION_TTL_MS });
     return res.json({ ok: true, clinic: safeClinic, token });
   }
   if (role === 'doctor') {
@@ -746,7 +798,7 @@ app.post("/api/admin-impersonate", requireSuperAdmin, async (req, res) => {
     if (!doctor) return res.status(404).json({ ok: false, error: "Shifokor topilmadi" });
     const { password, ...safeDoctor } = doctor;
     const token = crypto.randomBytes(32).toString("hex");
-    staffSessions.set(token, { role: 'doctor', clinicId: doctor.clinicId, doctorId: doctor.id, expiresAt: Date.now() + STAFF_SESSION_TTL_MS });
+    await saveStaffSession(token, { role: 'doctor', clinicId: doctor.clinicId, doctorId: doctor.id, expiresAt: Date.now() + STAFF_SESSION_TTL_MS });
     return res.json({ ok: true, doctor: safeDoctor, token });
   }
   return res.status(400).json({ ok: false, error: "Noto'g'ri rol" });
@@ -1162,7 +1214,7 @@ app.patch("/api/queues/:id", async (req, res) => {
       const isPatientSelfCancel = updateFields.status === 'cancelled' &&
         updateFields.service_id === undefined && updateFields.appointmentDate === undefined &&
         updateFields.appointmentTime === undefined && updateFields.medical_notes === undefined;
-      if (!isPatientSelfCancel && !isAuthorizedForClinic(req, itemMatch.clinicId, true)) {
+      if (!isPatientSelfCancel && !(await isAuthorizedForClinic(req, itemMatch.clinicId, true))) {
         return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
       }
       updatedItem = {
@@ -1300,7 +1352,7 @@ app.patch("/api/queues/:id", async (req, res) => {
 app.delete("/api/queues/:id", async (req, res) => {
   const id = req.params.id;
   const existing: any = (await getQueues()).find((q: any) => q.id === id);
-  if (!isAuthorizedForClinic(req, existing?.clinicId, true)) {
+  if (!(await isAuthorizedForClinic(req, existing?.clinicId, true))) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   await deleteQueue(id);
@@ -1369,7 +1421,7 @@ app.get("/api/clinics", async (req, res) => {
 const CLINIC_SELF_EDIT_SAFE_FIELDS = ['name', 'phone', 'address', 'geminiApiKey', 'mapLink', 'logo', 'lat', 'lng'];
 app.post("/api/clinics", async (req, res) => {
   const body = req.body;
-  const auth = getAuthContext(req);
+  const auth = await getAuthContext(req);
   let clinicToSave: any;
 
   if (auth.isSuperAdmin) {
@@ -1437,7 +1489,7 @@ app.get("/api/doctors", async (req, res) => {
 
 app.post("/api/doctors", async (req, res) => {
   const doc = req.body;
-  const auth = getAuthContext(req);
+  const auth = await getAuthContext(req);
   // Superadmin: any doctor. Director: any doctor at their own clinic (adding/editing
   // staff). Doctor: only their own record (self-editing profile/password in Settings).
   const allowed = auth.isSuperAdmin ||
@@ -1457,7 +1509,7 @@ app.post("/api/doctors", async (req, res) => {
 app.delete("/api/doctors/:id", async (req, res) => {
   const id = req.params.id;
   const existing: any = (await getDoctors()).find((d: any) => d.id === id);
-  if (!isAuthorizedForClinic(req, existing?.clinicId)) {
+  if (!(await isAuthorizedForClinic(req, existing?.clinicId))) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   await deleteDoctor(id);
@@ -1467,7 +1519,7 @@ app.delete("/api/doctors/:id", async (req, res) => {
 app.delete("/api/patients/:id", async (req, res) => {
   const id = req.params.id;
   const existing: any = (await getPatients()).find((p: any) => p.id === id);
-  if (!isAuthorizedForClinic(req, existing?.clinicId)) {
+  if (!(await isAuthorizedForClinic(req, existing?.clinicId))) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   await deletePatient(id);
@@ -1484,7 +1536,7 @@ app.post("/api/doctor-clinic-links", async (req, res) => {
   if (!link.doctorId || !link.clinicId) {
     return res.status(400).json({ error: "doctorId and clinicId are required." });
   }
-  if (!isAuthorizedForClinic(req, link.clinicId)) {
+  if (!(await isAuthorizedForClinic(req, link.clinicId))) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   if (!link.id) link.id = `${link.doctorId}_${link.clinicId}`;
@@ -1498,7 +1550,7 @@ app.post("/api/doctor-clinic-links", async (req, res) => {
 app.delete("/api/doctor-clinic-links/:id", async (req, res) => {
   const id = req.params.id;
   const existing: any = (await getDoctorClinicLinks()).find((l: any) => l.id === id);
-  if (!isAuthorizedForClinic(req, existing?.clinicId)) {
+  if (!(await isAuthorizedForClinic(req, existing?.clinicId))) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   await deleteDoctorClinicLink(id);
@@ -1515,7 +1567,7 @@ app.get("/api/payment-receipts", async (req, res) => {
   let matches = all;
   if (doctorId) matches = matches.filter((r) => r.doctorId === doctorId);
   if (patientId) matches = matches.filter((r) => r.patientId === patientId);
-  if (matches.length > 0 && !isAuthorizedForClinic(req, matches[0].clinicId, true)) {
+  if (matches.length > 0 && !(await isAuthorizedForClinic(req, matches[0].clinicId, true))) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
@@ -1530,10 +1582,10 @@ app.patch("/api/payment-receipts/:id", async (req, res) => {
   }
   const existing: any = (await getPaymentReceipts()).find((r: any) => r.id === id);
   if (!existing) return res.status(404).json({ ok: false, error: "Topilmadi" });
-  if (!isAuthorizedForClinic(req, existing.clinicId, true)) {
+  if (!(await isAuthorizedForClinic(req, existing.clinicId, true))) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
-  const auth = getAuthContext(req);
+  const auth = await getAuthContext(req);
   if (auth.staff?.role === 'doctor' && auth.staff.doctorId !== existing.doctorId) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
@@ -1570,7 +1622,7 @@ app.post("/api/request-payment", async (req, res) => {
   const doctors = await getDoctors();
   const doc: any = doctors.find((d: any) => d.id === doctorId);
   if (!doc) return res.status(404).json({ ok: false, error: "Shifokor topilmadi" });
-  if (!isAuthorizedForClinic(req, doc.clinicId, true)) {
+  if (!(await isAuthorizedForClinic(req, doc.clinicId, true))) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   const patients = await getPatients();
@@ -1599,7 +1651,7 @@ app.get("/api/reminders", async (req, res) => {
   let matches = all;
   if (patientId) matches = matches.filter((r) => r.patientId === patientId);
   if (doctorId) matches = matches.filter((r) => r.doctorId === doctorId);
-  if (matches.length > 0 && !isAuthorizedForClinic(req, matches[0].clinicId, true)) {
+  if (matches.length > 0 && !(await isAuthorizedForClinic(req, matches[0].clinicId, true))) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
@@ -1611,7 +1663,7 @@ app.post("/api/reminders", async (req, res) => {
   if (!clinicId || !doctorId || !patientId || !text || !String(text).trim()) {
     return res.status(400).json({ ok: false, error: "clinicId, doctorId, patientId va text talab qilinadi" });
   }
-  if (!isAuthorizedForClinic(req, clinicId, true)) {
+  if (!(await isAuthorizedForClinic(req, clinicId, true))) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   const reminder = {
@@ -1634,7 +1686,7 @@ app.patch("/api/reminders/:id", async (req, res) => {
   }
   const existing: any = (await getReminders()).find((r: any) => r.id === id);
   if (!existing) return res.status(404).json({ ok: false, error: "Topilmadi" });
-  if (!isAuthorizedForClinic(req, existing.clinicId, true)) {
+  if (!(await isAuthorizedForClinic(req, existing.clinicId, true))) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
 
@@ -1656,7 +1708,7 @@ app.delete("/api/reminders/:id", async (req, res) => {
   const id = req.params.id;
   const existing: any = (await getReminders()).find((r: any) => r.id === id);
   if (!existing) return res.status(404).json({ ok: false, error: "Topilmadi" });
-  if (!isAuthorizedForClinic(req, existing.clinicId, true)) {
+  if (!(await isAuthorizedForClinic(req, existing.clinicId, true))) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   await deleteReminder(id);
@@ -1670,7 +1722,7 @@ app.get("/api/services", async (req, res) => {
 
 app.post("/api/services", async (req, res) => {
   const srv = req.body;
-  if (!isAuthorizedForClinic(req, srv.clinicId)) {
+  if (!(await isAuthorizedForClinic(req, srv.clinicId))) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   await saveService(srv);
@@ -1680,7 +1732,7 @@ app.post("/api/services", async (req, res) => {
 app.delete("/api/services/:id", async (req, res) => {
   const id = req.params.id;
   const existing: any = (await getServices()).find((s: any) => s.id === id);
-  if (!isAuthorizedForClinic(req, existing?.clinicId)) {
+  if (!(await isAuthorizedForClinic(req, existing?.clinicId))) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   await deleteService(id);
