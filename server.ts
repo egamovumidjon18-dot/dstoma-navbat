@@ -578,9 +578,10 @@ function isHashedPassword(stored: any): boolean {
   return typeof stored === "string" && stored.startsWith("scrypt:");
 }
 function verifyPassword(plain: string, stored: any): boolean {
-  if (typeof stored !== "string" || !stored) return false;
-  if (isHashedPassword(stored)) {
-    const parts = stored.split(":");
+  if (stored === undefined || stored === null || stored === "") return false;
+  const storedStr = String(stored);
+  if (isHashedPassword(storedStr)) {
+    const parts = storedStr.split(":");
     if (parts.length !== 3) return false;
     const [, salt, hash] = parts;
     try {
@@ -592,8 +593,10 @@ function verifyPassword(plain: string, stored: any): boolean {
       return false;
     }
   }
-  // Legacy plaintext account, not yet migrated.
-  return stored === plain;
+  // Legacy plaintext account, not yet migrated. Some legacy records were saved
+  // with stray whitespace or a numeric type (e.g. from manual data entry) —
+  // normalize both sides so those don't silently fail to match.
+  return storedStr.trim() === String(plain).trim();
 }
 
 // Returns the RAW stored password value (hashed "scrypt:..." for migrated accounts,

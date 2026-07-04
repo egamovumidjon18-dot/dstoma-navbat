@@ -134,6 +134,7 @@ export default function SuperAdminDashboard({
     "prognoz natijasi": { ru: "РЕЗУЛЬТАТ ПРОГНОЗА", en: "FORECAST ACCUMULATION", kk: "БОЛЖАМ НӘТИЖЕСІ", ky: "БОЛЖОЛ НАТЫЙЖАСЫ", tg: "НАТИҶАИ ПЕШБИНӢ", tk: "CAKLAMA NETIJESI" },
     "o'chirish": { ru: "Удалить", en: "Delete", kk: "Жою", ky: "Өчүрүү", tg: "Нест кардан", tk: "Pozmak" },
     "tahrirlash": { ru: "Редактир.", en: "Edit", kk: "Өңдеу", ky: "Түзөтүү", tg: "Таҳрир", tk: "Üýtgetmek" },
+    "ma'lumotlarini tahrirlash": { ru: "Изменить данные", en: "Edit details", kk: "Деректерін өңдеу", ky: "Маалыматтарын түзөтүү", tg: "Таҳрири маълумот", tk: "Maglumatlary üýtgetmek" },
     "diqqat!": { ru: "Внимание!", en: "Warning!", kk: "Назар аударыңыз!", ky: "Көңүл буруңуз!", tg: "Диққат!", tk: "Üns beriň!" },
     "bekor qilish": { ru: "Отмена", en: "Cancel", kk: "Бас тарту", ky: "Жокко чыгаруу", tg: "Бекор кардан", tk: "Ýatyrmak" },
     "klinika o'chirib tashlandi!": { ru: "Клиника полностью удалена!", en: "Clinic successfully purged!", kk: "Клиника толығымен жойылды!", ky: "Клиника толугу менен өчүрүлдү!", tg: "Клиника пурра нест карда шуд!", tk: "Klinika doly pozuldy!" },
@@ -2340,12 +2341,14 @@ export default function SuperAdminDashboard({
                             <button
                               onClick={() => setDoctorToEditDetails(doc)}
                               className="p-1 px-2 text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded text-[10px] font-black cursor-pointer transition-colors"
+                              title="Ism, mutaxassislik va filialni o'zgartirish (parol bu yerda emas)"
                             >
-                              {tL("Tahrirlash")}
+                              {tL("Ma'lumotlarini tahrirlash")}
                             </button>
                             <button
                               onClick={() => handleUpdateDoctorCredsClick(doc)}
                               className="p-1 px-2.5 bg-cyan-50 hover:bg-cyan-100 text-cyan-700 text-[10px] font-black rounded"
+                              title="Login va parolni o'zgartirish shu yerda"
                             >
                               {t('resetCreds')}
                             </button>
