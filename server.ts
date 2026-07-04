@@ -297,6 +297,10 @@ async function saveQueue(q: QueueItem) {
     else g._queuesDb.push(clean);
   }
 }
+async function deleteQueue(id: string) {
+  if (fDb) await deleteDoc(doc(fDb, "queues", id));
+  else if (g._queuesDb) g._queuesDb = g._queuesDb.filter((x: any) => x.id !== id);
+}
 async function getClinics() {
   if (fDb) {
     const s = await getDocs(collection(fDb, "clinics"));
@@ -467,6 +471,13 @@ async function getAuditLogs() {
     return logs.slice(0, 100);
   }
   return (g._serverAuditLogs || []).slice(0, 100);
+}
+async function deleteAuditLogEntry(id: string) {
+  if (fDb) {
+    await deleteDoc(doc(fDb, "auditLogs", id));
+  } else if (g._serverAuditLogs) {
+    g._serverAuditLogs = g._serverAuditLogs.filter((x: any) => x.id !== id);
+  }
 }
 
 
@@ -1286,6 +1297,16 @@ app.patch("/api/queues/:id", async (req, res) => {
   }
 });
 
+app.delete("/api/queues/:id", async (req, res) => {
+  const id = req.params.id;
+  const existing: any = (await getQueues()).find((q: any) => q.id === id);
+  if (!isAuthorizedForClinic(req, existing?.clinicId, true)) {
+    return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+  }
+  await deleteQueue(id);
+  res.json({ ok: true });
+});
+
 app.post("/api/queues/:id/rate", async (req, res) => {
   try {
     const { id } = req.params;
@@ -1742,6 +1763,10 @@ app.post("/api/admin/audit-logs", requireSuperAdmin, async (req, res) => {
   };
   await saveAuditLogEntry(entry);
   res.status(201).json({ ok: true, entry });
+});
+app.delete("/api/admin/audit-logs/:id", requireSuperAdmin, async (req, res) => {
+  await deleteAuditLogEntry(req.params.id);
+  res.json({ ok: true });
 });
 
 function isUsableKey(key: any): key is string {
@@ -3831,28 +3856,6 @@ async function startServer() {
     
     // Launch Telegram Smart Polling bot service asynchronously
     startTelegramBot();
-    
-    // Ensure Demo Patient for local testing only — never seed test accounts into production data.
-    if (process.env.NODE_ENV !== 'production') {
-      setTimeout(async () => {
-        try {
-          const patients = await getPatients();
-          const demoExists = patients.find(p => p.passportSerial === 'AA1234567');
-          if (!demoExists) {
-            const demoPatient = {
-              id: 'pat_demo_1',
-              clinicId: 'samarqand',
-              fullName: 'Testov Test',
-              passportSerial: 'AA1234567',
-              phone: '+998901234567',
-              password: 'demo'
-            };
-            await savePatient(demoPatient);
-            console.log('[Seed] Demo patient created (dev only): pasport AA1234567, password: demo');
-          }
-        } catch (e) {}
-      }, 1000);
-    }
   });
 }
 
