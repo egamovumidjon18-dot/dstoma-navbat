@@ -140,49 +140,69 @@ export function useAppState() {
   };
 
   // Credential updaters
-  const handleUpdateClinicCreds = async (clinicId: string, login: string, pass: string) => {
-    setClinics(prev => prev.map(c => {
-      if (c.id === clinicId) {
-        const updated = { ...c, login, password: pass };
-        fetch('/api/clinics', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...superAdminAuthHeaders() },
-          body: JSON.stringify(updated)
-        }).catch(console.warn);
-        return updated;
-      }
-      return c;
-    }));
+  // Returns whether the save actually persisted server-side. Previous versions fired
+  // the request without checking res.ok, so a rejected save (e.g. an expired/not-yet-
+  // persisted superadmin session on a cold serverless instance) still left the UI
+  // showing the new credentials as if they'd saved — the doctor/clinic then couldn't
+  // log in with them because the old value was still the one actually stored.
+  const handleUpdateClinicCreds = async (clinicId: string, login: string, pass: string): Promise<boolean> => {
+    const previous = clinics.find(c => c.id === clinicId);
+    if (!previous) return false;
+    const updated = { ...previous, login, password: pass };
+    setClinics(prev => prev.map(c => (c.id === clinicId ? updated : c)));
+    try {
+      const res = await fetch('/api/clinics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...superAdminAuthHeaders() },
+        body: JSON.stringify(updated)
+      });
+      if (!res.ok) throw new Error('save failed');
+      return true;
+    } catch (e) {
+      console.warn(e);
+      setClinics(prev => prev.map(c => (c.id === clinicId ? previous : c)));
+      return false;
+    }
   };
 
-  const handleUpdateDoctorCreds = async (doctorId: string, login: string, pass: string) => {
-    setDoctors(prev => prev.map(d => {
-      if (d.id === doctorId) {
-        const updated = { ...d, login, password: pass };
-        fetch('/api/doctors', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...superAdminAuthHeaders(), ...staffAuthHeaders() },
-          body: JSON.stringify(updated)
-        }).catch(console.warn);
-        return updated;
-      }
-      return d;
-    }));
+  const handleUpdateDoctorCreds = async (doctorId: string, login: string, pass: string): Promise<boolean> => {
+    const previous = doctors.find(d => d.id === doctorId);
+    if (!previous) return false;
+    const updated = { ...previous, login, password: pass };
+    setDoctors(prev => prev.map(d => (d.id === doctorId ? updated : d)));
+    try {
+      const res = await fetch('/api/doctors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...superAdminAuthHeaders(), ...staffAuthHeaders() },
+        body: JSON.stringify(updated)
+      });
+      if (!res.ok) throw new Error('save failed');
+      return true;
+    } catch (e) {
+      console.warn(e);
+      setDoctors(prev => prev.map(d => (d.id === doctorId ? previous : d)));
+      return false;
+    }
   };
 
-  const handleUpdateDoctorDetails = async (doctorId: string, updates: Partial<Doctor>) => {
-    setDoctors(prev => prev.map(d => {
-      if (d.id === doctorId) {
-        const updated = { ...d, ...updates };
-        fetch('/api/doctors', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...superAdminAuthHeaders(), ...staffAuthHeaders() },
-          body: JSON.stringify(updated)
-        }).catch(console.warn);
-        return updated;
-      }
-      return d;
-    }));
+  const handleUpdateDoctorDetails = async (doctorId: string, updates: Partial<Doctor>): Promise<boolean> => {
+    const previous = doctors.find(d => d.id === doctorId);
+    if (!previous) return false;
+    const updated = { ...previous, ...updates };
+    setDoctors(prev => prev.map(d => (d.id === doctorId ? updated : d)));
+    try {
+      const res = await fetch('/api/doctors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...superAdminAuthHeaders(), ...staffAuthHeaders() },
+        body: JSON.stringify(updated)
+      });
+      if (!res.ok) throw new Error('save failed');
+      return true;
+    } catch (e) {
+      console.warn(e);
+      setDoctors(prev => prev.map(d => (d.id === doctorId ? previous : d)));
+      return false;
+    }
   };
 
   const handleDeleteClinic = async (clinicId: string) => {
@@ -927,17 +947,21 @@ export function useAppState() {
     }
   };
 
-  const handleAddDoctor = async (newDoc: Doctor) => {
+  const handleAddDoctor = async (newDoc: Doctor): Promise<boolean> => {
     isSyncingRef.current = true;
     setDoctors(prev => [...prev, newDoc]);
     try {
-      await fetch('/api/doctors', {
+      const res = await fetch('/api/doctors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...superAdminAuthHeaders(), ...staffAuthHeaders() },
         body: JSON.stringify(newDoc)
       });
+      if (!res.ok) throw new Error('save failed');
+      return true;
     } catch (e) {
       console.warn(e);
+      setDoctors(prev => prev.filter(d => d.id !== newDoc.id));
+      return false;
     } finally {
       isSyncingRef.current = false;
     }

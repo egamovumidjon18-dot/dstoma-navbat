@@ -14,8 +14,9 @@ import {
   DollarSign, 
   Activity, 
   ShieldAlert, 
-  Eye, 
-  Users, 
+  Eye,
+  EyeOff,
+  Users,
   CreditCard,
   Crown,
   KeyRound,
@@ -47,11 +48,11 @@ interface SuperAdminDashboardProps {
   queues: QueueItem[];
   doctors: Doctor[];
   onAddClinic: (newClinic: Clinic) => void;
-  onAddDoctor?: (newDoctor: Doctor) => void;
+  onAddDoctor?: (newDoctor: Doctor) => Promise<boolean>;
   onToggleSubscription: (clinicId: string) => void;
-  onUpdateClinicCreds?: (clinicId: string, login: string, pass: string) => void;
-  onUpdateDoctorCreds?: (doctorId: string, login: string, pass: string) => void;
-  onUpdateDoctorDetails?: (doctorId: string, updates: Partial<Doctor>) => void;
+  onUpdateClinicCreds?: (clinicId: string, login: string, pass: string) => Promise<boolean>;
+  onUpdateDoctorCreds?: (doctorId: string, login: string, pass: string) => Promise<boolean>;
+  onUpdateDoctorDetails?: (doctorId: string, updates: Partial<Doctor>) => Promise<boolean>;
   onDeleteClinic?: (clinicId: string) => void;
   onDeleteDoctor?: (doctorId: string) => void;
   language: Language;
@@ -410,23 +411,35 @@ export default function SuperAdminDashboard({
   // never persisted) so the credentials list can still show/copy it correctly instead
   // of a useless "scrypt:..." string.
   const [justSetPasswords, setJustSetPasswords] = useState<Record<string, string>>({});
+  // Only a leftover pre-migration hash (saved before doctor/clinic credentials moved to
+  // reversible encryption) is unrecoverable — the server already decrypts everything
+  // else back to plaintext in /api/admin/credentials, so this is now the rare case,
+  // not the default. Those accounts just need one "Kalitni qayta tiklash" to fix.
   const isHashedPw = (pw: any): boolean => typeof pw === 'string' && pw.startsWith('scrypt:');
   // One-time "reveal" dialog for a freshly created/reset doctor or clinic login —
   // mirrors the existing generatedCreds card but generic enough for both entity types
   // and for password-reset (not just first creation).
   const [justSetCredential, setJustSetCredential] = useState<{ label: string; login: string; pass: string } | null>(null);
 
+  // Passwords are masked with dots by default and only shown in plaintext once the
+  // SuperAdmin clicks the eye icon for that specific row — a simple show/hide toggle
+  // rather than the credential being permanently hidden.
+  const [revealedIds, setRevealedIds] = useState<Record<string, boolean>>({});
+  const toggleRevealed = (id: string) => setRevealedIds(prev => ({ ...prev, [id]: !prev[id] }));
+
   // What to show in the credentials list: our own remembered plaintext if we have
-  // it, otherwise whatever the server returned (which may already be an
-  // irreversible hash — shown as a friendly placeholder instead of raw gibberish).
+  // it, otherwise whatever the server returned. A leftover pre-migration hash is
+  // shown as a friendly placeholder instead of raw gibberish; everything else is
+  // masked with dots until the eye icon is toggled on for that row.
   const getDisplayPassword = (id: string, source: Record<string, string>): string => {
     const known = justSetPasswords[id] || source[id];
     if (!known) return superadminToken ? '...' : "Ko'rish uchun qayta kiring";
-    if (isHashedPw(known)) return '🔒 Yashiringan';
+    if (isHashedPw(known)) return '🔒 Yashiringan (qayta tiklang)';
+    if (!revealedIds[id]) return '•'.repeat(Math.min(Math.max(known.length, 6), 10));
     return known;
   };
-  // Returns null when there's nothing safe to copy (i.e. all we have is a hash) —
-  // callers should prompt a password reset instead of copying garbage.
+  // Returns null when there's nothing safe to copy (i.e. all we have is a leftover
+  // pre-migration hash) — callers should prompt a password reset instead.
   const getCopyablePassword = (id: string, source: Record<string, string>): string | null => {
     const known = justSetPasswords[id] || source[id];
     if (!known || isHashedPw(known)) return null;
@@ -617,22 +630,26 @@ export default function SuperAdminDashboard({
     setClinicPassVal(isHashedPw(known) ? '' : known);
   };
 
-  const handleSaveClinicCredsSubmit = (clinicId: string) => {
+  const handleSaveClinicCredsSubmit = async (clinicId: string) => {
     if (!clinicLoginVal || !clinicPassVal) {
       triggerToast(tL("Login va parol bo'sh bo'lishi mumkin emas!"));
       return;
     }
-    if (onUpdateClinicCreds) {
-      onUpdateClinicCreds(clinicId, clinicLoginVal, clinicPassVal);
-      addLog(`Clinic ID [${clinicId}] credentials modified: ${clinicLoginVal}`, 'info');
-      setJustSetPasswords(prev => ({ ...prev, [clinicId]: clinicPassVal }));
-      setEditingClinicId(null);
-      const clinic = clinics.find(c => c.id === clinicId);
-      setJustSetCredential({ label: `Klinika: ${clinic?.name || clinicLoginVal}`, login: clinicLoginVal, pass: clinicPassVal });
-      triggerToast(tL("Klinika hisob ma'lumotlari yangilandi!"));
-    } else {
+    if (!onUpdateClinicCreds) {
       triggerToast("Callback not tied yet in parent component");
+      return;
     }
+    const ok = await onUpdateClinicCreds(clinicId, clinicLoginVal, clinicPassVal);
+    if (!ok) {
+      triggerToast("Saqlash muvaffaqiyatsiz tugadi — internet aloqasini tekshirib, qayta urinib ko'ring.");
+      return;
+    }
+    addLog(`Clinic ID [${clinicId}] credentials modified: ${clinicLoginVal}`, 'info');
+    setJustSetPasswords(prev => ({ ...prev, [clinicId]: clinicPassVal }));
+    setEditingClinicId(null);
+    const clinic = clinics.find(c => c.id === clinicId);
+    setJustSetCredential({ label: `Klinika: ${clinic?.name || clinicLoginVal}`, login: clinicLoginVal, pass: clinicPassVal });
+    triggerToast(tL("Klinika hisob ma'lumotlari yangilandi!"));
   };
 
   const handleUpdateDoctorCredsClick = (doctor: Doctor) => {
@@ -643,25 +660,29 @@ export default function SuperAdminDashboard({
     setDoctorPassVal(isHashedPw(known) ? '' : known);
   };
 
-  const handleSaveDoctorCredsSubmit = (docId: string) => {
+  const handleSaveDoctorCredsSubmit = async (docId: string) => {
     if (!doctorLoginVal || !doctorPassVal) {
       triggerToast(tL("Login va parol bo'sh bo'lishi mumkin emas!"));
       return;
     }
-    if (onUpdateDoctorCreds) {
-      onUpdateDoctorCreds(docId, doctorLoginVal, doctorPassVal);
-      addLog(`Doctor ID [${docId}] credentials modified: ${doctorLoginVal}`, 'info');
-      setJustSetPasswords(prev => ({ ...prev, [docId]: doctorPassVal }));
-      setEditingDoctorId(null);
-      const doc = doctors.find(d => d.id === docId);
-      setJustSetCredential({ label: `Shifokor: ${doc?.name || doctorLoginVal}`, login: doctorLoginVal, pass: doctorPassVal });
-      triggerToast(tL("Shifokor hisob ma'lumotlari yangilandi!"));
-    } else {
+    if (!onUpdateDoctorCreds) {
       triggerToast("Callback not tied yet in parent component");
+      return;
     }
+    const ok = await onUpdateDoctorCreds(docId, doctorLoginVal, doctorPassVal);
+    if (!ok) {
+      triggerToast("Saqlash muvaffaqiyatsiz tugadi — internet aloqasini tekshirib, qayta urinib ko'ring.");
+      return;
+    }
+    addLog(`Doctor ID [${docId}] credentials modified: ${doctorLoginVal}`, 'info');
+    setJustSetPasswords(prev => ({ ...prev, [docId]: doctorPassVal }));
+    setEditingDoctorId(null);
+    const doc = doctors.find(d => d.id === docId);
+    setJustSetCredential({ label: `Shifokor: ${doc?.name || doctorLoginVal}`, login: doctorLoginVal, pass: doctorPassVal });
+    triggerToast(tL("Shifokor hisob ma'lumotlari yangilandi!"));
   };
 
-  const handleCreateDoctorSubmit = (e: React.FormEvent) => {
+  const handleCreateDoctorSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDoctorName || !newDoctorSpecialty || !newDoctorClinicId) {
       triggerToast(tL("Majburiy maydonlarni to'ldiring!"));
@@ -683,7 +704,11 @@ export default function SuperAdminDashboard({
       password: pass
     };
     if (onAddDoctor) {
-      onAddDoctor(newDoc);
+      const ok = await onAddDoctor(newDoc);
+      if (!ok) {
+        triggerToast("Shifokorni saqlab bo'lmadi — internet aloqasini tekshirib, qayta urinib ko'ring.");
+        return;
+      }
       setJustSetPasswords(prev => ({ ...prev, [newDocId]: pass }));
       setJustSetCredential({ label: `Shifokor: ${newDoctorName}`, login, pass });
       setShowAddDoctorModal(false);
@@ -2105,6 +2130,14 @@ export default function SuperAdminDashboard({
                               <code className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-bold font-mono text-[11px] select-all">
                                 {getDisplayPassword(clinic.id, credentialPasswords.clinics)}
                               </code>
+                              <button
+                                type="button"
+                                onClick={() => toggleRevealed(clinic.id)}
+                                className="p-1 text-slate-400 hover:text-slate-600 rounded bg-slate-50 hover:bg-slate-100"
+                                title={revealedIds[clinic.id] ? "Parolni yashirish" : "Parolni ko'rsatish"}
+                              >
+                                {revealedIds[clinic.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
                             </div>
                           </div>
 
@@ -2321,6 +2354,14 @@ export default function SuperAdminDashboard({
                               <code className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-bold font-mono text-[11px] select-all">
                                 {getDisplayPassword(doc.id, credentialPasswords.doctors)}
                               </code>
+                              <button
+                                type="button"
+                                onClick={() => toggleRevealed(doc.id)}
+                                className="p-1 text-slate-400 hover:text-slate-600 rounded bg-slate-50 hover:bg-slate-100"
+                                title={revealedIds[doc.id] ? "Parolni yashirish" : "Parolni ko'rsatish"}
+                              >
+                                {revealedIds[doc.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
                             </div>
                           </div>
 
@@ -2401,7 +2442,7 @@ export default function SuperAdminDashboard({
             </div>
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
               <p className="text-[11px] text-amber-300 font-semibold leading-snug">
-                ⚠️ Bu parolni hozir saqlab qo'ying — xavfsizlik uchun keyinroq qayta ko'rsatilmaydi.
+                ⚠️ Bu login-parolni tegishli shaxsga yetkazing. Keyinroq ham ro'yxatdagi 👁 belgisini bosib qayta ko'rishingiz mumkin.
               </p>
             </div>
             <div className="font-mono text-[11px] space-y-1.5 text-slate-200 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-850 select-all">
@@ -2805,14 +2846,18 @@ export default function SuperAdminDashboard({
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest text-center border-b border-slate-100 pb-2">
               {tL("Shifokorni Tahrirlash")}
             </h3>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               if (onUpdateDoctorDetails) {
-                onUpdateDoctorDetails(doctorToEditDetails.id, {
+                const ok = await onUpdateDoctorDetails(doctorToEditDetails.id, {
                   name: doctorToEditDetails.name,
                   specialty: doctorToEditDetails.specialty,
                   clinicId: doctorToEditDetails.clinicId
                 });
+                if (!ok) {
+                  triggerToast("Saqlash muvaffaqiyatsiz tugadi — internet aloqasini tekshirib, qayta urinib ko'ring.");
+                  return;
+                }
                 triggerToast(tL("Shifokor ma'lumotlari yangilandi!"));
               }
               setDoctorToEditDetails(null);

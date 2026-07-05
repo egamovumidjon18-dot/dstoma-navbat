@@ -60,21 +60,28 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 async function saveSuperAdminSession(token: string, expiresAt: number) {
   superAdminSessions.set(token, expiresAt);
-  // Fire-and-forget: the in-memory Map above already makes login work immediately
-  // on this instance. Firestore persistence (for surviving Vercel cold starts) is
-  // best-effort — never block the login response on it.
+  // On Vercel, the very next request (e.g. the credentials fetch right after login)
+  // often lands on a different serverless instance with an empty in-memory Map, so it
+  // depends on this Firestore write having already landed. Awaiting it here (bounded by
+  // a timeout so a flaky connection can't hang the login response forever) closes that
+  // race; a fire-and-forget write was tried before and caused intermittent "session not
+  // found" 401s on actions performed immediately after logging in or resetting creds.
   if (fDb) {
-    setDoc(doc(fDb, "sessions", token), { type: "superadmin", expiresAt }).catch((err) => {
+    try {
+      await withTimeout(setDoc(doc(fDb, "sessions", token), { type: "superadmin", expiresAt }), 4000);
+    } catch (err) {
       console.error("[Session] Failed to persist superadmin session to Firestore:", err);
-    });
+    }
   }
 }
 async function saveStaffSession(token: string, data: { role: 'director' | 'doctor'; clinicId: string; doctorId?: string; expiresAt: number }) {
   staffSessions.set(token, data);
   if (fDb) {
-    setDoc(doc(fDb, "sessions", token), stripUndefined({ type: "staff", ...data })).catch((err) => {
+    try {
+      await withTimeout(setDoc(doc(fDb, "sessions", token), stripUndefined({ type: "staff", ...data })), 4000);
+    } catch (err) {
       console.error("[Session] Failed to persist staff session to Firestore:", err);
-    });
+    }
   }
 }
 
@@ -593,10 +600,49 @@ function verifyPassword(plain: string, stored: any): boolean {
       return false;
     }
   }
+  if (isEncryptedCredential(storedStr)) {
+    const dec = decryptCredential(storedStr);
+    return dec !== null && dec === plain;
+  }
   // Legacy plaintext account, not yet migrated. Some legacy records were saved
   // with stray whitespace or a numeric type (e.g. from manual data entry) —
   // normalize both sides so those don't silently fail to match.
   return storedStr.trim() === String(plain).trim();
+}
+
+// Doctor/clinic login credentials are day-to-day operational passwords the SuperAdmin
+// (the single trusted account owner) routinely needs to look up and hand out — unlike
+// scrypt's one-way hash, they're stored with REVERSIBLE encryption (AES-256-GCM) so the
+// SuperAdmin panel can always show the real current value behind a show/hide toggle,
+// instead of permanently hiding it the moment it's saved. Patient and SuperAdmin-own
+// passwords are unaffected and keep using the one-way scrypt hash above.
+const CREDENTIALS_ENCRYPTION_KEY = crypto.scryptSync(
+  process.env.CREDENTIALS_ENCRYPTION_KEY || "dstoma-default-creds-key-change-in-prod-env",
+  "dstoma-creds-salt",
+  32
+);
+function encryptCredential(plain: string): string {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", CREDENTIALS_ENCRYPTION_KEY, iv);
+  const encrypted = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `enc:${iv.toString("hex")}:${tag.toString("hex")}:${encrypted.toString("hex")}`;
+}
+function isEncryptedCredential(stored: any): boolean {
+  return typeof stored === "string" && stored.startsWith("enc:");
+}
+function decryptCredential(stored: string): string | null {
+  try {
+    const parts = stored.split(":");
+    if (parts.length !== 4) return null;
+    const [, ivHex, tagHex, dataHex] = parts;
+    const decipher = crypto.createDecipheriv("aes-256-gcm", CREDENTIALS_ENCRYPTION_KEY, Buffer.from(ivHex, "hex"));
+    decipher.setAuthTag(Buffer.from(tagHex, "hex"));
+    const decrypted = Buffer.concat([decipher.update(Buffer.from(dataHex, "hex")), decipher.final()]);
+    return decrypted.toString("utf8");
+  } catch {
+    return null;
+  }
 }
 
 // Returns the RAW stored password value (hashed "scrypt:..." for migrated accounts,
@@ -724,8 +770,8 @@ app.post("/api/director-login", rateLimiter(5, 60 * 1000), async (req, res) => {
   if (!matched) {
     return res.status(401).json({ ok: false, error: "Login yoki parol noto'g'ri" });
   }
-  if (!isHashedPassword(matched.password)) {
-    await saveClinic({ id: matched.id, password: hashPassword(password) });
+  if (!isHashedPassword(matched.password) && !isEncryptedCredential(matched.password)) {
+    await saveClinic({ id: matched.id, password: encryptCredential(password) });
   }
   const { password: _pw, ...safeClinic } = matched;
   const token = crypto.randomBytes(32).toString("hex");
@@ -744,8 +790,8 @@ app.post("/api/doctor-login", rateLimiter(5, 60 * 1000), async (req, res) => {
   if (!matched) {
     return res.status(401).json({ ok: false, error: "Login yoki parol noto'g'ri" });
   }
-  if (!isHashedPassword(matched.password)) {
-    await saveDoctor({ id: matched.id, password: hashPassword(password) } as any);
+  if (!isHashedPassword(matched.password) && !isEncryptedCredential(matched.password)) {
+    await saveDoctor({ id: matched.id, password: encryptCredential(password) } as any);
   }
   const { password: _pw, ...safeDoctor } = matched;
   const token = crypto.randomBytes(32).toString("hex");
@@ -777,7 +823,18 @@ app.post("/api/patient-login", rateLimiter(10, 60 * 1000), async (req, res) => {
 // below deliberately omit passwords.
 app.get("/api/admin/credentials", requireSuperAdmin, async (req, res) => {
   const [allClinics, allDoctors] = await Promise.all([getClinics(), getDoctors()]);
-  res.json({ clinics: allClinics, doctors: allDoctors });
+  // Reversibly-encrypted passwords are decrypted here so the SuperAdmin panel can show
+  // the real current value (behind its own show/hide toggle). A leftover one-way
+  // scrypt hash (from before this account's password was last reset) can't be
+  // recovered — it's passed through as-is and the panel shows it as hidden.
+  const revealed = (list: any[]) => list.map((item) => {
+    if (item.password && isEncryptedCredential(item.password)) {
+      const dec = decryptCredential(item.password);
+      if (dec !== null) return { ...item, password: dec };
+    }
+    return item;
+  });
+  res.json({ clinics: revealed(allClinics), doctors: revealed(allDoctors) });
 });
 
 // Superadmin-only: log into any Director or Doctor panel WITHOUT needing that
@@ -1444,8 +1501,8 @@ app.post("/api/clinics", async (req, res) => {
     const existing = (await getClinics()).find((c: any) => c.id === clinicToSave.id);
     clinicToSave.aiTrialStartDate = existing?.aiTrialStartDate || new Date().toISOString();
   }
-  if (clinicToSave.password && !isHashedPassword(clinicToSave.password)) {
-    clinicToSave.password = hashPassword(clinicToSave.password);
+  if (clinicToSave.password && !isHashedPassword(clinicToSave.password) && !isEncryptedCredential(clinicToSave.password)) {
+    clinicToSave.password = encryptCredential(clinicToSave.password);
   }
   await saveClinic(clinicToSave);
   const { password: _pw, ...safeClinicToSave } = clinicToSave;
@@ -1501,8 +1558,8 @@ app.post("/api/doctors", async (req, res) => {
   if (!allowed) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
-  if (doc.password && !isHashedPassword(doc.password)) {
-    doc.password = hashPassword(doc.password);
+  if (doc.password && !isHashedPassword(doc.password) && !isEncryptedCredential(doc.password)) {
+    doc.password = encryptCredential(doc.password);
   }
   await saveDoctor(doc);
   const { password: _pw, ...safeDoc } = doc;
