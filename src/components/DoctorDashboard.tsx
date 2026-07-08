@@ -55,7 +55,6 @@ import {
   CheckCircle2,
   CheckCircle,
   Trash2,
-  Maximize2,
   MoreVertical,
   MessageSquare,
   Plus,
@@ -1355,7 +1354,7 @@ export default function DoctorDashboard({
               {/* Layout rows */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Bugungi Navbatlar */}
-                <div className="lg:col-span-4 bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
+                <div className="lg:col-span-9 bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-bold text-slate-800 text-base">
                       {t("bugungi navbatlar")}
@@ -1457,75 +1456,6 @@ export default function DoctorDashboard({
                   </div>
                 </div>
 
-                {/* Dental Chart */}
-                <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-slate-800 text-base">
-                      Dental Chart
-                    </h3>
-                    <div className="flex gap-2">
-                      <button className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 rounded-lg border border-slate-200 flex items-center gap-1">
-                        <Trash2 className="w-3.5 h-3.5" /> {t("tozalash")}
-                      </button>
-                      <button className="p-1.5 text-slate-600 hover:bg-slate-50 rounded-lg border border-slate-200">
-                        <Settings className="w-4 h-4" />
-                      </button>
-                      <button className="p-1.5 text-slate-600 hover:bg-slate-50 rounded-lg border border-slate-200">
-                        <Maximize2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex justify-center gap-4 mb-6">
-                    <button className="px-6 py-1.5 bg-blue-600 text-white rounded-full text-xs font-semibold shadow-md shadow-blue-500/20">
-                      {t("doimiy tishlar")}
-                    </button>
-                    <button className="px-6 py-1.5 bg-slate-100 text-slate-500 hover:bg-slate-200 rounded-full text-xs font-semibold">
-                      {t("sut tishlar")}
-                    </button>
-                  </div>
-
-                  <div className="h-[200px] flex items-center justify-center bg-slate-50 rounded-2xl mb-6">
-                    <span className="text-slate-400 text-sm font-semibold">
-                      Teeth Model Container
-                    </span>
-                    {/* Here we can place the real ThreeDentalModel later */}
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-2 text-[10px] font-medium text-slate-600">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-full border-2 border-slate-300"></span>{" "}
-                      {t("sog'lom")}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-full bg-rose-500"></span>{" "}
-                      {t("karies")}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-full bg-amber-400"></span>{" "}
-                      {t("pulpit")}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-full bg-blue-500"></span>{" "}
-                      {t("kanal davolangan")}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-full bg-emerald-500"></span>{" "}
-                      {t("plomba")}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-full bg-purple-500"></span>{" "}
-                      {t("koronka")}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-full bg-teal-500"></span>{" "}
-                      {t("implant")}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-full bg-slate-800"></span>{" "}
-                      {t("olib tashlangan")}
-                    </div>
-                  </div>
-                </div>
 
                 {/* Bemor Kartasi & Davolash Rejasi */}
                 <div className="lg:col-span-3 space-y-6">

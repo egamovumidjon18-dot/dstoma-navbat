@@ -11,6 +11,7 @@ import { Patient, QueueItem, Clinic } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
 import { TreatmentItem } from './TreatmentPlan';
 import AdBanner from './AdBanner';
+import DentalChart from './DentalChart';
 import { TRANSLATIONS, Language } from '../translations';
 
 interface NewFamilyMemberInfo {
@@ -30,6 +31,7 @@ const PATIENT_PANEL_TRANSLATIONS: Record<string, PatientPanelDictEntry> = {
   "tashriflar tarixi": { ru: "История посещений", en: "Visit history", kk: "Тарихы", ky: "Тарых", tg: "Таърихи ташрифҳо", tk: "Baryş taryhy" },
   "eslatmalarim": { ru: "Мои напоминания", en: "My reminders", kk: "Менің ескертулерім", ky: "Менин эскертүүлөрүм", tg: "Ёдоварҳои ман", tk: "Meniň duýduryşlarym" },
   oilam: { ru: "Моя семья", en: "My family", kk: "Менің отбасым", ky: "Менин үй-бүлөм", tg: "Оилаи ман", tk: "Maşgalam" },
+  "tish sxemasi": { ru: "Зубная карта", en: "Dental chart", kk: "Тіс картасы", ky: "Тиш картасы", tg: "Харитаи дандон", tk: "Diş kartasy" },
   sozlamalar: { ru: "Настройки", en: "Settings", kk: "Баптаулар", ky: "Тууралоолор", tg: "Танзимот", tk: "Sazlamalar" },
   "ko'rilayotgan kabinet": { ru: "Просматриваемый кабинет", en: "Viewing cabinet", kk: "Қаралып жатқан кабинет", ky: "Каралып жаткан кабинет", tg: "Кабинети дидашаванда", tk: "Görülýän kabinet" },
   men: { ru: "Я", en: "Me", kk: "Мен", ky: "Мен", tg: "Ман", tk: "Men" },
@@ -236,6 +238,7 @@ export default function PatientPanel({
     { id: 'reja', icon: <FileText size={18} />, label: t('davolash rejam') },
     { id: 'tolovlar', icon: <CreditCard size={18} />, label: t("to'lovlarim") },
     { id: 'tarix', icon: <Clock size={18} />, label: t('tashriflar tarixi') },
+    { id: 'tish_sxemasi', icon: <Smile size={18} />, label: t('tish sxemasi') },
     { id: 'eslatma', icon: <Bell size={18} />, label: t('eslatmalarim') },
     { id: 'oilam', icon: <Users size={18} />, label: t('oilam') },
     { id: 'sozlamalar', icon: <Settings size={18} />, label: t('sozlamalar') },
@@ -624,6 +627,12 @@ export default function PatientPanel({
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'tish_sxemasi' && (
+            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden" style={{ height: '75vh' }}>
+              <DentalChart patientId={viewingPatient.id} readOnly />
             </div>
           )}
 

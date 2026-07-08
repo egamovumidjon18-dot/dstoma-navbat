@@ -351,7 +351,7 @@ const InteractiveTooth = ({
   );
 };
 
-export default function DentalChart({ patientId, doctorName }: { patientId: string; doctorName?: string }) {
+export default function DentalChart({ patientId, doctorName, readOnly = false }: { patientId: string; doctorName?: string; readOnly?: boolean }) {
   const [teeth, setTeeth] = useState<Record<string, ToothData>>({});
   const [selectedTooth, setSelectedTooth] = useState<string | null>(null);
   const [selectedSurface, setSelectedSurface] = useState<string | null>(null);
@@ -559,7 +559,7 @@ export default function DentalChart({ patientId, doctorName }: { patientId: stri
   };
 
   const handleSurfaceDoubleClick = (id: number, surface: string) => {
-    if (paintCondition) return;
+    if (paintCondition || readOnly) return;
     handleSurfaceClick(id, surface);
     setShowAddTreatment(true);
   };
@@ -829,19 +829,23 @@ export default function DentalChart({ patientId, doctorName }: { patientId: stri
                       <button onClick={() => setNotation("Universal")} className={`px-2 py-1 rounded-md text-xs transition-colors ${notation === "Universal" ? 'bg-emerald-100 text-emerald-700 font-bold' : 'hover:bg-gray-100 text-gray-600'}`}>Universal</button>
                       <button onClick={() => setNotation("Palmer")} className={`px-2 py-1 rounded-md text-xs transition-colors ${notation === "Palmer" ? 'bg-emerald-100 text-emerald-700 font-bold' : 'hover:bg-gray-100 text-gray-600'}`}>Palmer</button>
                     </div>
-                    <div className="w-px h-4 bg-gray-200 hidden sm:block"></div>
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={handleResetChart} 
-                        className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-md text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm ml-2"
-                        title="Barcha belgilangan tishlarni tozalab, sog'lom holatiga qaytarish"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        Barchasini tozalash (Sog'lom)
-                      </button>
-                    </div>
+                    {!readOnly && (
+                      <>
+                        <div className="w-px h-4 bg-gray-200 hidden sm:block"></div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleResetChart}
+                            className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-md text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm ml-2"
+                            title="Barcha belgilangan tishlarni tozalab, sog'lom holatiga qaytarish"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            Barchasini tozalash (Sog'lom)
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  
+
                   <div className="flex items-center gap-2 mt-2 lg:mt-0">
                     <div className="relative mr-2">
                       <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 transform -translate-y-1/2" />
@@ -965,14 +969,15 @@ export default function DentalChart({ patientId, doctorName }: { patientId: stri
               </div>
 
               <div className="flex-1 flex flex-col relative min-h-0">
-                 {/* Quick Paint Palette (Horizontal) */}
+                 {/* Quick Paint Palette (Horizontal) — doctor-only, hidden entirely in read-only mode */}
+                 {!readOnly && (
                  <div className="w-full bg-white border-b border-gray-100 flex flex-col z-10 shrink-0">
                     <div className="flex flex-wrap items-center gap-3 px-6 py-4 border-b border-gray-50 bg-gray-50/50">
                        <div className="w-full flex items-center justify-between mb-2">
                          <span className="text-sm font-black text-gray-800 uppercase tracking-wider flex items-center gap-2 shrink-0 mr-2">
                            <Sparkles className="w-5 h-5 text-emerald-500" /> Tezkor bo'yash:
                          </span>
-                         
+
                          {Object.keys(pendingPaintChanges).length > 0 && (
                            <div className="flex items-center gap-3 shrink-0">
                               <span className="text-xs font-bold text-emerald-600">
@@ -995,12 +1000,12 @@ export default function DentalChart({ patientId, doctorName }: { patientId: stri
                            </div>
                          )}
                        </div>
-                       
+
                        <div className="flex flex-wrap items-center gap-4 w-full">
                          {CONDITIONS.map(c => {
                            const isSelected = paintCondition === c.id;
                            return (
-                             <button 
+                             <button
                                key={c.id}
                                onClick={() => setPaintCondition(isSelected ? null : c.id)}
                                className={`flex items-center gap-3 px-6 py-4 rounded-full transition-all whitespace-nowrap group shrink-0
@@ -1019,6 +1024,7 @@ export default function DentalChart({ patientId, doctorName }: { patientId: stri
                        </div>
                     </div>
                  </div>
+                 )}
 
                  {/* Chart Canvas Area */}
                  <div id="chart-canvas-container" className={`flex-1 overflow-auto relative p-4 sm:p-8 select-none bg-[#F8FAFC] ${paintCondition ? '[&_*]:!cursor-crosshair' : ''}`}>
@@ -1036,7 +1042,7 @@ export default function DentalChart({ patientId, doctorName }: { patientId: stri
                               data={pendingPaintChanges[id.toString()] || teeth[id.toString()]} 
                               isSelected={selectedTooth === id.toString()} 
                               onClick={() => handleToothClick(id)}
-                              onDoubleClick={() => { handleToothClick(id); setShowAddTreatment(true); }}
+                              onDoubleClick={() => { if (readOnly) return; handleToothClick(id); setShowAddTreatment(true); }}
                               onSurfaceClick={(surface: string) => handleSurfaceClick(id, surface)}
                               onSurfaceDoubleClick={(surface: string) => handleSurfaceDoubleClick(id, surface)}
                               highlightCondition={highlightCondition}
@@ -1054,7 +1060,7 @@ export default function DentalChart({ patientId, doctorName }: { patientId: stri
                               data={pendingPaintChanges[id.toString()] || teeth[id.toString()]} 
                               isSelected={selectedTooth === id.toString()} 
                               onClick={() => handleToothClick(id)}
-                              onDoubleClick={() => { handleToothClick(id); setShowAddTreatment(true); }}
+                              onDoubleClick={() => { if (readOnly) return; handleToothClick(id); setShowAddTreatment(true); }}
                               onSurfaceClick={(surface: string) => handleSurfaceClick(id, surface)}
                               onSurfaceDoubleClick={(surface: string) => handleSurfaceDoubleClick(id, surface)}
                               highlightCondition={highlightCondition}
@@ -1076,7 +1082,7 @@ export default function DentalChart({ patientId, doctorName }: { patientId: stri
                               data={pendingPaintChanges[id.toString()] || teeth[id.toString()]} 
                               isSelected={selectedTooth === id.toString()} 
                               onClick={() => handleToothClick(id)}
-                              onDoubleClick={() => { handleToothClick(id); setShowAddTreatment(true); }}
+                              onDoubleClick={() => { if (readOnly) return; handleToothClick(id); setShowAddTreatment(true); }}
                               onSurfaceClick={(surface: string) => handleSurfaceClick(id, surface)}
                               onSurfaceDoubleClick={(surface: string) => handleSurfaceDoubleClick(id, surface)}
                               highlightCondition={highlightCondition}
@@ -1094,7 +1100,7 @@ export default function DentalChart({ patientId, doctorName }: { patientId: stri
                               data={pendingPaintChanges[id.toString()] || teeth[id.toString()]} 
                               isSelected={selectedTooth === id.toString()} 
                               onClick={() => handleToothClick(id)}
-                              onDoubleClick={() => { handleToothClick(id); setShowAddTreatment(true); }}
+                              onDoubleClick={() => { if (readOnly) return; handleToothClick(id); setShowAddTreatment(true); }}
                               onSurfaceClick={(surface: string) => handleSurfaceClick(id, surface)}
                               onSurfaceDoubleClick={(surface: string) => handleSurfaceDoubleClick(id, surface)}
                               highlightCondition={highlightCondition}
@@ -1130,9 +1136,11 @@ export default function DentalChart({ patientId, doctorName }: { patientId: stri
                           </span>
                         )}
                       </div>
-                      <button onClick={() => { setEditToothData(currentToothData || {}); setShowEditTooth(true); }} className="flex w-full items-center justify-center gap-2 px-4 py-3 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-xl text-sm font-bold transition-colors">
-                        <Edit className="w-4 h-4" /> Tahrirlash
-                      </button>
+                      {!readOnly && (
+                        <button onClick={() => { setEditToothData(currentToothData || {}); setShowEditTooth(true); }} className="flex w-full items-center justify-center gap-2 px-4 py-3 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-xl text-sm font-bold transition-colors">
+                          <Edit className="w-4 h-4" /> Tahrirlash
+                        </button>
+                      )}
                     </div>
 
                     {/* Info Breakdown */}
@@ -1247,10 +1255,12 @@ export default function DentalChart({ patientId, doctorName }: { patientId: stri
                        </div>
                        
                        <div className="flex items-center gap-3 mt-auto">
-                         <button onClick={() => setShowAddTreatment(true)} className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl hover:bg-emerald-500/20 transition-all group">
-                           <Plus className="w-5 h-5 text-emerald-400" />
-                           <span className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Muolaja</span>
-                         </button>
+                         {!readOnly && (
+                           <button onClick={() => setShowAddTreatment(true)} className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl hover:bg-emerald-500/20 transition-all group">
+                             <Plus className="w-5 h-5 text-emerald-400" />
+                             <span className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Muolaja</span>
+                           </button>
+                         )}
                          <button onClick={() => setShowXRay(true)} className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-500/10 border border-blue-500/20 rounded-xl hover:bg-blue-500/20 transition-all group">
                            <ImageIcon className="w-5 h-5 text-blue-400" />
                            <span className="text-sm font-bold text-blue-400 uppercase tracking-wider">Rentgen</span>
@@ -1736,14 +1746,16 @@ export default function DentalChart({ patientId, doctorName }: { patientId: stri
                 <div className="flex-1 bg-[#0a0f1d] rounded-2xl border border-slate-800 flex flex-col items-center justify-center gap-4">
                    <ImageIcon className="w-16 h-16 text-slate-700 opacity-50" />
                    <p className="text-slate-500 font-medium text-lg">Bu tish uchun rentgen tasvirlari yuklanmagan.</p>
-                   <label className="px-6 py-3 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded-xl font-bold border border-blue-500/20 transition-all flex items-center gap-2 mt-4 cursor-pointer">
-                     <Plus className="w-5 h-5" /> Tasvir yuklash
-                     <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                       if (e.target.files && e.target.files.length > 0) {
-                         alert("Rentgen tasviri muvaffaqiyatli yuklandi (Simulyatsiya)");
-                       }
-                     }} />
-                   </label>
+                   {!readOnly && (
+                     <label className="px-6 py-3 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded-xl font-bold border border-blue-500/20 transition-all flex items-center gap-2 mt-4 cursor-pointer">
+                       <Plus className="w-5 h-5" /> Tasvir yuklash
+                       <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                         if (e.target.files && e.target.files.length > 0) {
+                           alert("Rentgen tasviri muvaffaqiyatli yuklandi (Simulyatsiya)");
+                         }
+                       }} />
+                     </label>
+                   )}
                 </div>
              </div>
           </div>
