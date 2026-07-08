@@ -3980,9 +3980,48 @@ async function startServer() {
   });
 }
 
+// Registers (or re-registers) a bot's Telegram webhook to point at this deployment's
+// own /api/telegram-webhook endpoint — the same action the SuperAdmin panel's manual
+// "Webhook Sozlash" button performs, done automatically so nobody has to remember to
+// click it after every deploy/domain change. A no-op if it's already pointed correctly
+// (checked first so a warm/repeat cold start doesn't keep hammering Telegram's API).
+async function ensureWebhookRegistered(token: string, label: string) {
+  if (!token) return;
+  try {
+    const domain = (
+      process.env.APP_URL ||
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "") ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+      lastActiveDomain
+    ).trim().replace(/\/$/, "");
+    const expectedUrl = `${domain}/api/telegram-webhook?token=${encodeURIComponent(token)}`;
+
+    const infoRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+    const info = await infoRes.json();
+    if (info.ok && info.result?.url === expectedUrl) return;
+
+    const setRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(expectedUrl)}`);
+    const setData = await setRes.json();
+    if (setData.ok) {
+      console.log(`[Telegram Webhook] ${label} auto-registered: ${expectedUrl}`);
+    } else {
+      console.error(`[Telegram Webhook] ${label} auto-registration failed:`, setData.description);
+    }
+  } catch (err) {
+    console.error(`[Telegram Webhook] ${label} auto-registration error:`, err);
+  }
+}
+
 // Guard server execution when deploying to serverless platforms (like Vercel)
 if (!process.env.VERCEL) {
   startServer();
+} else {
+  // No app.listen()/polling here — Vercel invokes `app` per-request instead. Fire the
+  // webhook check once per cold start; it's cheap and idempotent on warm reuse.
+  loadTelegramCreds().then(() => {
+    ensureWebhookRegistered(activeTelegramToken, "Patient Bot");
+    ensureWebhookRegistered(activeDoctorBotToken, "Doctor Bot");
+  });
 }
 
 export default app;
