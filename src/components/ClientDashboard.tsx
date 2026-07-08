@@ -257,7 +257,8 @@ export default function ClientDashboard({
   // 'register' -> Screenshot 2 (Bemor ma'lumotlari)
   // 'login' -> Let the user type their passport and password
   // 'cabinet' -> Screenshot 3 (Bemor Kabineti / Profilingizga kirish)
-  const [activeSubView, setActiveSubView] = useState<'home' | 'register' | 'login' | 'cabinet'>('home');
+  // 'booking' -> Logged-in patient's queue-booking wizard: pick clinic -> pick doctor -> confirm
+  const [activeSubView, setActiveSubView] = useState<'home' | 'register' | 'login' | 'cabinet' | 'booking'>('home');
 
   // Form States
   const [fullName, setFullName] = useState('');
@@ -272,7 +273,10 @@ export default function ClientDashboard({
 
   // Cabinet Specific States
   const [telegramIdInput, setTelegramIdInput] = useState('57896431');
-  const [bookingDoctorId, setBookingDoctorId] = useState('doc_sm_1');
+  // Booking wizard: both start empty so the patient makes an explicit choice —
+  // clinic first, then one of that clinic's doctors.
+  const [bookingClinicId, setBookingClinicId] = useState('');
+  const [bookingDoctorId, setBookingDoctorId] = useState('');
   const [complaint, setComplaint] = useState('');
   const [isLanguageOpen, setIsLanguageOpen] = useState(false);
 
@@ -886,18 +890,6 @@ export default function ClientDashboard({
     });
   }, [queues, currentUser]);
 
-  // Dynamically select the first available service and doctor when active clinic or services list changes
-  React.useEffect(() => {
-    const activeClinic = selectedClinic || clinics[0];
-    const clinicDoctors = doctors.filter(d => d.clinicId === activeClinic?.id);
-    if (clinicDoctors.length > 0) {
-      const exists = clinicDoctors.some(d => d.id === bookingDoctorId);
-      if (!exists) {
-        setBookingDoctorId(clinicDoctors[0].id);
-      }
-    }
-  }, [selectedClinic, clinics, doctors, bookingDoctorId]);
-
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !phone || !passport || !password) {
@@ -996,20 +988,26 @@ export default function ClientDashboard({
     }
   };
 
-  const handleBookQueue = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleBookQueue = (e?: React.FormEvent) => {
+    e?.preventDefault();
 
-    const selectedDocId = bookingDoctorId || clinicDoctors[0]?.id || doctors[0]?.id;
-    const doc = doctors.find(d => d.id === selectedDocId);
+    // The patient must explicitly pick a clinic and one of THAT clinic's doctors —
+    // never silently fall back to "first doctor of first clinic".
+    const clinic = clinics.find(c => c.id === bookingClinicId);
+    const doc = doctors.find(d => d.id === bookingDoctorId && d.clinicId === bookingClinicId);
+    if (!clinic || !doc) {
+      showToast("Iltimos, avval klinikani va shifokorni tanlang!", "error");
+      return;
+    }
 
     const ticketNo = queues.length + myQueues.length + 107;
 
     const newQueue: QueueItem = {
       id: 'q_' + Math.random().toString(36).substr(2, 9),
-      clinicId: activeClinic?.id || 'samarqand',
+      clinicId: clinic.id,
       patientName: currentUser?.fullName || 'Mehmon',
       patientPhone: currentUser?.phone || phone,
-      doctorId: selectedDocId,
+      doctorId: doc.id,
       complaint: complaint,
       number: ticketNo,
       status: 'pending',
@@ -1023,6 +1021,9 @@ export default function ClientDashboard({
     // Add locally
     setMyQueues([newQueue, ...myQueues]);
     onAddQueue(newQueue);
+    setComplaint('');
+    // Return to the cabinet so the fresh ticket is immediately visible in "Mening navbatlarim".
+    setActiveSubView('cabinet');
     showToast(`Navbatingiz olindi! Elektron chipta raqamingiz: #${ticketNo}`);
   };
 
@@ -1632,6 +1633,114 @@ export default function ClientDashboard({
       )}
 
 
+      {/* ---------------- VIEW: QUEUE BOOKING WIZARD (clinic -> doctor -> confirm) ---------------- */}
+      {activeSubView === 'booking' && currentUser && (
+        <div className="max-w-3xl mx-auto animate-fade-in text-left">
+          <form onSubmit={handleBookQueue} className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 md:p-8 space-y-7">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">🎫 {t("Yangi navbat olish")}</h3>
+                <p className="text-xs text-slate-500 mt-1">{t("Avval klinikani, so'ng shifokorni tanlang")}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveSubView('cabinet')}
+                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-500 hover:text-slate-700 text-xs font-bold rounded-xl transition-colors"
+              >
+                ← {t("Kabinetga qaytish")}
+              </button>
+            </div>
+
+            {/* Step 1: Clinic */}
+            <div>
+              <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3">1. {t("Klinikani tanlang")} *</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {clinics.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setBookingClinicId(c.id);
+                      // A doctor belongs to one clinic — switching clinics invalidates the old pick.
+                      setBookingDoctorId('');
+                    }}
+                    className={`p-4 rounded-2xl border text-left transition-all ${
+                      bookingClinicId === c.id
+                        ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
+                        : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white'
+                    }`}
+                  >
+                    <p className="font-bold text-sm text-slate-900">🏥 {c.name}</p>
+                    <p className="text-[11px] text-slate-500 mt-1">📍 {c.address || ''}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Step 2: Doctor (of the chosen clinic) */}
+            <div>
+              <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3">2. {t("Shifokorni tanlang")} *</h4>
+              {!bookingClinicId ? (
+                <p className="text-sm text-slate-400 bg-slate-50 border border-slate-100 rounded-2xl p-4 text-center">{t("Avval klinikani tanlang")}</p>
+              ) : (() => {
+                const bookingClinicDoctors = doctors.filter(d => d.clinicId === bookingClinicId);
+                if (bookingClinicDoctors.length === 0) {
+                  return <p className="text-sm text-slate-400 bg-slate-50 border border-slate-100 rounded-2xl p-4 text-center">{t("Bu klinikada hozircha shifokorlar yo'q")}</p>;
+                }
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {bookingClinicDoctors.map((d) => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => setBookingDoctorId(d.id)}
+                        className={`p-4 rounded-2xl border text-left transition-all flex items-center gap-3 ${
+                          bookingDoctorId === d.id
+                            ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500'
+                            : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white'
+                        }`}
+                      >
+                        <img
+                          src={d.image}
+                          alt={d.name}
+                          onError={(e) => { (e.target as HTMLImageElement).src = 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + d.name; }}
+                          className="w-11 h-11 rounded-full object-cover border border-slate-200 shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm text-slate-900 truncate">{d.name}</p>
+                          <p className="text-[11px] text-slate-500 truncate">{d.specialty}</p>
+                          <p className="text-[11px] text-amber-500 font-bold mt-0.5">⭐ {(d.rating || 5).toFixed(1)}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Step 3: Complaint (optional) */}
+            <div>
+              <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3">3. {t("Shikoyatingiz (ixtiyoriy)")}</h4>
+              <textarea
+                value={complaint}
+                onChange={(e) => setComplaint(e.target.value)}
+                rows={3}
+                placeholder={t("Masalan: tishim og'riyapti...")}
+                className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-blue-500 resize-none bg-slate-50 focus:bg-white transition-colors"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={!bookingClinicId || !bookingDoctorId}
+              className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-sm uppercase tracking-wider rounded-2xl shadow-lg shadow-blue-600/20 transition-all"
+            >
+              ✅ {t("Navbatni tasdiqlash")}
+            </button>
+          </form>
+        </div>
+      )}
+
       {/* ---------------- VIEW 3: PATIENT CABINET (SCREENSHOT 3) ---------------- */}
       {activeSubView === 'cabinet' && currentUser && (
         <PatientPanel
@@ -1639,7 +1748,12 @@ export default function ClientDashboard({
           onLogout={() => { setActiveSubView('home'); setCurrentUser(null); }}
           queues={queues}
           clinic={selectedClinic}
-          onGoToBooking={() => setActiveSubView('home')}
+          onGoToBooking={() => {
+            // Pre-select the patient's own clinic, but leave the doctor an explicit choice.
+            setBookingClinicId(currentUser?.clinicId || activeClinic?.id || '');
+            setBookingDoctorId('');
+            setActiveSubView('booking');
+          }}
           language={language}
           familyMembers={patients.filter(p => p.managedBy === currentUser.id)}
           onLinkFamilyMember={async (member) => {
