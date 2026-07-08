@@ -2503,7 +2503,16 @@ const gSessions = globalThis as any;
 if (!gSessions._botSessions) {
   gSessions._botSessions = {};
 }
-const botSessions: Record<number, {
+// Telegram's private-chat `chat.id` is the user's numeric Telegram ID, which is
+// IDENTICAL across both bots for the same person — so a plain `chatId` key let a
+// patient-flow session (e.g. mid-registration on the patient bot) collide with a
+// doctor-flow session for that same person on the doctor bot, causing one bot to
+// run the other bot's conversation logic (and reply through the wrong bot/token).
+// Scoping the key by which bot the message came in on eliminates the collision.
+function sessionKey(token: string, chatId: number): string {
+  return `${token === activeDoctorBotToken ? "doctor" : "patient"}:${chatId}`;
+}
+const botSessions: Record<string, {
   step?: 'register_name' | 'register_phone' | 'register_passport' | 'register_password' | 'register_blood' | 'doctor_login' | 'doctor_password' | 'patient_login_passport' | 'patient_login_password' | 'book_queue_complaint' | 'awaiting_receipt_photo';
   tempDoctorLogin?: string;
   tempPatientId?: string;
@@ -2622,7 +2631,7 @@ async function handleTelegramUpdate(token: string, update: any) {
       const text = update.message.text || '';
       const firstName = update.message.chat.first_name || 'Bemor';
       
-      const session = botSessions[chatId];
+      const session = botSessions[sessionKey(token, chatId)];
       if (session && session.step) {
         await handleRegistrationStep(token, chatId, session, update.message);
         return;
@@ -2686,7 +2695,7 @@ async function handleDoctorCabinetCommand(token: string, chatId: number) {
   if (matchedDoctorId) {
     await sendDoctorDashboard(token, chatId, matchedDoctorId, `👨‍⚕️ *Shifokor boshqaruv paneli:*`);
   } else {
-    botSessions[chatId] = { step: 'doctor_login' };
+    botSessions[sessionKey(token, chatId)] = { step: 'doctor_login' };
     await tgApi(token, 'sendMessage', {
       chat_id: chatId,
       text: `🔐 *DStoma Shifokor Autentifikatsiyasi*\n\nTizimda shifokor sifatida tasdiqlanish uchun shaxsiy login nomingizni kiriting:\n\n_(Masalan: \`umidjon\`, \`abdulaziz\` yoki \`sherzod\` )_`,
@@ -3033,7 +3042,7 @@ async function handleRegistrationStep(token: string, chatId: number, session: an
     
     if (doc) {
       g._doctorTelegramChats[doc.id] = String(chatId);
-      delete botSessions[chatId];
+      delete botSessions[sessionKey(token, chatId)];
       
       const successText = `🎉 *Tizimga muvaffaqiyatli kirdingiz!* 🎉\n\n` +
         `👨‍⚕️ *Shifokor:* Dr. *${doc.name}*\n` +
@@ -3090,7 +3099,7 @@ async function handleRegistrationStep(token: string, chatId: number, session: an
     if (pat && verifyPassword(text.trim(), pat.password)) {
       pat.telegramChatId = String(chatId);
       await savePatient(pat);
-      delete botSessions[chatId];
+      delete botSessions[sessionKey(token, chatId)];
 
       await tgApi(token, 'sendMessage', {
         chat_id: chatId,
@@ -3111,7 +3120,7 @@ async function handleRegistrationStep(token: string, chatId: number, session: an
     const complaint = text === '⏭ O\'tkazib yuborish' ? '' : text.trim();
     const clinicId = session.tempUser?.clinicId || 'samarqand';
     const doctorId = session.tempUser?.doctorId || 'doc_sm_1';
-    delete botSessions[chatId]; // form submitted
+    delete botSessions[sessionKey(token, chatId)]; // form submitted
 
     // Process queue creation
     await proceedQueueBooking(token, chatId, clinicId, doctorId, complaint);
@@ -3168,7 +3177,7 @@ async function handleRegistrationStep(token: string, chatId: number, session: an
         }
       }
 
-      delete botSessions[chatId];
+      delete botSessions[sessionKey(token, chatId)];
       await tgApi(token, 'sendMessage', {
         chat_id: chatId,
         text: "✅ To'lov chekingiz qabul qilindi va shifokorga yuborildi. Tasdiqlangach sizga xabar beramiz."
@@ -3502,7 +3511,7 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
       return;
     }
 
-    botSessions[chatId] = { step: 'patient_login_passport' };
+    botSessions[sessionKey(token, chatId)] = { step: 'patient_login_passport' };
     await tgApi(token, 'sendMessage', {
       chat_id: chatId,
       text: `🔐 *Tizimga Ulanish (Login):* \n\nIltimos, DStoma tizimidagi qayd etilgan *Pasport seriya va raqamingizni* kiriting (masalan: AA1234567):`,
@@ -3529,7 +3538,7 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
       return;
     }
 
-    botSessions[chatId] = {
+    botSessions[sessionKey(token, chatId)] = {
       step: 'register_name',
       tempUser: {
         id: 'pat_tg_' + Date.now(),
@@ -3551,7 +3560,7 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
 
   if (callbackData.startsWith('reg_blood_')) {
     const blood = callbackData.replace('reg_blood_', '');
-    const session = botSessions[chatId];
+    const session = botSessions[sessionKey(token, chatId)];
     if (session && session.tempUser) {
       session.tempUser.bloodGroup = blood;
       
@@ -3568,7 +3577,7 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
       };
 
       await savePatient(finalPatient);
-      delete botSessions[chatId];
+      delete botSessions[sessionKey(token, chatId)];
 
       const successText = `🎉 *Tabriklaymiz, ro'yxatdan o'tish muvaffaqiyatli yakunlandi!* 🎉\n\n` +
         `👤 *Ism, Familiya:* ${finalPatient.fullName}\n` +
@@ -3805,7 +3814,7 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
       }
       const patDb = await getPatients();
       const pat: any = patDb.find((p: any) => String(p.telegramChatId || '') === String(chatId));
-      botSessions[chatId] = {
+      botSessions[sessionKey(token, chatId)] = {
         step: 'awaiting_receipt_photo',
         receiptQueueId: q.id,
         receiptDoctorId: q.doctorId,
@@ -3916,7 +3925,7 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
     const clinicId = parts[0];
     const doctorId = parts[1] + '_' + parts[2] + '_' + parts[3]; // handle standard doc_sm_1 formatting
 
-    botSessions[chatId] = {
+    botSessions[sessionKey(token, chatId)] = {
       step: 'book_queue_complaint',
       tempUser: { clinicId, doctorId }
     };
@@ -3935,7 +3944,7 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
     const clinicId = info[0];
     const doctorId = info[1] + '_' + info[2] + '_' + info[3];
 
-    delete botSessions[chatId];
+    delete botSessions[sessionKey(token, chatId)];
     await tgApi(token, 'sendMessage', {
       chat_id: chatId,
       text: "⚡ *DStoma Elektron Navbat Serveriga chipta so'rovi yuborilmoqda, iltimos kuting...*"
