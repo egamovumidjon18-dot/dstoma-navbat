@@ -3981,8 +3981,10 @@ async function startServer() {
 // "Webhook Sozlash" button performs, done automatically so nobody has to remember to
 // click it after every deploy/domain change. A no-op if it's already pointed correctly
 // (checked first so a warm/repeat cold start doesn't keep hammering Telegram's API).
-async function ensureWebhookRegistered(token: string, label: string) {
-  if (!token) return;
+// Returns true on success (webhook now correctly registered), false otherwise — the
+// caller uses this to fall back from a Firestore-stored token to the raw env var one.
+async function ensureWebhookRegistered(token: string, label: string): Promise<boolean> {
+  if (!token) return false;
   try {
     const domain = (
       process.env.APP_URL ||
@@ -3994,17 +3996,36 @@ async function ensureWebhookRegistered(token: string, label: string) {
 
     const infoRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
     const info = await infoRes.json();
-    if (info.ok && info.result?.url === expectedUrl) return;
+    if (!info.ok) {
+      console.error(`[Telegram Webhook] ${label} token rejected by Telegram (likely stale/revoked):`, info.description);
+      return false;
+    }
+    if (info.result?.url === expectedUrl) return true;
 
     const setRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(expectedUrl)}`);
     const setData = await setRes.json();
     if (setData.ok) {
       console.log(`[Telegram Webhook] ${label} auto-registered: ${expectedUrl}`);
-    } else {
-      console.error(`[Telegram Webhook] ${label} auto-registration failed:`, setData.description);
+      return true;
     }
+    console.error(`[Telegram Webhook] ${label} auto-registration failed:`, setData.description);
+    return false;
   } catch (err) {
     console.error(`[Telegram Webhook] ${label} auto-registration error:`, err);
+    return false;
+  }
+}
+
+// Tries the (possibly Firestore-overridden) in-memory token first; if Telegram
+// rejects it — e.g. a stale token saved before the SuperAdmin rotated it in BotFather
+// and updated Vercel's env var, but never re-saved through the SuperAdmin panel —
+// falls back to the raw environment variable, which is the deployment owner's most
+// directly-controlled source of truth.
+async function ensureWebhookRegisteredWithFallback(currentToken: string, envToken: string | undefined, label: string) {
+  const ok = await ensureWebhookRegistered(currentToken, label);
+  if (!ok && envToken && envToken !== currentToken) {
+    console.log(`[Telegram Webhook] ${label} retrying with the raw env var token...`);
+    await ensureWebhookRegistered(envToken, label);
   }
 }
 
@@ -4015,10 +4036,12 @@ let webhookSetupPromise: Promise<void> | null = null;
 function ensureWebhooksSetupOnce(): Promise<void> {
   if (!process.env.VERCEL) return Promise.resolve();
   if (!webhookSetupPromise) {
+    const envPatientToken = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+    const envDoctorToken = process.env.DOCTOR_BOT_TOKEN;
     webhookSetupPromise = loadTelegramCreds()
       .then(() => Promise.all([
-        ensureWebhookRegistered(activeTelegramToken, "Patient Bot"),
-        ensureWebhookRegistered(activeDoctorBotToken, "Doctor Bot"),
+        ensureWebhookRegisteredWithFallback(activeTelegramToken, envPatientToken, "Patient Bot"),
+        ensureWebhookRegisteredWithFallback(activeDoctorBotToken, envDoctorToken, "Doctor Bot"),
       ]))
       .then(() => undefined)
       .catch((err) => {
