@@ -11,6 +11,7 @@ import { Patient, QueueItem, Clinic } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
 import { TreatmentItem } from './TreatmentPlan';
 import AdBanner from './AdBanner';
+import InstallAppBanner from './InstallAppBanner';
 import DentalChart from './DentalChart';
 import { TRANSLATIONS, Language } from '../translations';
 
@@ -331,6 +332,7 @@ export default function PatientPanel({
 
           {activeTab === 'bosh_sahifa' && (
             <div className="grid grid-cols-3 gap-6">
+              <InstallAppBanner />
               {/* Main Welcome Banner */}
               <div className="col-span-2 bg-blue-50/50 rounded-3xl p-8 border border-blue-100 flex items-center justify-between overflow-hidden relative">
                 <div className="max-w-sm z-10">
