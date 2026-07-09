@@ -2626,32 +2626,18 @@ export default function SuperAdminDashboard({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3.5">
-                <div>
-                  <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
-                    Obuna darajasi
-                  </label>
-                  <select
-                    value={clinicToEdit.subscriptionTier || 'basic'}
-                    onChange={(e) => setClinicToEdit({ ...clinicToEdit, subscriptionTier: e.target.value as 'basic' | 'premium' })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold focus:outline-none focus:border-cyan-500"
-                  >
-                    <option value="basic">Basic (AI'siz)</option>
-                    <option value="premium">Premium (AI Yordamchi bilan)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
-                    Gemini API Kalit (AI uchun)
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="AIzaSy... yoki AQ...."
-                    value={clinicToEdit.geminiApiKey || ""}
-                    onChange={(e) => setClinicToEdit({ ...clinicToEdit, geminiApiKey: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold font-mono focus:outline-none focus:border-cyan-500"
-                  />
-                </div>
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
+                  Obuna darajasi
+                </label>
+                <select
+                  value={clinicToEdit.subscriptionTier || 'basic'}
+                  onChange={(e) => setClinicToEdit({ ...clinicToEdit, subscriptionTier: e.target.value as 'basic' | 'premium' })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold focus:outline-none focus:border-cyan-500"
+                >
+                  <option value="basic">Basic (AI'siz)</option>
+                  <option value="premium">Premium (AI Yordamchi bilan)</option>
+                </select>
               </div>
 
               <div className="flex justify-end gap-2.5 pt-3">

@@ -380,9 +380,9 @@ async function getClinics() {
 }
 async function saveClinic(c: any) {
   const clean = stripUndefined(c);
-  // merge:true — the client's copy of a clinic may have sensitive fields (password,
-  // geminiApiKey) stripped out for security before it ever reaches the browser, so a
-  // plain overwrite here would silently erase them on any partial-field edit.
+  // merge:true — the client's copy of a clinic has sensitive fields (password) stripped
+  // out for security before it ever reaches the browser, so a plain overwrite here would
+  // silently erase them on any partial-field edit.
   if (fDb) await setDoc(doc(fDb, "clinics", clean.id), clean, { merge: true });
   else {
     if (!g._serverClinics) g._serverClinics = [];
@@ -1458,15 +1458,11 @@ app.get("/api/clinics", async (req, res) => {
   res.setHeader("Expires", "0");
   const [allClinics, allQueues] = await Promise.all([getClinics(), getQueues()]);
   // Public listing (powers the anonymous patient booking page) — never ship the login
-  // password. NOTE: geminiApiKey is intentionally still included here because this same
-  // array is the client's only in-memory copy of each clinic, and every clinic-update
-  // handler in useAppState.ts does a full-object POST /api/clinics (Firestore setDoc
-  // overwrite, no merge) built by spreading that copy — stripping geminiApiKey here would
-  // silently erase clinics' configured AI keys on their next unrelated save. Properly
-  // scoping geminiApiKey out of the public response needs a dedicated authenticated
-  // "my clinic settings" endpoint; tracked as a follow-up, not done in this pass.
+  // password. geminiApiKey is stripped too: all AI usage now bills against the single
+  // platform-wide key (see getGeminiApiKey), so clinics no longer configure their own
+  // key and this field has no legitimate reason to ever reach the browser.
   res.json(allClinics.map((c: any) => {
-    const { password, ...safe } = c;
+    const { password, geminiApiKey, ...safe } = c;
     // rating is derived live from real patient feedback (QueueItem.rating), never
     // a stored/editable value — a clinic can't have a frozen 5-star rating forever.
     const ratedQueues = allQueues.filter((q: any) => q.clinicId === c.id && typeof q.rating === 'number');
@@ -1485,11 +1481,12 @@ app.get("/api/clinics", async (req, res) => {
 
 // Shared by two very different callers: the SuperAdmin panel (full clinic CRUD,
 // including login/password/subscriptionTier/subscriptionStatus) and a clinic's own
-// director/doctor editing their non-sensitive settings (name/phone/address/AI key)
-// from Sozlamalar. Non-superadmin callers are restricted to a safe field allowlist —
+// director/doctor editing their non-sensitive settings (name/phone/address) from
+// Sozlamalar. Non-superadmin callers are restricted to a safe field allowlist —
 // they can never grant themselves premium, change their subscription, or set login
-// credentials through this endpoint.
-const CLINIC_SELF_EDIT_SAFE_FIELDS = ['name', 'phone', 'address', 'geminiApiKey', 'mapLink', 'logo', 'lat', 'lng'];
+// credentials through this endpoint. geminiApiKey deliberately absent — AI usage
+// bills against one platform-wide key now, clinics no longer configure their own.
+const CLINIC_SELF_EDIT_SAFE_FIELDS = ['name', 'phone', 'address', 'mapLink', 'logo', 'lat', 'lng'];
 app.post("/api/clinics", async (req, res) => {
   const body = req.body;
   const auth = await getAuthContext(req);
@@ -1921,21 +1918,71 @@ async function getClinicAiTrialAndTier(clinicId: string): Promise<{ tier: 'basic
   return { tier: clinic.subscriptionTier === 'premium' ? 'premium' : 'basic', daysLeftInTrial };
 }
 
-// Resolves which Gemini key to actually bill AI usage against for an eligible
-// clinic (own key first, else the platform-wide key). Callers must check
-// getClinicAiTrialAndTier themselves first — this function does NOT gate access.
-// clinicId omitted (e.g. the Telegram bot, which isn't tied to one clinic) falls
-// back to the platform-wide GEMINI_API_KEY.
+// All AI usage across the whole platform bills against one single owner-funded
+// key — clinics can no longer configure their own Gemini key (that option, and
+// the leak of it via the public /api/clinics response, has been removed).
+// Callers must still check getClinicAiTrialAndTier + checkAndConsumeAiUsage
+// themselves first — this function does NOT gate access.
 async function getGeminiApiKey(clinicId?: string): Promise<string | null> {
-  if (clinicId) {
-    const clinics = await getClinics();
-    const clinic = clinics.find((c: any) => c.id === clinicId);
-    if (isUsableKey(clinic?.geminiApiKey)) return clinic.geminiApiKey.trim();
-    const platformKey = process.env.GEMINI_API_KEY;
-    return isUsableKey(platformKey) ? platformKey : null;
-  }
   const activeKey = process.env.GEMINI_API_KEY;
   return isUsableKey(activeKey) ? activeKey : null;
+}
+
+// Shared daily spending ceiling so a single clinic (or the anonymous Telegram
+// bot channel) can't run up an unbounded Gemini bill against the one platform
+// key. Deliberately generous — this is a safety net against abuse/bugs, not a
+// per-feature quota — and is a single constant so it's trivial to retune later.
+const DAILY_AI_CAP_PER_CLINIC = 50;
+const DAILY_AI_CAP_PER_CHAT = 8;
+
+// Per-clinic daily AI usage counter, mirroring the stored-timestamp/elapsed-time
+// pattern getClinicAiTrialAndTier already uses. Returns false (caller must fall
+// back to the existing simulated/offline AI response) once the clinic has used
+// up today's shared allowance; otherwise consumes one unit and returns true.
+async function checkAndConsumeAiUsage(clinicId: string): Promise<boolean> {
+  const clinics = await getClinics();
+  const clinic: any = clinics.find((c: any) => c.id === clinicId);
+  if (!clinic) return false;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const isNewDay = clinic.aiUsageDate !== today;
+  const currentCount = isNewDay ? 0 : (clinic.aiUsageCount || 0);
+
+  if (currentCount >= DAILY_AI_CAP_PER_CLINIC) return false;
+
+  await saveClinic({ id: clinic.id, aiUsageDate: today, aiUsageCount: currentCount + 1 });
+  return true;
+}
+
+// In-memory per-chat daily cap for the Telegram patient bot's free-text AI chat,
+// which has no resolvable clinicId to hang a per-clinic cap off of. Same Map-based
+// style as the ipLimits table inside rateLimiter() below. Resets naturally when a
+// serverless instance recycles — this is an abuse guard, not a hard billing ledger.
+const chatAiUsage = new Map<string, { count: number; date: string }>();
+function checkAndConsumeChatAiUsage(chatId: number | string): boolean {
+  const today = new Date().toISOString().slice(0, 10);
+  const key = String(chatId);
+  const record = chatAiUsage.get(key);
+
+  if (!record || record.date !== today) {
+    chatAiUsage.set(key, { count: 1, date: today });
+    return true;
+  }
+  if (record.count >= DAILY_AI_CAP_PER_CHAT) return false;
+  record.count++;
+  return true;
+}
+
+// Lightweight per-chat cooldown so a script can't burn through the whole daily
+// cap in a single second — separate from the daily cap itself.
+const chatAiLastCallAt = new Map<string, number>();
+function isChatAiOnCooldown(chatId: number | string): boolean {
+  const key = String(chatId);
+  const last = chatAiLastCallAt.get(key) || 0;
+  const now = Date.now();
+  if (now - last < 3000) return true;
+  chatAiLastCallAt.set(key, now);
+  return false;
 }
 
 // Calls the Gemini REST API directly (bypassing the @google/genai SDK, whose HTTP
@@ -1981,7 +2028,7 @@ console.log("[DStoma Core] Booting Production-Ready Full-Stack Web App...");
  * Endpoint for Real-time AI Dental Diagnostics and Telemetry
  * Securely calls Gemini on the server side to protect secrets.
  */
-app.post("/api/ai/diagnostic", async (req, res) => {
+app.post("/api/ai/diagnostic", rateLimiter(10, 60 * 1000), async (req, res) => {
   try {
     const { toothNumber, symptoms, language, image, clinicId } = req.body;
 
@@ -1999,6 +2046,18 @@ app.post("/api/ai/diagnostic", async (req, res) => {
           error: "AI Yordamchi — Premium xizmat. Bepul sinov muddati tugagan."
         });
       }
+    }
+
+    // Daily platform-wide spending ceiling — once hit, degrade gracefully to the
+    // same simulated response used when no API key is configured, rather than
+    // erroring out.
+    if (clinicId && !(await checkAndConsumeAiUsage(clinicId))) {
+      const simulatedData = getSimulatedDiagnosis(Number(toothNumber), symptoms || '', requestedLang, !!image);
+      return res.json({
+        ...simulatedData,
+        isSimulation: true,
+        toothNumber: Number(toothNumber)
+      });
     }
 
     const apiKey = await getGeminiApiKey(clinicId);
@@ -2104,7 +2163,7 @@ Return the JSON response adhering strictly to this schema:
  * Endpoint for AI analysis of a full X-ray image (OPG/RVG/CBCT), returning
  * multiple findings across the image rather than a single-tooth diagnosis.
  */
-app.post("/api/ai/xray-analysis", async (req, res) => {
+app.post("/api/ai/xray-analysis", rateLimiter(10, 60 * 1000), async (req, res) => {
   const { image, xrayType, language, clinicId } = req.body;
   const requestedLang = language || 'uz';
   try {
@@ -2119,6 +2178,9 @@ app.post("/api/ai/xray-analysis", async (req, res) => {
           requiresPremium: true,
           error: "AI Yordamchi — Premium xizmat. Bepul sinov muddati tugagan."
         });
+      }
+      if (!(await checkAndConsumeAiUsage(clinicId))) {
+        return res.json({ ...getSimulatedXrayAnalysis(xrayType, requestedLang), isSimulation: true });
       }
     }
 
@@ -2171,6 +2233,56 @@ Return strict JSON matching this schema:
   } catch (error: any) {
     console.error("[DStoma AI API] X-ray analysis error:", error);
     return res.json({ ...getSimulatedXrayAnalysis(req.body.xrayType, requestedLang), isSimulation: true, errorDetails: error.message });
+  }
+});
+
+/**
+ * Conversational "AI Yordamchi" for the patient's own web cabinet — mirrors the
+ * Telegram patient bot's free-text/photo AI chat (same prompt, same fallback
+ * text), gated the same way as the other clinic-scoped AI features.
+ */
+app.post("/api/ai/patient-chat", rateLimiter(10, 60 * 1000), async (req, res) => {
+  const { clinicId, message, image, language } = req.body;
+  const requestedLang = language || 'uz';
+  try {
+    if (!message && !image) {
+      return res.status(400).json({ error: "Message or image is required." });
+    }
+
+    if (clinicId) {
+      const { tier, daysLeftInTrial } = await getClinicAiTrialAndTier(clinicId);
+      if (tier !== 'premium' && daysLeftInTrial <= 0) {
+        return res.status(402).json({
+          requiresPremium: true,
+          error: "AI Yordamchi — Premium xizmat. Bepul sinov muddati tugagan."
+        });
+      }
+      if (!(await checkAndConsumeAiUsage(clinicId))) {
+        return res.json({ reply: getPatientBotSimulatedReply(message || '', !!image), isSimulation: true });
+      }
+    }
+
+    const apiKey = await getGeminiApiKey(clinicId);
+    if (!apiKey) {
+      return res.json({ reply: getPatientBotSimulatedReply(message || '', !!image), isSimulation: true });
+    }
+
+    const systemPrompt = `You are an expert robotic AI dental scientist operating in DStoma Digital Hub. You analyze dental questions, symptoms, and human teeth/mouth photos/x-rays. Respond in ${requestedLang === 'uz' ? 'Uzbek' : requestedLang === 'ru' ? 'Russian' : 'English'} (unless the patient writes in a different language). Be warm, precise, professional, and very helpful. Format with bullet points where necessary. Keep the answer under 150 words. Always include a reminder that AI diagnostics is estimated and you must schedule/consult real dentists at DStoma.`;
+    const userPrompt = message ? message : "Diagnose this uploaded tooth/mouth photo and give preventative dental advice.";
+
+    const parts: any[] = [];
+    if (image && image.data && image.mimeType) {
+      parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
+      parts.push({ text: `Analyze this tooth image for symptoms, fractures, decay, or gum issues, and respond to: "${userPrompt}"\n\nSystem Instruction: ${systemPrompt}` });
+    } else {
+      parts.push({ text: `Analyze this question: "${userPrompt}"\n\nSystem Instruction: ${systemPrompt}` });
+    }
+
+    const response = await callGemini({ model: "gemini-2.5-flash", parts, apiKey });
+    return res.json({ reply: response.text?.trim() || getPatientBotSimulatedReply(userPrompt, !!image), isSimulation: false });
+  } catch (error: any) {
+    console.error("[DStoma AI API] Patient chat error:", error);
+    return res.json({ reply: getPatientBotSimulatedReply(req.body.message || '', !!req.body.image), isSimulation: true, errorDetails: error.message });
   }
 });
 
@@ -2772,8 +2884,9 @@ async function handleDoctorPatientAiLookup(token: string, chatId: number, doctor
   ].join('\n');
 
   const apiKey = await getGeminiApiKey(clinicId);
+  const underDailyCap = !clinicId || (await checkAndConsumeAiUsage(clinicId));
   let summaryText = '';
-  if (apiKey) {
+  if (apiKey && underDailyCap) {
     try {
       const response = await callGemini({
         model: "gemini-2.5-flash",
@@ -3352,7 +3465,11 @@ async function handlePatientBotDiagnosticMessage(token: string, chatId: number, 
 
     let response;
     const botApiKey = await getGeminiApiKey(); // no clinic context here — platform-wide key
-    if (botApiKey) {
+    // This channel has no resolvable clinicId, so it can't use the per-clinic daily
+    // cap — instead it gets its own per-chat daily cap + a short cooldown, so no
+    // single Telegram user can drain the shared platform key for free.
+    const underChatCap = !isChatAiOnCooldown(chatId) && checkAndConsumeChatAiUsage(chatId);
+    if (botApiKey && underChatCap) {
       const parts: any[] = [];
       if (imagePart) {
         parts.push(imagePart);

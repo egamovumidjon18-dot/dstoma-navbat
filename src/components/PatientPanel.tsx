@@ -5,15 +5,17 @@ import {
   Home, Calendar, FileText, CreditCard,
   Smile, Clock, Bell, Users, Folder, Settings,
   HelpCircle, ChevronDown, BellRing,
-  User, Star, Check, Phone, MessageCircle, Plus, Search, UserPlus, X, Trash2
+  User, Star, Check, Phone, MessageCircle, Plus, Search, UserPlus, X, Trash2, Menu, Bot, Send, ImagePlus
 } from 'lucide-react';
 import { Patient, QueueItem, Clinic } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
 import { TreatmentItem } from './TreatmentPlan';
 import AdBanner from './AdBanner';
 import InstallAppBanner from './InstallAppBanner';
+import BottomNav from './BottomNav';
 import DentalChart from './DentalChart';
 import { TRANSLATIONS, Language } from '../translations';
+import { getApiUrl } from '../services/api';
 
 interface NewFamilyMemberInfo {
   fullName: string;
@@ -163,6 +165,22 @@ export default function PatientPanel({
   };
 
   const [activeTab, setActiveTab] = useState('bosh_sahifa');
+  // Sidebar is always-visible on desktop; on narrow (phone) screens it's an off-canvas
+  // drawer toggled by a hamburger button, closed by default and after picking a tab.
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  // Tracked directly instead of relying on Tailwind's md: + negative-translate utility
+  // combo, which didn't reliably generate the expected CSS in this project's Tailwind
+  // v4 setup — an inline transform driven by this flag is unambiguous either way.
+  const [isDesktopViewport, setIsDesktopViewport] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(min-width: 768px)');
+    const handler = () => setIsDesktopViewport(mq.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
   const [planItems, setPlanItems] = useState<TreatmentItem[]>([]);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [familySearchQuery, setFamilySearchQuery] = useState('');
@@ -173,6 +191,58 @@ export default function PatientPanel({
     fullName: '', phone: '', passportSerial: '', birthDate: '', password: '',
   });
   const [isRegisteringFamilyMember, setIsRegisteringFamilyMember] = useState(false);
+
+  type AiChatMessage = { role: 'user' | 'assistant'; text: string; isSimulation?: boolean };
+  const [aiChatMessages, setAiChatMessages] = useState<AiChatMessage[]>([]);
+  const [aiChatInput, setAiChatInput] = useState('');
+  const [aiChatImage, setAiChatImage] = useState<{ data: string; mimeType: string } | null>(null);
+  const [aiChatSending, setAiChatSending] = useState(false);
+  const [aiChatRequiresPremium, setAiChatRequiresPremium] = useState(false);
+
+  const handleAiChatImagePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const [, base64] = result.split(',');
+      setAiChatImage({ data: base64, mimeType: file.type });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAiChatSend = async () => {
+    const messageText = aiChatInput.trim();
+    if (!messageText && !aiChatImage) return;
+    setAiChatMessages((prev) => [...prev, { role: 'user', text: messageText || t("rasm yuborildi") }]);
+    setAiChatInput('');
+    const imageToSend = aiChatImage;
+    setAiChatImage(null);
+    setAiChatSending(true);
+    try {
+      const res = await fetch(`${getApiUrl()}/api/ai/patient-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clinicId: clinic?.id,
+          message: messageText,
+          image: imageToSend,
+          language,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.requiresPremium) {
+        setAiChatRequiresPremium(true);
+        return;
+      }
+      setAiChatMessages((prev) => [...prev, { role: 'assistant', text: data.reply || '', isSimulation: !!data.isSimulation }]);
+    } catch {
+      setAiChatMessages((prev) => [...prev, { role: 'assistant', text: t("javob olishda xatolik yuz berdi. internet aloqasini tekshiring."), isSimulation: true }]);
+    } finally {
+      setAiChatSending(false);
+    }
+  };
 
   const handleFamilySearch = async () => {
     if (!familySearchQuery.trim() || !onSearchFamilyMember) return;
@@ -242,13 +312,25 @@ export default function PatientPanel({
     { id: 'tish_sxemasi', icon: <Smile size={18} />, label: t('tish sxemasi') },
     { id: 'eslatma', icon: <Bell size={18} />, label: t('eslatmalarim') },
     { id: 'oilam', icon: <Users size={18} />, label: t('oilam') },
+    { id: 'ai_yordamchi', icon: <Bot size={18} />, label: t('AI Yordamchi') },
     { id: 'sozlamalar', icon: <Settings size={18} />, label: t('sozlamalar') },
   ];
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#F8FAFC] flex font-sans text-slate-800">
-      {/* Sidebar */}
-      <div className="w-[280px] bg-white border-r border-slate-200 flex flex-col h-full shadow-sm">
+      {/* Mobile-only backdrop, tap to close the drawer */}
+      {isMobileNavOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-slate-900/40 md:hidden"
+          onClick={() => setIsMobileNavOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — always visible on desktop; an off-canvas drawer on phone screens */}
+      <div
+        className="fixed md:static inset-y-0 left-0 z-50 w-[280px] max-w-[85vw] bg-white border-r border-slate-200 flex flex-col h-full shadow-sm transition-transform duration-300"
+        style={{ transform: isDesktopViewport || isMobileNavOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+      >
         {/* Logo */}
         <div className="p-6 flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">
@@ -285,7 +367,13 @@ export default function PatientPanel({
         {/* Navigation */}
         <div className="flex-1 overflow-y-auto py-4 px-4 space-y-1">
           {navItems.map((item) => (
-            <NavItem key={item.id} active={activeTab === item.id} onClick={() => setActiveTab(item.id)} icon={item.icon} label={item.label} />
+            <NavItem
+              key={item.id}
+              active={activeTab === item.id}
+              onClick={() => { setActiveTab(item.id); setIsMobileNavOpen(false); }}
+              icon={item.icon}
+              label={item.label}
+            />
           ))}
         </div>
 
@@ -311,30 +399,39 @@ export default function PatientPanel({
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
+      <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
         {/* Header */}
-        <header className="h-20 bg-[#F8FAFC] flex items-center justify-between px-10">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">{navItems.find((n) => n.id === activeTab)?.label || t('bemor paneli')}</h1>
-            {!isViewingSelf && (
-              <p className="text-xs font-bold text-blue-600 mt-0.5">{t("ko'rilmoqda:")} {decodeLegacyEntities(viewingPatient.fullName)}</p>
-            )}
+        <header className="h-16 md:h-20 bg-[#F8FAFC] flex items-center justify-between px-4 md:px-10 gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={() => setIsMobileNavOpen(true)}
+              className="md:hidden p-2 -ml-2 text-slate-600 shrink-0"
+              aria-label={t('menyu')}
+            >
+              <Menu size={22} />
+            </button>
+            <div className="min-w-0">
+              <h1 className="text-lg md:text-2xl font-bold text-slate-900 truncate">{navItems.find((n) => n.id === activeTab)?.label || t('bemor paneli')}</h1>
+              {!isViewingSelf && (
+                <p className="text-xs font-bold text-blue-600 mt-0.5 truncate">{t("ko'rilmoqda:")} {decodeLegacyEntities(viewingPatient.fullName)}</p>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-6">
-            <button onClick={onLogout} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-bold text-sm border border-indigo-100/50 hover:bg-indigo-100 transition-colors">
-              <User size={16} /> {t('chiqish')} <ChevronDown size={14} />
+          <div className="flex items-center gap-6 shrink-0">
+            <button onClick={onLogout} className="flex items-center gap-2 px-3 md:px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-bold text-xs md:text-sm border border-indigo-100/50 hover:bg-indigo-100 transition-colors">
+              <User size={16} /> <span className="hidden sm:inline">{t('chiqish')}</span> <ChevronDown size={14} className="hidden sm:inline" />
             </button>
           </div>
         </header>
 
         {/* Scrollable Area */}
-        <main className="flex-1 overflow-y-auto px-10 pb-10">
+        <main className="flex-1 overflow-y-auto px-4 md:px-10 pb-24 md:pb-10">
 
           {activeTab === 'bosh_sahifa' && (
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <InstallAppBanner />
               {/* Main Welcome Banner */}
-              <div className="col-span-2 bg-blue-50/50 rounded-3xl p-8 border border-blue-100 flex items-center justify-between overflow-hidden relative">
+              <div className="md:col-span-2 bg-blue-50/50 rounded-3xl p-8 border border-blue-100 flex items-center justify-between overflow-hidden relative">
                 <div className="max-w-sm z-10">
                   <h2 className="text-2xl font-bold text-slate-900 mb-3">{t('xush kelibsiz,')} {decodeLegacyEntities(patient?.fullName)?.split(' ')[0] || t('bemor')}! 👋</h2>
                   <p className="text-sm text-slate-600 leading-relaxed">
@@ -350,7 +447,7 @@ export default function PatientPanel({
                 }}></div>
               </div>
 
-              <div className="col-span-3">
+              <div className="md:col-span-3">
                 <AdBanner placement="web_patient_panel" clinicId={patient?.clinicId} />
               </div>
 
@@ -387,7 +484,7 @@ export default function PatientPanel({
               </div>
 
               {/* Treatment Plan */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] col-span-1 row-span-2">
+              <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] md:col-span-1 md:row-span-2">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="font-bold text-slate-900">{t("davolash rejam")}</h3>
                   <button onClick={() => setActiveTab('reja')} className="text-blue-600 text-xs font-bold hover:underline">{t("barchasini ko'rish")} &gt;</button>
@@ -495,9 +592,9 @@ export default function PatientPanel({
               </div>
 
               {/* Quick Actions */}
-              <div className="col-span-3 mt-2">
+              <div className="md:col-span-3 mt-2">
                 <h3 className="font-bold text-slate-900 mb-4">{t("tezkor amallar")}</h3>
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <QuickAction onClick={onGoToBooking} icon={<Calendar className="text-purple-500" />} title={t("yangi navbat olish")} desc={t("navbatni tanlang")} bg="bg-purple-50" border="border-purple-100" />
                   <a href="https://t.me/dstoma_bot" target="_blank" rel="noopener noreferrer">
                     <QuickAction icon={<MessageCircle className="text-blue-500" />} title={t("telegram orqali chat")} desc={t("klinika bilan yozishing")} bg="bg-blue-50" border="border-blue-100" />
@@ -522,15 +619,40 @@ export default function PatientPanel({
                 <p className="text-sm text-slate-400 py-8 text-center">{t("hozircha navbat tarixingiz yo'q")}</p>
               ) : (
                 <div className="space-y-3">
-                  {myQueues.map((q) => (
-                    <div key={q.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <div>
-                        <p className="font-bold text-slate-900 text-sm">{t("navbat #")}{q.number}</p>
-                        <p className="text-xs text-slate-500">{q.appointmentDate || new Date(q.createdAt).toLocaleDateString()} {q.appointmentTime || ''}</p>
+                  {myQueues.map((q) => {
+                    const d = new Date(q.appointmentDate || q.createdAt);
+                    const statusStyle: Record<string, string> = {
+                      pending: 'bg-amber-50 text-amber-600 border-amber-100',
+                      scheduled: 'bg-blue-50 text-blue-600 border-blue-100',
+                      calling: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+                      in_progress: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+                      completed: 'bg-slate-100 text-slate-500 border-slate-200',
+                      cancelled: 'bg-rose-50 text-rose-500 border-rose-100',
+                    };
+                    const statusLabel: Record<string, string> = {
+                      pending: t('navbatda'),
+                      scheduled: t('rejalashtirilgan'),
+                      calling: t('chaqirilmoqda'),
+                      in_progress: t('qabulda'),
+                      completed: t('bajarildi'),
+                      cancelled: t('bekor qilingan'),
+                    };
+                    return (
+                      <div key={q.id} className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex flex-col items-center justify-center shrink-0 leading-none">
+                          <span className="text-[15px] font-black">{d.getDate()}</span>
+                          <span className="text-[9px] font-bold uppercase">{d.toLocaleDateString('uz-UZ', { month: 'short' })}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-slate-900 text-sm">{t("navbat #")}{q.number}</p>
+                          <p className="text-xs text-slate-500 truncate">{q.appointmentTime || d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                        </div>
+                        <span className={`px-3 py-1 text-[10px] font-bold rounded-lg uppercase border shrink-0 ${statusStyle[q.status] || 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                          {statusLabel[q.status] || q.status}
+                        </span>
                       </div>
-                      <span className="px-3 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-lg uppercase">{q.status}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -735,6 +857,84 @@ export default function PatientPanel({
             </div>
           )}
 
+          {activeTab === 'ai_yordamchi' && (
+            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col max-w-2xl" style={{ height: '75vh' }}>
+              <div className="p-4 border-b border-slate-100 flex items-center gap-3 shrink-0">
+                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shrink-0">
+                  <Bot size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">AI Yordamchi</h3>
+                  <p className="text-[11px] text-slate-500">{t("tish sog'lig'i bo'yicha savol bering yoki rasm yuboring")}</p>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {aiChatMessages.length === 0 && (
+                  <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 px-6">
+                    <Bot size={32} className="mb-2 opacity-40" />
+                    <p className="text-sm">{t("savolingizni yozing — masalan, \"tishim og'riyapti, nima qilishim kerak?\"")}</p>
+                  </div>
+                )}
+                {aiChatMessages.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                      m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800'
+                    }`}>
+                      {m.text}
+                      {m.isSimulation && (
+                        <p className={`text-[10px] mt-1.5 ${m.role === 'user' ? 'text-blue-200' : 'text-slate-400'}`}>
+                          {t("(taxminiy javob — AI hozircha band, birozdan so'ng qayta urinib ko'ring)")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {aiChatSending && (
+                  <div className="flex justify-start">
+                    <div className="bg-slate-100 text-slate-400 rounded-2xl px-4 py-2.5 text-sm">{t("yozmoqda...")}</div>
+                  </div>
+                )}
+              </div>
+
+              {aiChatRequiresPremium ? (
+                <div className="p-4 border-t border-slate-100 bg-rose-50 text-center shrink-0">
+                  <p className="text-xs font-bold text-rose-600">{t("AI Yordamchi — Premium xizmat. Bepul sinov muddati tugagan.")}</p>
+                </div>
+              ) : (
+                <div className="p-3 border-t border-slate-100 shrink-0">
+                  {aiChatImage && (
+                    <div className="mb-2 flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-1.5 w-fit">
+                      <span className="text-xs text-slate-500">{t("rasm biriktirildi")}</span>
+                      <button onClick={() => setAiChatImage(null)} className="text-slate-400 hover:text-rose-500"><X size={14} /></button>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <label className="p-2.5 text-slate-400 hover:text-blue-600 cursor-pointer shrink-0">
+                      <ImagePlus size={18} />
+                      <input type="file" accept="image/*" className="hidden" onChange={handleAiChatImagePick} />
+                    </label>
+                    <input
+                      type="text"
+                      value={aiChatInput}
+                      onChange={(e) => setAiChatInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && !aiChatSending && handleAiChatSend()}
+                      placeholder={t("savolingizni yozing...")}
+                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500 min-w-0"
+                    />
+                    <button
+                      onClick={handleAiChatSend}
+                      disabled={aiChatSending || (!aiChatInput.trim() && !aiChatImage)}
+                      className="p-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition-colors shrink-0"
+                    >
+                      <Send size={18} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'sozlamalar' && (
             <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm max-w-lg">
               <h3 className="font-bold text-slate-900 mb-4">{t("sozlamalar")}</h3>
@@ -840,6 +1040,13 @@ export default function PatientPanel({
           </div>
         </div>
       )}
+
+      <BottomNav
+        activeTab={activeTab}
+        onNavigate={(tab) => setActiveTab(tab)}
+        onBook={() => onGoToBooking?.()}
+        onOpenMore={() => setIsMobileNavOpen(true)}
+      />
     </div>
   );
 }

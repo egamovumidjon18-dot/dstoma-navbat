@@ -195,8 +195,6 @@ export default function Settings({ doctor, clinic, clinicPatients = [], clinicQu
   const [clinicName, setClinicName] = useState(decodeLegacyEntities(clinic?.name) || '');
   const [clinicPhone, setClinicPhone] = useState(decodeLegacyEntities(clinic?.phone) || '');
   const [clinicAddress, setClinicAddress] = useState(decodeLegacyEntities(clinic?.address) || '');
-  const [clinicGeminiKey, setClinicGeminiKey] = useState(clinic?.geminiApiKey || '');
-  const [aiKeyCheck, setAiKeyCheck] = useState<'idle' | 'checking' | 'ok' | 'fail'>('idle');
   const [premiumRequestSent, setPremiumRequestSent] = useState(false);
   const aiAccess = getAiAccessStatus(clinic);
 
@@ -270,19 +268,7 @@ export default function Settings({ doctor, clinic, clinicPatients = [], clinicQu
     setClinicName(decodeLegacyEntities(clinic?.name) || '');
     setClinicPhone(decodeLegacyEntities(clinic?.phone) || '');
     setClinicAddress(decodeLegacyEntities(clinic?.address) || '');
-    setClinicGeminiKey(clinic?.geminiApiKey || '');
   }, [clinic?.id]);
-
-  const handleCheckGeminiKey = async () => {
-    if (!clinicGeminiKey.trim()) return;
-    setAiKeyCheck('checking');
-    try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(clinicGeminiKey.trim())}`);
-      setAiKeyCheck(res.ok ? 'ok' : 'fail');
-    } catch {
-      setAiKeyCheck('fail');
-    }
-  };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -359,29 +345,6 @@ export default function Settings({ doctor, clinic, clinicPatients = [], clinicQu
             name: clinicName.trim(),
             phone: clinicPhone.trim(),
             address: clinicAddress.trim(),
-          }),
-        });
-        if (!res.ok) throw new Error('Saqlashda xatolik');
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
-      } catch (err) {
-        setSaveError(t("saqlab bo'lmadi. internet aloqasini tekshiring."));
-      } finally {
-        setIsSaving(false);
-      }
-      return;
-    }
-
-    if (activeSection === 'ai') {
-      if (!clinic) { setSaveError(t("klinika ma'lumotlari topilmadi.")); return; }
-      setIsSaving(true);
-      try {
-        const res = await fetch('/api/clinics', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(staffToken ? { Authorization: `Bearer ${staffToken}` } : {}) },
-          body: JSON.stringify({
-            ...clinic,
-            geminiApiKey: clinicGeminiKey.trim(),
           }),
         });
         if (!res.ok) throw new Error('Saqlashda xatolik');
@@ -599,37 +562,6 @@ export default function Settings({ doctor, clinic, clinicPatients = [], clinicQu
                        {t("premium'ga o'tish uchun so'rov yuborish")}
                      </button>
                    )}
-                 </div>
-               )}
-
-               {aiAccess.eligible && (
-                 <div className="bg-[#111827] border border-slate-700 rounded-2xl p-5">
-                   <h5 className="font-bold text-white mb-2">{t("gemini api integratsiyasi (ixtiyoriy)")}</h5>
-                   <p className="text-xs text-slate-500 mb-4">
-                     {t("o'z gemini api kalitingizni kiritsangiz, ai xarajati sizning google hisobingizga yoziladi. kiritilmasa, platformaning umumiy kaliti ishlatiladi.")}{' '}
-                     <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">{t("kalit olish (google ai studio)")}</a>
-                   </p>
-                   <div>
-                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t("api kalit")}</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="password"
-                          value={clinicGeminiKey}
-                          onChange={(e) => { setClinicGeminiKey(e.target.value); setAiKeyCheck('idle'); }}
-                          placeholder="AIzaSy... yoki AQ...."
-                          className="flex-1 bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-2.5 text-white outline-none focus:border-emerald-500 transition-colors"
-                        />
-                        <button
-                          onClick={handleCheckGeminiKey}
-                          disabled={!clinicGeminiKey.trim() || aiKeyCheck === 'checking'}
-                          className="px-4 py-2 bg-[#0a0f1d] border border-slate-700 rounded-xl text-white font-bold hover:bg-[#1f2937] disabled:opacity-50 transition-colors shrink-0"
-                        >
-                          {aiKeyCheck === 'checking' ? t('tekshirilmoqda...') : t('tekshirish')}
-                        </button>
-                      </div>
-                      {aiKeyCheck === 'ok' && <p className="text-xs text-emerald-400 mt-2">{t("✓ kalit ishlayapti")}</p>}
-                      {aiKeyCheck === 'fail' && <p className="text-xs text-rose-400 mt-2">{t("✗ kalit yaroqsiz yoki tarmoq xatosi")}</p>}
-                   </div>
                  </div>
                )}
             </div>
@@ -916,7 +848,7 @@ export default function Settings({ doctor, clinic, clinicPatients = [], clinicQu
          </div>
          
          {/* Footer Action Bar */}
-         {!['branches', 'backup', 'employment'].includes(activeSection) && (
+         {!['branches', 'backup', 'employment', 'ai'].includes(activeSection) && (
          <div className="p-4 border-t border-slate-800 bg-[#0a0f1d] flex justify-end shrink-0">
            <div className="flex items-center gap-4 max-w-4xl w-full mx-auto px-4">
              {saveError && (

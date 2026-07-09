@@ -22,13 +22,13 @@ export interface Clinic {
   // System owner-provided credentials
   login?: string;
   password?: string;
-  // Clinic's own Gemini API key. Only used once a clinic is AI-eligible
-  // (subscriptionTier 'premium', or still within its aiTrialStartDate window) —
-  // it decides who pays the Gemini bill, it does not itself grant AI access.
-  geminiApiKey?: string;
   // AI Yordamchi is a Premium-only feature with a one-time 10-day free trial.
+  // All AI usage bills against a single platform-wide key (see server.ts
+  // getGeminiApiKey) — clinics no longer configure their own.
   subscriptionTier?: 'basic' | 'premium';
   aiTrialStartDate?: string; // ISO date; stamped once at clinic creation
+  aiUsageDate?: string; // ISO date of the current daily AI usage window
+  aiUsageCount?: number; // AI calls consumed so far within aiUsageDate
 }
 
 export interface Doctor {
