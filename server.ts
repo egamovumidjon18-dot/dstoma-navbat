@@ -37,6 +37,17 @@ app.use((req, res, next) => {
   next();
 });
 
+// Ensures both bots' Telegram webhooks are registered, exactly once per cold start.
+// This is deliberately awaited inside a real request's lifecycle (as middleware),
+// not fired disconnected at module load — Vercel freezes a function's execution the
+// moment its response is sent, so a fire-and-forget async call kicked off at module
+// scope has no guarantee of ever finishing. Tying it to the request/response cycle
+// means the platform keeps the invocation alive until this actually completes.
+app.use(async (req, res, next) => {
+  await ensureWebhooksSetupOnce();
+  next();
+});
+
 // SESSION TOKENS (superadmin + director/doctor) — issued on /api/admin-login,
 // /api/director-login, /api/doctor-login, and /api/admin-impersonate.
 // Persisted to Firestore's "sessions" collection (doc id = token) so they survive
@@ -3997,16 +4008,29 @@ async function ensureWebhookRegistered(token: string, label: string) {
   }
 }
 
+// Single-flight cache for the middleware above: the first request on a fresh cold
+// start does the real check (awaited); every request after that (same warm instance)
+// just awaits the already-resolved promise, which is effectively free.
+let webhookSetupPromise: Promise<void> | null = null;
+function ensureWebhooksSetupOnce(): Promise<void> {
+  if (!process.env.VERCEL) return Promise.resolve();
+  if (!webhookSetupPromise) {
+    webhookSetupPromise = loadTelegramCreds()
+      .then(() => Promise.all([
+        ensureWebhookRegistered(activeTelegramToken, "Patient Bot"),
+        ensureWebhookRegistered(activeDoctorBotToken, "Doctor Bot"),
+      ]))
+      .then(() => undefined)
+      .catch((err) => {
+        console.error("[Telegram Webhook] one-time setup failed:", err);
+      });
+  }
+  return webhookSetupPromise;
+}
+
 // Guard server execution when deploying to serverless platforms (like Vercel)
 if (!process.env.VERCEL) {
   startServer();
-} else {
-  // No app.listen()/polling here — Vercel invokes `app` per-request instead. Fire the
-  // webhook check once per cold start; it's cheap and idempotent on warm reuse.
-  loadTelegramCreds().then(() => {
-    ensureWebhookRegistered(activeTelegramToken, "Patient Bot");
-    ensureWebhookRegistered(activeDoctorBotToken, "Doctor Bot");
-  });
 }
 
 export default app;
