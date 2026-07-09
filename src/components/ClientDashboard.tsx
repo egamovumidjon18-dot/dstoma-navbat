@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clinic, Doctor, Service, QueueItem, Patient, ToothDiagnosis } from '../types';
 import { DjangoAPI, getApiUrl } from '../services/api';
@@ -40,8 +40,13 @@ import {
   QrCode,
   Bot,
   MapPin,
-  ExternalLink
+  ExternalLink,
+  Navigation,
+  Users,
+  Building2,
+  History
 } from 'lucide-react';
+import ClinicCard from './ClinicCard';
 
 interface ClientDashboardProps {
   clinics: Clinic[];
@@ -1066,6 +1071,13 @@ export default function ClientDashboard({
   const [servicesSearchTerm, setServicesSearchTerm] = useState('');
   const [openServiceCategory, setOpenServiceCategory] = useState<string>("Mashhur xizmatlar");
 
+  // Landing-page hero: search box is a lightweight proxy that scrolls to and focuses
+  // the real clinic list/map below (which already has its own search/GPS/distance
+  // sorting) rather than duplicating that state here.
+  const [heroSearchTerm, setHeroSearchTerm] = useState('');
+  const nearbyClinicsRef = useRef<HTMLDivElement>(null);
+  const scrollToClinics = () => nearbyClinicsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
   const getServiceCategory = (name: string): string => {
     const n = name.toLowerCase();
     
@@ -1160,17 +1172,17 @@ export default function ClientDashboard({
         <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
 
-        <div className="flex flex-col md:flex-row items-center justify-between gap-5 relative z-10">
-          <div className="text-left space-y-1">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 md:gap-5 relative z-10">
+          <div className="text-left space-y-1 min-w-0">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-[#10b981] text-[10px] font-black uppercase tracking-wider">
               <Activity className="w-3 h-3 text-emerald-400 animate-pulse" /> {t("Faol filial monito'rlari")}
             </span>
-            <h2 className="text-md font-black text-white tracking-wider flex items-center gap-2 uppercase">
+            <h2 className="text-md font-black text-white tracking-wider flex items-center gap-2 uppercase truncate">
               {activeClinic?.name}
             </h2>
             <span className="text-xs text-slate-400 font-bold leading-normal block">
               📍 {activeClinic?.address} {activeClinic?.mapLink && (
-                <a 
+                <a
                   href={activeClinic.mapLink}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -1182,17 +1194,19 @@ export default function ClientDashboard({
             </span>
           </div>
 
-          {/* Tri-Action CTA Buttons styled exactly in luxurious cyber gradients */}
-          <div className="flex flex-wrap items-center justify-end gap-3 shrink-0">
+          {/* Tri-Action CTA Buttons — compact icon-first grid on mobile so this card doesn't
+              dominate the screen above the hero; full labels return from sm: up. */}
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-3 shrink-0">
             {/* 1. View / Switch Clinics Map (Cyan MapPin glass tab) */}
             <button
               onClick={() => {
                 onSelectClinic(null);
               }}
-              className="px-5 py-3 text-xs font-black uppercase tracking-wider rounded-2xl flex items-center gap-2 transition-all cursor-pointer bg-slate-900 border border-[#203254]/80 text-cyan-400 hover:text-white hover:bg-slate-850 shadow-lg active:scale-95"
+              className="px-2 py-2.5 sm:px-5 sm:py-3 text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-xl sm:rounded-2xl flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition-all cursor-pointer bg-slate-900 border border-[#203254]/80 text-cyan-400 hover:text-white hover:bg-slate-850 shadow-lg active:scale-95"
             >
-              <MapPin className="w-4 h-4 text-cyan-400" />
-              {t("FILIALLAR XARITASI")}
+              <MapPin className="w-4 h-4 text-cyan-400 shrink-0" />
+              <span className="sm:hidden">{t("Xarita")}</span>
+              <span className="hidden sm:inline">{t("FILIALLAR XARITASI")}</span>
             </button>
 
             {/* 2. Register new Patient (Emerald dark luxury) */}
@@ -1200,10 +1214,11 @@ export default function ClientDashboard({
               onClick={() => {
                 setActiveSubView('register');
               }}
-              className="px-5 py-3 text-xs font-black uppercase tracking-wider rounded-2xl flex items-center gap-2 transition-all cursor-pointer bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-black shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/25 active:scale-95"
+              className="px-2 py-2.5 sm:px-5 sm:py-3 text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-xl sm:rounded-2xl flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition-all cursor-pointer bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-black shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/25 active:scale-95"
             >
-              <UserPlus2 className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-              {t("Yangi bemor Ro'yxatdan o'tish")}
+              <UserPlus2 className="w-4 h-4 text-slate-950 stroke-[2.5] shrink-0" />
+              <span className="sm:hidden">{t("Ro'yxat")}</span>
+              <span className="hidden sm:inline">{t("Yangi bemor Ro'yxatdan o'tish")}</span>
             </button>
 
             {/* 3. Patient Cabinet (Indigo luxury glass tab) */}
@@ -1217,10 +1232,11 @@ export default function ClientDashboard({
                   setActiveSubView('login');
                 }
               }}
-              className="px-5 py-3 text-xs font-black uppercase tracking-wider rounded-2xl flex items-center gap-2 transition-all cursor-pointer bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/10 hover:shadow-cyan-500/25 active:scale-95"
+              className="px-2 py-2.5 sm:px-5 sm:py-3 text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-xl sm:rounded-2xl flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition-all cursor-pointer bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/10 hover:shadow-cyan-500/25 active:scale-95"
             >
-              <LogIn className="w-4 h-4 text-cyan-200" />
-              {t("bemor Shaxsiy kabinetga kirish")}
+              <LogIn className="w-4 h-4 text-cyan-200 shrink-0" />
+              <span className="sm:hidden">{t("Kirish")}</span>
+              <span className="hidden sm:inline">{t("bemor Shaxsiy kabinetga kirish")}</span>
             </button>
           </div>
         </div>
@@ -1229,14 +1245,218 @@ export default function ClientDashboard({
       {/* ----------------- CLIENT DASHBOARD WORKSPACE ----------------- */}
       {activeSubView === 'home' && (
         <div className="space-y-6">
+          {/* ----------------- HERO ----------------- */}
+          <div className="bg-[#0a0f1d] rounded-3xl p-6 sm:p-10 border border-[#1e3256]/60 relative overflow-hidden">
+            <div className="absolute -right-16 -top-16 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -left-10 bottom-0 w-40 h-40 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+              <div className="max-w-xl">
+                <h1 className="text-2xl sm:text-4xl font-black text-white leading-tight">
+                  Eng yaqin stomatologik klinikani <span className="text-emerald-400">toping</span>
+                </h1>
+                <p className="text-sm text-slate-400 mt-3 leading-relaxed">
+                  Onlayn navbat oling va vaqtni tejang. Sog'lig'ingiz biz uchun muhim!
+                </p>
+                <form
+                  onSubmit={(e) => { e.preventDefault(); scrollToClinics(); }}
+                  className="mt-6 flex flex-col sm:flex-row items-stretch gap-3"
+                >
+                  <div className="flex-1 flex items-center gap-2 bg-[#111827] border border-[#1e3256]/60 rounded-xl px-4">
+                    <Search className="w-4 h-4 text-slate-500 shrink-0" />
+                    <input
+                      type="text"
+                      value={heroSearchTerm}
+                      onChange={(e) => setHeroSearchTerm(e.target.value)}
+                      placeholder="Klinika yoki manzilni qidiring..."
+                      className="flex-1 bg-transparent py-3 text-sm text-white placeholder:text-slate-500 outline-none min-w-0"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={scrollToClinics}
+                    className="flex items-center justify-center gap-2 px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-[#04120c] text-sm font-black rounded-xl transition-colors shrink-0"
+                  >
+                    <Navigation className="w-4 h-4" /> GPS orqali topish
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white text-sm font-black rounded-xl transition-colors shrink-0"
+                  >
+                    <Calendar className="w-4 h-4" /> Navbat olish
+                  </button>
+                </form>
+              </div>
+
+              {/* Creative animated tooth centerpiece — desktop only, mirrors the reference mockup */}
+              <div className="relative hidden lg:flex items-center justify-center h-80">
+                <motion.div
+                  className="absolute bottom-6 w-56 h-56 rounded-full bg-emerald-500/20 blur-3xl"
+                  animate={{ opacity: [0.35, 0.65, 0.35], scale: [1, 1.08, 1] }}
+                  transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                />
+                <motion.div
+                  className="absolute bottom-10 w-44 h-7 rounded-full bg-cyan-400/25 blur-xl"
+                  animate={{ opacity: [0.25, 0.55, 0.25], scaleX: [1, 1.15, 1] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                />
+
+                <motion.div
+                  className="absolute w-64 h-64 rounded-full border border-emerald-500/20"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 22, repeat: Infinity, ease: 'linear' }}
+                />
+                <motion.div
+                  className="absolute w-52 h-52 rounded-full border border-dashed border-cyan-500/20"
+                  animate={{ rotate: -360 }}
+                  transition={{ duration: 28, repeat: Infinity, ease: 'linear' }}
+                />
+
+                {[...Array(6)].map((_, i) => (
+                  <motion.span
+                    key={i}
+                    className="absolute w-1.5 h-1.5 rounded-full bg-emerald-300"
+                    style={{
+                      top: `${18 + (i * 11) % 60}%`,
+                      left: `${(i % 2 === 0 ? 8 : 88) + (i * 4)}%`,
+                    }}
+                    animate={{ opacity: [0.2, 1, 0.2], scale: [0.6, 1.3, 0.6] }}
+                    transition={{ duration: 2 + i * 0.4, repeat: Infinity, ease: 'easeInOut', delay: i * 0.3 }}
+                  />
+                ))}
+
+                <motion.div
+                  className="relative z-10"
+                  animate={{ y: [0, -14, 0], rotate: [-2, 2, -2] }}
+                  transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <div className="absolute inset-4 blur-3xl bg-emerald-400/20 rounded-full" />
+                  <svg width="180" height="210" viewBox="0 0 180 210" fill="none" className="relative drop-shadow-[0_18px_32px_rgba(16,185,129,0.35)]">
+                    <defs>
+                      <linearGradient id="heroToothBody" x1="15%" y1="0%" x2="90%" y2="100%">
+                        <stop offset="0%" stopColor="#ffffff" />
+                        <stop offset="35%" stopColor="#eef8ff" />
+                        <stop offset="70%" stopColor="#c2ddf0" />
+                        <stop offset="100%" stopColor="#86aecb" />
+                      </linearGradient>
+                      <linearGradient id="heroToothShade" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
+                        <stop offset="55%" stopColor="#ffffff" stopOpacity="0" />
+                        <stop offset="100%" stopColor="#33607f" stopOpacity="0.55" />
+                      </linearGradient>
+                      <radialGradient id="heroToothShine" cx="32%" cy="20%" r="38%">
+                        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+                        <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+                      </radialGradient>
+                    </defs>
+
+                    {/* grounding shadow */}
+                    <ellipse cx="90" cy="202" rx="48" ry="7" fill="#02101f" opacity="0.35" />
+
+                    {/* classic molar silhouette: broad two-cusp crown, tapered waist,
+                        two rounded roots with a clear notch between them */}
+                    <path
+                      d="M90 12
+                         C 62 12, 35 26, 31 58
+                         C 28 82, 35 100, 45 116
+                         C 55 132, 57 152, 59 172
+                         C 60 185, 65 195, 73 195
+                         C 81 195, 83 182, 84 169
+                         C 85 155, 87 143, 90 143
+                         C 93 143, 95 155, 96 169
+                         C 97 182, 99 195, 107 195
+                         C 115 195, 120 185, 121 172
+                         C 123 152, 125 132, 135 116
+                         C 145 100, 152 82, 149 58
+                         C 145 26, 118 12, 90 12 Z"
+                      fill="url(#heroToothBody)"
+                      stroke="#67e8f9"
+                      strokeWidth="2.5"
+                      strokeOpacity="0.85"
+                    />
+                    {/* volumetric shading pass over the same silhouette */}
+                    <path
+                      d="M90 12
+                         C 62 12, 35 26, 31 58
+                         C 28 82, 35 100, 45 116
+                         C 55 132, 57 152, 59 172
+                         C 60 185, 65 195, 73 195
+                         C 81 195, 83 182, 84 169
+                         C 85 155, 87 143, 90 143
+                         C 93 143, 95 155, 96 169
+                         C 97 182, 99 195, 107 195
+                         C 115 195, 120 185, 121 172
+                         C 123 152, 125 132, 135 116
+                         C 145 100, 152 82, 149 58
+                         C 145 26, 118 12, 90 12 Z"
+                      fill="url(#heroToothShade)"
+                    />
+                    {/* crown cusp dimple */}
+                    <path d="M64 30 Q90 44 116 30" stroke="#7ba3c2" strokeWidth="3" strokeLinecap="round" opacity="0.7" fill="none" />
+                    {/* enamel-gum line across the crown */}
+                    <path d="M36 82 Q90 104 144 82" stroke="#7ba3c2" strokeWidth="2" opacity="0.5" fill="none" />
+                    {/* inner root-notch contour so the two legs read clearly */}
+                    <path d="M84 169 C 85 155, 87 143, 90 143 C 93 143, 95 155, 96 169" stroke="#5c86a5" strokeWidth="2" strokeLinecap="round" opacity="0.6" fill="none" />
+                    {/* glossy highlight */}
+                    <ellipse cx="64" cy="54" rx="26" ry="34" fill="url(#heroToothShine)" />
+                  </svg>
+                </motion.div>
+
+                <motion.div
+                  className="absolute top-6 left-2 w-11 h-11 rounded-2xl bg-[#0c1225] border border-emerald-500/30 flex items-center justify-center shadow-lg"
+                  animate={{ y: [0, -10, 0] }}
+                  transition={{ duration: 3.6, repeat: Infinity, ease: 'easeInOut', delay: 0.4 }}
+                >
+                  <Sparkles className="w-5 h-5 text-emerald-400" />
+                </motion.div>
+                <motion.div
+                  className="absolute bottom-16 right-0 w-11 h-11 rounded-2xl bg-[#0c1225] border border-cyan-500/30 flex items-center justify-center shadow-lg"
+                  animate={{ y: [0, 10, 0] }}
+                  transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut', delay: 0.9 }}
+                >
+                  <ShieldCheck className="w-5 h-5 text-cyan-400" />
+                </motion.div>
+                <motion.div
+                  className="absolute top-14 right-2 w-9 h-9 rounded-xl bg-[#0c1225] border border-blue-500/30 flex items-center justify-center shadow-lg"
+                  animate={{ y: [0, -8, 0] }}
+                  transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut', delay: 1.3 }}
+                >
+                  <Zap className="w-4 h-4 text-blue-400" />
+                </motion.div>
+              </div>
+            </div>
+          </div>
+
+          {/* ----------------- NEARBY CLINICS: map + card list ----------------- */}
+          <div ref={nearbyClinicsRef} className="scroll-mt-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-black text-white uppercase tracking-wider">Sizga eng yaqin klinikalar</h2>
+              <span className="text-[11px] font-bold text-slate-500">{clinics.length} ta klinika</span>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+              <ClinicMap
+                clinics={clinics}
+                selectedClinic={selectedClinic}
+                onSelectClinic={onSelectClinic}
+                language={language}
+                userLocationRef={userLocationRef}
+              />
+              <div className="space-y-3">
+                {clinics.length === 0 ? (
+                  <div className="bg-[#0c1225] border border-[#1e3256]/60 rounded-2xl p-8 text-center text-sm text-slate-500">
+                    Hozircha tizimda klinikalar mavjud emas.
+                  </div>
+                ) : (
+                  clinics
+                    .filter((c) => !heroSearchTerm.trim() || c.name.toLowerCase().includes(heroSearchTerm.trim().toLowerCase()) || (c.address || '').toLowerCase().includes(heroSearchTerm.trim().toLowerCase()))
+                    .map((c) => (
+                      <ClinicCard key={c.id} clinic={c} onBook={() => onSelectClinic(c)} />
+                    ))
+                )}
+              </div>
+            </div>
+          </div>
+
           <AdBanner placement="web_home" />
-          <ClinicMap
-            clinics={clinics}
-            selectedClinic={selectedClinic}
-            onSelectClinic={onSelectClinic}
-            language={language}
-            userLocationRef={userLocationRef}
-          />
 
           {activeClinic ? (
             <div className="space-y-6 animate-fade-in text-left">
@@ -1386,6 +1606,54 @@ export default function ClientDashboard({
               </p>
             </div>
           )}
+
+          {/* ----------------- STATS (real, live-computed — never fabricated) ----------------- */}
+          {(() => {
+            const ratedClinics = clinics.filter((c) => (c.ratingCount || 0) > 0);
+            const avgRating = ratedClinics.length > 0
+              ? (ratedClinics.reduce((sum, c) => sum + c.rating, 0) / ratedClinics.length).toFixed(1)
+              : null;
+            const stats = [
+              { icon: <Building2 className="text-emerald-400" />, value: clinics.length, label: "Hamkor klinikalar" },
+              { icon: <User className="text-blue-400" />, value: doctors.length, label: "Shifokorlar" },
+              { icon: <Ticket className="text-indigo-400" />, value: queues.length, label: "Xizmat ko'rsatilgan chiptalar" },
+              { icon: <Star className="text-amber-400" />, value: avgRating || "—", label: "O'rtacha reyting" },
+            ];
+            return (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {stats.map((s, i) => (
+                  <div key={i} className="bg-[#0c1225] border border-[#1e3256]/60 rounded-2xl p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center shrink-0">{s.icon}</div>
+                    <div className="min-w-0">
+                      <p className="text-lg font-black text-white leading-none">{s.value}</p>
+                      <p className="text-[10px] text-slate-500 mt-1 truncate">{s.label}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* ----------------- WHY DSTOMA ----------------- */}
+          <div className="bg-[#0c1225] border border-[#1e3256]/60 rounded-3xl p-6">
+            <h2 className="text-sm font-black text-white uppercase tracking-wider mb-4">Nima uchun DStoma Queue?</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { icon: <Calendar className="text-emerald-400" />, title: "Onlayn navbat", desc: "Navbatni oldindan oling" },
+                { icon: <MapPin className="text-cyan-400" />, title: "GPS va xarita", desc: "Eng yaqin klinikani toping" },
+                { icon: <Bot className="text-indigo-400" />, title: "AI yordamchi", desc: "Tez tashxis maslahati" },
+                { icon: <ShieldCheck className="text-blue-400" />, title: "Xavfsiz va ishonchli", desc: "Ma'lumotlaringiz himoyalangan" },
+              ].map((f, i) => (
+                <div key={i} className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">{f.icon}</div>
+                  <div>
+                    <p className="text-xs font-bold text-white">{f.title}</p>
+                    <p className="text-[10.5px] text-slate-500 mt-0.5 leading-snug">{f.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

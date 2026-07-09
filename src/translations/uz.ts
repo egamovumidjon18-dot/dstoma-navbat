@@ -149,6 +149,7 @@ export const uz = {
   detectingLocationLabel: "Joylashuv Aniqlanmoqda...",
   myLocationLabel: "Joylashuvim",
   closeLabel: "✕ Yopish",
+  verifiedClinicLabel: "Tasdiqlangan klinika",
   googleRouteLabel: "🟢 GOOGLE MARSHRUT",
   gis2RouteLabel: "🔴 2GIS MARSHRUT",
   interactiveMapActiveLabel: "Interaktiv xaritasi faol:",

@@ -149,6 +149,7 @@ export const kk = {
   detectingLocationLabel: "Орналасқан жер анықталуда...",
   myLocationLabel: "Менің орным",
   closeLabel: "✕ Жабу",
+  verifiedClinicLabel: "Расталған клиника",
   googleRouteLabel: "🟢 GOOGLE БАҒЫТЫ",
   gis2RouteLabel: "🔴 2GIS БАҒЫТЫ",
   interactiveMapActiveLabel: "Интерактивті картасы белсенді:",

@@ -609,7 +609,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 <option value="" className="text-slate-400 font-normal">ℹ️ {t('chooseClinicPlaceholder')}</option>
                 {clinics.map((clinic) => (
                   <option key={clinic.id} value={clinic.id} className="text-slate-200 font-semibold bg-[#0c1225]">
-                    {clinic.name} ({clinic.subdomain}.dstoma-navbat-lk2p.vercel.app)
+                    {clinic.name}
                   </option>
                 ))}
               </select>
@@ -668,8 +668,8 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-black px-2 py-0.5 bg-slate-900 border border-[#1e3256]/60 text-emerald-400 rounded-md font-mono">
-                      {clinic.subdomain}.dstoma-navbat-lk2p.vercel.app
+                    <span className="text-[10px] font-black px-2 py-0.5 bg-slate-900 border border-[#1e3256]/60 text-emerald-400 rounded-md flex items-center gap-1 uppercase tracking-wider">
+                      <ShieldCheck className="w-3 h-3 shrink-0" /> {t('verifiedClinicLabel')}
                     </span>
                     <span className="text-[11px] font-mono font-bold text-amber-500 flex items-center gap-0.5">
                       {clinic.ratingCount ? (
@@ -854,7 +854,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
           <div className="absolute top-14 sm:top-4 right-2 sm:right-4 z-40 max-w-[270px] bg-slate-950/95 backdrop-blur-md p-3 rounded-2xl shadow-2xl border border-[#1e3256]/60 text-left scale-90 sm:scale-100 origin-top-right">
             <div className="flex items-center justify-between gap-1 mb-1.5">
               <div className="flex items-center gap-1 text-[8.5px] uppercase tracking-wider font-slate-400 text-emerald-450 font-black leading-none">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-405 shrink-0" /> {selectedClinic.subdomain}.dstoma-navbat-lk2p.vercel.app
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-405 shrink-0" /> {t('verifiedClinicLabel')}
               </div>
               <button 
                 onClick={(e) => {

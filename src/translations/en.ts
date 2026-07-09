@@ -149,6 +149,7 @@ export const en = {
   detectingLocationLabel: "Detecting Location...",
   myLocationLabel: "My Location",
   closeLabel: "✕ Close",
+  verifiedClinicLabel: "Verified clinic",
   googleRouteLabel: "🟢 GOOGLE ROUTE",
   gis2RouteLabel: "🔴 2GIS ROUTE",
   interactiveMapActiveLabel: "Interactive Map Active:",

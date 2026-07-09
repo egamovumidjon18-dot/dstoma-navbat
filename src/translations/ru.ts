@@ -149,6 +149,7 @@ export const ru = {
   detectingLocationLabel: "Определение Местоположения...",
   myLocationLabel: "Моё место",
   closeLabel: "✕ Закрыть",
+  verifiedClinicLabel: "Проверенная клиника",
   googleRouteLabel: "🟢 МАРШРУТ GOOGLE",
   gis2RouteLabel: "🔴 МАРШРУТ 2GIS",
   interactiveMapActiveLabel: "Интерактивная карта активна:",

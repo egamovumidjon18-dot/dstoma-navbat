@@ -56,7 +56,7 @@ export default function InstallAppBanner() {
   if (!visible) return null;
 
   return (
-    <div className="col-span-3 bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap">
+    <div className="md:col-span-3 bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap">
       <div className="flex items-center gap-3 min-w-0">
         <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shrink-0">
           <Download className="w-5 h-5 text-white" />

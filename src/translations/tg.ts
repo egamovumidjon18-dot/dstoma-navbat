@@ -149,6 +149,7 @@ export const tg = {
   detectingLocationLabel: "Ҷойгиршавӣ муайян карда мешавад...",
   myLocationLabel: "Ҷои ман",
   closeLabel: "✕ Пӯшидан",
+  verifiedClinicLabel: "Клиникаи тасдиқшуда",
   googleRouteLabel: "🟢 МАСИРИ GOOGLE",
   gis2RouteLabel: "🔴 МАСИРИ 2GIS",
   interactiveMapActiveLabel: "Харитаи интерактивӣ фаъол аст:",

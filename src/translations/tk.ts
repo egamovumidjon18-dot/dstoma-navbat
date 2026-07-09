@@ -149,6 +149,7 @@ export const tk = {
   detectingLocationLabel: "Ýerleşýän ýer kesgitlenýär...",
   myLocationLabel: "Meniň ýerim",
   closeLabel: "✕ Ýapmak",
+  verifiedClinicLabel: "Tassyklanan klinika",
   googleRouteLabel: "🟢 GOOGLE UGRY",
   gis2RouteLabel: "🔴 2GIS UGRY",
   interactiveMapActiveLabel: "Interaktiw kartasy işjeň:",
