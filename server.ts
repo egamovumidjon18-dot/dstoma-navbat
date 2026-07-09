@@ -4020,13 +4020,17 @@ async function ensureWebhookRegistered(token: string, label: string): Promise<bo
 // rejects it — e.g. a stale token saved before the SuperAdmin rotated it in BotFather
 // and updated Vercel's env var, but never re-saved through the SuperAdmin panel —
 // falls back to the raw environment variable, which is the deployment owner's most
-// directly-controlled source of truth.
-async function ensureWebhookRegisteredWithFallback(currentToken: string, envToken: string | undefined, label: string) {
-  const ok = await ensureWebhookRegistered(currentToken, label);
-  if (!ok && envToken && envToken !== currentToken) {
+// directly-controlled source of truth. Returns whichever token actually ended up
+// registered so the caller can update the live in-memory value too — otherwise the
+// webhook receiver's own token check (which compares against that same in-memory
+// value) would reject every update Telegram sends, even though setWebhook succeeded.
+async function ensureWebhookRegisteredWithFallback(currentToken: string, envToken: string | undefined, label: string): Promise<string | null> {
+  if (await ensureWebhookRegistered(currentToken, label)) return currentToken;
+  if (envToken && envToken !== currentToken) {
     console.log(`[Telegram Webhook] ${label} retrying with the raw env var token...`);
-    await ensureWebhookRegistered(envToken, label);
+    if (await ensureWebhookRegistered(envToken, label)) return envToken;
   }
+  return null;
 }
 
 // Single-flight cache for the middleware above: the first request on a fresh cold
@@ -4043,6 +4047,17 @@ function ensureWebhooksSetupOnce(): Promise<void> {
         ensureWebhookRegisteredWithFallback(activeTelegramToken, envPatientToken, "Patient Bot"),
         ensureWebhookRegisteredWithFallback(activeDoctorBotToken, envDoctorToken, "Doctor Bot"),
       ]))
+      .then(([resolvedPatientToken, resolvedDoctorToken]) => {
+        const patientChanged = resolvedPatientToken && resolvedPatientToken !== activeTelegramToken;
+        const doctorChanged = resolvedDoctorToken && resolvedDoctorToken !== activeDoctorBotToken;
+        if (patientChanged) activeTelegramToken = resolvedPatientToken!;
+        if (doctorChanged) activeDoctorBotToken = resolvedDoctorToken!;
+        if (patientChanged || doctorChanged) {
+          // Persist so the next cold start reads the working token straight from
+          // Firestore instead of needing this same fallback dance again.
+          return saveTelegramCreds(activeTelegramToken, activeDoctorBotToken);
+        }
+      })
       .then(() => undefined)
       .catch((err) => {
         console.error("[Telegram Webhook] one-time setup failed:", err);
