@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#10b981">
+
+    <!-- iOS "Add to Home Screen" — Safari ignores manifest.json for these, so they're
+         set separately: capable=yes launches fullscreen (no Safari URL bar) instead of
+         a mini-browser tab, apple-touch-icon is the home screen icon iOS actually reads. -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DStoma">
+    <link rel="apple-touch-icon" href="/icon-192.png">
+
     <title>DStoma Queue - Multi-Tenant Elektron Navbat Tizimi</title>
     <meta name="google" content="notranslate" />
     <meta name="description" content="Stomatologiya klinikalari uchun ko'p ijarachili (Multi-Tenant) elektron navbat va Google Maps integratsiyali aqlli boshqaruv tizimi. Samarqand, Buxoro va Toshkent filiallari." />
