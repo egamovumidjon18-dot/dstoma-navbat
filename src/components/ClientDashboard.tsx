@@ -249,8 +249,24 @@ export default function ClientDashboard({
     };
   }, []);
 
-  // Simulated initial user starts at null so they must log in or register
-  const [currentUser, setCurrentUser] = useState<Patient | null>(null);
+  // Patient login never issues a server session token (see /api/patient-login) — the
+  // patient record itself, once verified, IS the session. Persisted to localStorage so
+  // a device stays logged in across restarts instead of asking for passport+password
+  // every visit; a useEffect below keeps this in sync with every setCurrentUser call
+  // rather than touching each of the many call sites individually.
+  const PATIENT_SESSION_KEY = 'dstoma_patient_session';
+  const [currentUser, setCurrentUser] = useState<Patient | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const saved = localStorage.getItem(PATIENT_SESSION_KEY);
+    if (!saved) return null;
+    try { return JSON.parse(saved); } catch (e) { return null; }
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (currentUser) localStorage.setItem(PATIENT_SESSION_KEY, JSON.stringify(currentUser));
+    else localStorage.removeItem(PATIENT_SESSION_KEY);
+  }, [currentUser]);
 
   // Screen control state matching user screenshots
   // 'home' -> Screenshot 1 (Main page with buttons, Shifokorlar & Xizmatlar listas)
@@ -258,7 +274,12 @@ export default function ClientDashboard({
   // 'login' -> Let the user type their passport and password
   // 'cabinet' -> Screenshot 3 (Bemor Kabineti / Profilingizga kirish)
   // 'booking' -> Logged-in patient's queue-booking wizard: pick clinic -> pick doctor -> confirm
-  const [activeSubView, setActiveSubView] = useState<'home' | 'register' | 'login' | 'cabinet' | 'booking'>('home');
+  // Defaults straight to 'cabinet' when a remembered session was found above, instead
+  // of showing the logged-out landing page to an already-logged-in patient.
+  const [activeSubView, setActiveSubView] = useState<'home' | 'register' | 'login' | 'cabinet' | 'booking'>(() => {
+    if (typeof window === 'undefined') return 'home';
+    return localStorage.getItem('dstoma_patient_session') ? 'cabinet' : 'home';
+  });
 
   // Form States
   const [fullName, setFullName] = useState('');

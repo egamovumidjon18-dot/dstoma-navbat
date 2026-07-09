@@ -2,6 +2,39 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Clinic, Doctor, Service, QueueItem, SaaSPayment, DoctorClinicLink } from '../types';
 import { TRANSLATIONS, Language } from '../translations';
 
+// Director/doctor (and patient) sessions persist in localStorage so a device stays
+// logged in across browser restarts — "remember this device" was an explicit ask.
+// The superadmin's own session deliberately stays in sessionStorage only (cleared the
+// moment the tab closes): it's the single most powerful account, so trading a little
+// convenience for not lingering indefinitely on a shared/borrowed device is worth it.
+function readUserSession(): any {
+  if (typeof window === 'undefined') return null;
+  const fromLocal = localStorage.getItem('dstoma_user_session');
+  if (fromLocal) {
+    try { return JSON.parse(fromLocal); } catch (e) { /* ignore */ }
+  }
+  const fromSession = sessionStorage.getItem('dstoma_user_session');
+  if (fromSession) {
+    try { return JSON.parse(fromSession); } catch (e) { /* ignore */ }
+  }
+  return null;
+}
+function writeUserSession(session: any) {
+  if (typeof window === 'undefined') return;
+  if (session?.type === 'superadmin') {
+    sessionStorage.setItem('dstoma_user_session', JSON.stringify(session));
+    localStorage.removeItem('dstoma_user_session');
+  } else {
+    localStorage.setItem('dstoma_user_session', JSON.stringify(session));
+    sessionStorage.removeItem('dstoma_user_session');
+  }
+}
+function clearUserSession() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('dstoma_user_session');
+  sessionStorage.removeItem('dstoma_user_session');
+}
+
 export function useAppState() {
   // Master States
   const [clinics, setClinics] = useState<Clinic[]>([]);
@@ -20,15 +53,8 @@ export function useAppState() {
   // public-facing `selectedClinic` (that one drives the Bemor Kabineti tab). Doctors
   // with 0 or 1 active links just use their home `clinicId`, unaffected by this.
   const [activeDoctorClinicId, setActiveDoctorClinicId] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = sessionStorage.getItem('dstoma_user_session');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed?.type === 'doctor' && parsed?.clinicId) return parsed.clinicId;
-        } catch (e) { /* ignore */ }
-      }
-    }
+    const parsed = readUserSession();
+    if (parsed?.type === 'doctor' && parsed?.clinicId) return parsed.clinicId;
     return null;
   });
 
@@ -52,19 +78,7 @@ export function useAppState() {
     id?: string;
     clinicId?: string;
     name?: string;
-  } | null>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = sessionStorage.getItem('dstoma_user_session');
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (e) {
-          return null;
-        }
-      }
-    }
-    return null;
-  });
+  } | null>(() => readUserSession());
 
   // Set while a superadmin is impersonating a Director/Doctor panel (see
   // handleAdminImpersonate) — remembers the original superadmin identity so
@@ -116,17 +130,21 @@ export function useAppState() {
   // Session token issued by /api/director-login, /api/doctor-login, or
   // /api/admin-impersonate — required by every clinic-staff-only write endpoint
   // (add/remove doctor, delete patient, manage services, queue status changes).
+  // Kept in localStorage (not sessionStorage) so a doctor/director's device stays
+  // logged in across browser restarts — the token's own server-side TTL is still
+  // what actually limits how long it stays valid, this just avoids re-login prompts.
   const [staffToken, setStaffToken] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
-      return sessionStorage.getItem('dstoma_staff_token');
+      return localStorage.getItem('dstoma_staff_token') || sessionStorage.getItem('dstoma_staff_token');
     }
     return null;
   });
   const setStaffTokenPersisted = (token: string | null) => {
     setStaffToken(token);
     if (typeof window !== 'undefined') {
-      if (token) sessionStorage.setItem('dstoma_staff_token', token);
-      else sessionStorage.removeItem('dstoma_staff_token');
+      sessionStorage.removeItem('dstoma_staff_token');
+      if (token) localStorage.setItem('dstoma_staff_token', token);
+      else localStorage.removeItem('dstoma_staff_token');
     }
   };
   const staffAuthHeaders = (): Record<string, string> =>
@@ -258,8 +276,8 @@ export function useAppState() {
         const session = { type: 'superadmin' as const, name: t('clinicOwner') };
         setCurrentUser(session);
         setSuperadminTokenPersisted(data.token || null);
+        writeUserSession(session);
         if (typeof window !== 'undefined') {
-          sessionStorage.setItem('dstoma_user_session', JSON.stringify(session));
           localStorage.setItem('dstoma_sa_login', userLower);
         }
         setAuthUsername('');
@@ -283,9 +301,7 @@ export function useAppState() {
         };
         setCurrentUser(session);
         setStaffTokenPersisted(data.token || null);
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem('dstoma_user_session', JSON.stringify(session));
-        }
+        writeUserSession(session);
         setSelectedClinic(matchedClinic);
         setAuthUsername('');
         setAuthPassword('');
@@ -309,9 +325,7 @@ export function useAppState() {
         };
         setCurrentUser(session);
         setStaffTokenPersisted(data.token || null);
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem('dstoma_user_session', JSON.stringify(session));
-        }
+        writeUserSession(session);
         setActiveDoctorClinicId(matchedDoctor.clinicId);
         setAuthUsername('');
         setAuthPassword('');
@@ -334,8 +348,8 @@ export function useAppState() {
     setSuperadminTokenPersisted(null);
     setStaffTokenPersisted(null);
     setImpersonatorSession(null);
+    clearUserSession();
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('dstoma_user_session');
       sessionStorage.removeItem('dstoma_impersonator_session');
     }
   };
@@ -370,14 +384,14 @@ export function useAppState() {
         setCurrentUser(session);
         setSelectedClinic(clinic);
         setActiveTab('boshliq');
-        if (typeof window !== 'undefined') sessionStorage.setItem('dstoma_user_session', JSON.stringify(session));
+        writeUserSession(session);
       } else {
         const doctor = data.doctor;
         const session = { type: 'doctor' as const, id: doctor.id, clinicId: doctor.clinicId, name: doctor.name };
         setCurrentUser(session);
         setActiveDoctorClinicId(doctor.clinicId);
         setActiveTab('shifokor');
-        if (typeof window !== 'undefined') sessionStorage.setItem('dstoma_user_session', JSON.stringify(session));
+        writeUserSession(session);
       }
     } catch (err: any) {
       setAuthError(err.message);
@@ -391,8 +405,8 @@ export function useAppState() {
     setActiveTab('superadmin');
     setImpersonatorSession(null);
     setStaffTokenPersisted(null);
+    writeUserSession(impersonatorSession);
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('dstoma_user_session', JSON.stringify(impersonatorSession));
       sessionStorage.removeItem('dstoma_impersonator_session');
     }
   };
