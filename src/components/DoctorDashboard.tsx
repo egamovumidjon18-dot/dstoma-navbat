@@ -2197,7 +2197,7 @@ export default function DoctorDashboard({
                         value={queueListSearch}
                         onChange={(e) => setQueueListSearch(e.target.value)}
                         placeholder={t("bemor ismi, tel yoki navbat raqami...")}
-                        className="w-64 bg-slate-50 border border-slate-200 rounded-lg py-1.5 pl-3 pr-8 text-xs outline-none"
+                        className="w-64 bg-slate-50 border border-slate-200 rounded-lg py-1.5 pl-3 pr-8 text-xs outline-none text-slate-800"
                       />
                       <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2" />
                     </div>
@@ -2542,7 +2542,7 @@ export default function DoctorDashboard({
                             value={patientListSearch}
                             onChange={(e) => setPatientListSearch(e.target.value)}
                             placeholder={t("ism, telefon yoki id bo'yicha qidirish...")}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-xs outline-none focus:border-emerald-500/50 transition-colors"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-xs outline-none focus:border-emerald-500/50 transition-colors text-slate-800"
                           />
                           <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5" />
                         </div>
@@ -2570,7 +2570,7 @@ export default function DoctorDashboard({
                             onChange={(e) => setCrossClinicQuery(e.target.value)}
                             onKeyDown={(e) => e.key === "Enter" && handleCrossClinicSearch()}
                             placeholder={t("telefon raqami yoki pasport seriyasi...")}
-                            className="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2.5 px-4 text-sm outline-none focus:border-indigo-500 transition-colors"
+                            className="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2.5 px-4 text-sm outline-none focus:border-indigo-500 transition-colors text-slate-800"
                           />
                           <button
                             onClick={handleCrossClinicSearch}
@@ -2797,7 +2797,7 @@ export default function DoctorDashboard({
                               <input
                                 type="text"
                                 placeholder="dd.mm.yyyy"
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-[11px] font-mono outline-none"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-[11px] font-mono outline-none text-slate-800"
                               />
                               <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5" />
                             </div>
@@ -2806,7 +2806,7 @@ export default function DoctorDashboard({
                               <input
                                 type="text"
                                 placeholder="dd.mm.yyyy"
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-[11px] font-mono outline-none"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-3 pr-8 text-[11px] font-mono outline-none text-slate-800"
                               />
                               <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5" />
                             </div>
@@ -2997,7 +2997,7 @@ export default function DoctorDashboard({
 
           {activeView === "statistika" && (
             <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-              <Statistics queues={queues} services={services} doctors={doctors} language={language} />
+              <Statistics queues={queues} services={services} doctors={doctors} patients={clinicPatients} clinicId={effectiveClinicId} staffToken={staffToken} language={language} />
             </div>
           )}
 
@@ -3058,11 +3058,11 @@ export default function DoctorDashboard({
                 <select
                   value={scheduleServiceId}
                   onChange={(e) => setScheduleServiceId(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
                 >
-                  <option value="">{t("— muolajani tanlang —")}</option>
+                  <option value="" className="text-slate-800">{t("— muolajani tanlang —")}</option>
                   {services.filter((s: any) => !effectiveClinicId || s.clinicId === effectiveClinicId).map((s: any) => (
-                    <option key={s.id} value={s.id}>{s.name} — {Number(s.price).toLocaleString()} so'm</option>
+                    <option key={s.id} value={s.id} className="text-slate-800">{s.name} — {Number(s.price).toLocaleString()} so'm</option>
                   ))}
                 </select>
               </div>
@@ -3072,7 +3072,7 @@ export default function DoctorDashboard({
                   type="date"
                   value={scheduleDate}
                   onChange={(e) => setScheduleDate(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
                 />
               </div>
               <div>
@@ -3081,7 +3081,7 @@ export default function DoctorDashboard({
                   type="time"
                   value={scheduleTime}
                   onChange={(e) => setScheduleTime(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
                 />
               </div>
             </div>
@@ -3191,7 +3191,7 @@ export default function DoctorDashboard({
                   type="text"
                   value={quickAddPatient.fullName}
                   onChange={(e) => setQuickAddPatient({ ...quickAddPatient, fullName: e.target.value })}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
                   placeholder={t("ism familiya")}
                 />
               </div>
@@ -3201,7 +3201,7 @@ export default function DoctorDashboard({
                   type="text"
                   value={quickAddPatient.phone}
                   onChange={(e) => setQuickAddPatient({ ...quickAddPatient, phone: e.target.value })}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
                   placeholder="+998 90 123 45 67"
                 />
               </div>
@@ -3211,7 +3211,7 @@ export default function DoctorDashboard({
                   type="text"
                   value={quickAddPatient.passportSerial}
                   onChange={(e) => setQuickAddPatient({ ...quickAddPatient, passportSerial: e.target.value })}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
                   placeholder="AD1234567"
                 />
               </div>

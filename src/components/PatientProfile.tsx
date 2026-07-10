@@ -680,13 +680,13 @@ export default function PatientProfile({
                       value={reminderText}
                       onChange={(e) => setReminderText(e.target.value)}
                       placeholder={t("masalan: ertaga qabulga kelishini eslating")}
-                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-400 transition-colors"
+                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-400 transition-colors text-slate-800"
                     />
                     <input
                       type="date"
                       value={reminderDueDate}
                       onChange={(e) => setReminderDueDate(e.target.value)}
-                      className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-400 transition-colors"
+                      className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-400 transition-colors text-slate-800"
                     />
                     <button
                       onClick={handleAddReminder}

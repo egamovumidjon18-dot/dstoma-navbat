@@ -2015,7 +2015,7 @@ export default function ClientDashboard({
                 onChange={(e) => setComplaint(e.target.value)}
                 rows={3}
                 placeholder={t("Masalan: tishim og'riyapti...")}
-                className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-blue-500 resize-none bg-slate-50 focus:bg-white transition-colors"
+                className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-blue-500 resize-none bg-slate-50 focus:bg-white transition-colors text-slate-800"
               />
             </div>
 

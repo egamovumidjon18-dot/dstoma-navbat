@@ -236,7 +236,7 @@ export default function MaterialsInventory({ clinicId }: { clinicId?: string }) 
               placeholder="Material nomini qidiring..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium outline-none focus:border-blue-500 transition-colors"
+              className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium outline-none focus:border-blue-500 transition-colors text-slate-800"
             />
           </div>
         </div>

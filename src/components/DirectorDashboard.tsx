@@ -1433,7 +1433,7 @@ export default function DirectorDashboard({
       {/* -------------------- TAB 2: HISOBOT VIEW -------------------- */}
       {activeSubTab === 'hisobot' && (
         <div className="h-full min-h-[600px] bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-          <Statistics queues={clinicQueues} services={clinicServices} doctors={clinicDoctors} language={language} />
+          <Statistics queues={clinicQueues} services={clinicServices} doctors={clinicDoctors} patients={clinicPatientsList} clinicId={currentClinicId} language={language} />
         </div>
       )}
 

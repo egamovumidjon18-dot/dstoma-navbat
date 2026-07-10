@@ -820,7 +820,7 @@ export default function PatientPanel({
                       onChange={(e) => setFamilySearchQuery(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleFamilySearch()}
                       placeholder={t("telefon raqami yoki pasport seriyasi")}
-                      className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500"
+                      className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500 text-slate-800"
                     />
                   </div>
                   <button
@@ -920,7 +920,7 @@ export default function PatientPanel({
                       onChange={(e) => setAiChatInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && !aiChatSending && handleAiChatSend()}
                       placeholder={t("savolingizni yozing...")}
-                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500 min-w-0"
+                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500 min-w-0 text-slate-800"
                     />
                     <button
                       onClick={handleAiChatSend}
@@ -978,7 +978,7 @@ export default function PatientPanel({
                   type="text"
                   value={newFamilyMember.fullName}
                   onChange={(e) => setNewFamilyMember({ ...newFamilyMember, fullName: e.target.value })}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-blue-500 text-slate-800"
                   placeholder={t("ism familiya (namuna)")}
                 />
               </div>
@@ -989,7 +989,7 @@ export default function PatientPanel({
                     type="text"
                     value={newFamilyMember.phone}
                     onChange={(e) => setNewFamilyMember({ ...newFamilyMember, phone: e.target.value })}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-blue-500 text-slate-800"
                     placeholder="+998 90 123 45 67"
                   />
                 </div>
@@ -999,7 +999,7 @@ export default function PatientPanel({
                     type="date"
                     value={newFamilyMember.birthDate}
                     onChange={(e) => setNewFamilyMember({ ...newFamilyMember, birthDate: e.target.value })}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-blue-500 text-slate-800"
                   />
                 </div>
               </div>
@@ -1009,7 +1009,7 @@ export default function PatientPanel({
                   type="text"
                   value={newFamilyMember.passportSerial}
                   onChange={(e) => setNewFamilyMember({ ...newFamilyMember, passportSerial: e.target.value })}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-blue-500 text-slate-800"
                   placeholder="AD1234567"
                 />
               </div>
@@ -1019,7 +1019,7 @@ export default function PatientPanel({
                   type="password"
                   value={newFamilyMember.password}
                   onChange={(e) => setNewFamilyMember({ ...newFamilyMember, password: e.target.value })}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-blue-500 text-slate-800"
                   placeholder={t("a'zo mustaqil kirishi uchun parol")}
                 />
                 <p className="text-[10px] text-slate-400 mt-1">{t("a'zo kattalashganda shu pasport va parol bilan o'z alohida kabinetiga kira oladi.")}</p>

@@ -1,19 +1,19 @@
-import React, { useState, useMemo } from 'react';
-import { 
+import React, { useState, useMemo, useEffect } from 'react';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../services/firebase';
+import { getApiUrl } from '../services/api';
+import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, PieChart, Pie, Cell, AreaChart, Area
+  AreaChart, Area
 } from 'recharts';
-import { 
-  TrendingUp, Users, Activity, Calendar, Star, 
+import {
+  TrendingUp, Users, Activity, Star,
   Download, FileSpreadsheet, ChevronDown, DollarSign,
-  UserCheck, UserPlus, Users2, AlertCircle, HeartPulse,
-  CreditCard, Smartphone, Wallet, Bell, CheckCircle2, Eye, MousePointerClick
+  UserCheck, UserPlus, Users2, HeartPulse,
+  CheckCircle2, Clock, XCircle, Receipt, Package, AlertTriangle
 } from 'lucide-react';
-import { QueueItem, Doctor, Service } from '../types';
+import { QueueItem, Doctor, Service, Patient, PaymentReceipt, Reminder } from '../types';
 import { TRANSLATIONS, Language } from '../translations';
-
-const COLORS = ['#10b981', '#3b82f6', '#6366f1', '#8b5cf6', '#f59e0b'];
-const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ec4899'];
 
 type StatsDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
 const STATS_TRANSLATIONS: Record<string, StatsDictEntry> = {
@@ -23,8 +23,8 @@ const STATS_TRANSLATIONS: Record<string, StatsDictEntry> = {
   haftalik: { ru: "Еженедельно", en: "Weekly", kk: "Апталық", ky: "Жумалык", tg: "Ҳафтагӣ", tk: "Hepdelik" },
   oylik: { ru: "Ежемесячно", en: "Monthly", kk: "Айлық", ky: "Айлык", tg: "Моҳона", tk: "Aýlyk" },
   yillik: { ru: "Ежегодно", en: "Yearly", kk: "Жылдық", ky: "Жылдык", tg: "Солона", tk: "Ýyllyk" },
+  hafta: { ru: "Неделя", en: "Week", kk: "Апта", ky: "Жума", tg: "Ҳафта", tk: "Hepde" },
   "umumiy xulosa": { ru: "Общий обзор", en: "Overview", kk: "Жалпы шолу", ky: "Жалпы карата", tg: "Хулосаи умумӣ", tk: "Umumy syn" },
-  shifokorlar: { ru: "Врачи", en: "Doctors", kk: "Дәрігерлер", ky: "Дарыгерлер", tg: "Духтурон", tk: "Lukmanlar" },
   bemorlar: { ru: "Пациенты", en: "Patients", kk: "Пациенттер", ky: "Бейтаптар", tg: "Беморон", tk: "Näsaglar" },
   muolajalar: { ru: "Процедуры", en: "Treatments", kk: "Емдеу процедуралары", ky: "Дарылоо процедуралары", tg: "Муолиҷаҳо", tk: "Bejergiler" },
   "to'lovlar": { ru: "Платежи", en: "Payments", kk: "Төлемдер", ky: "Төлөмдөр", tg: "Пардохтҳо", tk: "Tölegler" },
@@ -36,52 +36,34 @@ const STATS_TRANSLATIONS: Record<string, StatsDictEntry> = {
   "shifokorlar reytingi": { ru: "Рейтинг врачей", en: "Doctor Rating", kk: "Дәрігерлер рейтингі", ky: "Дарыгерлердин рейтинги", tg: "Рейтинги духтурон", tk: "Lukmanlaryň reýtingi" },
   "tushum dinamikasi": { ru: "Динамика дохода", en: "Revenue Dynamics", kk: "Табыс динамикасы", ky: "Кирешенин динамикасы", tg: "Динамикаи даромад", tk: "Girdejiniň dinamikasy" },
   batafsil: { ru: "Подробнее", en: "Details", kk: "Толығырақ", ky: "Кененирээк", tg: "Муфассал", tk: "Jikme-jik" },
-  "to'lov usullari": { ru: "Способы оплаты", en: "Payment Methods", kk: "Төлем әдістері", ky: "Төлөм ыкмалары", tg: "Усулҳои пардохт", tk: "Töleg usullary" },
-  "shifokorlar reytingi va samaradorligi": { ru: "Рейтинг и эффективность врачей", en: "Doctor Rating & Performance", kk: "Дәрігерлердің рейтингі мен тиімділігі", ky: "Дарыгерлердин рейтинги жана натыйжалуулугу", tg: "Рейтинг ва самаранокии духтурон", tk: "Lukmanlaryň reýtingi we netijeliligi" },
   "ushbu oy": { ru: "Этот месяц", en: "This month", kk: "Осы ай", ky: "Ушул ай", tg: "Ин моҳ", tk: "Şu aý" },
-  shifokor: { ru: "Врач", en: "Doctor", kk: "Дәрігер", ky: "Дарыгер", tg: "Духтур", tk: "Lukman" },
-  "qabul qilganlar": { ru: "Принято пациентов", en: "Patients Seen", kk: "Қабылданғандар", ky: "Кабыл алынгандар", tg: "Қабулшудагон", tk: "Kabul edilenler" },
-  tushum: { ru: "Доход", en: "Revenue", kk: "Табыс", ky: "Киреше", tg: "Даромад", tk: "Girdeji" },
-  reyting: { ru: "Рейтинг", en: "Rating", kk: "Рейтинг", ky: "Рейтинг", tg: "Рейтинг", tk: "Reýting" },
-  "o'rtacha vaqt": { ru: "Среднее время", en: "Average Time", kk: "Орташа уақыт", ky: "Орточо убакыт", tg: "Вақти миёна", tk: "Ortaça wagt" },
-  "hozircha shifokorlar mavjud emas.": { ru: "Пока нет врачей.", en: "No doctors yet.", kk: "Әзірге дәрігерлер жоқ.", ky: "Азырынча дарыгерлер жок.", tg: "Ҳанӯз духтур нест.", tk: "Heniz lukman ýok." },
-  "tushum taqsimoti": { ru: "Распределение дохода", en: "Revenue Distribution", kk: "Табыс бөлінуі", ky: "Кирешенин бөлүнүшү", tg: "Тақсимоти даромад", tk: "Girdejiniň paýlanyşy" },
-  "qabul qilingan bemorlar soni": { ru: "Кол-во принятых пациентов", en: "Number of Patients Seen", kk: "Қабылданған пациенттер саны", ky: "Кабыл алынган бейтаптардын саны", tg: "Шумораи беморони қабулшуда", tk: "Kabul edilen näsaglaryň sany" },
+  "hozircha ma'lumot yo'q": { ru: "Пока нет данных", en: "No data yet", kk: "Әзірге деректер жоқ", ky: "Азырынча маалымат жок", tg: "Ҳанӯз маълумот нест", tk: "Heniz maglumat ýok" },
+  "bemorlar yosh toifalari": { ru: "Возрастные категории пациентов", en: "Patient Age Groups", kk: "Пациенттердің жас топтары", ky: "Бейтаптардын жаш категориялары", tg: "Гурӯҳҳои синнусолии беморон", tk: "Näsaglaryň ýaş toparlary" },
+  "eng ko'p bajarilgan muolajalar (soni)": { ru: "Самые частые процедуры (кол-во)", en: "Most Performed Treatments (Count)", kk: "Ең көп орындалған процедуралар (саны)", ky: "Эң көп аткарылган процедуралар (саны)", tg: "Муолиҷаҳои бештарин иҷрошуда (шумора)", tk: "Iň köp ýerine ýetirilen bejergiler (sany)" },
   "jami bemorlar": { ru: "Всего пациентов", en: "Total Patients", kk: "Барлық пациенттер", ky: "Бардык бейтаптар", tg: "Ҳамаи беморон", tk: "Ähli näsaglar" },
   "qayta kelganlar": { ru: "Повторные визиты", en: "Returning Patients", kk: "Қайта келгендер", ky: "Кайра келгендер", tg: "Такроран омадагон", tk: "Gaýtadan gelenler" },
-  qarzdorlar: { ru: "Должники", en: "Debtors", kk: "Қарыздарлар", ky: "Карызкорлор", tg: "Қарздорон", tk: "Bergidarlar" },
-  "bemorlar yosh toifalari": { ru: "Возрастные категории пациентов", en: "Patient Age Groups", kk: "Пациенттердің жас топтары", ky: "Бейтаптардын жаш категориялары", tg: "Гурӯҳҳои синнусолии беморон", tk: "Näsaglaryň ýaş toparlary" },
-  "mijozlar manbai": { ru: "Источник клиентов", en: "Client Source", kk: "Клиенттер көзі", ky: "Кардарлардын булагы", tg: "Манбаи мизоҷон", tk: "Müşderi çeşmesi" },
-  tavsiya: { ru: "Рекомендация", en: "Referral", kk: "Ұсыныс", ky: "Сунуш", tg: "Тавсия", tk: "Maslahat" },
-  boshqa: { ru: "Другое", en: "Other", kk: "Басқа", ky: "Башка", tg: "Дигар", tk: "Başga" },
-  "eng ko'p bajarilgan muolajalar (soni)": { ru: "Самые частые процедуры (кол-во)", en: "Most Performed Treatments (Count)", kk: "Ең көп орындалған процедуралар (саны)", ky: "Эң көп аткарылган процедуралар (саны)", tg: "Муолиҷаҳои бештарин иҷрошуда (шумора)", tk: "Iň köp ýerine ýetirilen bejergiler (sany)" },
-  "naqd pul": { ru: "Наличные", en: "Cash", kk: "Қолма-қол ақша", ky: "Накталай акча", tg: "Пули нақд", tk: "Nagt pul" },
-  karta: { ru: "Карта", en: "Card", kk: "Карта", ky: "Карта", tg: "Корт", tk: "Kart" },
-  "karta orqali": { ru: "Через карту", en: "Via Card", kk: "Карта арқылы", ky: "Карта аркылуу", tg: "Тавассути корт", tk: "Kart arkaly" },
-  "qarzlar undirilishi": { ru: "Взыскание долгов", en: "Debt Collection", kk: "Қарызды өндіру", ky: "Карызды өндүрүү", tg: "Ситонидани қарз", tk: "Bergi ýygnamak" },
+  "tasdiqlangan to'lovlar": { ru: "Подтверждённые платежи", en: "Confirmed Payments", kk: "Расталған төлемдер", ky: "Тастыкталган төлөмдөр", tg: "Пардохтҳои тасдиқшуда", tk: "Tassyklanan tölegler" },
+  kutilmoqda: { ru: "В ожидании", en: "Pending", kk: "Күтуде", ky: "Күтүүдө", tg: "Дар интизор", tk: "Garaşylýar" },
+  "rad etilgan": { ru: "Отклонено", en: "Rejected", kk: "Қабылданбады", ky: "Четке кагылды", tg: "Рад карда шуд", tk: "Ret edildi" },
+  "jami kvitansiyalar": { ru: "Всего чеков", en: "Total Receipts", kk: "Барлық чектер", ky: "Бардык чектер", tg: "Ҳамаи чекҳо", tk: "Ähli çekler" },
   yuborildi: { ru: "Отправлено", en: "Sent", kk: "Жіберілді", ky: "Жөнөтүлдү", tg: "Фиристода шуд", tk: "Iberildi" },
-  "yetib bordi": { ru: "Доставлено", en: "Delivered", kk: "Жеткізілді", ky: "Жеткирилди", tg: "Расид", tk: "Gowuşdy" },
-  "o'qildi": { ru: "Прочитано", en: "Read", kk: "Оқылды", ky: "Окулду", tg: "Хонда шуд", tk: "Okaldy" },
-  "tasdiqladi (keldi)": { ru: "Подтвердил (пришёл)", en: "Confirmed (Came)", kk: "Растады (келді)", ky: "Ырастады (келди)", tg: "Тасдиқ кард (омад)", tk: "Tassyklady (geldi)" },
-  "ishlatilgan materiallar (xarajatlar)": { ru: "Использованные материалы (расходы)", en: "Used Materials (Expenses)", kk: "Пайдаланылған материалдар (шығындар)", ky: "Колдонулган материалдар (чыгымдар)", tg: "Маводҳои истифодашуда (харочот)", tk: "Ulanylan materiallar (çykdajylar)" },
-  "material nomi": { ru: "Название материала", en: "Material Name", kk: "Материал атауы", ky: "Материалдын аты", tg: "Номи мавод", tk: "Materialyň ady" },
-  "ishlatilgan miqdor": { ru: "Использованное количество", en: "Quantity Used", kk: "Пайдаланылған мөлшер", ky: "Колдонулган өлчөм", tg: "Миқдори истифодашуда", tk: "Ulanylan mukdar" },
-  "xarajat summasi (uzs)": { ru: "Сумма расходов (UZS)", en: "Expense Amount (UZS)", kk: "Шығын сомасы (UZS)", ky: "Чыгым суммасы (UZS)", tg: "Маблағи харочот (UZS)", tk: "Çykdajy mukdary (UZS)" },
-  "materiallar xarajati taqsimoti": { ru: "Распределение расходов на материалы", en: "Material Expense Distribution", kk: "Материал шығындарының бөлінуі", ky: "Материал чыгымдарынын бөлүнүшү", tg: "Тақсимоти харочоти мавод", tk: "Material çykdajylarynyň paýlanyşy" },
-  xarajat: { ru: "Расход", en: "Expense", kk: "Шығын", ky: "Чыгым", tg: "Харочот", tk: "Çykdajy" },
-  shprits: { ru: "шприц", en: "syringe", kk: "шприц", ky: "шприц", tg: "сиринга", tk: "şприс" },
-  quti: { ru: "коробка", en: "box", kk: "қорап", ky: "кутуча", tg: "қуттӣ", tk: "gap" },
-  "noma'lum": { ru: "Неизвестно", en: "Unknown", kk: "Белгісіз", ky: "Белгисиз", tg: "Номаълум", tk: "Näbelli" },
+  bajarildi: { ru: "Выполнено", en: "Done", kk: "Орындалды", ky: "Аткарылды", tg: "Иҷро шуд", tk: "Ýerine ýetirildi" },
+  "ombor qiymati": { ru: "Стоимость склада", en: "Warehouse Value", kk: "Қойма құны", ky: "Кампанын баасы", tg: "Арзиши анбор", tk: "Ammaryň bahasy" },
+  "kam qolgan materiallar": { ru: "Заканчивающиеся материалы", en: "Low Stock Materials", kk: "Аяқталып қалған материалдар", ky: "Түгөнүп бараткан материалдар", tg: "Маводҳои рӯ ба итмом", tk: "Gutarýan materiallar" },
+  "batafsil ma'lumot uchun \"materiallar\" bo'limiga o'ting": { ru: "Подробности смотрите в разделе «Материалы»", en: "See the \"Materials\" section for details", kk: "Толығырақ «Материалдар» бөлімінде", ky: "Толук маалымат үчүн \"Материалдар\" бөлүмүнө өтүңүз", tg: "Барои маълумоти бештар ба бахши \"Маводҳо\" гузаред", tk: "Jikme-jik üçin \"Materiallar\" bölümine geçiň" },
 };
 
 interface StatisticsProps {
   queues?: QueueItem[];
   services?: Service[];
   doctors?: Doctor[];
+  patients?: Patient[];
+  clinicId?: string;
+  staffToken?: string | null;
   language?: Language;
 }
 
-export default function Statistics({ queues = [], services = [], doctors = [], language }: StatisticsProps) {
+export default function Statistics({ queues = [], services = [], doctors = [], patients = [], clinicId, staffToken, language }: StatisticsProps) {
   const localLang: keyof StatsDictEntry | null =
     (language === "ru" || language === "en" || language === "kk" || language === "ky" || language === "tg" || language === "tk")
       ? language
@@ -104,12 +86,70 @@ export default function Statistics({ queues = [], services = [], doctors = [], l
   };
 
   const [timeRange, setTimeRange] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('weekly');
-  const [activeTab, setActiveTab] = useState<'overview' | 'doctors' | 'patients' | 'treatments' | 'payments' | 'reminders' | 'materials'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'patients' | 'treatments' | 'payments' | 'reminders' | 'materials'>('overview');
+
+  // Real payment receipts (bemor -> shifokor to'g'ridan-to'g'ri to'lovi, kvitansiya
+  // orqali tasdiqlanadi) — no cash/card/click/payme method is ever recorded, so
+  // this tab reports real confirmed/pending/rejected totals instead of a fabricated
+  // payment-method breakdown.
+  const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
+  useEffect(() => {
+    if (!clinicId) return;
+    let active = true;
+    fetch(`${getApiUrl()}/api/payment-receipts?clinicId=${encodeURIComponent(clinicId)}`, {
+      headers: staffToken ? { Authorization: `Bearer ${staffToken}` } : {},
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => { if (active) setReceipts(Array.isArray(data) ? data : []); })
+      .catch(() => { if (active) setReceipts([]); });
+    return () => { active = false; };
+  }, [clinicId, staffToken]);
+
+  // Real reminders (only 3 real states exist: pending/sent/done — Telegram exposes
+  // no delivery or read-receipt data, so a "delivered/read" funnel can't be built).
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  useEffect(() => {
+    if (!clinicId) return;
+    let active = true;
+    fetch(`${getApiUrl()}/api/reminders?clinicId=${encodeURIComponent(clinicId)}`, {
+      headers: staffToken ? { Authorization: `Bearer ${staffToken}` } : {},
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => { if (active) setReminders(Array.isArray(data) ? data : []); })
+      .catch(() => { if (active) setReminders([]); });
+    return () => { active = false; };
+  }, [clinicId, staffToken]);
+
+  // Real current-stock materials value — mirrors the same Firestore collection and
+  // calculation MaterialsInventory.tsx uses, just summarized (this tab shows a
+  // snapshot, not a fabricated "expenses over time" chart, since no historical
+  // consumption log exists to build one from).
+  const [materialsValue, setMaterialsValue] = useState(0);
+  const [lowStockCount, setLowStockCount] = useState(0);
+  useEffect(() => {
+    if (!clinicId) return;
+    const unsub = onSnapshot(
+      collection(db, `clinics/${clinicId}/materials`),
+      (snapshot) => {
+        let value = 0;
+        let low = 0;
+        snapshot.forEach((d) => {
+          const m: any = d.data();
+          value += (m.quantity || 0) * (m.price || 0);
+          if ((m.quantity || 0) <= (m.minQuantity || 0)) low++;
+        });
+        setMaterialsValue(value);
+        setLowStockCount(low);
+      },
+      (error) => handleFirestoreError(error, OperationType.GET, `clinics/${clinicId}/materials`)
+    );
+    return () => unsub();
+  }, [clinicId]);
 
   // Compute dynamic stats
   const stats = useMemo(() => {
     const completedQueues = queues.filter(q => q.status === 'completed');
-    
+
     const now = new Date();
     let startDate = new Date();
     if (timeRange === 'daily') startDate.setHours(0, 0, 0, 0);
@@ -118,9 +158,9 @@ export default function Statistics({ queues = [], services = [], doctors = [], l
     if (timeRange === 'yearly') startDate.setFullYear(now.getFullYear() - 1);
 
     const filteredQueues = completedQueues.filter(q => new Date(q.createdAt) >= startDate);
-    
+
     const getServicePrice = (id: string) => services.find(s => s.id === id)?.price || 0;
-    
+
     const totalRevenue = filteredQueues.reduce((sum, q) => sum + getServicePrice(q.serviceId || ''), 0);
     const prevStartDate = new Date(startDate);
     const prevEndDate = new Date(startDate);
@@ -134,102 +174,137 @@ export default function Statistics({ queues = [], services = [], doctors = [], l
       return d >= prevStartDate && d <= prevEndDate;
     });
     const prevRevenue = prevFilteredQueues.reduce((sum, q) => sum + getServicePrice(q.serviceId || ''), 0);
-    const revenueTrend = prevRevenue === 0 ? 100 : Math.round(((totalRevenue - prevRevenue) / prevRevenue) * 100);
-    const patientTrend = prevFilteredQueues.length === 0 ? 100 : Math.round(((filteredQueues.length - prevFilteredQueues.length) / prevFilteredQueues.length) * 100);
+    const revenueTrend = prevRevenue === 0 ? (totalRevenue > 0 ? 100 : 0) : Math.round(((totalRevenue - prevRevenue) / prevRevenue) * 100);
+    const visitTrend = prevFilteredQueues.length === 0 ? (filteredQueues.length > 0 ? 100 : 0) : Math.round(((filteredQueues.length - prevFilteredQueues.length) / prevFilteredQueues.length) * 100);
 
-    const drPerf = doctors.map(doc => {
-      const docQueues = filteredQueues.filter(q => q.doctorId === doc.id);
-      const docRev = docQueues.reduce((sum, q) => sum + getServicePrice(q.serviceId || ''), 0);
-      return {
-        name: doc.name,
-        patients: docQueues.length,
-        revenue: docRev,
-        rating: doc.rating,
-        time: '35 min'
-      };
-    }).sort((a, b) => b.revenue - a.revenue);
-
-    const revenueData = [];
+    // Real revenue chart — every bucket is a genuine sum over completedQueues, no
+    // Math.random() filler (previously used for monthly/yearly views).
+    const revenueData: { name: string; value: number }[] = [];
     if (timeRange === 'daily') {
-      for(let i=9; i<=18; i++) {
+      for (let i = 9; i <= 18; i++) {
         const hourQueues = filteredQueues.filter(q => new Date(q.createdAt).getHours() === i);
         revenueData.push({ name: `${i}:00`, value: hourQueues.reduce((sum, q) => sum + getServicePrice(q.serviceId || ''), 0) });
       }
     } else if (timeRange === 'weekly') {
       const days = ['Yak', 'Dush', 'Sesh', 'Chor', 'Pay', 'Jum', 'Shan'];
-      for(let i=6; i>=0; i--) {
+      for (let i = 6; i >= 0; i--) {
         const d = new Date(); d.setDate(now.getDate() - i);
-        const dayQueues = filteredQueues.filter(q => new Date(q.createdAt).getDate() === d.getDate());
+        const dayQueues = filteredQueues.filter(q => new Date(q.createdAt).getDate() === d.getDate() && new Date(q.createdAt).getMonth() === d.getMonth());
         revenueData.push({ name: days[d.getDay()], value: dayQueues.reduce((sum, q) => sum + getServicePrice(q.serviceId || ''), 0) });
       }
     } else if (timeRange === 'monthly') {
-      for(let i=4; i>=1; i--) {
-        revenueData.push({ name: `${5-i}-Hafta`, value: Math.floor(Math.random() * 20000000) });
+      for (let i = 3; i >= 0; i--) {
+        const weekEnd = new Date(now); weekEnd.setDate(now.getDate() - i * 7);
+        const weekStart = new Date(weekEnd); weekStart.setDate(weekEnd.getDate() - 7);
+        const weekQueues = completedQueues.filter(q => {
+          const d = new Date(q.createdAt);
+          return d >= weekStart && d < weekEnd;
+        });
+        revenueData.push({ name: `${4 - i}-${t('hafta')}`, value: weekQueues.reduce((sum, q) => sum + getServicePrice(q.serviceId || ''), 0) });
       }
     } else {
-      for(let i=6; i>=0; i--) {
-        const d = new Date(); d.setMonth(now.getMonth() - i);
-        const months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun', 'Iyul', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
-        revenueData.push({ name: months[d.getMonth()], value: Math.floor(Math.random() * 100000000) });
+      const months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun', 'Iyul', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now); d.setMonth(now.getMonth() - i);
+        const monthQueues = completedQueues.filter(q => {
+          const qd = new Date(q.createdAt);
+          return qd.getFullYear() === d.getFullYear() && qd.getMonth() === d.getMonth();
+        });
+        revenueData.push({ name: months[d.getMonth()], value: monthQueues.reduce((sum, q) => sum + getServicePrice(q.serviceId || ''), 0) });
       }
     }
 
+    // Real treatment mix — no fake fallback rows when there's simply no history yet.
     const tCounts: Record<string, number> = {};
     filteredQueues.forEach(q => {
-      const srvName = services.find(s => s.id === q.serviceId)?.name || t("noma'lum");
-      tCounts[srvName] = (tCounts[srvName] || 0) + 1;
+      const srvName = services.find(s => s.id === q.serviceId)?.name;
+      if (srvName) tCounts[srvName] = (tCounts[srvName] || 0) + 1;
     });
-    const trData = Object.entries(tCounts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 8);
-    if (trData.length === 0) {
-      trData.push({ name: 'Kariyes', value: 145 }, { name: 'Pulpit', value: 85 }, { name: 'Periodontit', value: 45 });
-    }
+    const treatmentsData = Object.entries(tCounts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 8);
 
-    const scale = timeRange === 'daily' ? 1 : timeRange === 'weekly' ? 7 : timeRange === 'monthly' ? 30 : 365;
+    // Real average doctor rating — only counts doctors with at least one real review,
+    // matching the same honesty pattern used for clinic ratings elsewhere in the app.
+    const ratedDoctors = doctors.filter(d => (d.ratingCount || 0) > 0);
+    const avgDoctorRating = ratedDoctors.length > 0
+      ? (ratedDoctors.reduce((sum, d) => sum + (d.rating || 0), 0) / ratedDoctors.length).toFixed(1)
+      : null;
 
-    const usedMaterialsData = [
-      { name: 'Filtek Ultimate (A2)', quantity: Math.round(15 * scale), unit: t('shprits'), cost: 15 * scale * 450000 },
-      { name: 'Ubistesin Forte', quantity: Math.round(40 * scale), unit: t('quti'), cost: 40 * scale * 32000 },
-      { name: 'Gutta Percha', quantity: Math.round(10 * scale), unit: t('quti'), cost: 10 * scale * 65000 },
-      { name: 'K-File #15-40', quantity: Math.round(20 * scale), unit: t('quti'), cost: 20 * scale * 85000 },
-      { name: 'Septanest', quantity: Math.round(25 * scale), unit: t('quti'), cost: 25 * scale * 34000 },
-    ].sort((a, b) => b.cost - a.cost);
+    // Real new-vs-returning patient counts, derived from each patient's full queue
+    // history (matched by normalized phone, the only join key QueueItem has) rather
+    // than a stored "registered at" field, which doesn't exist on Patient.
+    const normPhone = (p?: string) => (p || '').replace(/\D/g, '');
+    const firstVisitByPhone = new Map<string, Date>();
+    const visitCountByPhone = new Map<string, number>();
+    queues.forEach(q => {
+      const phone = normPhone(q.patientPhone);
+      if (!phone) return;
+      const d = new Date(q.createdAt);
+      visitCountByPhone.set(phone, (visitCountByPhone.get(phone) || 0) + 1);
+      const existing = firstVisitByPhone.get(phone);
+      if (!existing || d < existing) firstVisitByPhone.set(phone, d);
+    });
+    const phonesInPeriod = new Set(filteredQueues.map(q => normPhone(q.patientPhone)).filter(Boolean));
+    let newPatientsInPeriod = 0;
+    let returningPatientsInPeriod = 0;
+    phonesInPeriod.forEach(phone => {
+      const firstVisit = firstVisitByPhone.get(phone);
+      if (firstVisit && firstVisit >= startDate) newPatientsInPeriod++;
+      if ((visitCountByPhone.get(phone) || 0) >= 2) returningPatientsInPeriod++;
+    });
 
-    const paymentData = [
-      { name: t('naqd pul'), value: 45 },
-      { name: t('karta'), value: 35 },
-      { name: 'Click', value: 15 },
-      { name: 'Payme', value: 5 },
+    // Real age groups, computed from Patient.birthDate — previously a fully
+    // hardcoded chart with invented percentages.
+    const ageBuckets = [
+      { name: '0-12', min: 0, max: 12, value: 0 },
+      { name: '13-18', min: 13, max: 18, value: 0 },
+      { name: '19-35', min: 19, max: 35, value: 0 },
+      { name: '36-50', min: 36, max: 50, value: 0 },
+      { name: '50+', min: 51, max: 999, value: 0 },
     ];
-
-    const ageGroupData = [
-      { name: '0-12', value: 15 },
-      { name: '13-18', value: 20 },
-      { name: '19-35', value: 45 },
-      { name: '36-50', value: 15 },
-      { name: '50+', value: 5 },
-    ];
-
-    const sourceData = [
-      { name: 'Instagram', value: 45 },
-      { name: 'Telegram', value: 25 },
-      { name: t('tavsiya'), value: 20 },
-      { name: t('boshqa'), value: 10 },
-    ];
+    let patientsWithBirthDate = 0;
+    patients.forEach(p => {
+      if (!p.birthDate) return;
+      const birth = new Date(p.birthDate);
+      if (isNaN(birth.getTime())) return;
+      const age = Math.floor((now.getTime() - birth.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+      const bucket = ageBuckets.find(b => age >= b.min && age <= b.max);
+      if (bucket) { bucket.value++; patientsWithBirthDate++; }
+    });
 
     return {
-      patients: filteredQueues.length,
-      patientTrend,
+      visits: filteredQueues.length,
+      visitTrend,
       revenue: totalRevenue,
       revenueTrend,
       revenueData,
-      doctorPerformance: drPerf,
-      treatmentsData: trData,
-      usedMaterialsData,
-      paymentData,
-      ageGroupData,
-      sourceData
+      treatmentsData,
+      avgDoctorRating,
+      newPatientsInPeriod,
+      returningPatientsInPeriod,
+      ageGroupData: ageBuckets,
+      patientsWithBirthDate,
     };
-  }, [queues, services, doctors, timeRange, language]);
+  }, [queues, services, doctors, patients, timeRange, language]);
+
+  const receiptsInPeriod = useMemo(() => {
+    const now = new Date();
+    let startDate = new Date();
+    if (timeRange === 'daily') startDate.setHours(0, 0, 0, 0);
+    if (timeRange === 'weekly') startDate.setDate(now.getDate() - 7);
+    if (timeRange === 'monthly') startDate.setMonth(now.getMonth() - 1);
+    if (timeRange === 'yearly') startDate.setFullYear(now.getFullYear() - 1);
+    return receipts.filter(r => new Date(r.createdAt) >= startDate);
+  }, [receipts, timeRange]);
+
+  const remindersInPeriod = useMemo(() => {
+    const now = new Date();
+    let startDate = new Date();
+    if (timeRange === 'daily') startDate.setHours(0, 0, 0, 0);
+    if (timeRange === 'weekly') startDate.setDate(now.getDate() - 7);
+    if (timeRange === 'monthly') startDate.setMonth(now.getMonth() - 1);
+    if (timeRange === 'yearly') startDate.setFullYear(now.getFullYear() - 1);
+    return reminders.filter(r => new Date(r.createdAt) >= startDate);
+  }, [reminders, timeRange]);
 
   const StatCard = ({ title, value, trend, icon: Icon, color }: any) => (
     <div className="bg-white border border-slate-100 rounded-2xl p-5 hover:border-slate-200 transition-colors relative overflow-hidden group shadow-sm hover:shadow-md">
@@ -238,9 +313,11 @@ export default function Statistics({ queues = [], services = [], doctors = [], l
         <div className={`p-3 rounded-xl ${color} bg-opacity-10`}>
           <Icon className={`w-6 h-6 ${color.replace('bg-', 'text-')}`} />
         </div>
-        <span className={`text-xs font-bold px-2 py-1 rounded-lg ${trend >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-          {trend >= 0 ? '+' : ''}{trend}%
-        </span>
+        {typeof trend === 'number' && (
+          <span className={`text-xs font-bold px-2 py-1 rounded-lg ${trend >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+            {trend >= 0 ? '+' : ''}{trend}%
+          </span>
+        )}
       </div>
       <div>
         <h4 className="text-2xl font-black text-slate-800 mb-1 font-mono">{value}</h4>
@@ -249,9 +326,16 @@ export default function Statistics({ queues = [], services = [], doctors = [], l
     </div>
   );
 
+  const EmptyState = () => (
+    <div className="flex flex-col items-center justify-center h-[200px] text-slate-400 text-sm font-semibold gap-2">
+      <HeartPulse className="w-8 h-8 opacity-40" />
+      {t("hozircha ma'lumot yo'q")}
+    </div>
+  );
+
   return (
     <div className="flex flex-col h-full bg-slate-50 rounded-3xl p-6 text-slate-600 font-sans overflow-hidden">
-      
+
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
@@ -289,7 +373,6 @@ export default function Statistics({ queues = [], services = [], doctors = [], l
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2 custom-scrollbar">
         {[
           { id: 'overview', label: t("umumiy xulosa") },
-          { id: 'doctors', label: t("shifokorlar") },
           { id: 'patients', label: t("bemorlar") },
           { id: 'treatments', label: t("muolajalar") },
           { id: 'payments', label: t("to'lovlar") },
@@ -311,329 +394,131 @@ export default function Statistics({ queues = [], services = [], doctors = [], l
           <div className="space-y-6">
             {/* KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard title={t("jami tushum")} value={stats.revenue === 0 ? "42.5M" : `${(stats.revenue / 1000000).toFixed(1)}M`} trend={stats.revenueTrend === 100 ? 12.5 : stats.revenueTrend} icon={DollarSign} color="bg-emerald-500" />
-              <StatCard title={t("yangi bemorlar")} value={stats.patients === 0 ? "124" : stats.patients} trend={stats.patientTrend === 100 ? 8.2 : stats.patientTrend} icon={Users} color="bg-blue-500" />
-              <StatCard title={t("muolajalar soni")} value={stats.patients === 0 ? "358" : stats.patients} trend={stats.patientTrend === 100 ? 15.3 : stats.patientTrend} icon={Activity} color="bg-indigo-500" />
-              <StatCard title={t("shifokorlar reytingi")} value="4.8" trend={2.1} icon={Star} color="bg-amber-500" />
+              <StatCard title={t("jami tushum")} value={`${(stats.revenue / 1000000).toFixed(1)}M`} trend={stats.revenueTrend} icon={DollarSign} color="bg-emerald-500" />
+              <StatCard title={t("yangi bemorlar")} value={stats.newPatientsInPeriod} icon={Users} color="bg-blue-500" />
+              <StatCard title={t("muolajalar soni")} value={stats.visits} trend={stats.visitTrend} icon={Activity} color="bg-indigo-500" />
+              <StatCard title={t("shifokorlar reytingi")} value={stats.avgDoctorRating ?? "—"} icon={Star} color="bg-amber-500" />
             </div>
 
-            {/* Charts Row 1 */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 bg-white border border-slate-100 shadow-sm rounded-2xl p-5">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="font-bold text-slate-800">{t("tushum dinamikasi")}</h3>
-                  <button className="text-slate-500 hover:text-slate-800 text-sm flex items-center gap-1">{t("batafsil")} <ChevronDown className="w-4 h-4" /></button>
-                </div>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={stats.revenueData}>
-                      <defs>
-                        <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                      <XAxis dataKey="name" stroke="#94a3b8" axisLine={false} tickLine={false} />
-                      <YAxis stroke="#94a3b8" axisLine={false} tickLine={false} tickFormatter={(val) => `${val / 1000000}M`} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#fff', borderColor: '#e2e8f0', borderRadius: '12px', color: '#1e293b', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        itemStyle={{ color: '#10b981', fontWeight: 'bold' }}
-                      />
-                      <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
+            {/* Revenue chart */}
+            <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-5">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-bold text-slate-800">{t("tushum dinamikasi")}</h3>
+                <button className="text-slate-500 hover:text-slate-800 text-sm flex items-center gap-1">{t("batafsil")} <ChevronDown className="w-4 h-4" /></button>
               </div>
-
-              <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-5">
-                <h3 className="font-bold text-slate-800 mb-6">{t("to'lov usullari")}</h3>
-                <div className="h-[250px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={stats.paymentData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {stats.paymentData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#fff', borderColor: '#e2e8f0', borderRadius: '12px', color: '#1e293b', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        itemStyle={{ fontWeight: 'bold' }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="grid grid-cols-2 gap-4 mt-2">
-                  {stats.paymentData.map((item, index) => (
-                    <div key={item.name} className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: PIE_COLORS[index] }}></div>
-                      <span className="text-xs text-slate-600 font-medium">{item.name} ({item.value}%)</span>
-                    </div>
-                  ))}
-                </div>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={stats.revenueData}>
+                    <defs>
+                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="name" stroke="#94a3b8" axisLine={false} tickLine={false} />
+                    <YAxis stroke="#94a3b8" axisLine={false} tickLine={false} tickFormatter={(val) => `${val / 1000000}M`} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#fff', borderColor: '#e2e8f0', borderRadius: '12px', color: '#1e293b', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      itemStyle={{ color: '#10b981', fontWeight: 'bold' }}
+                    />
+                    <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'doctors' && (
-          <div className="space-y-6">
-            <div className="bg-white border border-slate-100 shadow-sm rounded-2xl overflow-hidden">
-              <div className="p-5 border-b border-slate-100 flex justify-between items-center">
-                 <h3 className="font-bold text-slate-800">{t("shifokorlar reytingi va samaradorligi")}</h3>
-                 <span className="text-xs bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full font-bold">{t("ushbu oy")}</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm whitespace-nowrap">
-                  <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
-                    <tr>
-                      <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">{t("shifokor")}</th>
-                      <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-center">{t("qabul qilganlar")}</th>
-                      <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-center">{t("tushum")}</th>
-                      <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-center">{t("reyting")}</th>
-                      <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-center">{t("o'rtacha vaqt")}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {stats.doctorPerformance.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-6 py-8 text-center text-slate-400 text-xs font-semibold">
-                          {t("hozircha shifokorlar mavjud emas.")}
-                        </td>
-                      </tr>
-                    ) : (
-                      stats.doctorPerformance.map((doc, i) => (
-                        <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-6 py-4 font-bold text-slate-800 flex items-center gap-3">
-                             <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-emerald-600 font-bold">
-                               {doc.name.charAt(0)}
-                             </div>
-                             {doc.name}
-                          </td>
-                          <td className="px-6 py-4 text-center text-slate-600 font-mono">{doc.patients}</td>
-                          <td className="px-6 py-4 text-center text-emerald-600 font-mono font-bold">{doc.revenue.toLocaleString()}</td>
-                          <td className="px-6 py-4 text-center">
-                            <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-600 px-2 py-1 rounded-md font-bold text-xs">
-                              <Star className="w-3.5 h-3.5 fill-current" /> {doc.rating}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-center text-slate-500">{doc.time}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-               <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-5">
-                 <h3 className="font-bold text-slate-800 mb-6">{t("tushum taqsimoti")}</h3>
-                 <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={stats.doctorPerformance}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                      <XAxis dataKey="name" stroke="#94a3b8" axisLine={false} tickLine={false} tick={{fontSize: 12}} />
-                      <YAxis stroke="#94a3b8" axisLine={false} tickLine={false} tickFormatter={(val) => `${val / 1000000}M`} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#fff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        cursor={{fill: '#f8fafc', opacity: 0.8}}
-                      />
-                      <Bar dataKey="revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-               </div>
-               
-               <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-5">
-                 <h3 className="font-bold text-slate-800 mb-6">{t("qabul qilingan bemorlar soni")}</h3>
-                 <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={stats.doctorPerformance}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                      <XAxis dataKey="name" stroke="#94a3b8" axisLine={false} tickLine={false} tick={{fontSize: 12}} />
-                      <YAxis stroke="#94a3b8" axisLine={false} tickLine={false} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#fff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        cursor={{fill: '#f8fafc', opacity: 0.8}}
-                      />
-                      <Bar dataKey="patients" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-               </div>
             </div>
           </div>
         )}
 
         {activeTab === 'patients' && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard title={t("jami bemorlar")} value="2,451" trend={12} icon={Users2} color="bg-indigo-500" />
-              <StatCard title={t("yangi bemorlar")} value="142" trend={5} icon={UserPlus} color="bg-emerald-500" />
-              <StatCard title={t("qayta kelganlar")} value="340" trend={2} icon={UserCheck} color="bg-blue-500" />
-              <StatCard title={t("qarzdorlar")} value="28" trend={-15} icon={AlertCircle} color="bg-rose-500" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <StatCard title={t("jami bemorlar")} value={patients.length} icon={Users2} color="bg-indigo-500" />
+              <StatCard title={t("yangi bemorlar")} value={stats.newPatientsInPeriod} icon={UserPlus} color="bg-emerald-500" />
+              <StatCard title={t("qayta kelganlar")} value={stats.returningPatientsInPeriod} icon={UserCheck} color="bg-blue-500" />
             </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-               <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-5">
-                 <h3 className="font-bold text-slate-800 mb-6">{t("bemorlar yosh toifalari")}</h3>
-                 <div className="h-[300px]">
+
+            <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-5">
+              <h3 className="font-bold text-slate-800 mb-6">{t("bemorlar yosh toifalari")}</h3>
+              {stats.patientsWithBirthDate === 0 ? (
+                <EmptyState />
+              ) : (
+                <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={stats.ageGroupData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                      <XAxis dataKey="name" stroke="#94a3b8" axisLine={false} tickLine={false} tick={{fontSize: 12}} />
-                      <YAxis stroke="#94a3b8" axisLine={false} tickLine={false} />
-                      <Tooltip 
+                      <XAxis dataKey="name" stroke="#94a3b8" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                      <YAxis stroke="#94a3b8" axisLine={false} tickLine={false} allowDecimals={false} />
+                      <Tooltip
                         contentStyle={{ backgroundColor: '#fff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        cursor={{fill: '#f8fafc', opacity: 0.8}}
+                        cursor={{ fill: '#f8fafc', opacity: 0.8 }}
                       />
                       <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-               </div>
-               
-               <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-5">
-                 <h3 className="font-bold text-slate-800 mb-6">{t("mijozlar manbai")}</h3>
-                 <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={stats.sourceData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {stats.sourceData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#fff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        itemStyle={{ fontWeight: 'bold' }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex justify-center gap-4 mt-2">
-                  {stats.sourceData.map((item, index) => (
-                    <div key={item.name} className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}></div>
-                      <span className="text-xs text-slate-600 font-medium">{item.name} ({item.value}%)</span>
-                    </div>
-                  ))}
-                </div>
-               </div>
+              )}
             </div>
           </div>
         )}
 
         {activeTab === 'treatments' && (
           <div className="space-y-6">
-             <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-5">
-                 <h3 className="font-bold text-slate-800 mb-6">{t("eng ko'p bajarilgan muolajalar (soni)")}</h3>
-                 <div className="h-[300px]">
+            <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-5">
+              <h3 className="font-bold text-slate-800 mb-6">{t("eng ko'p bajarilgan muolajalar (soni)")}</h3>
+              {stats.treatmentsData.length === 0 ? (
+                <EmptyState />
+              ) : (
+                <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={stats.treatmentsData} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                      <XAxis type="number" stroke="#94a3b8" axisLine={false} tickLine={false} />
+                      <XAxis type="number" stroke="#94a3b8" axisLine={false} tickLine={false} allowDecimals={false} />
                       <YAxis dataKey="name" type="category" stroke="#94a3b8" axisLine={false} tickLine={false} width={100} />
-                      <Tooltip 
+                      <Tooltip
                         contentStyle={{ backgroundColor: '#fff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        cursor={{fill: '#f8fafc', opacity: 0.8}}
+                        cursor={{ fill: '#f8fafc', opacity: 0.8 }}
                       />
                       <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={20} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-               </div>
+              )}
+            </div>
           </div>
         )}
 
         {activeTab === 'payments' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard title={t("naqd pul")} value="4.5M" trend={2} icon={Wallet} color="bg-emerald-500" />
-              <StatCard title={t("karta orqali")} value="3.2M" trend={8} icon={CreditCard} color="bg-blue-500" />
-              <StatCard title="Click/Payme" value="1.8M" trend={15} icon={Smartphone} color="bg-indigo-500" />
-              <StatCard title={t("qarzlar undirilishi")} value="450K" trend={-5} icon={TrendingUp} color="bg-amber-500" />
+            <StatCard
+              title={t("tasdiqlangan to'lovlar")}
+              value={`${(receiptsInPeriod.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + (r.amount || 0), 0) / 1000000).toFixed(1)}M`}
+              icon={DollarSign}
+              color="bg-emerald-500"
+            />
+            <StatCard title={t("kutilmoqda")} value={receiptsInPeriod.filter(r => r.status === 'pending').length} icon={Clock} color="bg-amber-500" />
+            <StatCard title={t("rad etilgan")} value={receiptsInPeriod.filter(r => r.status === 'rejected').length} icon={XCircle} color="bg-rose-500" />
+            <StatCard title={t("jami kvitansiyalar")} value={receiptsInPeriod.length} icon={Receipt} color="bg-indigo-500" />
           </div>
         )}
 
         {activeTab === 'reminders' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard title={t("yuborildi")} value="1,245" trend={10} icon={Bell} color="bg-blue-500" />
-              <StatCard title={t("yetib bordi")} value="1,180" trend={8} icon={CheckCircle2} color="bg-emerald-500" />
-              <StatCard title={t("o'qildi")} value="850" trend={5} icon={Eye} color="bg-indigo-500" />
-              <StatCard title={t("tasdiqladi (keldi)")} value="420" trend={12} icon={MousePointerClick} color="bg-fuchsia-500" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <StatCard title={t("kutilmoqda")} value={remindersInPeriod.filter(r => r.status === 'pending').length} icon={Clock} color="bg-amber-500" />
+            <StatCard title={t("yuborildi")} value={remindersInPeriod.filter(r => r.status === 'sent').length} icon={CheckCircle2} color="bg-blue-500" />
+            <StatCard title={t("bajarildi")} value={remindersInPeriod.filter(r => r.status === 'done').length} icon={CheckCircle2} color="bg-emerald-500" />
           </div>
         )}
 
         {activeTab === 'materials' && (
-          <div className="space-y-6">
-            <div className="bg-white border border-slate-100 shadow-sm rounded-2xl overflow-hidden">
-              <div className="p-5 border-b border-slate-100 flex justify-between items-center">
-                 <h3 className="font-bold text-slate-800">{t("ishlatilgan materiallar (xarajatlar)")}</h3>
-                 <span className="text-xs bg-rose-50 text-rose-600 px-3 py-1 rounded-full font-bold">{t("ushbu oy")}</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm whitespace-nowrap">
-                  <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
-                    <tr>
-                      <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">{t("material nomi")}</th>
-                      <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-center">{t("ishlatilgan miqdor")}</th>
-                      <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-right">{t("xarajat summasi (uzs)")}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {stats.usedMaterialsData.map((mat, i) => (
-                      <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-6 py-4 font-bold text-slate-800">{mat.name}</td>
-                        <td className="px-6 py-4 text-center font-bold text-slate-600">
-                          {mat.quantity} <span className="text-slate-400 font-medium text-xs ml-1">{mat.unit}</span>
-                        </td>
-                        <td className="px-6 py-4 text-right font-bold text-rose-600 font-mono">
-                          {mat.cost.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <StatCard title={t("ombor qiymati")} value={`${(materialsValue / 1000000).toFixed(1)}M`} icon={Package} color="bg-blue-500" />
+              <StatCard title={t("kam qolgan materiallar")} value={lowStockCount} icon={AlertTriangle} color="bg-rose-500" />
             </div>
-            
-            <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-5">
-              <h3 className="font-bold text-slate-800 mb-6">{t("materiallar xarajati taqsimoti")}</h3>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.usedMaterialsData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                    <XAxis type="number" stroke="#94a3b8" axisLine={false} tickLine={false} tickFormatter={(val) => `${val / 1000000}M`} />
-                    <YAxis dataKey="name" type="category" stroke="#94a3b8" axisLine={false} tickLine={false} width={120} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#fff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                      cursor={{fill: '#f8fafc', opacity: 0.8}}
-                      formatter={(value: any) => [`${value.toLocaleString()} UZS`, t("xarajat")]}
-                    />
-                    <Bar dataKey="cost" fill="#f43f5e" radius={[0, 4, 4, 0]} barSize={20} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            <p className="text-xs text-slate-400 text-center">{t("batafsil ma'lumot uchun \"materiallar\" bo'limiga o'ting")}</p>
           </div>
         )}
-        
       </div>
     </div>
   );

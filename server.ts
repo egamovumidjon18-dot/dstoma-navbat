@@ -1629,10 +1629,12 @@ app.delete("/api/doctor-clinic-links/:id", async (req, res) => {
 // payment gateway integration. GET is scoped to the requesting doctor/director;
 // PATCH lets the doctor confirm/reject a pending receipt.
 app.get("/api/payment-receipts", async (req, res) => {
+  const clinicId = String(req.query.clinicId || "");
   const doctorId = String(req.query.doctorId || "");
   const patientId = String(req.query.patientId || "");
   const all: any[] = await getPaymentReceipts();
   let matches = all;
+  if (clinicId) matches = matches.filter((r) => r.clinicId === clinicId);
   if (doctorId) matches = matches.filter((r) => r.doctorId === doctorId);
   if (patientId) matches = matches.filter((r) => r.patientId === patientId);
   if (matches.length > 0 && !(await isAuthorizedForClinic(req, matches[0].clinicId, true))) {
@@ -1713,10 +1715,12 @@ app.post("/api/request-payment", async (req, res) => {
 });
 
 app.get("/api/reminders", async (req, res) => {
+  const clinicId = String(req.query.clinicId || "");
   const patientId = String(req.query.patientId || "");
   const doctorId = String(req.query.doctorId || "");
   const all: any[] = await getReminders();
   let matches = all;
+  if (clinicId) matches = matches.filter((r) => r.clinicId === clinicId);
   if (patientId) matches = matches.filter((r) => r.patientId === patientId);
   if (doctorId) matches = matches.filter((r) => r.doctorId === doctorId);
   if (matches.length > 0 && !(await isAuthorizedForClinic(req, matches[0].clinicId, true))) {
