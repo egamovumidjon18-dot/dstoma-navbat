@@ -151,6 +151,17 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "qon guruhi": { ru: "Группа крови", en: "Blood group", kk: "Қан тобы", ky: "Кан тобу", tg: "Гурӯҳи хун", tk: "Gan topary" },
   infeksiya: { ru: "Инфекция", en: "Infection", kk: "Инфекция", ky: "Инфекция", tg: "Сироят", tk: "Ýokanç" },
   "surunkali kasalliklar": { ru: "Хронические заболевания", en: "Chronic diseases", kk: "Созылмалы аурулар", ky: "Уланма ооруулар", tg: "Бемориҳои музмин", tk: "Dowamly keseller" },
+  parol: { ru: "Пароль", en: "Password", kk: "Құпия сөз", ky: "Сыр сөз", tg: "Парол", tk: "Parol" },
+  allergiyalar: { ru: "Аллергии", en: "Allergies", kk: "Аллергиялар", ky: "Аллергиялар", tg: "Аллергияҳо", tk: "Allergiýalar" },
+  "jiddiy yuqumli kasallik mavjud": { ru: "Есть серьёзное инфекционное заболевание", en: "Has a serious infectious disease", kk: "Ауыр жұқпалы ауру бар", ky: "Оор жугуштуу оору бар", tg: "Бемории вазнини сироятӣ дорад", tk: "Agyr ýokanç keseli bar" },
+  "hozircha rejalashtirilgan qabullar yo'q": { ru: "Пока нет запланированных приёмов", en: "No scheduled appointments yet", kk: "Әзірге жоспарланған қабылдаулар жоқ", ky: "Азырынча пландаштырылган кабылдоолор жок", tg: "Ҳанӯз қабулҳои банақшагирифташуда нест", tk: "Heniz meýilleşdirilen kabullar ýok" },
+  yakshanba: { ru: "Воскресенье", en: "Sunday", kk: "Жексенбі", ky: "Жекшемби", tg: "Якшанбе", tk: "Ýekşenbe" },
+  dushanba: { ru: "Понедельник", en: "Monday", kk: "Дүйсенбі", ky: "Дүйшөмбү", tg: "Душанбе", tk: "Duşenbe" },
+  seshanba: { ru: "Вторник", en: "Tuesday", kk: "Сейсенбі", ky: "Шейшемби", tg: "Сешанбе", tk: "Sişenbe" },
+  chorshanba: { ru: "Среда", en: "Wednesday", kk: "Сәрсенбі", ky: "Шаршемби", tg: "Чоршанбе", tk: "Çarşenbe" },
+  payshanba: { ru: "Четверг", en: "Thursday", kk: "Бейсенбі", ky: "Бейшемби", tg: "Панҷшанбе", tk: "Penşenbe" },
+  juma: { ru: "Пятница", en: "Friday", kk: "Жұма", ky: "Жума", tg: "Ҷумъа", tk: "Anna" },
+  shanba: { ru: "Суббота", en: "Saturday", kk: "Сенбі", ky: "Ишемби", tg: "Шанбе", tk: "Şenbe" },
   "tashriflar tarixi": { ru: "История посещений", en: "Visit history", kk: "Келу тарихы", ky: "Келүү тарыхы", tg: "Таърихи ташрифҳо", tk: "Gelen-gidenler taryhy" },
   "hali tashrif qayd etilmagan.": { ru: "Визиты еще не зарегистрированы.", en: "No visits recorded yet.", kk: "Әзірге келу тіркелмеген.", ky: "Азырынча келүү катталган эмес.", tg: "Ҳанӯз ягон ташриф сабт нашудааст.", tk: "Heniz gelen-gideniň ýazgysy ýok." },
   "yangi bemor qo'shish": { ru: "Добавить нового пациента", en: "Add new patient", kk: "Жаңа пациент қосу", ky: "Жаңы бейтап кошуу", tg: "Илова кардани бемори нав", tk: "Täze näsag goşmak" },
@@ -575,7 +586,10 @@ export default function DoctorDashboard({
   const [activeDoctorId, setActiveDoctorId] = useState(currentDoctor?.id || "");
   const [patientListSearch, setPatientListSearch] = useState("");
   const [showQuickAddPatient, setShowQuickAddPatient] = useState(false);
-  const [quickAddPatient, setQuickAddPatient] = useState({ fullName: "", phone: "", passportSerial: "" });
+  const [quickAddPatient, setQuickAddPatient] = useState({
+    fullName: "", phone: "", passportSerial: "", birthDate: "", password: "",
+    bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
+  });
   const [isSavingQuickAddPatient, setIsSavingQuickAddPatient] = useState(false);
   const [isSendingBulkTelegram, setIsSendingBulkTelegram] = useState(false);
   const [showCrossClinicSearch, setShowCrossClinicSearch] = useState(false);
@@ -603,21 +617,34 @@ export default function DoctorDashboard({
       return visits.some((v) => (v.clinicId || p.clinicId) === effectiveClinicId);
     });
   }, [patients, effectiveClinicId, currentDoctor?.id]);
+
+  // The "Bemorlar" tab itself is scoped tighter than clinicPatients above: only
+  // patients this doctor is currently treating (primaryDoctorId), not every patient
+  // who's ever visited the clinic. primaryDoctorId is kept in sync automatically
+  // whenever a patient books a new queue (see POST /api/queues in server.ts), so
+  // this naturally updates the moment a patient switches to a different doctor.
+  // clinicPatients itself stays clinic-wide — it still backs Statistics, bulk
+  // Telegram messaging, and resolving a patient from any clinic queue, which all
+  // legitimately need the full clinic roster.
+  const myPatients = useMemo(
+    () => clinicPatients.filter((p) => p.primaryDoctorId === currentDoctor?.id),
+    [clinicPatients, currentDoctor?.id]
+  );
   const filteredClinicPatients = useMemo(() => {
     const q = patientListSearch.trim().toLowerCase();
-    if (!q) return clinicPatients;
-    return clinicPatients.filter(
+    if (!q) return myPatients;
+    return myPatients.filter(
       (p) =>
         (p.fullName || "").toLowerCase().includes(q) ||
         (p.phone || "").includes(q) ||
         (p.id || "").toLowerCase().includes(q)
     );
-  }, [clinicPatients, patientListSearch]);
+  }, [myPatients, patientListSearch]);
   const patientStats = useMemo(() => {
-    const total = clinicPatients.length;
-    const active = clinicPatients.filter((p) => (p.clinicVisits?.length || 0) > 0).length;
-    const totalVisits = clinicPatients.reduce((sum, p) => sum + (p.clinicVisits?.length || 0), 0);
-    const totalRevenue = clinicPatients.reduce(
+    const total = myPatients.length;
+    const active = myPatients.filter((p) => (p.clinicVisits?.length || 0) > 0).length;
+    const totalVisits = myPatients.reduce((sum, p) => sum + (p.clinicVisits?.length || 0), 0);
+    const totalRevenue = myPatients.reduce(
       (sum, p) => sum + (p.clinicVisits || []).reduce((s, v) => s + (v.price || 0), 0),
       0
     );
@@ -632,7 +659,7 @@ export default function DoctorDashboard({
       totalRevenue,
       todayVisits,
     };
-  }, [clinicPatients, queues, effectiveClinicId]);
+  }, [myPatients, queues, effectiveClinicId]);
 
   // Resolve a queue entry to a real patient record (queues only store name/phone, not a patient ID)
   const resolvePatientIdFromQueue = (q: QueueItem): string | null => {
@@ -656,11 +683,20 @@ export default function DoctorDashboard({
           fullName: quickAddPatient.fullName.trim(),
           phone: quickAddPatient.phone.trim(),
           passportSerial: quickAddPatient.passportSerial.trim(),
+          birthDate: quickAddPatient.birthDate || undefined,
+          password: quickAddPatient.password.trim() || undefined,
+          bloodGroup: quickAddPatient.bloodGroup || undefined,
+          allergies: quickAddPatient.allergies.trim() || undefined,
+          chronicDiseases: quickAddPatient.chronicDiseases.trim() || undefined,
+          hasInfection: quickAddPatient.hasInfection,
           primaryDoctorId: currentDoctor?.id,
         }),
       });
       if (res.ok) {
-        setQuickAddPatient({ fullName: "", phone: "", passportSerial: "" });
+        setQuickAddPatient({
+          fullName: "", phone: "", passportSerial: "", birthDate: "", password: "",
+          bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
+        });
         setShowQuickAddPatient(false);
       }
     } catch (err) {
@@ -936,6 +972,29 @@ export default function DoctorDashboard({
     (q) => q.appointmentDate && q.appointmentDate < todayStr,
   );
 
+  // "Rejalashtirilgan" tab: upcoming (not overdue) scheduled appointments, grouped
+  // by their real calendar date (not an abstract recurring weekday, since each
+  // appointment has one concrete date) and sorted chronologically; each group's
+  // rows are sorted by appointment time.
+  const WEEKDAY_NAMES_UZ = ["Yakshanba", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba"];
+  const upcomingScheduledByDate = (() => {
+    const groups: Record<string, QueueItem[]> = {};
+    scheduledQueues
+      .filter((q) => q.appointmentDate && q.appointmentDate >= todayStr)
+      .forEach((q) => {
+        const dateKey = q.appointmentDate!;
+        if (!groups[dateKey]) groups[dateKey] = [];
+        groups[dateKey].push(q);
+      });
+    return Object.entries(groups)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, items]) => ({
+        date,
+        weekday: WEEKDAY_NAMES_UZ[new Date(date).getDay()],
+        items: [...items].sort((a, b) => (a.appointmentTime || "").localeCompare(b.appointmentTime || "")),
+      }));
+  })();
+
   const visibleQueues = doctorQueues
     .filter((q) => queueListRange === 'all' || (q.appointmentDate || q.createdAt.slice(0, 10)) === todayStr)
     .filter((q) => !queueListStatusFilter || q.status === queueListStatusFilter)
@@ -1125,6 +1184,7 @@ export default function DoctorDashboard({
         <div className={`flex-1 px-4 py-2 space-y-1 ${!isSidebarOpen ? 'px-2' : ''}`}>
           <SidebarItem icon={Home} label={t("Dashboard")} id="dashboard" />
           <SidebarItem icon={List} label={t("Navbatlar")} id="navbatlar" />
+          <SidebarItem icon={CalendarClock} label={t("Rejalashtirilgan")} id="rejalashtirilgan" />
           <SidebarItem icon={Users} label={t("Bemorlar")} id="bemorlar" />
           <SidebarItem icon={Package} label={t("Material va Anjomlar")} id="materiallar" />
           <SidebarItem icon={BarChart2} label={t("Statistika")} id="statistika" />
@@ -2425,6 +2485,89 @@ export default function DoctorDashboard({
             </div>
           )}
 
+          {activeView === "rejalashtirilgan" && (
+            <div className="space-y-6">
+              {overdueScheduledQueues.length > 0 && (
+                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4">
+                  <h3 className="text-xs font-black text-rose-700 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <CalendarCheck2 className="w-4 h-4" /> {t("kechiktirilganlar")} ({overdueScheduledQueues.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {overdueScheduledQueues.map((q) => (
+                      <div
+                        key={q.id}
+                        onClick={() => { const pid = resolvePatientIdFromQueue(q); if (pid) { setActiveView('bemorlar'); setSelectedPatientId(pid); } }}
+                        className="flex items-center justify-between bg-white rounded-xl px-4 py-2.5 cursor-pointer hover:bg-rose-50/50 transition-colors border border-rose-100"
+                      >
+                        <div>
+                          <p className="font-bold text-slate-800 text-sm">{q.patientName}</p>
+                          <p className="text-[10px] text-rose-500 font-bold">{q.appointmentDate} {q.appointmentTime}</p>
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onUpdateQueueStatus(q.id!, 'in_progress'); }}
+                          className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-xs rounded-lg transition-colors"
+                        >
+                          {t("qabulni boshlash")}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {upcomingScheduledByDate.length === 0 ? (
+                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-10 text-center">
+                  <CalendarClock className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-slate-500">{t("hozircha rejalashtirilgan qabullar yo'q")}</p>
+                </div>
+              ) : (
+                upcomingScheduledByDate.map(({ date, weekday, items }) => (
+                  <div key={date} className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                      <h3 className="text-sm font-black text-slate-800">
+                        {t(weekday.toLowerCase())} — {new Date(date).toLocaleDateString('uz-UZ')}
+                      </h3>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">{items.length} {t("ta")}</span>
+                    </div>
+                    <div className="divide-y divide-slate-50">
+                      {items.map((q) => (
+                        <div
+                          key={q.id}
+                          onClick={() => { const pid = resolvePatientIdFromQueue(q); if (pid) { setActiveView('bemorlar'); setSelectedPatientId(pid); } }}
+                          className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 text-center shrink-0">
+                              <span className="text-sm font-black text-blue-600">{q.appointmentTime || '--:--'}</span>
+                            </div>
+                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-400 text-xs shrink-0">
+                              {q.patientName.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-800 text-sm">{q.patientName}</p>
+                              <p className="text-[10px] text-slate-400 font-mono">{q.patientPhone}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <span className="text-[10px] text-slate-500 font-semibold hidden sm:inline">
+                              {services.find((s: any) => s.id === q.serviceId)?.name || t("ko'rik")}
+                            </span>
+                            <button
+                              onClick={() => onUpdateQueueStatus(q.id!, 'in_progress')}
+                              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-xs rounded-lg transition-colors"
+                            >
+                              {t("qabulni boshlash")}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
           {activeView === "bemorlar" &&
             (selectedPatientId ? (
               <PatientProfile
@@ -3177,7 +3320,7 @@ export default function DoctorDashboard({
 
       {showQuickAddPatient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-base font-bold text-slate-800">{t("yangi bemor qo'shish")}</h3>
               <button onClick={() => setShowQuickAddPatient(false)} className="text-slate-400 hover:text-slate-600">
@@ -3214,6 +3357,76 @@ export default function DoctorDashboard({
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
                   placeholder="AD1234567"
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("tug'ilgan sana")}</label>
+                  <input
+                    type="date"
+                    value={quickAddPatient.birthDate}
+                    onChange={(e) => setQuickAddPatient({ ...quickAddPatient, birthDate: e.target.value })}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("parol")}</label>
+                  <input
+                    type="text"
+                    value={quickAddPatient.password}
+                    onChange={(e) => setQuickAddPatient({ ...quickAddPatient, password: e.target.value })}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
+                    placeholder={t("kabinetga kirish uchun")}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("qon guruhi")}</label>
+                <select
+                  value={quickAddPatient.bloodGroup}
+                  onChange={(e) => setQuickAddPatient({ ...quickAddPatient, bloodGroup: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
+                >
+                  <option value="">{t("tanlang (noma'lum)")}</option>
+                  <option value="I+">I (O) Rh+</option>
+                  <option value="I-">I (O) Rh-</option>
+                  <option value="II+">II (A) Rh+</option>
+                  <option value="II-">II (A) Rh-</option>
+                  <option value="III+">III (B) Rh+</option>
+                  <option value="III-">III (B) Rh-</option>
+                  <option value="IV+">IV (AB) Rh+</option>
+                  <option value="IV-">IV (AB) Rh-</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("allergiyalar")}</label>
+                <input
+                  type="text"
+                  value={quickAddPatient.allergies}
+                  onChange={(e) => setQuickAddPatient({ ...quickAddPatient, allergies: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
+                  placeholder={t("masalan: penitsillin guruhiga")}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("surunkali kasalliklar")}</label>
+                <textarea
+                  value={quickAddPatient.chronicDiseases}
+                  onChange={(e) => setQuickAddPatient({ ...quickAddPatient, chronicDiseases: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800 h-16 resize-none"
+                  placeholder={t("yurak, qon bosimi, qandli diabet va h.k.")}
+                />
+              </div>
+              <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl flex items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  id="quick-add-has-infection"
+                  checked={quickAddPatient.hasInfection}
+                  onChange={(e) => setQuickAddPatient({ ...quickAddPatient, hasInfection: e.target.checked })}
+                  className="rounded border-rose-300 text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer mt-0.5 shrink-0"
+                />
+                <label htmlFor="quick-add-has-infection" className="text-xs font-bold text-rose-900 leading-tight cursor-pointer select-none">
+                  {t("jiddiy yuqumli kasallik mavjud")}
+                </label>
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">

@@ -848,6 +848,37 @@ app.get("/api/admin/credentials", requireSuperAdmin, async (req, res) => {
   res.json({ clinics: revealed(allClinics), doctors: revealed(allDoctors) });
 });
 
+// One-time migration: primaryDoctorId is now kept in sync automatically on every
+// new queue booking (see POST /api/queues), but patients registered before that
+// existed have no primaryDoctorId (or a stale one) — this backfills each patient
+// to the doctor of their most recent queue, so doctor-scoped patient lists aren't
+// empty for existing data. Idempotent — safe to re-run.
+app.post("/api/admin/backfill-primary-doctor", requireSuperAdmin, async (req, res) => {
+  const [allPatients, allQueues] = await Promise.all([getPatients(), getQueues()]);
+  const normPhone = (p?: string) => (p || "").replace(/\D/g, "");
+
+  const latestQueueByPhone = new Map<string, any>();
+  allQueues.forEach((q: any) => {
+    const phone = normPhone(q.patientPhone);
+    if (!phone) return;
+    const existing = latestQueueByPhone.get(phone);
+    if (!existing || new Date(q.createdAt).getTime() > new Date(existing.createdAt).getTime()) {
+      latestQueueByPhone.set(phone, q);
+    }
+  });
+
+  let updated = 0;
+  for (const p of allPatients as any[]) {
+    const latestQueue = latestQueueByPhone.get(normPhone(p.phone));
+    if (latestQueue && latestQueue.doctorId && p.primaryDoctorId !== latestQueue.doctorId) {
+      await savePatient({ id: p.id, primaryDoctorId: latestQueue.doctorId } as Patient);
+      updated++;
+    }
+  }
+
+  res.json({ ok: true, totalPatients: allPatients.length, updated });
+});
+
 // Superadmin-only: log into any Director or Doctor panel WITHOUT needing that
 // account's own password — the superadmin's own token already proves who they are.
 // Never accepts a patient's own password here; identity is entirely established by
@@ -1210,6 +1241,28 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
   }
 
   await saveQueue(newQueueItem as QueueItem);
+
+  // A patient's "treating doctor" (primaryDoctorId) tracks whoever they most
+  // recently booked a queue with, so it stays accurate as a patient switches
+  // doctors over time — this is also what scopes each doctor's "Bemorlar" list.
+  // Matched by normalized phone within the same clinic; silently a no-op for a
+  // guest/unregistered phone (never creates a patient here, that's not this
+  // endpoint's job). Awaited (not fire-and-forget) — on Vercel, execution can be
+  // frozen the instant the response is sent, and this write must not be lost.
+  if (patientPhone) {
+    try {
+      const normalizedPhone = patientPhone.replace(/\D/g, "");
+      const allPatients = await getPatients();
+      const matchedPatient = allPatients.find(
+        (p: any) => p.clinicId === clinicId && (p.phone || "").replace(/\D/g, "") === normalizedPhone
+      );
+      if (matchedPatient && matchedPatient.primaryDoctorId !== doctorId) {
+        await savePatient({ id: matchedPatient.id, primaryDoctorId: doctorId } as Patient);
+      }
+    } catch (e) {
+      console.error("[Queue Create] primaryDoctorId update failed:", e);
+    }
+  }
 
   // Confirm the new ticket to the patient over Telegram (server-side — the bot
   // token never has to leave the server or touch the browser).

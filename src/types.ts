@@ -153,9 +153,11 @@ export interface Patient {
   // Family cabinet: if set, this patient is a dependent managed by another
   // patient (the family admin) — id of that admin's Patient record.
   managedBy?: string;
-  // Doctor who registered/owns this patient relationship — keeps the patient
-  // showing up in that doctor's own patient list even after the doctor
-  // switches to a different clinic (set once at creation, never auto-reassigned).
+  // The doctor currently treating this patient — scopes which doctor sees them
+  // in their "Bemorlar" list. Kept in sync automatically: every time this patient
+  // books a new queue (POST /api/queues in server.ts), primaryDoctorId is updated
+  // to that queue's doctorId, so it always reflects whoever they most recently
+  // booked with — this is the patient's own way of "switching" treating doctors.
   primaryDoctorId?: string;
 }
 
