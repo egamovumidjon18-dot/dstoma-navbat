@@ -10,7 +10,7 @@ import PhotoGallery from "./PhotoGallery";
 import Statistics from "./Statistics";
 import Prescriptions from "./Prescriptions";
 import SettingsView from "./Settings";
-import { Clinic, Doctor, Service, QueueItem, Patient, DoctorClinicLink } from "../types";
+import { Clinic, Doctor, Service, QueueItem, Patient, DoctorClinicLink, Reminder } from "../types";
 import { decodeLegacyEntities } from "../utils/textFormat";
 import { TRANSLATIONS, Language, translateMedicalText } from "../translations";
 import {
@@ -225,6 +225,18 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "eslatma sanasi": { ru: "Дата напоминания", en: "Reminder date", kk: "Ескерту күні", ky: "Эскертүү күнү", tg: "Санаи ёдоварӣ", tk: "Duýduryş senesi" },
   vaqti: { ru: "Время", en: "Time", kk: "Уақыты", ky: "Убактысы", tg: "Вақташ", tk: "Wagty" },
   "eslatma matni": { ru: "Текст напоминания", en: "Reminder text", kk: "Ескерту мәтіні", ky: "Эскертүү тексти", tg: "Матни ёдоварӣ", tk: "Duýduryş teksti" },
+  "eslatmalar": { ru: "Напоминания", en: "Reminders", kk: "Ескертулер", ky: "Эскертүүлөр", tg: "Ёдовариҳо", tk: "Duýduryşlar" },
+  "masalan: implant nazorati uchun qabulga kelish": { ru: "например: явиться на контроль импланта", en: "e.g.: come in for an implant check-up", kk: "мысалы: имплант бақылауына келу", ky: "мисалы: имплант көзөмөлүнө келүү", tg: "масалан: барои назорати имплант омадан", tk: "meselem: implant barlagyna gelmek" },
+  "yuborildi": { ru: "Отправлено", en: "Sent", kk: "Жіберілді", ky: "Жөнөтүлдү", tg: "Фиристода шуд", tk: "Iberildi" },
+  "bajarildi": { ru: "Выполнено", en: "Done", kk: "Орындалды", ky: "Аткарылды", tg: "Иҷро шуд", tk: "Ýerine ýetirildi" },
+  "telegram orqali yuborish": { ru: "Отправить через Telegram", en: "Send via Telegram", kk: "Telegram арқылы жіберу", ky: "Telegram аркылуу жөнөтүү", tg: "Тавассути Telegram фиристодан", tk: "Telegram arkaly ibermek" },
+  "hozircha eslatmalar yo'q": { ru: "Пока нет напоминаний", en: "No reminders yet", kk: "Әзірге ескертулер жоқ", ky: "Азырынча эскертүүлөр жок", tg: "Ҳоло ёдоварӣ нест", tk: "Häzirlikçe duýduryş ýok" },
+  "eslatma tanlanmagan": { ru: "Напоминание не выбрано", en: "No reminder selected", kk: "Ескерту таңдалмаған", ky: "Эскертүү тандалган жок", tg: "Ёдоварӣ интихоб нашудааст", tk: "Duýduryş saýlanmady" },
+  "noma'lum bemor": { ru: "Неизвестный пациент", en: "Unknown patient", kk: "Белгісіз пациент", ky: "Белгисиз бейтап", tg: "Бемори номаълум", tk: "Näbelli näsag" },
+  "muddat (ixtiyoriy)": { ru: "Срок (необязательно)", en: "Due date (optional)", kk: "Мерзім (міндетті емес)", ky: "Мөөнөт (милдеттүү эмес)", tg: "Мӯҳлат (ихтиёрӣ)", tk: "Möhlet (hökmany däl)" },
+  "yuklanmoqda...": { ru: "Загружается...", en: "Loading...", kk: "Жүктелуде...", ky: "Жүктөлүүдө...", tg: "Бор мешавад...", tk: "Ýüklenýär..." },
+  "xatolik yuz berdi": { ru: "Произошла ошибка", en: "An error occurred", kk: "Қате орын алды", ky: "Ката кетти", tg: "Хатогӣ рӯй дод", tk: "Ýalňyşlyk ýüze çykdy" },
+  "eslatmani o'chirishni tasdiqlaysizmi?": { ru: "Подтверждаете удаление напоминания?", en: "Confirm deleting this reminder?", kk: "Ескертуді өшіруді растайсыз ба?", ky: "Эскертүүнү өчүрүүнү ырастайсызбы?", tg: "Нест кардани ёдовариро тасдиқ мекунед?", tk: "Duýduryşy pozmagy tassyklaýarsyňyzmy?" },
   shifokor: { ru: "Врач", en: "Doctor", kk: "Дәрігер", ky: "Дарыгер", tg: "Духтур", tk: "Lukman" },
   "eslatma tarixi": { ru: "История напоминаний", en: "Reminder history", kk: "Ескертулер тарихы", ky: "Эскертүүлөр тарыхы", tg: "Таърихи ёдоварӣ", tk: "Duýduryş taryhy" },
   "bemorga telegram orqali eslatildi": { ru: "Пациенту напомнили через Telegram", en: "Patient reminded via Telegram", kk: "Пациентке Telegram арқылы еске салынды", ky: "Бейтапка Telegram аркылуу эскертилди", tg: "Ба бемор тавассути Telegram ёдоварӣ шуд", tk: "Näsaga Telegram arkaly duýduryldy" },
@@ -910,6 +922,124 @@ export default function DoctorDashboard({
     }
   }, [currentUser, doctors]);
 
+  // Real per-patient reminders (Reminder type — doctor-authored notes with an
+  // optional dueDate, manually "sent" to the patient over Telegram; no background
+  // scheduler exists, matching the /api/reminders backend this already reuses
+  // from Statistics.tsx's real Reminders tab).
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [remindersLoading, setRemindersLoading] = useState(false);
+  const [reminderScopeTab, setReminderScopeTab] = useState<'barchasi' | 'menda'>('menda');
+  const [reminderStatusFilter, setReminderStatusFilter] = useState('');
+  const [selectedReminderId, setSelectedReminderId] = useState<string | null>(null);
+  const [showAddReminderModal, setShowAddReminderModal] = useState(false);
+  const [newReminderPatientQuery, setNewReminderPatientQuery] = useState('');
+  const [newReminderPatientId, setNewReminderPatientId] = useState('');
+  const [newReminderText, setNewReminderText] = useState('');
+  const [newReminderDueDate, setNewReminderDueDate] = useState('');
+  const [isSavingReminder, setIsSavingReminder] = useState(false);
+  const [reminderActionId, setReminderActionId] = useState<string | null>(null);
+
+  const fetchReminders = React.useCallback(() => {
+    if (!effectiveClinicId) return;
+    setRemindersLoading(true);
+    fetch(`/api/reminders?clinicId=${encodeURIComponent(effectiveClinicId)}`, {
+      headers: staffToken ? { Authorization: `Bearer ${staffToken}` } : {},
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setReminders(Array.isArray(data) ? data : []))
+      .catch((err) => console.warn("[DoctorDashboard] Failed to load reminders:", err))
+      .finally(() => setRemindersLoading(false));
+  }, [effectiveClinicId, staffToken]);
+
+  React.useEffect(() => {
+    fetchReminders();
+  }, [fetchReminders]);
+
+  const newReminderPatientResults = useMemo(() => {
+    const q = newReminderPatientQuery.trim().toLowerCase();
+    if (!q) return [];
+    return myPatients
+      .filter((p) => (p.fullName || "").toLowerCase().includes(q) || (p.phone || "").includes(q))
+      .slice(0, 6);
+  }, [myPatients, newReminderPatientQuery]);
+
+  const handleAddReminder = async () => {
+    if (!newReminderPatientId || !newReminderText.trim() || !effectiveClinicId || !currentDoctor?.id) return;
+    setIsSavingReminder(true);
+    try {
+      const res = await fetch('/api/reminders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(staffToken ? { Authorization: `Bearer ${staffToken}` } : {}),
+        },
+        body: JSON.stringify({
+          clinicId: effectiveClinicId,
+          doctorId: currentDoctor.id,
+          patientId: newReminderPatientId,
+          text: newReminderText.trim(),
+          dueDate: newReminderDueDate || undefined,
+        }),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        setReminders((prev) => [saved, ...prev]);
+        setShowAddReminderModal(false);
+        setNewReminderPatientQuery('');
+        setNewReminderPatientId('');
+        setNewReminderText('');
+        setNewReminderDueDate('');
+      }
+    } catch (err) {
+      console.warn("[DoctorDashboard] Failed to add reminder:", err);
+    } finally {
+      setIsSavingReminder(false);
+    }
+  };
+
+  const handleReminderStatusChange = async (id: string, status: 'sent' | 'done') => {
+    setReminderActionId(id);
+    try {
+      const res = await fetch(`/api/reminders/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(staffToken ? { Authorization: `Bearer ${staffToken}` } : {}),
+        },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        setReminders((prev) => prev.map((r) => (r.id === id ? { ...r, status, sentAt: status === 'sent' ? new Date().toISOString() : r.sentAt } : r)));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        window.alert(data.error || t("xatolik yuz berdi"));
+      }
+    } catch (err) {
+      console.warn("[DoctorDashboard] Failed to update reminder:", err);
+    } finally {
+      setReminderActionId(null);
+    }
+  };
+
+  const handleDeleteReminder = async (id: string) => {
+    if (!window.confirm(t("eslatmani o'chirishni tasdiqlaysizmi?"))) return;
+    setReminderActionId(id);
+    try {
+      const res = await fetch(`/api/reminders/${id}`, {
+        method: 'DELETE',
+        headers: staffToken ? { Authorization: `Bearer ${staffToken}` } : {},
+      });
+      if (res.ok) {
+        setReminders((prev) => prev.filter((r) => r.id !== id));
+        if (selectedReminderId === id) setSelectedReminderId(null);
+      }
+    } catch (err) {
+      console.warn("[DoctorDashboard] Failed to delete reminder:", err);
+    } finally {
+      setReminderActionId(null);
+    }
+  };
+
   // Queues specifically directed to this doctor
   const doctorQueues = queues.filter(
     (q) => q.doctorId === activeDoctorId && (!effectiveClinicId || q.clinicId === effectiveClinicId)
@@ -927,6 +1057,25 @@ export default function DoctorDashboard({
   const overdueScheduledQueues = scheduledQueues.filter(
     (q) => q.appointmentDate && q.appointmentDate < todayStr,
   );
+
+  // "Eslatmalar" tab: real per-patient reminders, scoped either to this doctor's
+  // own patients or the whole clinic, filtered by status, with real due-date-based
+  // summary counts (no fabricated numbers).
+  const scopedReminders = reminders.filter((r) => reminderScopeTab === 'barchasi' || r.doctorId === currentDoctor?.id);
+  const filteredReminders = scopedReminders
+    .filter((r) => !reminderStatusFilter || r.status === reminderStatusFilter)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const in7DaysStr = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  const in30DaysStr = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const reminderStats = {
+    total: scopedReminders.length,
+    today: scopedReminders.filter((r) => r.dueDate === todayStr).length,
+    in7Days: scopedReminders.filter((r) => r.dueDate && r.dueDate >= todayStr && r.dueDate <= in7DaysStr).length,
+    in30Days: scopedReminders.filter((r) => r.dueDate && r.dueDate >= todayStr && r.dueDate <= in30DaysStr).length,
+    overdue: scopedReminders.filter((r) => r.dueDate && r.dueDate < todayStr && r.status !== 'done').length,
+  };
+  const selectedReminder = filteredReminders.find((r) => r.id === selectedReminderId) || filteredReminders[0] || null;
+  const selectedReminderPatient = selectedReminder ? clinicPatients.find((p) => p.id === selectedReminder.patientId) || null : null;
 
   // "Rejalashtirilgan" tab: upcoming (not overdue) scheduled appointments, grouped
   // by their real calendar date (not an abstract recurring weekday, since each
@@ -1142,6 +1291,7 @@ export default function DoctorDashboard({
           <SidebarItem icon={List} label={t("Navbatlar")} id="navbatlar" />
           <SidebarItem icon={CalendarClock} label={t("Rejalashtirilgan")} id="rejalashtirilgan" />
           <SidebarItem icon={Users} label={t("Bemorlar")} id="bemorlar" />
+          <SidebarItem icon={Bell} label={t("Eslatmalar")} id="eslatmalar" />
           <SidebarItem icon={Package} label={t("Material va Anjomlar")} id="materiallar" />
           <SidebarItem icon={BarChart2} label={t("Statistika")} id="statistika" />
           <SidebarItem icon={Settings} label={t("sozlamalar")} id="sozlamalar" />
@@ -1222,9 +1372,9 @@ export default function DoctorDashboard({
               <Search className="w-3.5 h-3.5 text-slate-400 absolute right-4 top-2.5" />
             </div>
             <button
-              onClick={() => setActiveView("statistika")}
+              onClick={() => setActiveView("eslatmalar")}
               className="relative p-2.5 text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
-              title={t("statistika")}
+              title={t("barcha eslatmalar")}
             >
               <Bell className="w-4.5 h-4.5" />
               <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-slate-100"></span>
@@ -1641,23 +1791,17 @@ export default function DoctorDashboard({
 
           {activeView === "eslatmalar" && (
             <div className="space-y-6">
-              {/* Eslatmalar Top Cards */}
+              {/* Real summary cards (counts derived from actual Reminder records) */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
                   <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl">
                     <Bell className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-500 mb-1">
-                      {t("barcha eslatmalar")}
-                    </p>
+                    <p className="text-[10px] font-bold text-slate-500 mb-1">{t("barcha eslatmalar")}</p>
                     <div className="flex items-end gap-1">
-                      <span className="text-2xl font-black text-slate-800 leading-none">
-                        28
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400">
-                        {t("ta")}
-                      </span>
+                      <span className="text-2xl font-black text-slate-800 leading-none">{reminderStats.total}</span>
+                      <span className="text-[10px] font-bold text-slate-400">{t("ta")}</span>
                     </div>
                   </div>
                 </div>
@@ -1666,16 +1810,10 @@ export default function DoctorDashboard({
                     <Clock className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-500 mb-1">
-                      {t("bugun")}
-                    </p>
+                    <p className="text-[10px] font-bold text-slate-500 mb-1">{t("bugun")}</p>
                     <div className="flex items-end gap-1">
-                      <span className="text-2xl font-black text-slate-800 leading-none">
-                        5
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400">
-                        {t("ta")}
-                      </span>
+                      <span className="text-2xl font-black text-slate-800 leading-none">{reminderStats.today}</span>
+                      <span className="text-[10px] font-bold text-slate-400">{t("ta")}</span>
                     </div>
                   </div>
                 </div>
@@ -1684,16 +1822,10 @@ export default function DoctorDashboard({
                     <CalendarCheck2 className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-500 mb-1">
-                      {t("7 kun ichida")}
-                    </p>
+                    <p className="text-[10px] font-bold text-slate-500 mb-1">{t("7 kun ichida")}</p>
                     <div className="flex items-end gap-1">
-                      <span className="text-2xl font-black text-slate-800 leading-none">
-                        12
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400">
-                        {t("ta")}
-                      </span>
+                      <span className="text-2xl font-black text-slate-800 leading-none">{reminderStats.in7Days}</span>
+                      <span className="text-[10px] font-bold text-slate-400">{t("ta")}</span>
                     </div>
                   </div>
                 </div>
@@ -1702,16 +1834,10 @@ export default function DoctorDashboard({
                     <CalendarCheck2 className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-500 mb-1">
-                      {t("30 kun ichida")}
-                    </p>
+                    <p className="text-[10px] font-bold text-slate-500 mb-1">{t("30 kun ichida")}</p>
                     <div className="flex items-end gap-1">
-                      <span className="text-2xl font-black text-slate-800 leading-none">
-                        9
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400">
-                        {t("ta")}
-                      </span>
+                      <span className="text-2xl font-black text-slate-800 leading-none">{reminderStats.in30Days}</span>
+                      <span className="text-[10px] font-bold text-slate-400">{t("ta")}</span>
                     </div>
                   </div>
                 </div>
@@ -1720,385 +1846,334 @@ export default function DoctorDashboard({
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-500 mb-1">
-                      {t("muddati o'tgan")}
-                    </p>
+                    <p className="text-[10px] font-bold text-slate-500 mb-1">{t("muddati o'tgan")}</p>
                     <div className="flex items-end gap-1">
-                      <span className="text-2xl font-black text-slate-800 leading-none">
-                        2
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400">
-                        {t("ta")}
-                      </span>
+                      <span className="text-2xl font-black text-slate-800 leading-none">{reminderStats.overdue}</span>
+                      <span className="text-[10px] font-bold text-slate-400">{t("ta")}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Eslatmalar Main Area */}
               <div className="flex flex-col lg:flex-row gap-6">
-                {/* Left List */}
+                {/* Left: real reminder list */}
                 <div className="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm p-5 flex flex-col">
-                  <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-4">
+                  <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-4 flex-wrap gap-3">
                     <div className="flex items-center gap-2">
-                      <button className="px-4 py-1.5 bg-blue-50 text-blue-600 font-bold text-xs rounded-lg">
-                        {t("barchasi")}
-                      </button>
-                      <button className="px-4 py-1.5 text-slate-500 hover:bg-slate-50 font-bold text-xs rounded-lg transition-colors">
+                      <button
+                        onClick={() => setReminderScopeTab('menda')}
+                        className={`px-4 py-1.5 font-bold text-xs rounded-lg transition-colors ${reminderScopeTab === 'menda' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}
+                      >
                         {t("menda")}
                       </button>
-                      <button className="px-4 py-1.5 text-slate-500 hover:bg-slate-50 font-bold text-xs rounded-lg transition-colors">
-                        {t("shifokorlar bo'yicha")}
+                      <button
+                        onClick={() => setReminderScopeTab('barchasi')}
+                        className={`px-4 py-1.5 font-bold text-xs rounded-lg transition-colors ${reminderScopeTab === 'barchasi' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}
+                      >
+                        {t("barchasi")}
                       </button>
                     </div>
                     <div className="flex items-center gap-3">
-                      <select className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-3 py-1.5 outline-none font-semibold">
-                        <option>{t("sana bo'yicha")}</option>
+                      <select
+                        value={reminderStatusFilter}
+                        onChange={(e) => setReminderStatusFilter(e.target.value)}
+                        className="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-lg px-3 py-1.5 outline-none font-semibold"
+                      >
+                        <option value="">{t("barchasi")}</option>
+                        <option value="pending">{t("kutilmoqda")}</option>
+                        <option value="sent">{t("yuborildi")}</option>
+                        <option value="done">{t("bajarildi")}</option>
                       </select>
-                      <button className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors shadow-md shadow-blue-500/20">
+                      <button
+                        onClick={() => setShowAddReminderModal(true)}
+                        className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors shadow-md shadow-blue-500/20"
+                      >
                         <Plus className="w-3.5 h-3.5" /> {t("eslatma qo'shish")}
                       </button>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 mb-4 text-xs font-semibold text-slate-500 border-b border-slate-100 pb-4">
-                    <div className="flex items-center gap-2">
-                      {t("holati")}:{" "}
-                      <select className="bg-transparent font-bold text-slate-800 outline-none">
-                        <option>{t("barchasi")}</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {t("sana oralig'i:")}{" "}
-                      <span className="bg-slate-50 px-2 py-1 rounded border border-slate-100 font-mono">
-                        dd.mm.yyyy - dd.mm.yyyy{" "}
-                        <CalendarCheck2 className="inline w-3 h-3 ml-1" />
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 ml-auto">
-                      {t("eslatma turi:")}{" "}
-                      <select className="bg-transparent font-bold text-slate-800 outline-none">
-                        <option>{t("barchasi")}</option>
-                      </select>
-                    </div>
-                  </div>
-
                   <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                    {/* Active Item */}
-                    <div className="border border-amber-300 bg-amber-50/30 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-colors">
-                      <div className="flex items-center gap-4 w-1/3">
-                        <img
-                          src="https://api.dicebear.com/7.x/adventurer/svg?seed=b1"
-                          className="w-12 h-12 rounded-full border-2 border-white shadow-sm bg-slate-100"
-                        />
-                        <div>
-                          <h4 className="font-bold text-slate-800 text-sm">
-                            Karimov Behzod Anvarovich
-                          </h4>
-                          <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                            <Phone className="inline w-3 h-3 mr-1" />
-                            99 987 65 43
-                          </p>
-                        </div>
+                    {remindersLoading && reminders.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-10">{t("yuklanmoqda...")}</p>
+                    ) : filteredReminders.length === 0 ? (
+                      <div className="text-center py-10">
+                        <Bell className="w-8 h-8 text-slate-200 mx-auto mb-3" />
+                        <p className="text-xs text-slate-400">{t("hozircha eslatmalar yo'q")}</p>
                       </div>
-                      <div className="w-1/3">
-                        <h4 className="font-bold text-slate-800 text-xs">
-                          Implant nazorati
-                        </h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                          36-tishga qo'yilgan implant nazoratini amalga
-                          oshirish.
-                        </p>
-                      </div>
-                      <div className="w-1/6">
-                        <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-1">
-                          <CalendarCheck2 className="w-3.5 h-3.5 text-amber-500" />{" "}
-                          {t("bugun")}
-                        </p>
-                        <p className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-amber-500" /> 10:30
-                        </p>
-                      </div>
-                      <div className="w-1/6 text-right">
-                        <span className="inline-block bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
-                          {t("bugun")}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Normal Item */}
-                    <div className="border border-slate-100 hover:border-slate-200 bg-white rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-colors">
-                      <div className="flex items-center gap-4 w-1/3">
-                        <img
-                          src="https://api.dicebear.com/7.x/adventurer/svg?seed=b2"
-                          className="w-12 h-12 rounded-full border-2 border-white shadow-sm bg-slate-100"
-                        />
-                        <div>
-                          <h4 className="font-bold text-slate-800 text-sm">
-                            Saidova Malika Rustamovna
-                          </h4>
-                          <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                            <Phone className="inline w-3 h-3 mr-1" />
-                            90 123 45 67
-                          </p>
-                        </div>
-                      </div>
-                      <div className="w-1/3">
-                        <h4 className="font-bold text-slate-800 text-xs">
-                          Ortodontiya nazorati
-                        </h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                          Breket tizimini faollashtirish va nazorat qilish.
-                        </p>
-                      </div>
-                      <div className="w-1/6">
-                        <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-1">
-                          <CalendarCheck2 className="w-3.5 h-3.5 text-amber-500" />{" "}
-                          {t("bugun")}
-                        </p>
-                        <p className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-amber-500" /> 14:00
-                        </p>
-                      </div>
-                      <div className="w-1/6 text-right">
-                        <span className="inline-block bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
-                          {t("bugun")}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Overdue Item */}
-                    <div className="border border-slate-100 hover:border-slate-200 bg-white rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-colors">
-                      <div className="flex items-center gap-4 w-1/3">
-                        <img
-                          src="https://api.dicebear.com/7.x/adventurer/svg?seed=b3"
-                          className="w-12 h-12 rounded-full border-2 border-white shadow-sm bg-slate-100"
-                        />
-                        <div>
-                          <h4 className="font-bold text-slate-800 text-sm">
-                            Abdullayev Sardorbek
-                          </h4>
-                          <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                            <Phone className="inline w-3 h-3 mr-1" />
-                            91 234 56 78
-                          </p>
-                        </div>
-                      </div>
-                      <div className="w-1/3">
-                        <h4 className="font-bold text-slate-800 text-xs">
-                          Plomba nazorati
-                        </h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                          46-tish plombasini nazorat qilish.
-                        </p>
-                      </div>
-                      <div className="w-1/6">
-                        <p className="text-xs font-bold text-rose-500 flex items-center gap-1.5 mb-1">
-                          <CalendarCheck2 className="w-3.5 h-3.5" /> 12.05.2024
-                        </p>
-                        <p className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-slate-400" /> 11:00
-                        </p>
-                      </div>
-                      <div className="w-1/6 text-right">
-                        <span className="inline-block bg-rose-50 text-rose-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
-                          {t("muddati o'tgan")}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Future Item */}
-                    <div className="border border-slate-100 hover:border-slate-200 bg-white rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-colors">
-                      <div className="flex items-center gap-4 w-1/3">
-                        <img
-                          src="https://api.dicebear.com/7.x/adventurer/svg?seed=b4"
-                          className="w-12 h-12 rounded-full border-2 border-white shadow-sm bg-slate-100"
-                        />
-                        <div>
-                          <h4 className="font-bold text-slate-800 text-sm">
-                            Ergasheva Nilufar Akbarovna
-                          </h4>
-                          <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                            <Phone className="inline w-3 h-3 mr-1" />
-                            94 567 89 01
-                          </p>
-                        </div>
-                      </div>
-                      <div className="w-1/3">
-                        <h4 className="font-bold text-slate-800 text-xs">
-                          Professional tozalash
-                        </h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                          Og'iz bo'shlig'ini professional tozalash.
-                        </p>
-                      </div>
-                      <div className="w-1/6">
-                        <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-1">
-                          <CalendarCheck2 className="w-3.5 h-3.5 text-blue-500" />{" "}
-                          14.05.2024
-                        </p>
-                        <p className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-slate-400" /> 09:30
-                        </p>
-                      </div>
-                      <div className="w-1/6 text-right">
-                        <span className="inline-block bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
-                          3 kun qoldi
-                        </span>
-                      </div>
-                    </div>
+                    ) : (
+                      filteredReminders.map((r) => {
+                        const pat = clinicPatients.find((p) => p.id === r.patientId);
+                        const isOverdue = !!(r.dueDate && r.dueDate < todayStr && r.status !== 'done');
+                        const isSelected = selectedReminder?.id === r.id;
+                        return (
+                          <div
+                            key={r.id}
+                            onClick={() => setSelectedReminderId(r.id)}
+                            className={`border rounded-2xl p-4 flex items-center justify-between gap-3 cursor-pointer transition-colors ${isSelected ? 'border-blue-300 bg-blue-50/30' : isOverdue ? 'border-rose-200 bg-rose-50/20 hover:border-rose-300' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                          >
+                            <div className="flex items-center gap-3 w-1/3 min-w-0">
+                              <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-sm shrink-0">
+                                {(decodeLegacyEntities(pat?.fullName) || "?").trim().charAt(0).toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="font-bold text-slate-800 text-sm truncate">
+                                  {decodeLegacyEntities(pat?.fullName) || t("noma'lum bemor")}
+                                </h4>
+                                <p className="text-[11px] text-slate-500 font-mono mt-0.5 truncate">
+                                  <Phone className="inline w-3 h-3 mr-1" />
+                                  {decodeLegacyEntities(pat?.phone) || "—"}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="w-1/3 min-w-0">
+                              <p className="text-[11px] text-slate-600 leading-snug line-clamp-2">{r.text}</p>
+                            </div>
+                            <div className="w-1/6">
+                              {r.dueDate ? (
+                                <>
+                                  <p className={`text-xs font-bold flex items-center gap-1.5 mb-1 ${isOverdue ? 'text-rose-500' : 'text-slate-800'}`}>
+                                    <CalendarCheck2 className="w-3.5 h-3.5" /> {r.dueDate === todayStr ? t("bugun") : r.dueDate}
+                                  </p>
+                                  <p className="text-[10px] font-bold text-slate-400">
+                                    {WEEKDAY_NAMES_UZ[new Date(r.dueDate).getDay()]}
+                                  </p>
+                                </>
+                              ) : (
+                                <p className="text-xs text-slate-300">—</p>
+                              )}
+                            </div>
+                            <div className="w-1/6 text-right">
+                              {isOverdue ? (
+                                <span className="inline-block bg-rose-50 text-rose-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                                  {t("muddati o'tgan")}
+                                </span>
+                              ) : r.status === 'done' ? (
+                                <span className="inline-block bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                                  {t("bajarildi")}
+                                </span>
+                              ) : r.status === 'sent' ? (
+                                <span className="inline-block bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                                  {t("yuborildi")}
+                                </span>
+                              ) : (
+                                <span className="inline-block bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                                  {t("kutilmoqda")}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 
-                {/* Right Details Panel */}
+                {/* Right: details for the selected reminder */}
                 <div className="w-full lg:w-[350px] shrink-0 bg-white rounded-3xl border border-slate-100 shadow-sm p-6 flex flex-col">
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="font-bold text-slate-800 text-base">
-                      {t("eslatma tafsilotlari")}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <button className="text-slate-400 hover:text-slate-600">
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-                      <button className="text-slate-400 hover:text-slate-600">
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
+                    <h3 className="font-bold text-slate-800 text-base">{t("eslatma tafsilotlari")}</h3>
                   </div>
 
-                  <div className="flex items-center gap-4 mb-6">
-                    <img
-                      src="https://api.dicebear.com/7.x/adventurer/svg?seed=b1"
-                      className="w-16 h-16 rounded-full bg-slate-100"
-                    />
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-sm leading-tight">
-                        Karimov Behzod Anvarovich
-                      </h4>
-                      <p className="text-[10px] text-slate-500 mt-1">
-                        29 yosh (12.05.1995)
-                      </p>
-                      <div className="flex items-center justify-between mt-1.5">
-                        <p className="text-xs font-mono text-slate-600 font-medium flex items-center gap-1">
-                          <Phone className="w-3 h-3" /> 99 987 65 43
-                        </p>
-                        <div className="flex gap-1.5">
-                          <button className="p-1.5 bg-slate-50 hover:bg-slate-100 text-blue-600 rounded-full">
-                            <Phone className="w-3 h-3" />
-                          </button>
-                          <button className="p-1.5 bg-slate-50 hover:bg-slate-100 text-blue-600 rounded-full">
-                            <Send className="w-3 h-3" />
-                          </button>
-                          <button className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-full">
-                            <MoreVertical className="w-3 h-3" />
-                          </button>
+                  {!selectedReminder ? (
+                    <p className="text-xs text-slate-400 text-center py-10">{t("eslatma tanlanmagan")}</p>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-4 mb-6">
+                        <div className="w-14 h-14 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-lg shrink-0">
+                          {(decodeLegacyEntities(selectedReminderPatient?.fullName) || "?").trim().charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-slate-800 text-sm leading-tight truncate">
+                            {decodeLegacyEntities(selectedReminderPatient?.fullName) || t("noma'lum bemor")}
+                          </h4>
+                          <p className="text-xs font-mono text-slate-600 font-medium flex items-center gap-1 mt-1">
+                            <Phone className="w-3 h-3" /> {decodeLegacyEntities(selectedReminderPatient?.phone) || "—"}
+                          </p>
                         </div>
                       </div>
-                    </div>
-                  </div>
 
-                  <div className="space-y-4 text-xs font-medium text-slate-600 border-b border-slate-100 pb-6 mb-6">
-                    <div className="grid grid-cols-2 gap-2">
-                      <span className="flex items-center gap-2 text-slate-400">
-                        <Tag className="w-4 h-4" /> {t("eslatma turi")}
-                      </span>
-                      <span className="text-slate-800 text-right">
-                        Implant nazorati
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <span className="flex items-center gap-2 text-slate-400">
-                        <CalendarCheck2 className="w-4 h-4" /> {t("eslatma sanasi")}
-                      </span>
-                      <span className="text-slate-800 text-right">
-                        13.05.2024
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <span className="flex items-center gap-2 text-slate-400">
-                        <Clock className="w-4 h-4" /> {t("vaqti")}
-                      </span>
-                      <span className="text-slate-800 text-right">10:30</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <span className="flex items-center gap-2 text-slate-400">
-                        <CheckCircle className="w-4 h-4" /> {t("holati")}
-                      </span>
-                      <div className="text-right">
-                        <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded">
-                          {t("bugun")}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-4 pt-2">
-                      <span className="flex items-center gap-2 text-slate-400 mb-1">
-                        <FileText className="w-4 h-4" /> {t("eslatma matni")}
-                      </span>
-                      <p className="text-slate-800 leading-snug">
-                        36-tishga qo'yilgan implant nazoratini amalga oshirish.
-                        Rentgen tekshiruvi va yallig'lanish belgilarini
-                        tekshirish.
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 mt-4">
-                      <span className="flex items-center gap-2 text-slate-400">
-                        <User className="w-4 h-4" /> {t("shifokor")}
-                      </span>
-                      <span className="text-slate-800 text-right">
-                        Dr. Asilbek Xolmirzayev
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="mb-6">
-                    <h4 className="font-bold text-slate-800 text-xs mb-4">
-                      {t("eslatma tarixi")}
-                    </h4>
-                    <div className="space-y-4 relative before:absolute before:inset-0 before:ml-[11px] before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-slate-100">
-                      {/* timeline items */}
-                      <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                        <div className="flex items-center justify-center w-6 h-6 rounded-full border-2 border-white bg-emerald-500 text-white shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm z-10">
-                          <Check className="w-3 h-3" />
-                        </div>
-                        <div className="w-[calc(100%-3rem)] md:w-[calc(50%-1.5rem)] p-3 rounded border border-slate-100 bg-slate-50 text-[10px] font-medium text-slate-800 shadow-sm flex flex-col gap-1">
-                          <span className="text-slate-400">
-                            10.05.2024 09:15
+                      <div className="space-y-4 text-xs font-medium text-slate-600 border-b border-slate-100 pb-6 mb-6">
+                        <div className="grid grid-cols-2 gap-2">
+                          <span className="flex items-center gap-2 text-slate-400">
+                            <CalendarCheck2 className="w-4 h-4" /> {t("eslatma sanasi")}
                           </span>
-                          <span className="font-bold">{t("eslatma yaratildi")}</span>
-                          <span className="text-slate-500">Dr. Asilbek</span>
+                          <span className="text-slate-800 text-right">{selectedReminder.dueDate || "—"}</span>
                         </div>
-                      </div>
-                      <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                        <div className="flex items-center justify-center w-6 h-6 rounded-full border-2 border-white bg-blue-500 text-white shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm z-10">
-                          <Send className="w-3 h-3" />
-                        </div>
-                        <div className="w-[calc(100%-3rem)] md:w-[calc(50%-1.5rem)] p-3 rounded border border-slate-100 bg-slate-50 text-[10px] font-medium text-slate-800 shadow-sm flex flex-col gap-1">
-                          <span className="text-slate-400">
-                            11.05.2024 09:00
+                        <div className="grid grid-cols-2 gap-2">
+                          <span className="flex items-center gap-2 text-slate-400">
+                            <CheckCircle className="w-4 h-4" /> {t("holati")}
                           </span>
-                          <span className="font-bold">
-                            {t("bemorga telegram orqali eslatildi")}
+                          <div className="text-right">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${selectedReminder.status === 'done' ? 'bg-emerald-50 text-emerald-600' : selectedReminder.status === 'sent' ? 'bg-blue-50 text-blue-600' : 'bg-amber-100 text-amber-700'}`}>
+                              {selectedReminder.status === 'done' ? t("bajarildi") : selectedReminder.status === 'sent' ? t("yuborildi") : t("kutilmoqda")}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mt-4 pt-2">
+                          <span className="flex items-center gap-2 text-slate-400 mb-1">
+                            <FileText className="w-4 h-4" /> {t("eslatma matni")}
+                          </span>
+                          <p className="text-slate-800 leading-snug">{selectedReminder.text}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mt-4">
+                          <span className="flex items-center gap-2 text-slate-400">
+                            <User className="w-4 h-4" /> {t("shifokor")}
+                          </span>
+                          <span className="text-slate-800 text-right">
+                            {doctors.find((d) => d.id === selectedReminder.doctorId)?.name || "—"}
                           </span>
                         </div>
                       </div>
-                    </div>
-                  </div>
 
-                  <div className="mt-auto space-y-3">
-                    <div className="flex gap-3">
-                      <button className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-bold rounded-xl transition-colors">
-                        {t("tahrirlash")}
-                      </button>
-                      <button className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1">
-                        <Trash2 className="w-3.5 h-3.5" /> {t("o'chirish")}
-                      </button>
-                    </div>
-                    <button className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1">
-                      <CheckCircle className="w-4 h-4" /> {t("bajarildi deb belgilash")}
-                    </button>
-                  </div>
+                      <div className="mb-6">
+                        <h4 className="font-bold text-slate-800 text-xs mb-4">{t("eslatma tarixi")}</h4>
+                        <div className="space-y-3">
+                          <div className="flex items-start gap-3">
+                            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500 text-white shrink-0 shadow-sm">
+                              <Check className="w-3 h-3" />
+                            </div>
+                            <div className="flex-1 p-3 rounded border border-slate-100 bg-slate-50 text-[10px] font-medium text-slate-800 shadow-sm flex flex-col gap-1">
+                              <span className="text-slate-400">{new Date(selectedReminder.createdAt).toLocaleString()}</span>
+                              <span className="font-bold">{t("eslatma yaratildi")}</span>
+                            </div>
+                          </div>
+                          {selectedReminder.sentAt && (
+                            <div className="flex items-start gap-3">
+                              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-500 text-white shrink-0 shadow-sm">
+                                <Send className="w-3 h-3" />
+                              </div>
+                              <div className="flex-1 p-3 rounded border border-slate-100 bg-slate-50 text-[10px] font-medium text-slate-800 shadow-sm flex flex-col gap-1">
+                                <span className="text-slate-400">{new Date(selectedReminder.sentAt).toLocaleString()}</span>
+                                <span className="font-bold">{t("bemorga telegram orqali eslatildi")}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-auto space-y-3">
+                        {selectedReminder.status === 'pending' && (
+                          <button
+                            onClick={() => handleReminderStatusChange(selectedReminder.id, 'sent')}
+                            disabled={reminderActionId === selectedReminder.id}
+                            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-colors shadow-md shadow-blue-500/20 flex items-center justify-center gap-1.5"
+                          >
+                            <Send className="w-4 h-4" /> {t("telegram orqali yuborish")}
+                          </button>
+                        )}
+                        {selectedReminder.status !== 'done' && (
+                          <button
+                            onClick={() => handleReminderStatusChange(selectedReminder.id, 'done')}
+                            disabled={reminderActionId === selectedReminder.id}
+                            className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-colors shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5"
+                          >
+                            <CheckCircle className="w-4 h-4" /> {t("bajarildi deb belgilash")}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteReminder(selectedReminder.id)}
+                          disabled={reminderActionId === selectedReminder.id}
+                          className="w-full py-2 bg-rose-50 hover:bg-rose-100 disabled:opacity-50 text-rose-600 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> {t("o'chirish")}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
+
+              {/* Add-reminder modal */}
+              {showAddReminderModal && (
+                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                  <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl border border-slate-100 flex flex-col max-h-[90vh]">
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <Bell className="w-5 h-5 text-blue-500" />
+                        {t("eslatma qo'shish")}
+                      </h3>
+                      <button
+                        onClick={() => setShowAddReminderModal(false)}
+                        className="text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="p-5 flex flex-col gap-4 overflow-y-auto">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("bemorni qidirish")} *</label>
+                        <input
+                          type="text"
+                          value={newReminderPatientQuery}
+                          onChange={(e) => {
+                            setNewReminderPatientQuery(e.target.value);
+                            setNewReminderPatientId('');
+                          }}
+                          placeholder={t("ism yoki telefon bo'yicha qidiring...")}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium bg-white text-slate-800"
+                        />
+                        {!newReminderPatientId && newReminderPatientResults.length > 0 && (
+                          <div className="mt-1.5 border border-slate-100 rounded-xl overflow-hidden divide-y divide-slate-50">
+                            {newReminderPatientResults.map((p) => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => {
+                                  setNewReminderPatientId(p.id);
+                                  setNewReminderPatientQuery(decodeLegacyEntities(p.fullName) || '');
+                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-slate-50 transition-colors"
+                              >
+                                <p className="text-xs font-bold text-slate-800">{decodeLegacyEntities(p.fullName)}</p>
+                                <p className="text-[10px] text-slate-400 font-mono">{decodeLegacyEntities(p.phone)}</p>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {newReminderPatientId && (
+                          <p className="mt-1.5 text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3" /> {newReminderPatientQuery}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("eslatma matni")} *</label>
+                        <textarea
+                          value={newReminderText}
+                          onChange={(e) => setNewReminderText(e.target.value)}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium bg-white text-slate-800 h-20 resize-none"
+                          placeholder={t("masalan: implant nazorati uchun qabulga kelish")}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("muddat (ixtiyoriy)")}</label>
+                        <input
+                          type="date"
+                          value={newReminderDueDate}
+                          onChange={(e) => setNewReminderDueDate(e.target.value)}
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium bg-white text-slate-800"
+                        />
+                      </div>
+                    </div>
+                    <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0">
+                      <button
+                        onClick={() => setShowAddReminderModal(false)}
+                        className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-200 rounded-xl transition-colors"
+                      >
+                        {t("bekor qilish")}
+                      </button>
+                      <button
+                        onClick={handleAddReminder}
+                        disabled={!newReminderPatientId || !newReminderText.trim() || isSavingReminder}
+                        className="px-4 py-2 text-sm font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-colors shadow-md shadow-blue-500/20"
+                      >
+                        {isSavingReminder ? t("saqlanmoqda...") : t("saqlash")}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
