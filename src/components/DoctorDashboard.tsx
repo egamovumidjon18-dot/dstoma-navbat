@@ -62,7 +62,6 @@ import {
   UserCheck,
   Calendar,
   CreditCard,
-  Filter,
   Eye,
   Edit2,
   FileDown,
@@ -1222,11 +1221,20 @@ export default function DoctorDashboard({
               />
               <Search className="w-3.5 h-3.5 text-slate-400 absolute right-4 top-2.5" />
             </div>
-            <button className="relative p-2.5 text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer">
+            <button
+              onClick={() => setActiveView("statistika")}
+              className="relative p-2.5 text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
+              title={t("statistika")}
+            >
               <Bell className="w-4.5 h-4.5" />
               <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-slate-100"></span>
             </button>
-            <button className="p-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition-colors shadow-md shadow-blue-500/20 cursor-pointer">
+            <button
+              onClick={handleBulkTelegramMessage}
+              disabled={isSendingBulkTelegram}
+              className="p-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-full transition-colors shadow-md shadow-blue-500/20 cursor-pointer"
+              title={t("telegram'ga xabar yuborish")}
+            >
               <Send className="w-4.5 h-4.5" />
             </button>
           </div>
@@ -2663,16 +2671,16 @@ export default function DoctorDashboard({
                           />
                           <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5" />
                         </div>
-                        <button className="hidden sm:flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-700 font-bold text-xs rounded-lg hover:bg-slate-50 transition-colors">
-                          <Filter className="w-3.5 h-3.5" /> {t("filter")}
-                        </button>
                         <button
                           onClick={() => setShowCrossClinicSearch((v) => !v)}
                           className={`shrink-0 flex items-center gap-1.5 px-4 py-2 font-bold text-xs rounded-lg transition-colors border ${showCrossClinicSearch ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50"}`}
                         >
                           {t("🌐 boshqa klinikadan qidirish")}
                         </button>
-                        <button className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors shadow-md shadow-emerald-500/20">
+                        <button
+                          onClick={() => setShowQuickAddPatient(true)}
+                          className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors shadow-md shadow-emerald-500/20"
+                        >
                           <Plus className="w-4 h-4" /> {t("yangi bemor")}
                         </button>
                       </div>
