@@ -186,6 +186,8 @@ export default function App() {
           language={language}
           onRequestPremiumUpgrade={handleRequestPremiumUpgrade}
           staffToken={staffToken}
+          onAddQueue={handleAddQueue}
+          onLogout={handleLogout}
         />
       </ErrorBoundary>
     );

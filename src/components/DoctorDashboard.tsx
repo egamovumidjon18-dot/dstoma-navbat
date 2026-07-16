@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../services/firebase";
 import PatientProfile from "./PatientProfile";
@@ -104,6 +104,8 @@ interface DoctorDashboardProps {
   language: Language;
   onRequestPremiumUpgrade?: (clinicId: string) => void;
   staffToken?: string | null;
+  onAddQueue?: (q: QueueItem) => void;
+  onLogout?: () => void;
 }
 
 type DoctorDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
@@ -162,6 +164,11 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   payshanba: { ru: "Четверг", en: "Thursday", kk: "Бейсенбі", ky: "Бейшемби", tg: "Панҷшанбе", tk: "Penşenbe" },
   juma: { ru: "Пятница", en: "Friday", kk: "Жұма", ky: "Жума", tg: "Ҷумъа", tk: "Anna" },
   shanba: { ru: "Суббота", en: "Saturday", kk: "Сенбі", ky: "Ишемби", tg: "Шанбе", tk: "Şenbe" },
+  "yangi bandlash": { ru: "Новая запись", en: "New booking", kk: "Жаңа жазылу", ky: "Жаңы жазылуу", tg: "Сабти нав", tk: "Täze bellik" },
+  "bemorni qidirish": { ru: "Поиск пациента", en: "Search patient", kk: "Пациентті іздеу", ky: "Бейтапты издөө", tg: "Ҷустуҷӯи бемор", tk: "Näsagy gözlemek" },
+  "ism yoki telefon bo'yicha qidiring...": { ru: "Искать по имени или телефону...", en: "Search by name or phone...", kk: "Аты немесе телефоны бойынша іздеу...", ky: "Аты же телефону боюнча издөө...", tg: "Ҷустуҷӯ бо ном ё телефон...", tk: "Ady ýa-da telefony boýunça gözlemek..." },
+  "bemorni bandlash": { ru: "Записать пациента", en: "Book patient", kk: "Пациентті жазу", ky: "Бейтапты жазуу", tg: "Сабти бемор", tk: "Näsagy bellemek" },
+  "kelgusi sana va vaqtga yozish": { ru: "Записать на будущую дату и время", en: "Book for a future date and time", kk: "Болашақ күн мен уақытқа жазу", ky: "Келечектеги күн жана убакытка жазуу", tg: "Ба санаи оянда сабт кардан", tk: "Geljekki sene we wagta ýazmak" },
   "tashriflar tarixi": { ru: "История посещений", en: "Visit history", kk: "Келу тарихы", ky: "Келүү тарыхы", tg: "Таърихи ташрифҳо", tk: "Gelen-gidenler taryhy" },
   "hali tashrif qayd etilmagan.": { ru: "Визиты еще не зарегистрированы.", en: "No visits recorded yet.", kk: "Әзірге келу тіркелмеген.", ky: "Азырынча келүү катталган эмес.", tg: "Ҳанӯз ягон ташриф сабт нашудааст.", tk: "Heniz gelen-gideniň ýazgysy ýok." },
   "yangi bemor qo'shish": { ru: "Добавить нового пациента", en: "Add new patient", kk: "Жаңа пациент қосу", ky: "Жаңы бейтап кошуу", tg: "Илова кардани бемори нав", tk: "Täze näsag goşmak" },
@@ -535,7 +542,9 @@ export default function DoctorDashboard({
   selectedClinic,
   setActiveTab,
   onRequestPremiumUpgrade,
-  staffToken
+  staffToken,
+  onAddQueue,
+  onLogout
 }: DoctorDashboardProps) {
   // Translation Helper
   const localLang: keyof DoctorDictEntry | null =
@@ -580,11 +589,11 @@ export default function DoctorDashboard({
       : currentDoctor?.clinicId || selectedClinic?.id || null;
   const effectiveClinic = clinics.find((c) => c.id === effectiveClinicId) || selectedClinic;
 
-  const [docStatus, setDocStatus] = useState<"idle" | "busy" | "away">("idle");
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState("dashboard");
   const [activeDoctorId, setActiveDoctorId] = useState(currentDoctor?.id || "");
   const [patientListSearch, setPatientListSearch] = useState("");
+  const patientSearchInputRef = useRef<HTMLInputElement>(null);
   const [showQuickAddPatient, setShowQuickAddPatient] = useState(false);
   const [quickAddPatient, setQuickAddPatient] = useState({
     fullName: "", phone: "", passportSerial: "", birthDate: "", password: "",
@@ -706,6 +715,37 @@ export default function DoctorDashboard({
     }
   };
 
+  // Books a patient (existing, picked from search, or a brand-new name/phone
+  // typed directly — POST /api/queues accepts free-text patient info, no
+  // pre-existing Patient record required) for a specific future date/time,
+  // creating the queue as already 'scheduled' rather than 'pending'.
+  const handleNewBooking = () => {
+    if (!newBookingName.trim() || !newBookingDate || !newBookingTime || !effectiveClinicId || !onAddQueue) return;
+    setIsSavingNewBooking(true);
+    const newQueue: QueueItem = {
+      id: 'q_' + Math.random().toString(36).substr(2, 9),
+      clinicId: effectiveClinicId,
+      doctorId: currentDoctor?.id || activeDoctorId,
+      serviceId: newBookingServiceId,
+      patientName: newBookingName.trim(),
+      patientPhone: newBookingPhone.trim(),
+      number: 0,
+      status: 'scheduled',
+      appointmentDate: newBookingDate,
+      appointmentTime: newBookingTime,
+      createdAt: new Date().toISOString(),
+    };
+    onAddQueue(newQueue);
+    setIsSavingNewBooking(false);
+    setShowNewBookingModal(false);
+    setNewBookingQuery('');
+    setNewBookingName('');
+    setNewBookingPhone('');
+    setNewBookingServiceId('');
+    setNewBookingDate(new Date().toISOString().split('T')[0]);
+    setNewBookingTime('09:00');
+  };
+
   const handleExportPatientsCsv = () => {
     const header = ["Ism", "Telefon", "Tug'ilgan sana", "Pasport", "Tashriflar soni"];
     const rows = filteredClinicPatients.map((p) => [
@@ -806,132 +846,37 @@ export default function DoctorDashboard({
     }
   };
 
-  // Avatar and password states for profile updates
-  const [showProfileSettings, setShowProfileSettings] = useState(false);
+  // Avatar (real profile picture, synced from currentDoctor below) — actual
+  // profile editing/password change lives in the real SettingsView component
+  // (see the "sozlamalar" tab), not here.
   const [avatarUrl, setAvatarUrl] = useState(currentDoctor?.image || "");
-  const [password, setPassword] = useState("123456");
-  const [profileSuccessMsg, setProfileSuccessMsg] = useState("");
 
   const [scheduleModal, setScheduleModal] = useState<{isOpen: boolean, queueId: string | null}>({isOpen: false, queueId: null});
   const [scheduleDate, setScheduleDate] = useState(new Date().toISOString().split('T')[0]);
   const [scheduleTime, setScheduleTime] = useState('09:00');
   const [scheduleServiceId, setScheduleServiceId] = useState('');
-
-  // Service Selector Search
-  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
-  const [serviceSearchTerm, setServiceSearchTerm] = useState("");
-  const [openServiceCategory, setOpenServiceCategory] = useState<string>("");
-  const [medicalNotes, setMedicalNotes] = useState<Record<string, string>>({});
-  const [openPatientHistory, setOpenPatientHistory] = useState<
-    Record<string, boolean>
-  >({});
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  const getServiceCategory = (name: string): string => {
-    const n = name.toLowerCase();
-    if (
-      n.includes("diagnostika") ||
-      n.includes("konsultatsiya") ||
-      n.includes("rentgen") ||
-      n.includes("snimka") ||
-      n.includes("kt")
-    )
-      return "Diagnostika";
-    if (
-      n.includes("oqartirish") ||
-      n.includes("zoom") ||
-      n.includes("bleaching")
-    )
-      return "Tishlarni oqartirish";
-    if (n.includes("vinir") || n.includes("komponir") || n.includes("lyuminir"))
-      return "Vinirlar";
-    if (
-      n.includes("implant") ||
-      n.includes("all-on-4") ||
-      n.includes("mega gen") ||
-      n.includes("osstem")
-    )
-      return "Implantatsiya";
-    if (
-      n.includes("protez") ||
-      n.includes("koronka") ||
-      n.includes("metallokera") ||
-      n.includes("sirqoniy") ||
-      n.includes("plastmassa")
-    )
-      return "Protezlash";
-    if (
-      n.includes("breket") ||
-      n.includes("plastinka") ||
-      n.includes("elayner") ||
-      n.includes("reteyner")
-    )
-      return "Ortodontiya";
-    if (
-      n.includes("bolalar") ||
-      n.includes("sut tish") ||
-      n.includes("karies s")
-    )
-      return "Bolalar stomatologiyasi";
-    if (
-      n.includes("olish") ||
-      n.includes("xirurg") ||
-      n.includes("operasiya") ||
-      n.includes("operatsiya") ||
-      n.includes("rezeksiya") ||
-      n.includes("kista") ||
-      n.includes("sinus")
-    )
-      return "Xirurgiya";
-    if (
-      n.includes("tosh") ||
-      n.includes("tozalash") ||
-      n.includes("gigiyena") ||
-      n.includes("polirovka") ||
-      n.includes("ftor") ||
-      n.includes("air flow")
-    )
-      return "Profilaktika";
-    if (
-      n.includes("karies") ||
-      n.includes("plomba") ||
-      n.includes("pulpit") ||
-      n.includes("abssess") ||
-      n.includes("davolash")
-    )
-      return "Terapevtik stomatologiya";
-    return "Boshqa xizmatlar";
-  };
-
-  const myClinicServices = services.filter(
-    (s) => s.clinicId === currentDoctor?.clinicId,
-  );
-  const filteredServices = myClinicServices.filter((s) =>
-    translateMedicalText(s.name, language)
-      .toLowerCase()
-      .includes(serviceSearchTerm.toLowerCase()),
-  );
-
-  const groupedServices: Record<string, typeof services> = {};
-  filteredServices.forEach((s) => {
-    const cat = getServiceCategory(translateMedicalText(s.name, language));
-    if (!groupedServices[cat]) groupedServices[cat] = [];
-    groupedServices[cat].push(s);
-  });
-
-  const sortedCategories = [
-    "Diagnostika",
-    "Terapevtik stomatologiya",
-    "Tishlarni oqartirish",
-    "Vinirlar",
-    "Xirurgiya",
-    "Protezlash",
-    "Ortodontiya",
-    "Bolalar stomatologiyasi",
-    "Implantatsiya",
-    "Profilaktika",
-    "Boshqa xizmatlar",
-  ].filter((c) => groupedServices[c] && groupedServices[c].length > 0);
+  // "Yangi bandlash" — book a patient (existing or new) for a chosen future
+  // date/time directly, without needing an already-existing queue ticket first
+  // (unlike scheduleModal above, which only reschedules an existing one). Reused
+  // identically from the Rejalashtirilgan tab, the Navbatlar tab, and the
+  // Bemorlar tab's quick actions — one shared modal/state, three entry points.
+  const [showNewBookingModal, setShowNewBookingModal] = useState(false);
+  const [newBookingQuery, setNewBookingQuery] = useState('');
+  const [newBookingName, setNewBookingName] = useState('');
+  const [newBookingPhone, setNewBookingPhone] = useState('');
+  const [newBookingServiceId, setNewBookingServiceId] = useState('');
+  const [newBookingDate, setNewBookingDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newBookingTime, setNewBookingTime] = useState('09:00');
+  const [isSavingNewBooking, setIsSavingNewBooking] = useState(false);
+  const newBookingSearchResults = useMemo(() => {
+    const q = newBookingQuery.trim().toLowerCase();
+    if (!q) return [];
+    return myPatients
+      .filter((p) => (p.fullName || "").toLowerCase().includes(q) || (p.phone || "").includes(q))
+      .slice(0, 6);
+  }, [myPatients, newBookingQuery]);
 
   // Sync state if currentUser changes
   React.useEffect(() => {
@@ -943,16 +888,6 @@ export default function DoctorDashboard({
       }
     }
   }, [currentUser, doctors]);
-
-  const handleUpdateProfile = () => {
-    setProfileSuccessMsg(
-      "Profil ma'lumotlari muvaffaqiyatli saqlandi! (Parol yangilandi)",
-    );
-    setTimeout(() => {
-      setProfileSuccessMsg("");
-      setShowProfileSettings(false);
-    }, 2500);
-  };
 
   // Queues specifically directed to this doctor
   const doctorQueues = queues.filter(
@@ -1207,7 +1142,7 @@ export default function DoctorDashboard({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              setActiveTab && setActiveTab("bemor");
+              onLogout ? onLogout() : (setActiveTab && setActiveTab("bemor"));
             }}
             className={`w-full flex items-center ${isSidebarOpen ? 'gap-3 px-3' : 'justify-center px-0'} py-3 text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer rounded-xl`}
             title={!isSidebarOpen ? t("chiqish") : ""}
@@ -2273,6 +2208,12 @@ export default function DoctorDashboard({
                       <option value="completed">{t("yakunlangan")}</option>
                       <option value="cancelled">{t("bekor qilindi")}</option>
                     </select>
+                    <button
+                      onClick={() => setShowNewBookingModal(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg transition-colors shadow-sm shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> {t("yangi bandlash")}
+                    </button>
                   </div>
                 </div>
 
@@ -2487,6 +2428,16 @@ export default function DoctorDashboard({
 
           {activeView === "rejalashtirilgan" && (
             <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-black text-slate-700 uppercase tracking-wide">{t("rejalashtirilgan")}</h2>
+                <button
+                  onClick={() => setShowNewBookingModal(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-purple-500/20"
+                >
+                  <Plus className="w-3.5 h-3.5" /> {t("yangi bandlash")}
+                </button>
+              </div>
+
               {overdueScheduledQueues.length > 0 && (
                 <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4">
                   <h3 className="text-xs font-black text-rose-700 uppercase tracking-wide mb-3 flex items-center gap-1.5">
@@ -2681,6 +2632,7 @@ export default function DoctorDashboard({
                       <div className="flex items-center gap-3 w-full sm:w-auto">
                         <div className="relative w-full sm:w-72">
                           <input
+                            ref={patientSearchInputRef}
                             type="text"
                             value={patientListSearch}
                             onChange={(e) => setPatientListSearch(e.target.value)}
@@ -2982,8 +2934,8 @@ export default function DoctorDashboard({
                         </button>
                         <button
                           onClick={() => {
-                            const el = document.querySelector('input[placeholder*="Ism, telefon"]') as HTMLInputElement | null;
-                            el?.focus();
+                            setActiveView("bemorlar");
+                            patientSearchInputRef.current?.focus();
                           }}
                           className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-colors text-left group"
                         >
@@ -2996,6 +2948,19 @@ export default function DoctorDashboard({
                             </h4>
                             <p className="text-[10px] text-slate-500">
                               {t("mavjud bemorni tanlang")}
+                            </p>
+                          </div>
+                        </button>
+                        <button onClick={() => setShowNewBookingModal(true)} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-colors text-left group">
+                          <div className="p-2 bg-purple-50 text-purple-600 rounded-lg group-hover:bg-purple-100 transition-colors">
+                            <CalendarClock className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-800 text-xs">
+                              {t("bemorni bandlash")}
+                            </h4>
+                            <p className="text-[10px] text-slate-500">
+                              {t("kelgusi sana va vaqtga yozish")}
                             </p>
                           </div>
                         </button>
@@ -3179,6 +3144,126 @@ export default function DoctorDashboard({
           )}
         </div>
       </div>
+
+      {showNewBookingModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl border border-slate-100 flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <CalendarClock className="w-5 h-5 text-purple-500" />
+                {t("yangi bandlash")}
+              </h3>
+              <button
+                onClick={() => setShowNewBookingModal(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 flex flex-col gap-4 overflow-y-auto">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("bemorni qidirish")}</label>
+                <input
+                  type="text"
+                  value={newBookingQuery}
+                  onChange={(e) => setNewBookingQuery(e.target.value)}
+                  placeholder={t("ism yoki telefon bo'yicha qidiring...")}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                />
+                {newBookingSearchResults.length > 0 && (
+                  <div className="mt-1.5 border border-slate-100 rounded-xl overflow-hidden divide-y divide-slate-50">
+                    {newBookingSearchResults.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setNewBookingName(decodeLegacyEntities(p.fullName) || '');
+                          setNewBookingPhone(decodeLegacyEntities(p.phone) || '');
+                          setNewBookingQuery('');
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-slate-50 transition-colors"
+                      >
+                        <p className="text-xs font-bold text-slate-800">{decodeLegacyEntities(p.fullName)}</p>
+                        <p className="text-[10px] text-slate-400 font-mono">{decodeLegacyEntities(p.phone)}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("to'liq ism *")}</label>
+                  <input
+                    type="text"
+                    value={newBookingName}
+                    onChange={(e) => setNewBookingName(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                    placeholder={t("ism familiya")}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("telefon")}</label>
+                  <input
+                    type="text"
+                    value={newBookingPhone}
+                    onChange={(e) => setNewBookingPhone(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                    placeholder="+998 90 123 45 67"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("muolaja / xizmat")}</label>
+                <select
+                  value={newBookingServiceId}
+                  onChange={(e) => setNewBookingServiceId(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                >
+                  <option value="" className="text-slate-800">{t("— muolajani tanlang —")}</option>
+                  {services.filter((s: any) => !effectiveClinicId || s.clinicId === effectiveClinicId).map((s: any) => (
+                    <option key={s.id} value={s.id} className="text-slate-800">{s.name} — {Number(s.price).toLocaleString()} so'm</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("qabul kuni")}</label>
+                  <input
+                    type="date"
+                    value={newBookingDate}
+                    onChange={(e) => setNewBookingDate(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("qabul vaqti")}</label>
+                  <input
+                    type="time"
+                    value={newBookingTime}
+                    onChange={(e) => setNewBookingTime(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0">
+              <button
+                onClick={() => setShowNewBookingModal(false)}
+                className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                {t("bekor qilish")}
+              </button>
+              <button
+                onClick={handleNewBooking}
+                disabled={!newBookingName.trim() || !newBookingDate || !newBookingTime || isSavingNewBooking}
+                className="px-4 py-2 text-sm font-bold bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-colors shadow-md shadow-purple-500/20"
+              >
+                {t("tasdiqlash")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {scheduleModal.isOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">

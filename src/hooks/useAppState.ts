@@ -618,13 +618,19 @@ export function useAppState() {
   const handleAddQueue = async (newQueue: QueueItem) => {
     isSyncingRef.current = true;
     setQueues(prev => [...prev, newQueue]);
-    
-    setClinics(prev => prev.map(c => {
-      if (c.id === newQueue.clinicId) {
-        return { ...c, activePatients: c.activePatients + 1 };
-      }
-      return c;
-    }));
+
+    // A future-dated booking (status 'scheduled', e.g. from the doctor panel's
+    // "book for a chosen date/time" flow) isn't someone physically waiting at
+    // the clinic right now, unlike a walk-in 'pending' ticket — only count the
+    // latter toward activePatients.
+    if (newQueue.status !== 'scheduled') {
+      setClinics(prev => prev.map(c => {
+        if (c.id === newQueue.clinicId) {
+          return { ...c, activePatients: c.activePatients + 1 };
+        }
+        return c;
+      }));
+    }
 
     try {
       const res = await fetch('/api/queues', {
@@ -640,7 +646,10 @@ export function useAppState() {
           hasInfection: newQueue.hasInfection,
           medicalNotes: newQueue.medicalNotes,
           passportSerial: newQueue.passportSerial,
-          telegramChatId: newQueue.telegramChatId
+          telegramChatId: newQueue.telegramChatId,
+          status: newQueue.status,
+          appointmentDate: newQueue.appointmentDate,
+          appointmentTime: newQueue.appointmentTime
         })
       });
       if (res.ok) {
@@ -658,6 +667,8 @@ export function useAppState() {
           passportSerial: saved.passportSerial || saved.passport_serial || '',
           telegramChatId: saved.telegramChatId || saved.telegram_chat_id || '',
           status: saved.status || 'pending',
+          appointmentDate: saved.appointmentDate || saved.appointment_date || undefined,
+          appointmentTime: saved.appointmentTime || saved.appointment_time || undefined,
           createdAt: saved.createdAt || saved.created_at || new Date().toISOString()
         };
         setQueues(prev => prev.map(q => q.id === newQueue.id ? mapped : q));

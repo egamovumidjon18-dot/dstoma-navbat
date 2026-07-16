@@ -1214,6 +1214,8 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
   const hasInfection = q.has_infection ?? q.hasInfection ?? false;
   const medicalNotes = sanitizeString(q.medical_notes ?? q.medicalNotes ?? '');
   const passportSerial = sanitizeString(q.passport_serial ?? q.passportSerial ?? '');
+  const appointmentDate = sanitizeString(q.appointment_date ?? q.appointmentDate ?? '');
+  const appointmentTime = sanitizeString(q.appointment_time ?? q.appointmentTime ?? '');
 
   const qDb = await getQueues();
   const ticketNo = qDb.filter(item => item.clinicId === clinicId).length + 104;
@@ -1232,7 +1234,14 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
     medicalNotes,
     passportSerial
   };
-  
+
+  // A doctor booking a patient directly for a specific future date/time (rather
+  // than the walk-in "take a ticket now" flow) creates the queue as already
+  // 'scheduled' with these set — previously only the PATCH /api/queues/:id path
+  // (rescheduling an existing ticket) could set these fields.
+  if (appointmentDate) newQueueItem.appointmentDate = appointmentDate;
+  if (appointmentTime) newQueueItem.appointmentTime = appointmentTime;
+
   if (telegramChatId) {
     newQueueItem.telegramChatId = telegramChatId;
   }
