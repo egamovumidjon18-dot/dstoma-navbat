@@ -169,6 +169,7 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "ism yoki telefon bo'yicha qidiring...": { ru: "Искать по имени или телефону...", en: "Search by name or phone...", kk: "Аты немесе телефоны бойынша іздеу...", ky: "Аты же телефону боюнча издөө...", tg: "Ҷустуҷӯ бо ном ё телефон...", tk: "Ady ýa-da telefony boýunça gözlemek..." },
   "bemorni bandlash": { ru: "Записать пациента", en: "Book patient", kk: "Пациентті жазу", ky: "Бейтапты жазуу", tg: "Сабти бемор", tk: "Näsagy bellemek" },
   "kelgusi sana va vaqtga yozish": { ru: "Записать на будущую дату и время", en: "Book for a future date and time", kk: "Болашақ күн мен уақытқа жазу", ky: "Келечектеги күн жана убакытка жазуу", tg: "Ба санаи оянда сабт кардан", tk: "Geljekki sene we wagta ýazmak" },
+  "shu bilan birga qabulga ham yozish": { ru: "Одновременно записать на приём", en: "Also book an appointment", kk: "Сонымен қатар қабылдауға да жазу", ky: "Ошону менен кабылдоого да жазуу", tg: "Ҳамзамон ба қабул низ сабт кардан", tk: "Şol bilen bile kabula-da ýazmak" },
   "tashriflar tarixi": { ru: "История посещений", en: "Visit history", kk: "Келу тарихы", ky: "Келүү тарыхы", tg: "Таърихи ташрифҳо", tk: "Gelen-gidenler taryhy" },
   "hali tashrif qayd etilmagan.": { ru: "Визиты еще не зарегистрированы.", en: "No visits recorded yet.", kk: "Әзірге келу тіркелмеген.", ky: "Азырынча келүү катталган эмес.", tg: "Ҳанӯз ягон ташриф сабт нашудааст.", tk: "Heniz gelen-gideniň ýazgysy ýok." },
   "yangi bemor qo'shish": { ru: "Добавить нового пациента", en: "Add new patient", kk: "Жаңа пациент қосу", ky: "Жаңы бейтап кошуу", tg: "Илова кардани бемори нав", tk: "Täze näsag goşmak" },
@@ -598,6 +599,8 @@ export default function DoctorDashboard({
   const [quickAddPatient, setQuickAddPatient] = useState({
     fullName: "", phone: "", passportSerial: "", birthDate: "", password: "",
     bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
+    bookAppointment: true, serviceId: "",
+    appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: "09:00",
   });
   const [isSavingQuickAddPatient, setIsSavingQuickAddPatient] = useState(false);
   const [isSendingBulkTelegram, setIsSendingBulkTelegram] = useState(false);
@@ -702,9 +705,28 @@ export default function DoctorDashboard({
         }),
       });
       if (res.ok) {
+        const savedPatient = await res.json();
+        if (quickAddPatient.bookAppointment && quickAddPatient.appointmentDate && quickAddPatient.appointmentTime && onAddQueue) {
+          onAddQueue({
+            id: 'q_' + Math.random().toString(36).substr(2, 9),
+            clinicId: effectiveClinicId,
+            doctorId: currentDoctor?.id || activeDoctorId,
+            serviceId: quickAddPatient.serviceId,
+            patientName: savedPatient.fullName || quickAddPatient.fullName.trim(),
+            patientPhone: savedPatient.phone || quickAddPatient.phone.trim(),
+            passportSerial: savedPatient.passportSerial || quickAddPatient.passportSerial.trim(),
+            number: 0,
+            status: 'scheduled',
+            appointmentDate: quickAddPatient.appointmentDate,
+            appointmentTime: quickAddPatient.appointmentTime,
+            createdAt: new Date().toISOString(),
+          });
+        }
         setQuickAddPatient({
           fullName: "", phone: "", passportSerial: "", birthDate: "", password: "",
           bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
+          bookAppointment: true, serviceId: "",
+          appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: "09:00",
         });
         setShowQuickAddPatient(false);
       }
@@ -3513,6 +3535,48 @@ export default function DoctorDashboard({
                   {t("jiddiy yuqumli kasallik mavjud")}
                 </label>
               </div>
+              <div className="bg-purple-50 border border-purple-200 p-3 rounded-xl">
+                <div className="flex items-start gap-2.5">
+                  <input
+                    type="checkbox"
+                    id="quick-add-book-appointment"
+                    checked={quickAddPatient.bookAppointment}
+                    onChange={(e) => setQuickAddPatient({ ...quickAddPatient, bookAppointment: e.target.checked })}
+                    className="rounded border-purple-300 text-purple-600 focus:ring-purple-500 w-4 h-4 cursor-pointer mt-0.5 shrink-0"
+                  />
+                  <label htmlFor="quick-add-book-appointment" className="text-xs font-bold text-purple-900 leading-tight cursor-pointer select-none">
+                    {t("shu bilan birga qabulga ham yozish")}
+                  </label>
+                </div>
+                {quickAddPatient.bookAppointment && (
+                  <div className="mt-3 space-y-2.5">
+                    <select
+                      value={quickAddPatient.serviceId}
+                      onChange={(e) => setQuickAddPatient({ ...quickAddPatient, serviceId: e.target.value })}
+                      className="w-full border border-purple-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                    >
+                      <option value="" className="text-slate-800">{t("— muolajani tanlang —")}</option>
+                      {services.filter((s: any) => !effectiveClinicId || s.clinicId === effectiveClinicId).map((s: any) => (
+                        <option key={s.id} value={s.id} className="text-slate-800">{s.name} — {Number(s.price).toLocaleString()} so'm</option>
+                      ))}
+                    </select>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <input
+                        type="date"
+                        value={quickAddPatient.appointmentDate}
+                        onChange={(e) => setQuickAddPatient({ ...quickAddPatient, appointmentDate: e.target.value })}
+                        className="w-full border border-purple-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                      />
+                      <input
+                        type="time"
+                        value={quickAddPatient.appointmentTime}
+                        onChange={(e) => setQuickAddPatient({ ...quickAddPatient, appointmentTime: e.target.value })}
+                        className="w-full border border-purple-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
               <button
@@ -3523,7 +3587,7 @@ export default function DoctorDashboard({
               </button>
               <button
                 onClick={handleQuickAddPatient}
-                disabled={!quickAddPatient.fullName.trim() || isSavingQuickAddPatient}
+                disabled={!quickAddPatient.fullName.trim() || isSavingQuickAddPatient || (quickAddPatient.bookAppointment && (!quickAddPatient.appointmentDate || !quickAddPatient.appointmentTime))}
                 className="px-4 py-2 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl transition-colors shadow-md shadow-emerald-500/20"
               >
                 {isSavingQuickAddPatient ? t("saqlanmoqda...") : t("saqlash")}
