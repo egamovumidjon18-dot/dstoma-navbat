@@ -3,6 +3,7 @@ import { Clinic, Doctor, QueueItem, SaaSPayment, Advertisement } from '../types'
 import { TRANSLATIONS, Language } from '../translations';
 import { motion, AnimatePresence } from 'motion/react';
 import { compressImage } from '../utils/imageCompressor';
+import { LanguageSwitcher } from './LanguageSwitcher';
 import { 
   Building, 
   TrendingUp, 
@@ -56,6 +57,7 @@ interface SuperAdminDashboardProps {
   onDeleteClinic?: (clinicId: string) => void;
   onDeleteDoctor?: (doctorId: string) => void;
   language: Language;
+  setLanguage?: (l: Language) => void;
 
   // Custom added billing variables
   saasPayments?: SaaSPayment[];
@@ -100,6 +102,7 @@ export default function SuperAdminDashboard({
   onDeleteClinic,
   onDeleteDoctor,
   language,
+  setLanguage,
   saasPayments = [],
   onApproveSaaSPayment,
   onUpdateClinicDetails,
@@ -772,9 +775,12 @@ export default function SuperAdminDashboard({
               </p>
             </div>
           </div>
-          <div className="bg-slate-900/80 px-4 py-2.5 rounded-xl border border-slate-830 shrink-0 flex items-center gap-2">
-            <Globe className="w-4 h-4 text-[#06b6d4]" />
-            <span className="text-[11px] font-bold text-slate-350 font-mono">DSTOMA NETWORK CENTRAL</span>
+          <div className="flex items-center gap-2.5 shrink-0">
+            {setLanguage && <LanguageSwitcher language={language} setLanguage={setLanguage} variant="dark" />}
+            <div className="bg-slate-900/80 px-4 py-2.5 rounded-xl border border-slate-830 flex items-center gap-2">
+              <Globe className="w-4 h-4 text-[#06b6d4]" />
+              <span className="text-[11px] font-bold text-slate-350 font-mono">DSTOMA NETWORK CENTRAL</span>
+            </div>
           </div>
         </div>
       </div>

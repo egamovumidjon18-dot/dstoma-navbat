@@ -27,6 +27,7 @@ import {
   LogOut
 } from 'lucide-react';
 import Statistics from './Statistics';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 interface DirectorDashboardProps {
   clinics: Clinic[];
@@ -50,6 +51,7 @@ interface DirectorDashboardProps {
   onSimulatePayment?: (clinicId: string) => void;
   saasPayments?: SaaSPayment[];
   language: Language;
+  setLanguage?: (l: Language) => void;
 }
 
 interface CatalogItem {
@@ -234,7 +236,8 @@ export default function DirectorDashboard({
   clinicId,
   onSimulatePayment,
   saasPayments = [],
-  language
+  language,
+  setLanguage
 }: DirectorDashboardProps) {
   
   // Translation Helper
@@ -768,7 +771,8 @@ export default function DirectorDashboard({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 z-10 shrink-0">
-          <button 
+          {setLanguage && <LanguageSwitcher language={language} setLanguage={setLanguage} variant="dark" />}
+          <button
             onClick={() => setShowSearchModal(true)}
             className="px-5 py-3 bg-white/10 hover:bg-white/15 text-xs font-black rounded-xl border border-white/10 flex items-center gap-1.5 transition-all text-white cursor-pointer active:scale-95"
           >

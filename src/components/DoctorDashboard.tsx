@@ -10,6 +10,7 @@ import PhotoGallery from "./PhotoGallery";
 import Statistics from "./Statistics";
 import Prescriptions from "./Prescriptions";
 import SettingsView from "./Settings";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 import { Clinic, Doctor, Service, QueueItem, Patient, DoctorClinicLink, Reminder } from "../types";
 import { decodeLegacyEntities } from "../utils/textFormat";
 import { TRANSLATIONS, Language, translateMedicalText } from "../translations";
@@ -101,6 +102,7 @@ interface DoctorDashboardProps {
     name?: string;
   } | null;
   language: Language;
+  setLanguage?: (l: Language) => void;
   onRequestPremiumUpgrade?: (clinicId: string) => void;
   staffToken?: string | null;
   onAddQueue?: (q: QueueItem) => void;
@@ -550,6 +552,7 @@ export default function DoctorDashboard({
   setActiveDoctorClinicId,
   currentUser,
   language,
+  setLanguage,
   onUpdateQueueStatus,
   selectedClinic,
   setActiveTab,
@@ -1371,6 +1374,7 @@ export default function DoctorDashboard({
               />
               <Search className="w-3.5 h-3.5 text-slate-400 absolute right-4 top-2.5" />
             </div>
+            {setLanguage && <LanguageSwitcher language={language} setLanguage={setLanguage} variant="light" />}
             <button
               onClick={() => setActiveView("eslatmalar")}
               className="relative p-2.5 text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"

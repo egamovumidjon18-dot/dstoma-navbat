@@ -6,82 +6,9 @@ import DoctorDashboard from './components/DoctorDashboard';
 import DirectorDashboard from './components/DirectorDashboard';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { KeyRound, ShieldAlert, LogOut, CheckCircle, Smartphone, Lock, ClipboardCheck, ChevronDown, Check } from 'lucide-react';
 import type { Language } from './translations';
-
-// Country codes for flag images (flagcdn.com) — used instead of flag emoji because
-// Windows browsers commonly render regional-indicator flag emoji as plain 2-letter
-// boxes instead of actual flag graphics.
-const LANGUAGE_META: Record<Language, { countryCode: string; native: string }> = {
-  uz: { countryCode: 'uz', native: "O'zbekcha" },
-  ru: { countryCode: 'ru', native: 'Русский' },
-  en: { countryCode: 'gb', native: 'English' },
-  kk: { countryCode: 'kz', native: 'Қазақша' },
-  ky: { countryCode: 'kg', native: 'Кыргызча' },
-  tg: { countryCode: 'tj', native: 'Тоҷикӣ' },
-  tk: { countryCode: 'tm', native: 'Türkmençe' },
-};
-
-function FlagIcon({ countryCode, className }: { countryCode: string; className?: string }) {
-  return (
-    <img
-      src={`https://flagcdn.com/24x18/${countryCode}.png`}
-      srcSet={`https://flagcdn.com/48x36/${countryCode}.png 2x`}
-      alt={countryCode.toUpperCase()}
-      className={`inline-block rounded-[2px] object-cover shadow-sm ${className || ''}`}
-    />
-  );
-}
-
-function LanguageSwitcher({ language, setLanguage }: { language: Language; setLanguage: (l: Language) => void }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onClickOutside = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onClickOutside);
-    return () => document.removeEventListener('mousedown', onClickOutside);
-  }, []);
-
-  const current = LANGUAGE_META[language] || LANGUAGE_META.uz;
-
-  return (
-    <div className="relative" ref={rootRef}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 bg-slate-900/60 hover:bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 transition-all cursor-pointer"
-      >
-        <FlagIcon countryCode={current.countryCode} className="w-[18px] h-[13px]" />
-        <span className="text-[10px] font-black uppercase text-slate-300 hidden sm:inline">{language}</span>
-        <ChevronDown className={`w-3 h-3 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      {open && (
-        <div className="absolute right-0 mt-2 w-48 bg-[#0b1022] border border-slate-800 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden z-[300] py-1.5">
-          {(Object.keys(LANGUAGE_META) as Language[]).map((lang) => {
-            const meta = LANGUAGE_META[lang];
-            const isActive = language === lang;
-            return (
-              <button
-                key={lang}
-                onClick={() => { setLanguage(lang); setOpen(false); }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
-                  isActive ? 'bg-cyan-500/10 text-cyan-300' : 'text-slate-300 hover:bg-slate-800/60'
-                }`}
-              >
-                <FlagIcon countryCode={meta.countryCode} className="w-5 h-[15px]" />
-                <span className="text-xs font-bold flex-1">{meta.native}</span>
-                {isActive && <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0" />}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function App() {
   const {
@@ -184,6 +111,7 @@ export default function App() {
           setActiveTab={setActiveTab}
           currentUser={currentUser}
           language={language}
+          setLanguage={setLanguage}
           onRequestPremiumUpgrade={handleRequestPremiumUpgrade}
           staffToken={staffToken}
           onAddQueue={handleAddQueue}
@@ -378,6 +306,7 @@ export default function App() {
                 onSimulatePayment={handlePaySubscriptionSimulate}
                 saasPayments={saasPayments}
                 language={language}
+                setLanguage={setLanguage}
               />
             </ErrorBoundary>
           ) : (
@@ -403,6 +332,7 @@ export default function App() {
                 onDeleteClinic={handleDeleteClinic}
                 onDeleteDoctor={handleDeleteDoctor}
                 language={language}
+                setLanguage={setLanguage}
                 saasPayments={saasPayments}
                 onApproveSaaSPayment={handleApproveSaaSPayment}
                 onUpdateClinicDetails={handleUpdateClinicDetails}
