@@ -16,6 +16,8 @@ import { decodeLegacyEntities } from "../utils/textFormat";
 import { TRANSLATIONS, Language, translateMedicalText } from "../translations";
 import {
   Check,
+  ChevronLeft,
+  ChevronRight,
   X,
   Phone,
   Play,
@@ -158,6 +160,9 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   allergiyalar: { ru: "Аллергии", en: "Allergies", kk: "Аллергиялар", ky: "Аллергиялар", tg: "Аллергияҳо", tk: "Allergiýalar" },
   "jiddiy yuqumli kasallik mavjud": { ru: "Есть серьёзное инфекционное заболевание", en: "Has a serious infectious disease", kk: "Ауыр жұқпалы ауру бар", ky: "Оор жугуштуу оору бар", tg: "Бемории вазнини сироятӣ дорад", tk: "Agyr ýokanç keseli bar" },
   "hozircha rejalashtirilgan qabullar yo'q": { ru: "Пока нет запланированных приёмов", en: "No scheduled appointments yet", kk: "Әзірге жоспарланған қабылдаулар жоқ", ky: "Азырынча пландаштырылган кабылдоолор жок", tg: "Ҳанӯз қабулҳои банақшагирифташуда нест", tk: "Heniz meýilleşdirilen kabullar ýok" },
+  "oldingi hafta": { ru: "Предыдущая неделя", en: "Previous week", kk: "Алдыңғы апта", ky: "Мурунку жума", tg: "Ҳафтаи гузашта", tk: "Öňki hepde" },
+  "keyingi hafta": { ru: "Следующая неделя", en: "Next week", kk: "Келесі апта", ky: "Кийинки жума", tg: "Ҳафтаи оянда", tk: "Indiki hepde" },
+  "bu hafta": { ru: "Эта неделя", en: "This week", kk: "Осы апта", ky: "Ушул жума", tg: "Ҳамин ҳафта", tk: "Şu hepde" },
   yakshanba: { ru: "Воскресенье", en: "Sunday", kk: "Жексенбі", ky: "Жекшемби", tg: "Якшанбе", tk: "Ýekşenbe" },
   dushanba: { ru: "Понедельник", en: "Monday", kk: "Дүйсенбі", ky: "Дүйшөмбү", tg: "Душанбе", tk: "Duşenbe" },
   seshanba: { ru: "Вторник", en: "Tuesday", kk: "Сейсенбі", ky: "Шейшемби", tg: "Сешанбе", tk: "Sişenbe" },
@@ -887,6 +892,10 @@ export default function DoctorDashboard({
   // (see the "sozlamalar" tab), not here.
   const [avatarUrl, setAvatarUrl] = useState(currentDoctor?.image || "");
 
+  // "Rejalashtirilgan" week-table navigation: 0 = the current ISO week
+  // (Monday-Sunday), negative/positive shifts by whole weeks.
+  const [scheduleWeekOffset, setScheduleWeekOffset] = useState(0);
+
   const [scheduleModal, setScheduleModal] = useState<{isOpen: boolean, queueId: string | null}>({isOpen: false, queueId: null});
   const [scheduleDate, setScheduleDate] = useState(new Date().toISOString().split('T')[0]);
   const [scheduleTime, setScheduleTime] = useState('09:00');
@@ -1080,28 +1089,30 @@ export default function DoctorDashboard({
   const selectedReminder = filteredReminders.find((r) => r.id === selectedReminderId) || filteredReminders[0] || null;
   const selectedReminderPatient = selectedReminder ? clinicPatients.find((p) => p.id === selectedReminder.patientId) || null : null;
 
-  // "Rejalashtirilgan" tab: upcoming (not overdue) scheduled appointments, grouped
-  // by their real calendar date (not an abstract recurring weekday, since each
-  // appointment has one concrete date) and sorted chronologically; each group's
-  // rows are sorted by appointment time.
+  // "Rejalashtirilgan" tab: a real Monday-Sunday weekly schedule table (not just
+  // a chronological agenda) — every scheduled appointment is placed under its
+  // actual weekday column for the currently-viewed week, sorted by time within
+  // the day. Navigable via scheduleWeekOffset (0 = this week).
   const WEEKDAY_NAMES_UZ = ["Yakshanba", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba"];
-  const upcomingScheduledByDate = (() => {
-    const groups: Record<string, QueueItem[]> = {};
-    scheduledQueues
-      .filter((q) => q.appointmentDate && q.appointmentDate >= todayStr)
-      .forEach((q) => {
-        const dateKey = q.appointmentDate!;
-        if (!groups[dateKey]) groups[dateKey] = [];
-        groups[dateKey].push(q);
-      });
-    return Object.entries(groups)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, items]) => ({
-        date,
-        weekday: WEEKDAY_NAMES_UZ[new Date(date).getDay()],
-        items: [...items].sort((a, b) => (a.appointmentTime || "").localeCompare(b.appointmentTime || "")),
-      }));
+  const scheduleWeekDays = (() => {
+    const now = new Date();
+    const jsDay = now.getDay(); // 0=Sun..6=Sat
+    const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay;
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset + scheduleWeekOffset * 7);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return { date: dateStr, dateObj: d, weekday: WEEKDAY_NAMES_UZ[d.getDay()] };
+    });
   })();
+  const scheduleWeekGrid = scheduleWeekDays.map((day) => ({
+    ...day,
+    items: scheduledQueues
+      .filter((q) => q.appointmentDate === day.date)
+      .sort((a, b) => (a.appointmentTime || "").localeCompare(b.appointmentTime || "")),
+  }));
+  const formatDdMm = (d: Date) => `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const scheduleWeekLabel = `${formatDdMm(scheduleWeekDays[0].dateObj)} — ${formatDdMm(scheduleWeekDays[6].dateObj)}.${scheduleWeekDays[6].dateObj.getFullYear()}`;
 
   const visibleQueues = doctorQueues
     .filter((q) => queueListRange === 'all' || (q.appointmentDate || q.createdAt.slice(0, 10)) === todayStr)
@@ -2537,7 +2548,7 @@ export default function DoctorDashboard({
 
           {activeView === "rejalashtirilgan" && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-sm font-black text-slate-700 uppercase tracking-wide">{t("rejalashtirilgan")}</h2>
                 <button
                   onClick={() => setShowNewBookingModal(true)}
@@ -2575,56 +2586,75 @@ export default function DoctorDashboard({
                 </div>
               )}
 
-              {upcomingScheduledByDate.length === 0 ? (
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-10 text-center">
-                  <CalendarClock className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-                  <p className="text-sm font-bold text-slate-500">{t("hozircha rejalashtirilgan qabullar yo'q")}</p>
+              {/* Week navigator */}
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3 flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setScheduleWeekOffset((v) => v - 1)}
+                    className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl transition-colors"
+                    title={t("oldingi hafta")}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setScheduleWeekOffset(0)}
+                    disabled={scheduleWeekOffset === 0}
+                    className="px-3 py-2 text-xs font-bold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-blue-50 text-blue-600 hover:bg-blue-100"
+                  >
+                    {t("bu hafta")}
+                  </button>
+                  <button
+                    onClick={() => setScheduleWeekOffset((v) => v + 1)}
+                    className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl transition-colors"
+                    title={t("keyingi hafta")}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
                 </div>
-              ) : (
-                upcomingScheduledByDate.map(({ date, weekday, items }) => (
-                  <div key={date} className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                    <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                      <h3 className="text-sm font-black text-slate-800">
-                        {t(weekday.toLowerCase())} — {new Date(date).toLocaleDateString('uz-UZ')}
-                      </h3>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">{items.length} {t("ta")}</span>
-                    </div>
-                    <div className="divide-y divide-slate-50">
-                      {items.map((q) => (
-                        <div
-                          key={q.id}
-                          onClick={() => { const pid = resolvePatientIdFromQueue(q); if (pid) { setActiveView('bemorlar'); setSelectedPatientId(pid); } }}
-                          className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-slate-50 transition-colors"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-12 text-center shrink-0">
-                              <span className="text-sm font-black text-blue-600">{q.appointmentTime || '--:--'}</span>
-                            </div>
-                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-400 text-xs shrink-0">
-                              {q.patientName.charAt(0)}
-                            </div>
-                            <div>
-                              <p className="font-bold text-slate-800 text-sm">{q.patientName}</p>
-                              <p className="text-[10px] text-slate-400 font-mono">{q.patientPhone}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            <span className="text-[10px] text-slate-500 font-semibold hidden sm:inline">
-                              {services.find((s: any) => s.id === q.serviceId)?.name || t("ko'rik")}
-                            </span>
-                            <button
-                              onClick={() => onUpdateQueueStatus(q.id!, 'in_progress')}
-                              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-xs rounded-lg transition-colors"
-                            >
-                              {t("qabulni boshlash")}
-                            </button>
-                          </div>
+                <span className="text-sm font-black text-slate-700">{scheduleWeekLabel}</span>
+              </div>
+
+              {/* Weekly schedule table: Monday-Sunday columns, appointments placed
+                  under their real weekday, always visible at a glance. */}
+              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-x-auto">
+                <div className="grid grid-cols-7 min-w-[980px]">
+                  {scheduleWeekGrid.map((day) => {
+                    const isToday = day.date === todayStr;
+                    const isWeekend = day.dateObj.getDay() === 0 || day.dateObj.getDay() === 6;
+                    return (
+                      <div key={day.date} className={`border-r border-slate-100 last:border-r-0 flex flex-col ${isWeekend ? 'bg-slate-50/60' : ''}`}>
+                        <div className={`px-3 py-3 border-b border-slate-100 text-center ${isToday ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-700'}`}>
+                          <p className="text-[10px] font-black uppercase tracking-wide">{t(day.weekday.toLowerCase())}</p>
+                          <p className="text-sm font-black">{formatDdMm(day.dateObj)}</p>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ))
-              )}
+                        <div className="flex-1 p-2 space-y-2 min-h-[220px]">
+                          {day.items.length === 0 ? (
+                            <p className="text-[10px] text-slate-300 text-center pt-6">{t("bo'sh")}</p>
+                          ) : (
+                            day.items.map((q) => (
+                              <div
+                                key={q.id}
+                                onClick={() => { const pid = resolvePatientIdFromQueue(q); if (pid) { setActiveView('bemorlar'); setSelectedPatientId(pid); } }}
+                                className="bg-blue-50/60 hover:bg-blue-100/70 border border-blue-100 rounded-xl p-2 cursor-pointer transition-colors"
+                              >
+                                <p className="text-[11px] font-black text-blue-700">{q.appointmentTime || '--:--'}</p>
+                                <p className="text-xs font-bold text-slate-800 truncate">{q.patientName}</p>
+                                <p className="text-[10px] text-slate-400 font-mono truncate">{q.patientPhone}</p>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onUpdateQueueStatus(q.id!, 'in_progress'); }}
+                                  className="mt-1.5 w-full py-1 bg-white hover:bg-blue-600 hover:text-white text-blue-600 font-bold text-[10px] rounded-lg transition-colors border border-blue-200"
+                                >
+                                  {t("qabulni boshlash")}
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 
