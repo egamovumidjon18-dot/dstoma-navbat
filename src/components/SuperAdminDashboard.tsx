@@ -526,7 +526,7 @@ export default function SuperAdminDashboard({
 
   const handleCopy = () => {
     if (!generatedCreds) return;
-    const shareText = `Klinika: ${generatedCreds.clinicName}\nSubdomain: ${generatedCreds.subdomain}.dstoma-navbat-lk2p.vercel.app\nDirekor: ${generatedCreds.ownerName}\n\nLogin: ${generatedCreds.login}\nParol: ${generatedCreds.pass}`;
+    const shareText = `Klinika: ${generatedCreds.clinicName}\nHavola: ${window.location.origin}/?clinic=${generatedCreds.subdomain}\nDirekor: ${generatedCreds.ownerName}\n\nLogin: ${generatedCreds.login}\nParol: ${generatedCreds.pass}`;
     navigator.clipboard.writeText(shareText);
     setCopied(true);
     triggerToast(tL("Hisob ma'lumotlari nusxalandi!"));
@@ -909,6 +909,7 @@ export default function SuperAdminDashboard({
                     {t('subdomain')} *
                   </label>
                   <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:border-cyan-500">
+                    <span className="text-[9px] text-slate-400 font-black font-mono shrink-0">{window.location.host}/?clinic=</span>
                     <input
                       type="text"
                       required
@@ -917,7 +918,6 @@ export default function SuperAdminDashboard({
                       placeholder="toshkent"
                       className="w-full bg-transparent text-xs font-bold text-slate-800 focus:outline-none"
                     />
-                    <span className="text-[9px] text-slate-400 font-black font-mono">.dstoma-navbat-lk2p.vercel.app</span>
                   </div>
                 </div>
 
@@ -1062,7 +1062,7 @@ export default function SuperAdminDashboard({
                     </p>
                     <div className="font-mono text-[11px] space-y-1.5 text-slate-200 bg-slate-950 p-3 rounded-xl border border-slate-900 select-all">
                       <p><span className="text-slate-500">Filial:</span> {generatedCreds.clinicName}</p>
-                      <p><span className="text-slate-500">Subdomain:</span> {generatedCreds.subdomain}.dstoma-navbat-lk2p.vercel.app</p>
+                      <p><span className="text-slate-500">Havola:</span> {window.location.origin}/?clinic={generatedCreds.subdomain}</p>
                       <p><span className="text-slate-500">Director:</span> {generatedCreds.ownerName}</p>
                       <hr className="border-slate-800/60 my-2" />
                       <p className="text-cyan-400 font-bold"><span className="text-slate-500">Login:</span> {generatedCreds.login}</p>
@@ -2017,7 +2017,7 @@ export default function SuperAdminDashboard({
                           <span className="text-base">{clinic.logo || '🦷'}</span>
                           <h4 className="text-xs font-black text-slate-800 leading-none">{clinic.name}</h4>
                           <span className="px-1.5 py-0.5 bg-cyan-900/10 text-cyan-800 text-[10px] font-bold rounded-md font-mono">
-                            {clinic.subdomain}.dstoma-navbat-lk2p.vercel.app
+                            {window.location.host}/?clinic={clinic.subdomain}
                           </span>
                         </div>
                         <p className="text-[10px] text-slate-400 font-bold mt-1.5">

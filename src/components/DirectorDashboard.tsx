@@ -2072,10 +2072,10 @@ export default function DirectorDashboard({
               {/* Card 3 */}
               <div className="bg-slate-50 p-4.5 rounded-2xl border border-slate-100">
                 <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">
-                  {t("Klinika Subdomeni")}
+                  {t("Klinika havolasi")}
                 </span>
-                <strong className="text-lg text-emerald-700 font-semibold block mt-1.5 font-mono">
-                  {myClinic?.subdomain || currentClinicId}.dstoma-navbat-lk2p.vercel.app
+                <strong className="text-lg text-emerald-700 font-semibold block mt-1.5 font-mono break-all">
+                  {window.location.origin}/?clinic={myClinic?.subdomain || currentClinicId}
                 </strong>
                 <span className="text-xs text-slate-400 font-semibold mt-1 block">
                   {t("Xarita integratsiyasi faollashtirilgan.")}
