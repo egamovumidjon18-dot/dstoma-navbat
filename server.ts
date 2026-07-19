@@ -10,7 +10,7 @@ import { Type } from "@google/genai";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Without these, any unhandled error thrown inside an `async (req, res) => {...}`
 // route handler (e.g. a Firestore write rejecting an `undefined` field) becomes an
