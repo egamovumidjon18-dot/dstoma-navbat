@@ -1404,7 +1404,7 @@ app.patch("/api/queues/:id", async (req, res) => {
         const srvObj = srvDb.find((s: any) => s.id === (item.serviceId || ''));
         const doctorObj = docDb.find((d: any) => d.id === item.doctorId);
         
-        const visit: ClinicVisit = {
+        const visit: ClinicVisit = stripUndefined({
           id: 'v_' + Math.random().toString(36).substr(2, 9),
           date: new Date().toISOString(),
           doctorId: item.doctorId,
@@ -1414,7 +1414,7 @@ app.patch("/api/queues/:id", async (req, res) => {
           complaint: item.complaint,
           medicalNotes: item.medicalNotes,
           price: srvObj ? srvObj.price : 0
-        };
+        });
         
         const updatedPat = { 
           ...patientObj, 
