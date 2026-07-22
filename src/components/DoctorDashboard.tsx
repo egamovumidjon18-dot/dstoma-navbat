@@ -1105,9 +1105,12 @@ export default function DoctorDashboard({
       return { date: dateStr, dateObj: d, weekday: WEEKDAY_NAMES_UZ[d.getDay()] };
     });
   })();
+  // Everything with an appointmentDate stays on the weekly table regardless of
+  // status — a completed or cancelled visit is still part of that day's real
+  // history, not something that should vanish once the doctor finishes it.
   const scheduleWeekGrid = scheduleWeekDays.map((day) => ({
     ...day,
-    items: scheduledQueues
+    items: doctorQueues
       .filter((q) => q.appointmentDate === day.date)
       .sort((a, b) => (a.appointmentTime || "").localeCompare(b.appointmentTime || "")),
   }));
@@ -2631,23 +2634,47 @@ export default function DoctorDashboard({
                           {day.items.length === 0 ? (
                             <p className="text-[10px] text-slate-300 text-center pt-6">{t("bo'sh")}</p>
                           ) : (
-                            day.items.map((q) => (
-                              <div
-                                key={q.id}
-                                onClick={() => { const pid = resolvePatientIdFromQueue(q); if (pid) { setActiveView('bemorlar'); setSelectedPatientId(pid); } }}
-                                className="bg-blue-50/60 hover:bg-blue-100/70 border border-blue-100 rounded-xl p-2 cursor-pointer transition-colors"
-                              >
-                                <p className="text-[11px] font-black text-blue-700">{q.appointmentTime || '--:--'}</p>
-                                <p className="text-xs font-bold text-slate-800 truncate">{q.patientName}</p>
-                                <p className="text-[10px] text-slate-400 font-mono truncate">{q.patientPhone}</p>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); onUpdateQueueStatus(q.id!, 'in_progress'); }}
-                                  className="mt-1.5 w-full py-1 bg-white hover:bg-blue-600 hover:text-white text-blue-600 font-bold text-[10px] rounded-lg transition-colors border border-blue-200"
+                            day.items.map((q) => {
+                              const isDone = q.status === 'completed';
+                              const isCancelled = q.status === 'cancelled';
+                              const isActive = q.status === 'calling' || q.status === 'in_progress';
+                              const cardClasses = isDone
+                                ? 'bg-emerald-50/60 hover:bg-emerald-100/70 border-emerald-100'
+                                : isCancelled
+                                ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 opacity-60'
+                                : isActive
+                                ? 'bg-amber-50/60 hover:bg-amber-100/70 border-amber-100'
+                                : 'bg-blue-50/60 hover:bg-blue-100/70 border-blue-100';
+                              const timeClasses = isDone ? 'text-emerald-700' : isCancelled ? 'text-slate-400' : isActive ? 'text-amber-700' : 'text-blue-700';
+                              return (
+                                <div
+                                  key={q.id}
+                                  onClick={() => { const pid = resolvePatientIdFromQueue(q); if (pid) { setActiveView('bemorlar'); setSelectedPatientId(pid); } }}
+                                  className={`border rounded-xl p-2 cursor-pointer transition-colors ${cardClasses}`}
                                 >
-                                  {t("qabulni boshlash")}
-                                </button>
-                              </div>
-                            ))
+                                  <div className="flex items-center justify-between gap-1">
+                                    <p className={`text-[11px] font-black ${timeClasses}`}>{q.appointmentTime || '--:--'}</p>
+                                    {isDone && <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />}
+                                    {isCancelled && <span className="text-[9px] font-black text-slate-400 uppercase shrink-0">{t("bekor qilindi")}</span>}
+                                  </div>
+                                  <p className={`text-xs font-bold truncate ${isCancelled ? 'text-slate-500 line-through' : 'text-slate-800'}`}>{q.patientName}</p>
+                                  <p className="text-[10px] text-slate-400 font-mono truncate">{q.patientPhone}</p>
+                                  {q.status === 'scheduled' && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); onUpdateQueueStatus(q.id!, 'in_progress'); }}
+                                      className="mt-1.5 w-full py-1 bg-white hover:bg-blue-600 hover:text-white text-blue-600 font-bold text-[10px] rounded-lg transition-colors border border-blue-200"
+                                    >
+                                      {t("qabulni boshlash")}
+                                    </button>
+                                  )}
+                                  {isActive && (
+                                    <span className="mt-1.5 block w-full py-1 text-center bg-amber-100 text-amber-700 font-bold text-[10px] rounded-lg">
+                                      {t("qabulda")}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })
                           )}
                         </div>
                       </div>
