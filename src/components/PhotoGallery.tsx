@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, doc, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
 import { compressImage } from '../utils/imageCompressor';
-import { 
-  Camera, Upload, Search, Filter, 
-  Image as ImageIcon, ChevronLeft, X, 
+import { exportPhotoGalleryPdf } from '../utils/pdfExport';
+import type { ToothData } from './DentalChart';
+import {
+  Camera, Upload, Search, Filter,
+  Image as ImageIcon, ChevronLeft, X,
   SplitSquareHorizontal, Download, Lock, Unlock, Tag, Trash2, Calendar
 } from 'lucide-react';
 
@@ -29,7 +31,7 @@ export interface BeforeAfterPair {
   date: string;
 }
 
-export default function PhotoGallery({ patientId }: { patientId: string }) {
+export default function PhotoGallery({ patientId, patientName, doctorName }: { patientId: string; patientName?: string; doctorName?: string }) {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [pairs, setPairs] = useState<BeforeAfterPair[]>([]);
   
@@ -143,6 +145,48 @@ export default function PhotoGallery({ patientId }: { patientId: string }) {
     }
   };
 
+  const [isLinkingToChart, setIsLinkingToChart] = useState(false);
+  const handleLinkToChart = async (photo: Photo) => {
+    if (!photo.toothNumber) {
+      alert("Bu foto uchun tish raqami kiritilmagan. Avval fotoni tahrirlab tish raqamini kiriting.");
+      return;
+    }
+    setIsLinkingToChart(true);
+    try {
+      const toothRef = doc(db, `patients/${patientId}/dentalChart`, photo.toothNumber);
+      const existingSnap = await getDoc(toothRef);
+      const existing = existingSnap.exists() ? (existingSnap.data() as ToothData) : {
+        id: photo.toothNumber,
+        condition: 'Healthy',
+        conditions: ['Healthy'],
+        surfaces: {},
+        notes: '',
+        history: [],
+      };
+      const updatedTooth: ToothData = {
+        ...existing,
+        history: [
+          {
+            id: Date.now().toString(),
+            date: new Date().toISOString(),
+            treatment: `Foto biriktirildi${photo.category ? ` (${photo.category})` : ''}`,
+            condition: existing.condition,
+            cost: 0,
+            dentist: doctorName || 'Shifokor',
+            notes: photo.notes || '',
+          },
+          ...(existing.history || []),
+        ],
+      };
+      await setDoc(toothRef, updatedTooth);
+      alert(`Foto ${photo.toothNumber}-tish kartasiga muvaffaqiyatli bog'landi.`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `patients/${patientId}/dentalChart`);
+    } finally {
+      setIsLinkingToChart(false);
+    }
+  };
+
   const categories = Array.from(new Set(photos.map(p => p.category)));
 
   const filteredPhotos = photos.filter(p => {
@@ -194,8 +238,12 @@ export default function PhotoGallery({ patientId }: { patientId: string }) {
 
           {activeView !== 'viewer' && activeView !== 'compare' && (
             <>
-              <button className="flex items-center gap-2 px-3 py-2 bg-[#111827] hover:bg-[#1f2937] text-white border border-slate-800 rounded-xl text-sm font-bold transition-colors">
-                <Download className="w-4 h-4" /> PDF 
+              <button
+                onClick={() => exportPhotoGalleryPdf(patientName, filteredPhotos)}
+                disabled={filteredPhotos.length === 0}
+                className="flex items-center gap-2 px-3 py-2 bg-[#111827] hover:bg-[#1f2937] text-white border border-slate-800 rounded-xl text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Download className="w-4 h-4" /> PDF
               </button>
               <button 
                 onClick={() => setShowUpload(true)}
@@ -416,8 +464,12 @@ export default function PhotoGallery({ patientId }: { patientId: string }) {
             </div>
 
             <div className="mt-auto space-y-2">
-              <button className="w-full py-2.5 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-sm font-bold border border-slate-800 transition-colors flex justify-center items-center gap-2">
-                <Tag className="w-4 h-4" /> Dental Chartga bog'lash
+              <button
+                onClick={() => handleLinkToChart(selectedPhoto)}
+                disabled={isLinkingToChart}
+                className="w-full py-2.5 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-sm font-bold border border-slate-800 transition-colors flex justify-center items-center gap-2 disabled:opacity-50"
+              >
+                <Tag className="w-4 h-4" /> {isLinkingToChart ? "Bog'lanmoqda..." : "Dental Chartga bog'lash"}
               </button>
               <button 
                 onClick={() => handleDelete(selectedPhoto.id)}

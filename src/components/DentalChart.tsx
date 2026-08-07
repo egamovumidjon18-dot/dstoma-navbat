@@ -382,6 +382,7 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
   const [selectedCatalogCategory, setSelectedCatalogCategory] = useState(0);
   const [catalogSearchQuery, setCatalogSearchQuery] = useState('');
   const [zoom, setZoom] = useState(1.2);
+  const [showGrid, setShowGrid] = useState(false);
   const [paintCondition, setPaintCondition] = useState<string | null>(null);
   const [pendingPaintChanges, setPendingPaintChanges] = useState<Record<string, ToothData>>({});
   const [isSavingPaint, setIsSavingPaint] = useState(false);
@@ -879,8 +880,20 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
                     <span className="text-xs font-bold text-gray-600 w-10 text-center">{Math.round(zoom * 100)}%</span>
                     <button onClick={() => setZoom(z => Math.min(2, z + 0.1))} className="p-1 hover:bg-gray-100 rounded-md text-gray-500 transition-colors"><ZoomIn className="w-4 h-4" /></button>
                     <div className="w-px h-4 bg-gray-200 mx-1"></div>
-                    <button className="p-1 hover:bg-gray-100 rounded-md text-gray-500"><Grid className="w-4 h-4" /></button>
-                    <button className="p-1 hover:bg-gray-100 rounded-md text-gray-500"><RotateCcw className="w-4 h-4" /></button>
+                    <button
+                      onClick={() => setShowGrid((v) => !v)}
+                      title="Chizmani ko'rsatish/yashirish"
+                      className={`p-1 rounded-md transition-colors ${showGrid ? 'bg-emerald-100 text-emerald-700' : 'hover:bg-gray-100 text-gray-500'}`}
+                    >
+                      <Grid className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => { setZoom(1.2); setToothSearch(''); setSelectedTooth(null); }}
+                      title="Ko'rinishni asliga qaytarish"
+                      className="p-1 hover:bg-gray-100 rounded-md text-gray-500"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
 
@@ -1027,7 +1040,14 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
                  )}
 
                  {/* Chart Canvas Area */}
-                 <div id="chart-canvas-container" className={`flex-1 overflow-auto relative p-4 sm:p-8 select-none bg-[#F8FAFC] ${paintCondition ? '[&_*]:!cursor-crosshair' : ''}`}>
+                 <div
+                   id="chart-canvas-container"
+                   className={`flex-1 overflow-auto relative p-4 sm:p-8 select-none bg-[#F8FAFC] ${paintCondition ? '[&_*]:!cursor-crosshair' : ''}`}
+                   style={showGrid ? {
+                     backgroundImage: 'linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)',
+                     backgroundSize: '24px 24px',
+                   } : undefined}
+                 >
                     <div className="relative transition-transform duration-300 w-full mx-auto flex flex-col items-center min-w-max pb-8" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
                        <div className="bg-white rounded-3xl p-6 flex flex-col items-center shadow-sm border border-gray-200">
                           <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-4">YUQORI JAG'</div>

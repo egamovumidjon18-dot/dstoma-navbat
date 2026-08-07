@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
 import { compressImage } from '../utils/imageCompressor';
-import { 
-  Upload, Search, ZoomIn, ZoomOut, RotateCw, 
+import { exportXrayReportPdf } from '../utils/pdfExport';
+import type { ToothData } from './DentalChart';
+import {
+  Upload, Search, ZoomIn, ZoomOut, RotateCw,
   Brain, FileText, SplitSquareHorizontal,
-  Image as ImageIcon, ChevronLeft, X
+  Image as ImageIcon, ChevronLeft, X, Check, Ban
 } from 'lucide-react';
 
 export interface XRay {
@@ -32,7 +34,7 @@ export interface AIAnalysis {
   overallConfidence: number;
 }
 
-export default function XRayCenter({ patientId, clinicId }: { patientId: string; clinicId?: string }) {
+export default function XRayCenter({ patientId, clinicId, patientName, doctorName }: { patientId: string; clinicId?: string; patientName?: string; doctorName?: string }) {
   const [xrays, setXrays] = useState<XRay[]>([]);
   const [activeView, setActiveView] = useState<'gallery' | 'viewer' | 'compare'>('gallery');
   const [selectedXRay, setSelectedXRay] = useState<XRay | null>(null);
@@ -106,11 +108,98 @@ export default function XRayCenter({ patientId, clinicId }: { patientId: string;
           toothNumber: f.toothNumber || undefined,
         })),
       });
+      if (xray.status === 'Pending') {
+        setDoc(doc(db, `patients/${patientId}/xrays`, xrayId), { status: 'Analyzed' }, { merge: true }).catch((err) =>
+          handleFirestoreError(err, OperationType.WRITE, `patients/${patientId}/xrays`)
+        );
+      }
     } catch (err) {
       console.error('X-ray AI analysis failed', err);
       setAnalysis({ id: xrayId, overallConfidence: 0, findings: [] });
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const [isSavingFinding, setIsSavingFinding] = useState<string | null>(null);
+
+  const handleAddFindingToChart = async (finding: AIFinding) => {
+    if (!finding.toothNumber) return;
+    setIsSavingFinding(finding.id);
+    try {
+      const toothRef = doc(db, `patients/${patientId}/dentalChart`, finding.toothNumber);
+      const existingSnap = await getDoc(toothRef);
+      const existing = existingSnap.exists() ? (existingSnap.data() as ToothData) : {
+        id: finding.toothNumber,
+        condition: 'Healthy',
+        conditions: ['Healthy'],
+        surfaces: {},
+        notes: '',
+        history: [],
+      };
+      const updatedTooth: ToothData = {
+        ...existing,
+        history: [
+          {
+            id: Date.now().toString(),
+            date: new Date().toISOString(),
+            treatment: `AI topilma: ${finding.description}`,
+            condition: existing.condition,
+            cost: 0,
+            dentist: doctorName || 'Shifokor',
+            notes: `AI ishonch darajasi: ${finding.confidence}%`,
+          },
+          ...(existing.history || []),
+        ],
+      };
+      await setDoc(toothRef, updatedTooth);
+      alert(`Topilma ${finding.toothNumber}-tish kartasiga qo'shildi.`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `patients/${patientId}/dentalChart`);
+    } finally {
+      setIsSavingFinding(null);
+    }
+  };
+
+  const handleAddFindingToPlan = async (finding: AIFinding) => {
+    if (!finding.toothNumber) return;
+    setIsSavingFinding(finding.id);
+    try {
+      const planId = Date.now().toString() + '_' + Math.random().toString(36).substring(2, 9);
+      const planItem = {
+        id: planId,
+        toothId: finding.toothNumber,
+        treatment: finding.description,
+        price: 0,
+        status: 'Planned',
+        doctorName: doctorName || 'Shifokor',
+        createdAt: new Date().toISOString(),
+      };
+      await setDoc(doc(db, `patients/${patientId}/treatmentPlans`, planId), planItem);
+      alert("Davolash rejasiga qo'shildi.");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `patients/${patientId}/treatmentPlans`);
+    } finally {
+      setIsSavingFinding(null);
+    }
+  };
+
+  const handleApproveAnalysis = async () => {
+    if (!selectedXRay) return;
+    try {
+      await setDoc(doc(db, `patients/${patientId}/xrays`, selectedXRay.id), { status: 'Approved' }, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `patients/${patientId}/xrays`);
+    }
+  };
+
+  const handleRejectAnalysis = async () => {
+    if (!selectedXRay) return;
+    try {
+      await setDoc(doc(db, `patients/${patientId}/xrays`, selectedXRay.id), { status: 'Pending' }, { merge: true });
+      setAnalysis(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `patients/${patientId}/xrays`);
     }
   };
 
@@ -337,8 +426,20 @@ export default function XRayCenter({ patientId, clinicId }: { patientId: string;
                           <div className="text-xs text-slate-400 mt-2 flex items-center justify-between">
                             <span>Tish: <span className="text-emerald-400 font-bold">{finding.toothNumber}</span></span>
                             <div className="flex gap-2">
-                               <button className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors">Chartga qo'shish</button>
-                               <button className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors">Rejaga qo'shish</button>
+                               <button
+                                 onClick={() => handleAddFindingToChart(finding)}
+                                 disabled={isSavingFinding === finding.id}
+                                 className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors disabled:opacity-50"
+                               >
+                                 Chartga qo'shish
+                               </button>
+                               <button
+                                 onClick={() => handleAddFindingToPlan(finding)}
+                                 disabled={isSavingFinding === finding.id}
+                                 className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors disabled:opacity-50"
+                               >
+                                 Rejaga qo'shish
+                               </button>
                             </div>
                           </div>
                         )}
@@ -347,18 +448,27 @@ export default function XRayCenter({ patientId, clinicId }: { patientId: string;
                   </div>
 
                   <div className="pt-4 flex gap-2">
-                    <button className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition-colors">
-                      Tasdiqlash
+                    <button
+                      onClick={handleApproveAnalysis}
+                      className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <Check className="w-4 h-4" /> Tasdiqlash
                     </button>
-                    <button className="flex-1 py-2 bg-[#111827] hover:bg-rose-500/20 text-rose-400 border border-slate-800 hover:border-rose-500/50 rounded-lg text-sm font-bold transition-colors">
-                      Rad etish
+                    <button
+                      onClick={handleRejectAnalysis}
+                      className="flex-1 py-2 bg-[#111827] hover:bg-rose-500/20 text-rose-400 border border-slate-800 hover:border-rose-500/50 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <Ban className="w-4 h-4" /> Rad etish
                     </button>
                   </div>
                 </div>
               )}
 
               <div className="mt-auto pt-6 border-t border-slate-800">
-                <button className="w-full py-2.5 bg-[#111827] hover:bg-[#1f2937] text-white border border-slate-800 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors">
+                <button
+                  onClick={() => exportXrayReportPdf(patientName, selectedXRay, analysis)}
+                  className="w-full py-2.5 bg-[#111827] hover:bg-[#1f2937] text-white border border-slate-800 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors"
+                >
                   <FileText className="w-4 h-4" /> PDF Hisobot
                 </button>
               </div>

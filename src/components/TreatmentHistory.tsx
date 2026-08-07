@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
 import { TreatmentItem } from './TreatmentPlan';
-import { 
-  History, Calendar, User, FileText, Download, Filter, 
+import { exportTreatmentListPdf, exportTreatmentRecordPdf } from '../utils/pdfExport';
+import {
+  History, Calendar, User, FileText, Download, Filter,
   Search, Clock, LayoutList, List, AlertTriangle, Activity,
   ChevronRight, ImageIcon, Camera, Link as LinkIcon, Check
 } from 'lucide-react';
 
-export default function TreatmentHistory({ patientId }: { patientId: string }) {
+export default function TreatmentHistory({ patientId, patientName }: { patientId: string; patientName?: string }) {
   const [items, setItems] = useState<TreatmentItem[]>([]);
   const [viewMode, setViewMode] = useState<'timeline' | 'table'>('timeline');
   const [searchTerm, setSearchTerm] = useState('');
@@ -89,7 +90,11 @@ export default function TreatmentHistory({ patientId }: { patientId: string }) {
 
               <div className="h-8 w-px bg-slate-800 hidden md:block"></div>
 
-              <button className="flex items-center gap-2 px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-white border border-slate-800 rounded-xl text-sm font-bold transition-colors">
+              <button
+                onClick={() => exportTreatmentListPdf(patientName, filteredItems)}
+                disabled={filteredItems.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-white border border-slate-800 rounded-xl text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
                 <Download className="w-4 h-4" /> PDF Yuklash
               </button>
             </div>
@@ -334,7 +339,10 @@ export default function TreatmentHistory({ patientId }: { patientId: string }) {
                    </div>
                  </div>
 
-                 <button className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition-colors shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
+                 <button
+                   onClick={() => exportTreatmentRecordPdf(patientName, selectedRecord)}
+                   className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition-colors shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
+                 >
                    <Download className="w-4 h-4" /> PDF Yuklash
                  </button>
               </div>

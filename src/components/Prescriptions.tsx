@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, query, collectionGroup } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
-import { 
-  Pill, FileText, Plus, Search, Filter, 
-  Send, Download, Printer, Trash2, Calendar, 
+import { exportPrescriptionPdf, printPrescriptionPdf, exportPrescriptionsListPdf } from '../utils/pdfExport';
+import {
+  Pill, FileText, Plus, Search, Filter,
+  Send, Download, Printer, Trash2, Calendar,
   Clock, CheckCircle, BrainCircuit, X, AlertTriangle, AlertCircle
 } from 'lucide-react';
 
@@ -35,19 +36,20 @@ const MEDICATION_TEMPLATES = [
   { name: 'Xlorgeksidin', dosage: '0.05%', frequency: 'Kuniga 2-3 marta chayiladi', duration: '5-7 kun', notes: 'Muolajadan so\'ng og\'iz bo\'shlig\'ini chayish uchun.' },
 ];
 
-export default function Prescriptions({ patientId }: { patientId?: string }) {
+export default function Prescriptions({ patientId, patientName, doctorName, patientTelegramChatId }: { patientId?: string; patientName?: string; doctorName?: string; patientTelegramChatId?: string }) {
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
-  
+  const [isSendingTelegram, setIsSendingTelegram] = useState<string | null>(null);
+
   const [formData, setFormData] = useState<Partial<Prescription>>({
-    doctorName: 'Dr. Azizbek T.', // Mock logged in doctor
+    doctorName: doctorName || 'Shifokor',
     diagnosis: '',
     medications: [],
     status: 'Active'
   });
-  
+
   const [currentMed, setCurrentMed] = useState<Partial<Medication>>({});
   const [showTemplates, setShowTemplates] = useState(false);
   const [showAiRecommendations, setShowAiRecommendations] = useState(false);
@@ -103,7 +105,7 @@ export default function Prescriptions({ patientId }: { patientId?: string }) {
     try {
       await setDoc(doc(db, `patients/${patientId}/prescriptions`, id), newPrescription);
       setShowForm(false);
-      setFormData({ doctorName: 'Dr. Azizbek T.', diagnosis: '', medications: [], status: 'Active' });
+      setFormData({ doctorName: doctorName || 'Shifokor', diagnosis: '', medications: [], status: 'Active' });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `patients/${patientId}/prescriptions`);
     }
@@ -115,6 +117,34 @@ export default function Prescriptions({ patientId }: { patientId?: string }) {
       if (selectedPrescription?.id === id) setSelectedPrescription(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `patients/${patientId}/prescriptions`);
+    }
+  };
+
+  const handleSendTelegram = async (p: Prescription) => {
+    if (!patientTelegramChatId) {
+      alert("Bemor Telegram botga ulanmagan.");
+      return;
+    }
+    setIsSendingTelegram(p.id);
+    try {
+      const medLines = p.medications.map((m) => `• ${m.name} — ${m.dosage}, ${m.frequency} (${m.duration})`).join('\n');
+      const text = `💊 Retsept\n\nTashxis: ${p.diagnosis || '-'}\nShifokor: ${p.doctorName}\nSana: ${new Date(p.date).toLocaleDateString('uz-UZ')}\n\n${medLines}`;
+      const res = await fetch('/api/telegram/bulk-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatIds: [patientTelegramChatId], text }),
+      });
+      const data = await res.json();
+      if (data.ok && data.sent > 0) {
+        alert("Retsept Telegram orqali yuborildi.");
+      } else {
+        alert("Yuborib bo'lmadi.");
+      }
+    } catch (error) {
+      console.error('Telegram send failed', error);
+      alert("Yuborib bo'lmadi.");
+    } finally {
+      setIsSendingTelegram(null);
     }
   };
 
@@ -167,7 +197,11 @@ export default function Prescriptions({ patientId }: { patientId?: string }) {
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-white border border-slate-800 rounded-xl text-sm font-bold transition-colors">
+          <button
+            onClick={() => exportPrescriptionsListPdf(patientName, filteredPrescriptions)}
+            disabled={filteredPrescriptions.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-white border border-slate-800 rounded-xl text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             <Download className="w-4 h-4" /> Barchasini yuklash
           </button>
           {patientId && !showForm && !selectedPrescription && (
@@ -227,10 +261,19 @@ export default function Prescriptions({ patientId }: { patientId?: string }) {
                     {p.status === 'Active' ? 'Faol (Qabul qilinmoqda)' : 'Yakunlangan'}
                   </span>
                   <div className="flex gap-2">
-                    <button className="p-1.5 text-slate-400 hover:text-white bg-[#111827] rounded-lg transition-colors" title="PDF Yuklash">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); exportPrescriptionPdf(patientName, p); }}
+                      className="p-1.5 text-slate-400 hover:text-white bg-[#111827] rounded-lg transition-colors"
+                      title="PDF Yuklash"
+                    >
                       <Download className="w-3.5 h-3.5" />
                     </button>
-                    <button className="p-1.5 text-slate-400 hover:text-[#0088cc] bg-[#111827] rounded-lg transition-colors" title="Telegramga yuborish">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleSendTelegram(p); }}
+                      disabled={isSendingTelegram === p.id}
+                      className="p-1.5 text-slate-400 hover:text-[#0088cc] bg-[#111827] rounded-lg transition-colors disabled:opacity-50"
+                      title="Telegramga yuborish"
+                    >
                       <Send className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -483,13 +526,23 @@ export default function Prescriptions({ patientId }: { patientId?: string }) {
                 <X className="w-5 h-5" /> Yopish
               </button>
               <div className="flex gap-2">
-                 <button className="flex items-center gap-2 px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-[#0088cc] border border-slate-800 rounded-xl text-sm font-bold transition-colors">
+                 <button
+                   onClick={() => handleSendTelegram(selectedPrescription)}
+                   disabled={isSendingTelegram === selectedPrescription.id}
+                   className="flex items-center gap-2 px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-[#0088cc] border border-slate-800 rounded-xl text-sm font-bold transition-colors disabled:opacity-50"
+                 >
                    <Send className="w-4 h-4" /> Telegram
                  </button>
-                 <button className="flex items-center gap-2 px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-emerald-400 border border-slate-800 rounded-xl text-sm font-bold transition-colors">
+                 <button
+                   onClick={() => printPrescriptionPdf(patientName, selectedPrescription)}
+                   className="flex items-center gap-2 px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-emerald-400 border border-slate-800 rounded-xl text-sm font-bold transition-colors"
+                 >
                    <Printer className="w-4 h-4" /> Chop etish
                  </button>
-                 <button className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-emerald-500/20">
+                 <button
+                   onClick={() => exportPrescriptionPdf(patientName, selectedPrescription)}
+                   className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-emerald-500/20"
+                 >
                    <Download className="w-4 h-4" /> PDF Yuklash
                  </button>
               </div>

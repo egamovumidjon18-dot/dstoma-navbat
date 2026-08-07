@@ -292,6 +292,77 @@ export default function PatientProfile({
     ? [...patient.clinicVisits].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
     : null;
 
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editForm, setEditForm] = useState({
+    fullName: "", phone: "", birthDate: "", bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
+  });
+
+  const openEditModal = () => {
+    setEditForm({
+      fullName: patient?.fullName || "",
+      phone: patient?.phone || "",
+      birthDate: patient?.birthDate || "",
+      bloodGroup: patient?.bloodGroup || "",
+      allergies: patient?.allergies || "",
+      chronicDiseases: patient?.chronicDiseases || "",
+      hasInfection: !!patient?.hasInfection,
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!patient || !editForm.fullName.trim()) return;
+    setIsSavingEdit(true);
+    try {
+      const res = await fetch(`${getApiUrl()}/api/patients`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({
+          id: patientId,
+          clinicId: patient.clinicId,
+          fullName: editForm.fullName.trim(),
+          phone: editForm.phone.trim(),
+          birthDate: editForm.birthDate || undefined,
+          bloodGroup: editForm.bloodGroup || undefined,
+          allergies: editForm.allergies.trim() || undefined,
+          chronicDiseases: editForm.chronicDiseases.trim() || undefined,
+          hasInfection: editForm.hasInfection,
+        }),
+      });
+      if (!res.ok) throw new Error("failed");
+      setShowEditModal(false);
+    } catch {
+      alert(t("yuborib bo'lmadi."));
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleSendTelegramMessage = async () => {
+    if (!patient?.telegramChatId) {
+      alert("Bemor Telegram botga ulanmagan.");
+      return;
+    }
+    const text = window.prompt("Bemorga yuboriladigan xabar matnini kiriting:");
+    if (!text || !text.trim()) return;
+    try {
+      const res = await fetch(`${getApiUrl()}/api/telegram/bulk-message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatIds: [patient.telegramChatId], text: text.trim() }),
+      });
+      const data = await res.json();
+      if (data.ok && data.sent > 0) {
+        alert("Xabar yuborildi.");
+      } else {
+        alert(t("yuborib bo'lmadi."));
+      }
+    } catch {
+      alert(t("yuborib bo'lmadi."));
+    }
+  };
+
   useEffect(() => {
     if (!patientId) return;
     const unsub = onSnapshot(
@@ -351,10 +422,16 @@ export default function PatientProfile({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5">
+          <button
+            onClick={openEditModal}
+            className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5"
+          >
             <Edit2 className="w-4 h-4" /> {t("tahrirlash")}
           </button>
-          <button className="px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5">
+          <button
+            onClick={handleSendTelegramMessage}
+            className="px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5"
+          >
             <Send className="w-4 h-4" /> {t("telegram xabar")}
           </button>
         </div>
@@ -562,25 +639,29 @@ export default function PatientProfile({
 
             {activeTab === "xray" && (
               <div className="h-full">
-                <XRayCenter patientId={patientId.toString()} clinicId={patient?.clinicId} />
+                <XRayCenter patientId={patientId.toString()} clinicId={patient?.clinicId} patientName={patient?.fullName} />
               </div>
             )}
             
             {activeTab === "history" && (
               <div className="h-full">
-                <TreatmentHistory patientId={patientId.toString()} />
+                <TreatmentHistory patientId={patientId.toString()} patientName={patient?.fullName} />
               </div>
             )}
             
             {activeTab === "photos" && (
               <div className="h-full">
-                <PhotoGallery patientId={patientId.toString()} />
+                <PhotoGallery patientId={patientId.toString()} patientName={patient?.fullName} />
               </div>
             )}
             
             {activeTab === "prescriptions" && (
               <div className="h-full">
-                <Prescriptions patientId={patientId.toString()} />
+                <Prescriptions
+                  patientId={patientId.toString()}
+                  patientName={patient?.fullName}
+                  patientTelegramChatId={patient?.telegramChatId}
+                />
               </div>
             )}
             
@@ -754,6 +835,112 @@ export default function PatientProfile({
           </div>
         </div>
       </div>
+
+      {showEditModal && (
+        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowEditModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-bold text-slate-800">{t("tahrirlash")}</h3>
+              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("to'liq ism")}</label>
+                <input
+                  type="text"
+                  value={editForm.fullName}
+                  onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium bg-white text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("telefon")}</label>
+                <input
+                  type="text"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium bg-white text-slate-800"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">Tug'ilgan sana</label>
+                  <input
+                    type="date"
+                    value={editForm.birthDate}
+                    onChange={(e) => setEditForm({ ...editForm, birthDate: e.target.value })}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium bg-white text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("qon guruhi")}</label>
+                  <select
+                    value={editForm.bloodGroup}
+                    onChange={(e) => setEditForm({ ...editForm, bloodGroup: e.target.value })}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium bg-white text-slate-800"
+                  >
+                    <option value="">—</option>
+                    <option value="I+">I (O) Rh+</option>
+                    <option value="I-">I (O) Rh-</option>
+                    <option value="II+">II (A) Rh+</option>
+                    <option value="II-">II (A) Rh-</option>
+                    <option value="III+">III (B) Rh+</option>
+                    <option value="III-">III (B) Rh-</option>
+                    <option value="IV+">IV (AB) Rh+</option>
+                    <option value="IV-">IV (AB) Rh-</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Allergiyalar</label>
+                <input
+                  type="text"
+                  value={editForm.allergies}
+                  onChange={(e) => setEditForm({ ...editForm, allergies: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium bg-white text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Surunkali kasalliklar</label>
+                <textarea
+                  value={editForm.chronicDiseases}
+                  onChange={(e) => setEditForm({ ...editForm, chronicDiseases: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium bg-white text-slate-800 h-16 resize-none"
+                />
+              </div>
+              <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl flex items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  id="edit-has-infection"
+                  checked={editForm.hasInfection}
+                  onChange={(e) => setEditForm({ ...editForm, hasInfection: e.target.checked })}
+                  className="rounded border-rose-300 text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer mt-0.5 shrink-0"
+                />
+                <label htmlFor="edit-has-infection" className="text-xs font-bold text-rose-900 leading-tight cursor-pointer select-none">
+                  Jiddiy yuqumli kasallik mavjud
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                Bekor qilish
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={!editForm.fullName.trim() || isSavingEdit}
+                className="px-4 py-2 text-sm font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition-colors shadow-md shadow-blue-500/20"
+              >
+                {isSavingEdit ? "Saqlanmoqda..." : "Saqlash"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
