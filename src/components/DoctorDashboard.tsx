@@ -108,6 +108,7 @@ interface DoctorDashboardProps {
   onRequestPremiumUpgrade?: (clinicId: string) => void;
   staffToken?: string | null;
   onAddQueue?: (q: QueueItem) => void;
+  onPatientUpserted?: (p: Patient) => void;
   onLogout?: () => void;
 }
 
@@ -564,6 +565,7 @@ export default function DoctorDashboard({
   onRequestPremiumUpgrade,
   staffToken,
   onAddQueue,
+  onPatientUpserted,
   onLogout
 }: DoctorDashboardProps) {
   // Translation Helper
@@ -657,8 +659,15 @@ export default function DoctorDashboard({
   // clinicPatients itself stays clinic-wide — it still backs Statistics, bulk
   // Telegram messaging, and resolving a patient from any clinic queue, which all
   // legitimately need the full clinic roster.
+  // Unassigned patients (no primaryDoctorId yet) are shown to every doctor in the
+  // clinic, NOT hidden. They aren't another doctor's patients, so hiding them
+  // served nobody — it made self-registered patients (ClientDashboard registration
+  // never sets primaryDoctorId) and every pre-existing record invisible to the
+  // entire clinic at once, which is what made the system feel "disconnected".
+  // The privacy rule the user asked for still holds: another doctor's patients
+  // stay hidden until the patient books with you, which reassigns primaryDoctorId.
   const myPatients = useMemo(
-    () => clinicPatients.filter((p) => p.primaryDoctorId === currentDoctor?.id),
+    () => clinicPatients.filter((p) => !p.primaryDoctorId || p.primaryDoctorId === currentDoctor?.id),
     [clinicPatients, currentDoctor?.id]
   );
   const filteredClinicPatients = useMemo(() => {
@@ -725,6 +734,9 @@ export default function DoctorDashboard({
       });
       if (res.ok) {
         const savedPatient = await res.json();
+        // Reflect the new patient in shared state right away — the 4s background
+        // poll would otherwise leave the doctor staring at an unchanged list.
+        onPatientUpserted?.({ ...savedPatient, primaryDoctorId: savedPatient.primaryDoctorId || currentDoctor?.id });
         if (quickAddPatient.bookAppointment && quickAddPatient.appointmentDate && quickAddPatient.appointmentTime && onAddQueue) {
           onAddQueue({
             id: 'q_' + Math.random().toString(36).substr(2, 9),
@@ -915,13 +927,25 @@ export default function DoctorDashboard({
   const [newBookingDate, setNewBookingDate] = useState(new Date().toISOString().split('T')[0]);
   const [newBookingTime, setNewBookingTime] = useState('09:00');
   const [isSavingNewBooking, setIsSavingNewBooking] = useState(false);
+  // Searches the WHOLE clinic roster, not just this doctor's own patients: booking
+  // is itself the mechanism that assigns a patient to a doctor (POST /api/queues
+  // sets primaryDoctorId), so restricting the search to patients you already own
+  // was a catch-22 — you couldn't book anyone new, and nobody new could become
+  // yours. Only name/phone are exposed here, never medical history.
   const newBookingSearchResults = useMemo(() => {
     const q = newBookingQuery.trim().toLowerCase();
     if (!q) return [];
-    return myPatients
-      .filter((p) => (p.fullName || "").toLowerCase().includes(q) || (p.phone || "").includes(q))
-      .slice(0, 6);
-  }, [myPatients, newBookingQuery]);
+    // Digits-only comparison so "+998 90 123" matches a stored "+998901234567";
+    // guarded because "".includes("") is true and would match every patient.
+    const qDigits = q.replace(/\D/g, "");
+    return clinicPatients
+      .filter((p) => {
+        const name = (decodeLegacyEntities(p.fullName) || "").toLowerCase();
+        const phoneDigits = (p.phone || "").replace(/\D/g, "");
+        return name.includes(q) || (qDigits.length > 0 && phoneDigits.includes(qDigits));
+      })
+      .slice(0, 8);
+  }, [clinicPatients, newBookingQuery]);
 
   // Sync state if currentUser changes
   React.useEffect(() => {
@@ -3233,7 +3257,7 @@ export default function DoctorDashboard({
           {activeView === "rentgenlar" && (
             selectedPatientId ? (
               <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-                <XRayCenter patientId={selectedPatientId} clinicId={effectiveClinicId} />
+                <XRayCenter patientId={selectedPatientId} clinicId={effectiveClinicId} patientName={clinicPatients.find((p) => p.id === selectedPatientId)?.fullName} doctorName={currentDoctor?.name} />
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
@@ -3246,7 +3270,7 @@ export default function DoctorDashboard({
           {activeView === "muolaja_tarixi" && (
             selectedPatientId ? (
               <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-                <TreatmentHistory patientId={selectedPatientId} />
+                <TreatmentHistory patientId={selectedPatientId} patientName={clinicPatients.find((p) => p.id === selectedPatientId)?.fullName} />
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
@@ -3259,7 +3283,7 @@ export default function DoctorDashboard({
           {activeView === "foto_galereya" && (
             selectedPatientId ? (
               <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-                <PhotoGallery patientId={selectedPatientId} />
+                <PhotoGallery patientId={selectedPatientId} patientName={clinicPatients.find((p) => p.id === selectedPatientId)?.fullName} doctorName={currentDoctor?.name} />
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
@@ -3278,7 +3302,12 @@ export default function DoctorDashboard({
           {activeView === "retseptlar" && (
             selectedPatientId ? (
               <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-                <Prescriptions patientId={selectedPatientId} />
+                <Prescriptions
+                  patientId={selectedPatientId}
+                  patientName={clinicPatients.find((p) => p.id === selectedPatientId)?.fullName}
+                  doctorName={currentDoctor?.name}
+                  patientTelegramChatId={clinicPatients.find((p) => p.id === selectedPatientId)?.telegramChatId}
+                />
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">

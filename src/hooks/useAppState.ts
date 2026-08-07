@@ -256,6 +256,21 @@ export function useAppState() {
     }
   };
 
+  // Merge a just-created/edited patient into local state immediately, so the UI
+  // that created it (e.g. the doctor's quick-add modal) reflects it on the spot
+  // instead of waiting up to 4s for the next background poll — that lag is what
+  // made newly added patients look like they hadn't saved at all.
+  const handlePatientUpserted = (patient: any) => {
+    if (!patient?.id) return;
+    setPatients(prev => {
+      const idx = prev.findIndex(p => p.id === patient.id);
+      if (idx === -1) return [...prev, patient];
+      const next = [...prev];
+      next[idx] = { ...next[idx], ...patient };
+      return next;
+    });
+  };
+
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
@@ -1116,6 +1131,7 @@ export function useAppState() {
     handleDeleteClinic,
     handleDeleteDoctor,
     handleDeletePatient,
+    handlePatientUpserted,
     handleLoginSubmit,
     handleLogout,
     handleAddQueue,

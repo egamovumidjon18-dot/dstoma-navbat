@@ -51,6 +51,7 @@ export default function App() {
     handleDeletePatient,
     handleLoginSubmit,
     handleLogout,
+    handlePatientUpserted,
     handleAddQueue,
     handleCancelQueue,
     handleUpdateQueueStatus,
@@ -115,6 +116,7 @@ export default function App() {
           onRequestPremiumUpgrade={handleRequestPremiumUpgrade}
           staffToken={staffToken}
           onAddQueue={handleAddQueue}
+          onPatientUpserted={handlePatientUpserted}
           onLogout={handleLogout}
         />
       </ErrorBoundary>
