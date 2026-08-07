@@ -740,6 +740,38 @@ export default function SuperAdminDashboard({
   // Sidebar tab state — controls which section's JSX renders in the main content area.
   const [activeSection, setActiveSection] = useState('overview');
 
+  // One-off data maintenance: assign primaryDoctorId to patients who never got one
+  // (self-registration doesn't set it), based on whichever doctor they most recently
+  // booked with. Safe to re-run — the endpoint skips patients already pointing at
+  // the right doctor.
+  const [isBackfilling, setIsBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<string | null>(null);
+  const runPrimaryDoctorBackfill = async () => {
+    if (!superadminToken) {
+      setBackfillResult("Superadmin sessiyasi topilmadi — qayta kiring.");
+      return;
+    }
+    setIsBackfilling(true);
+    setBackfillResult(null);
+    try {
+      const res = await fetch('/api/admin/backfill-primary-doctor', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${superadminToken}` },
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setBackfillResult(`✅ ${data.updated} ta bemor biriktirildi (jami ${data.totalPatients} ta bemor tekshirildi).`);
+        addLog(`Bemorlar shifokorlarga biriktirildi: ${data.updated} ta yangilandi`, 'success');
+      } else {
+        setBackfillResult(`⚠️ ${data.error || 'Amal bajarilmadi.'}`);
+      }
+    } catch (err: any) {
+      setBackfillResult(`⚠️ Tarmoq xatosi: ${err?.message || 'noma\'lum'}`);
+    } finally {
+      setIsBackfilling(false);
+    }
+  };
+
   return (
     <div className="space-y-6 font-sans text-left pb-12">
       {/* Toast Notification */}
@@ -1352,6 +1384,44 @@ export default function SuperAdminDashboard({
       {activeSection === 'security' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-12 space-y-6">
+          {/* ==================== 1. DATA MAINTENANCE ==================== */}
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4 font-sans text-left">
+            <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+              <div className="flex items-center gap-1.5">
+                <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">🧩</span>
+                <div>
+                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                    Ma'lumotlar bazasi xizmati
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-semibold leading-none mt-0.5">
+                    Bemorlarni davolovchi shifokorlariga biriktirish
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+              O'zi ro'yxatdan o'tgan bemorlarga davolovchi shifokor avtomatik biriktirilmaydi.
+              Bu tugma har bir shunday bemorni <strong>oxirgi marta navbat olgan shifokoriga</strong> biriktiradi.
+              Xavfsiz: allaqachon to'g'ri biriktirilgan bemorlar o'zgarmaydi, istalgan vaqtda qayta bosish mumkin.
+            </p>
+
+            <button
+              type="button"
+              onClick={runPrimaryDoctorBackfill}
+              disabled={isBackfilling}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black rounded-xl shadow-md transition-all"
+            >
+              {isBackfilling ? 'Bajarilmoqda...' : 'Bemorlarni shifokorlarga biriktirish'}
+            </button>
+
+            {backfillResult && (
+              <p className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-150 rounded-xl p-3">
+                {backfillResult}
+              </p>
+            )}
+          </div>
+
           {/* ==================== 2. SUPERADMIN PASSWORD UPDATE FORM ==================== */}
           <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4 font-sans text-left">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
