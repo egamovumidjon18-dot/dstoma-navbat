@@ -446,15 +446,14 @@ export function useAppState() {
             const params = new URLSearchParams(window.location.search);
             const clinicParam = params.get('clinic');
             
-            // Only auto-select from URL once, or default to the first clinic
-            if (isInitialLoad && !selectedClinicRef.current) {
-              let found = null;
-              if (clinicParam) {
-                found = clList.find((c: any) => c.id === clinicParam || c.subdomain === clinicParam);
-              }
-              if (!found && clList.length > 0) {
-                found = clList[0];
-              }
+            // Only auto-select a clinic when the URL explicitly names one (e.g. a
+            // shared ?clinic= link). Otherwise leave selectedClinic null so patients
+            // land on the neutral clinic-discovery page — this is a multi-tenant
+            // platform, so silently defaulting to "whichever clinic happens to be
+            // first in the list" would misrepresent the site as belonging to one
+            // specific clinic.
+            if (isInitialLoad && !selectedClinicRef.current && clinicParam) {
+              const found = clList.find((c: any) => c.id === clinicParam || c.subdomain === clinicParam);
               if (found) setSelectedClinic(found);
             }
           }

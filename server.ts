@@ -4144,8 +4144,23 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    // Hashed build assets (dist/assets/*) are safe to cache forever — their
+    // filename changes whenever content does. index.html itself must never be
+    // cached: it's the only thing that references the current hash filenames,
+    // so a stale cached copy (Safari's disk cache is notoriously aggressive)
+    // points at JS/CSS files a redeploy has already deleted, leaving a blank
+    // (or here, dark-shell-only) unhydrated page — the same class of bug fixed
+    // for the old Vercel deployment via vercel.json's no-cache headers.
+    app.use(express.static(distPath, {
+      index: false,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        }
+      },
+    }));
     app.get('*', (req, res) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
