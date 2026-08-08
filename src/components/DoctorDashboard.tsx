@@ -172,6 +172,7 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   juma: { ru: "Пятница", en: "Friday", kk: "Жұма", ky: "Жума", tg: "Ҷумъа", tk: "Anna" },
   shanba: { ru: "Суббота", en: "Saturday", kk: "Сенбі", ky: "Ишемби", tg: "Шанбе", tk: "Şenbe" },
   "yangi bandlash": { ru: "Новая запись", en: "New booking", kk: "Жаңа жазылу", ky: "Жаңы жазылуу", tg: "Сабти нав", tk: "Täze bellik" },
+  "yangi bemor sifatida to'liq ro'yxatdan o'tkazish": { ru: "Зарегистрировать как нового пациента полностью", en: "Register fully as a new patient", kk: "Жаңа пациент ретінде толық тіркеу", ky: "Жаңы бейтап катары толук каттоо", tg: "Ҳамчун беморони нав пурра сабти ном кардан", tk: "Täze näsag hökmünde doly hasaba almak" },
   "bemorni qidirish": { ru: "Поиск пациента", en: "Search patient", kk: "Пациентті іздеу", ky: "Бейтапты издөө", tg: "Ҷустуҷӯи бемор", tk: "Näsagy gözlemek" },
   "ism yoki telefon bo'yicha qidiring...": { ru: "Искать по имени или телефону...", en: "Search by name or phone...", kk: "Аты немесе телефоны бойынша іздеу...", ky: "Аты же телефону боюнча издөө...", tg: "Ҷустуҷӯ бо ном ё телефон...", tk: "Ady ýa-da telefony boýunça gözlemek..." },
   "bemorni bandlash": { ru: "Записать пациента", en: "Book patient", kk: "Пациентті жазу", ky: "Бейтапты жазуу", tg: "Сабти бемор", tk: "Näsagy bellemek" },
@@ -772,31 +773,60 @@ export default function DoctorDashboard({
   // typed directly — POST /api/queues accepts free-text patient info, no
   // pre-existing Patient record required) for a specific future date/time,
   // creating the queue as already 'scheduled' rather than 'pending'.
-  const handleNewBooking = () => {
+  const handleNewBooking = async () => {
     if (!newBookingName.trim() || !newBookingDate || !newBookingTime || !effectiveClinicId || !onAddQueue) return;
     setIsSavingNewBooking(true);
-    const newQueue: QueueItem = {
-      id: 'q_' + Math.random().toString(36).substr(2, 9),
-      clinicId: effectiveClinicId,
-      doctorId: currentDoctor?.id || activeDoctorId,
-      serviceId: newBookingServiceId,
-      patientName: newBookingName.trim(),
-      patientPhone: newBookingPhone.trim(),
-      number: 0,
-      status: 'scheduled',
-      appointmentDate: newBookingDate,
-      appointmentTime: newBookingTime,
-      createdAt: new Date().toISOString(),
-    };
-    onAddQueue(newQueue);
-    setIsSavingNewBooking(false);
-    setShowNewBookingModal(false);
-    setNewBookingQuery('');
-    setNewBookingName('');
-    setNewBookingPhone('');
-    setNewBookingServiceId('');
-    setNewBookingDate(new Date().toISOString().split('T')[0]);
-    setNewBookingTime('09:00');
+    try {
+      // Booking someone by free-typed name/phone (as opposed to picking them from
+      // the search results) never used to create a real Patient record — only a
+      // queue ticket with those two fields as plain text. The person then couldn't
+      // be found on the NEXT booking either, forcing another from-scratch retype
+      // (this is exactly how "elmutodov javoxir" / "elmurodov javoxir" ended up as
+      // two separate near-duplicate entries in production). Upsert a real Patient
+      // by phone before creating the queue so this only ever has to happen once.
+      const typedPhoneDigits = newBookingPhone.trim().replace(/\D/g, "");
+      const existingByPhone = typedPhoneDigits
+        ? clinicPatients.find((p) => (p.phone || "").replace(/\D/g, "") === typedPhoneDigits)
+        : undefined;
+      if (!existingByPhone && typedPhoneDigits) {
+        const res = await fetch("/api/patients", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clinicId: effectiveClinicId,
+            fullName: newBookingName.trim(),
+            phone: newBookingPhone.trim(),
+            primaryDoctorId: currentDoctor?.id,
+          }),
+        });
+        const savedPatient = await res.json().catch(() => null);
+        if (res.ok && savedPatient) onPatientUpserted?.(savedPatient);
+      }
+
+      const newQueue: QueueItem = {
+        id: 'q_' + Math.random().toString(36).substr(2, 9),
+        clinicId: effectiveClinicId,
+        doctorId: currentDoctor?.id || activeDoctorId,
+        serviceId: newBookingServiceId,
+        patientName: newBookingName.trim(),
+        patientPhone: newBookingPhone.trim(),
+        number: 0,
+        status: 'scheduled',
+        appointmentDate: newBookingDate,
+        appointmentTime: newBookingTime,
+        createdAt: new Date().toISOString(),
+      };
+      onAddQueue(newQueue);
+      setShowNewBookingModal(false);
+      setNewBookingQuery('');
+      setNewBookingName('');
+      setNewBookingPhone('');
+      setNewBookingServiceId('');
+      setNewBookingDate(new Date().toISOString().split('T')[0]);
+      setNewBookingTime('09:00');
+    } finally {
+      setIsSavingNewBooking(false);
+    }
   };
 
   const handleExportPatientsCsv = () => {
@@ -3407,6 +3437,22 @@ export default function DoctorDashboard({
                   />
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNewBookingModal(false);
+                  setQuickAddPatient({
+                    fullName: newBookingName.trim(), phone: newBookingPhone.trim(), passportSerial: "", birthDate: "", password: "",
+                    bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
+                    bookAppointment: true, serviceId: newBookingServiceId,
+                    appointmentDate: newBookingDate, appointmentTime: newBookingTime,
+                  });
+                  setShowQuickAddPatient(true);
+                }}
+                className="text-[11px] font-bold text-purple-600 hover:text-purple-700 text-left -mt-1"
+              >
+                + {t("yangi bemor sifatida to'liq ro'yxatdan o'tkazish")}
+              </button>
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("muolaja / xizmat")}</label>
                 <select
