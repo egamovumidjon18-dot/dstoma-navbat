@@ -1124,6 +1124,25 @@ export default function DoctorDashboard({
     (q) => q.appointmentDate && q.appointmentDate < todayStr,
   );
 
+  // Dashboard tab's "BUGUNGI ..." (today's) cards must reflect only today's
+  // activity — doctorQueues/pendingQueues/completedQueues above are all-time
+  // totals used by the Navbatlar tab's "Barcha navbatlar" summary, so a
+  // separate today-scoped subset is needed here instead of reusing them.
+  const todayDoctorQueues = doctorQueues.filter(
+    (q) => (q.appointmentDate || q.createdAt?.slice(0, 10)) === todayStr,
+  );
+  const todayPendingQueues = todayDoctorQueues.filter((q) => q.status === "pending");
+  const todayActiveConsultingQueues = todayDoctorQueues.filter(
+    (q) => q.status === "calling" || q.status === "in_progress",
+  );
+  const todayCompletedQueues = todayDoctorQueues.filter((q) => q.status === "completed");
+  const todayNewPatients = todayPendingQueues.filter((q) => {
+    const priorVisits = queues.filter(
+      (other) => other.patientName === q.patientName && other.status === "completed",
+    );
+    return priorVisits.length === 0;
+  });
+
   // "Eslatmalar" tab: real per-patient reminders, scoped either to this doctor's
   // own patients or the whole clinic, filtered by status, with real due-date-based
   // summary counts (no fabricated numbers).
@@ -1254,7 +1273,7 @@ export default function DoctorDashboard({
     return services.find((s) => s.id === sId);
   };
 
-  const dailyRevenue = completedQueues.reduce(
+  const dailyRevenue = todayCompletedQueues.reduce(
     (sum, item) => sum + getServicePrice(item.serviceId),
     0,
   );
@@ -1488,10 +1507,10 @@ export default function DoctorDashboard({
                   </div>
                   <div className="mt-3 flex items-end gap-2">
                     <span className="text-3xl font-black text-slate-800">
-                      {doctorQueues.length}
+                      {todayDoctorQueues.length}
                     </span>
                     <span className="text-[11px] font-bold text-emerald-500 mb-1">
-                      +{newPatients.length} {t("yangi")}
+                      +{todayNewPatients.length} {t("yangi")}
                     </span>
                   </div>
                 </div>
@@ -1509,7 +1528,7 @@ export default function DoctorDashboard({
                   </div>
                   <div className="mt-3 flex flex-col">
                     <span className="text-3xl font-black text-slate-800">
-                      {activeConsultingQueues.length}
+                      {todayActiveConsultingQueues.length}
                     </span>
                     <span className="text-[10px] font-semibold text-slate-400">
                       {t("qabul davom etmoqda")}
@@ -1548,7 +1567,7 @@ export default function DoctorDashboard({
                   </div>
                   <div className="mt-3 flex flex-col">
                     <span className="text-3xl font-black text-slate-800">
-                      {pendingQueues.length}
+                      {todayPendingQueues.length}
                     </span>
                     <span className="text-[10px] font-semibold text-slate-400">
                       {t("navbatda")}
@@ -1569,7 +1588,7 @@ export default function DoctorDashboard({
                   </div>
                   <div className="mt-3 flex flex-col">
                     <span className="text-3xl font-black text-slate-800">
-                      {completedQueues.length}
+                      {todayCompletedQueues.length}
                     </span>
                     <span className="text-[10px] font-semibold text-slate-400">
                       {t("bugun")}
@@ -1626,14 +1645,14 @@ export default function DoctorDashboard({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {doctorQueues.length === 0 ? (
+                        {todayDoctorQueues.length === 0 ? (
                           <tr>
                             <td colSpan={5} className="py-8 text-center text-slate-500 font-medium">
                               {t("hozircha navbatda bemorlar yo'q")}
                             </td>
                           </tr>
                         ) : (
-                          doctorQueues.slice(0, 5).map((q, idx) => (
+                          todayDoctorQueues.map((q, idx) => (
                             <tr key={q.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => { const pid = resolvePatientIdFromQueue(q); if (pid) { setActiveView('bemorlar'); setSelectedPatientId(pid); } }}>
                               <td className="py-3 font-medium text-slate-500">{idx + 1}</td>
                               <td className="py-3 text-slate-500 font-medium">
