@@ -172,7 +172,6 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   juma: { ru: "Пятница", en: "Friday", kk: "Жұма", ky: "Жума", tg: "Ҷумъа", tk: "Anna" },
   shanba: { ru: "Суббота", en: "Saturday", kk: "Сенбі", ky: "Ишемби", tg: "Шанбе", tk: "Şenbe" },
   "yangi bandlash": { ru: "Новая запись", en: "New booking", kk: "Жаңа жазылу", ky: "Жаңы жазылуу", tg: "Сабти нав", tk: "Täze bellik" },
-  "yangi bemor sifatida to'liq ro'yxatdan o'tkazish": { ru: "Зарегистрировать как нового пациента полностью", en: "Register fully as a new patient", kk: "Жаңа пациент ретінде толық тіркеу", ky: "Жаңы бейтап катары толук каттоо", tg: "Ҳамчун беморони нав пурра сабти ном кардан", tk: "Täze näsag hökmünde doly hasaba almak" },
   "bemorni qidirish": { ru: "Поиск пациента", en: "Search patient", kk: "Пациентті іздеу", ky: "Бейтапты издөө", tg: "Ҷустуҷӯи бемор", tk: "Näsagy gözlemek" },
   "ism yoki telefon bo'yicha qidiring...": { ru: "Искать по имени или телефону...", en: "Search by name or phone...", kk: "Аты немесе телефоны бойынша іздеу...", ky: "Аты же телефону боюнча издөө...", tg: "Ҷустуҷӯ бо ном ё телефон...", tk: "Ady ýa-da telefony boýunça gözlemek..." },
   "bemorni bandlash": { ru: "Записать пациента", en: "Book patient", kk: "Пациентті жазу", ky: "Бейтапты жазуу", tg: "Сабти бемор", tk: "Näsagy bellemek" },
@@ -2607,12 +2606,28 @@ export default function DoctorDashboard({
             <div className="space-y-6">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-sm font-black text-slate-700 uppercase tracking-wide">{t("rejalashtirilgan")}</h2>
-                <button
-                  onClick={() => setShowNewBookingModal(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-purple-500/20"
-                >
-                  <Plus className="w-3.5 h-3.5" /> {t("yangi bandlash")}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setQuickAddPatient({
+                        fullName: "", phone: "", passportSerial: "", birthDate: "", password: "",
+                        bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
+                        bookAppointment: true, serviceId: "",
+                        appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: "09:00",
+                      });
+                      setShowQuickAddPatient(true);
+                    }}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-xs rounded-xl transition-colors"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" /> {t("yangi bemor qo'shish")}
+                  </button>
+                  <button
+                    onClick={() => setShowNewBookingModal(true)}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-purple-500/20"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> {t("yangi bandlash")}
+                  </button>
+                </div>
               </div>
 
               {overdueScheduledQueues.length > 0 && (
@@ -3437,22 +3452,6 @@ export default function DoctorDashboard({
                   />
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowNewBookingModal(false);
-                  setQuickAddPatient({
-                    fullName: newBookingName.trim(), phone: newBookingPhone.trim(), passportSerial: "", birthDate: "", password: "",
-                    bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
-                    bookAppointment: true, serviceId: newBookingServiceId,
-                    appointmentDate: newBookingDate, appointmentTime: newBookingTime,
-                  });
-                  setShowQuickAddPatient(true);
-                }}
-                className="text-[11px] font-bold text-purple-600 hover:text-purple-700 text-left -mt-1"
-              >
-                + {t("yangi bemor sifatida to'liq ro'yxatdan o'tkazish")}
-              </button>
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("muolaja / xizmat")}</label>
                 <select
