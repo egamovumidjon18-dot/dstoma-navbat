@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import Statistics from './Statistics';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import InstallAppBanner from './InstallAppBanner';
 
 interface DirectorDashboardProps {
   clinics: Clinic[];
@@ -1012,6 +1013,7 @@ export default function DirectorDashboard({
       {/* -------------------- TAB 1: BUGUN VIEW (SCREENSHOT 5) -------------------- */}
       {activeSubTab === 'bugun' && (
         <div className="space-y-6">
+          <InstallAppBanner />
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             
             {/* Shifokorlar bugungi hisoboti (Tab 1 left part) */}

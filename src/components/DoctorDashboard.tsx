@@ -11,6 +11,7 @@ import Statistics from "./Statistics";
 import Prescriptions from "./Prescriptions";
 import SettingsView from "./Settings";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import InstallAppBanner from "./InstallAppBanner";
 import { Clinic, Doctor, Service, QueueItem, Patient, DoctorClinicLink, Reminder } from "../types";
 import { decodeLegacyEntities } from "../utils/textFormat";
 import { TRANSLATIONS, Language, translateMedicalText } from "../translations";
@@ -1471,6 +1472,7 @@ export default function DoctorDashboard({
         }`}>
           {activeView === "dashboard" && (
             <div className="space-y-6">
+              <InstallAppBanner />
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 {/* Top Cards */}
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">

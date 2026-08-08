@@ -4,19 +4,14 @@ import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
 
-// Service worker removed: it intercepted every request (including all /api/*
-// data fetches the app's initial load depends on), and Safari has known bugs
-// where SW-intercepted fetches can hang indefinitely (neither resolve nor
-// reject), leaving the app stuck on the loading screen forever — matches a
-// symptom reported exclusively on Safari/macOS. Unregister any previously
-// installed worker and clear its caches for returning visitors.
+// v4 has no fetch handler at all (see public/sw.js) — it exists only so
+// Chrome/Android consider the site installable as a PWA. The old v3 worker
+// intercepted every request, including the /api/* calls the initial load
+// depends on, and Safari has known bugs where SW-intercepted fetches can
+// hang indefinitely — that's what got a Mac stuck on the loading screen.
+// The browser's normal SW update flow replaces any old v3 registration.
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => {
-    regs.forEach(reg => reg.unregister());
-  });
-}
-if ('caches' in window) {
-  caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+  navigator.serviceWorker.register('/sw.js');
 }
 
 // Disable console.log in production
