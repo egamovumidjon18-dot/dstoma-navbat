@@ -7,6 +7,7 @@ import PatientPanel from './PatientPanel';
 import ThreeDentalModel from './ThreeDentalModel';
 import ClinicMap from './ClinicMap';
 import AdBanner from './AdBanner';
+import InstallAppBanner from './InstallAppBanner';
 import { 
   User, 
   Phone, 
@@ -1165,6 +1166,8 @@ export default function ClientDashboard({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <InstallAppBanner dark />
 
       {/* ----------------- ACTION HUB CONTROL CARD (PREMIUM DARK GLASS DESIGN) ----------------- */}
       <div className="bg-[#0b1022]/85 rounded-3xl p-6 border border-[#203254]/80 shadow-2xl relative overflow-hidden backdrop-blur-3xl">

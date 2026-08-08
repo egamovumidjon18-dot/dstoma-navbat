@@ -1,15 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { Download, X } from 'lucide-react';
+import { Download, X, Menu } from 'lucide-react';
 
 const DISMISS_KEY = 'dstoma_install_prompt_dismissed_at';
 const DISMISS_DAYS = 14;
 
-// Shown once a patient is inside their own cabinet — Chrome/Android can trigger the
-// real install dialog directly (captured via beforeinstallprompt); Safari/iOS never
-// fires that event, so it gets static "Share > Add to Home Screen" instructions
-// instead. Silently does nothing if the app is already running installed, or was
-// dismissed recently (re-prompting every visit would just get it dismissed forever).
-export default function InstallAppBanner() {
+interface Props {
+  dark?: boolean;
+}
+
+// Shown as soon as a visitor lands on the site — most people never notice the
+// small browser-native install icon, so this surfaces it explicitly instead of
+// waiting to be discovered. Chrome/Android can trigger the real install dialog
+// directly once `beforeinstallprompt` fires (a one-click install); until then
+// (or on browsers that never fire it, like desktop Firefox) it shows manual
+// "browser menu" instructions instead of staying hidden. Safari/iOS never
+// fires that event at all, so it always gets the Share > Add to Home Screen
+// instructions. Silently does nothing if already running installed, or was
+// dismissed recently (re-prompting every visit would just get it dismissed
+// forever).
+export default function InstallAppBanner({ dark = false }: Props) {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -25,16 +34,13 @@ export default function InstallAppBanner() {
 
     const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(iOS);
+    setVisible(true);
 
-    if (iOS) {
-      setVisible(true);
-      return;
-    }
+    if (iOS) return;
 
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setVisible(true);
     };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
@@ -55,23 +61,36 @@ export default function InstallAppBanner() {
 
   if (!visible) return null;
 
+  const hint = isIOS
+    ? "Pastdagi ulashish (Share) tugmasini bosib, \"Bosh ekranga qo'shish\"ni tanlang."
+    : deferredPrompt
+    ? "Tezroq va qulayroq foydalanish uchun telefoningizga/kompyuteringizga o'rnating."
+    : "Brauzer menyusidan (⋮ yoki ...) \"Ilovani o'rnatish\" yoki \"Bosh ekranga qo'shish\"ni tanlang.";
+
   return (
-    <div className="md:col-span-3 bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap">
+    <div
+      className={`rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap border ${
+        dark
+          ? 'bg-emerald-500/10 border-emerald-500/20'
+          : 'bg-emerald-50 border-emerald-100'
+      }`}
+    >
       <div className="flex items-center gap-3 min-w-0">
         <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shrink-0">
           <Download className="w-5 h-5 text-white" />
         </div>
         <div className="min-w-0">
-          <p className="font-bold text-sm text-slate-900">DStoma ilovasini o'rnating</p>
-          <p className="text-xs text-slate-600">
-            {isIOS
-              ? "Pastdagi ulashish (share) tugmasini bosib, \"Bosh ekranga qo'shish\"ni tanlang."
-              : "Tezroq va qulayroq foydalanish uchun telefoningizga o'rnating."}
+          <p className={`font-bold text-sm ${dark ? 'text-white' : 'text-slate-900'}`}>
+            DStoma ilovasini o'rnating
+          </p>
+          <p className={`text-xs flex items-center gap-1 flex-wrap ${dark ? 'text-slate-300' : 'text-slate-600'}`}>
+            {!isIOS && !deferredPrompt && <Menu className="w-3 h-3 shrink-0" />}
+            {hint}
           </p>
         </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        {!isIOS && (
+        {!isIOS && deferredPrompt && (
           <button
             onClick={install}
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors"
@@ -79,7 +98,11 @@ export default function InstallAppBanner() {
             O'rnatish
           </button>
         )}
-        <button onClick={dismiss} className="p-2 text-slate-400 hover:text-slate-600" aria-label="Yopish">
+        <button
+          onClick={dismiss}
+          className={`p-2 ${dark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
+          aria-label="Yopish"
+        >
           <X className="w-4 h-4" />
         </button>
       </div>
