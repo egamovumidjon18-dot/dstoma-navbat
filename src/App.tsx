@@ -117,6 +117,7 @@ export default function App() {
           onAddQueue={handleAddQueue}
           onPatientUpserted={handlePatientUpserted}
           onLogout={handleLogout}
+          onUpdateDoctorDetails={handleUpdateDoctorDetails}
         />
       </ErrorBoundary>
     );

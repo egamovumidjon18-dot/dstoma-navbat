@@ -48,6 +48,16 @@ export interface Doctor {
   // receipts manually; see PaymentReceipt).
   paymentCardNumber?: string;
   paymentPhone?: string;
+  // Doctor-configurable weekly schedule used to render the "Rejalashtirilgan"
+  // time-slot grid. Falls back to a default (08:00-18:00, 60min, 13:00-14:00
+  // lunch) when absent — see DEFAULT_WORKING_HOURS in DoctorDashboard.tsx.
+  workingHours?: {
+    startTime: string;   // "08:00"
+    endTime: string;     // "18:00"
+    slotMinutes: number; // 15 | 30 | 45 | 60
+    lunchStart?: string; // "13:00"
+    lunchEnd?: string;   // "14:00"
+  };
 }
 
 // A patient-submitted proof-of-payment (screenshot/photo sent via the Telegram bot).

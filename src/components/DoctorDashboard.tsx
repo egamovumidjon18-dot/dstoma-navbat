@@ -111,6 +111,7 @@ interface DoctorDashboardProps {
   onAddQueue?: (q: QueueItem) => void;
   onPatientUpserted?: (p: Patient) => void;
   onLogout?: () => void;
+  onUpdateDoctorDetails?: (doctorId: string, updates: Partial<Doctor>) => Promise<boolean>;
 }
 
 type DoctorDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
@@ -177,6 +178,15 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "ism yoki telefon bo'yicha qidiring...": { ru: "Искать по имени или телефону...", en: "Search by name or phone...", kk: "Аты немесе телефоны бойынша іздеу...", ky: "Аты же телефону боюнча издөө...", tg: "Ҷустуҷӯ бо ном ё телефон...", tk: "Ady ýa-da telefony boýunça gözlemek..." },
   "bemorni bandlash": { ru: "Записать пациента", en: "Book patient", kk: "Пациентті жазу", ky: "Бейтапты жазуу", tg: "Сабти бемор", tk: "Näsagy bellemek" },
   "kelgusi sana va vaqtga yozish": { ru: "Записать на будущую дату и время", en: "Book for a future date and time", kk: "Болашақ күн мен уақытқа жазу", ky: "Келечектеги күн жана убакытка жазуу", tg: "Ба санаи оянда сабт кардан", tk: "Geljekki sene we wagta ýazmak" },
+  "jadval sozlamalari": { ru: "Настройки расписания", en: "Schedule settings", kk: "Кесте баптаулары", ky: "Кесте жөндөөлөрү", tg: "Танзимоти ҷадвал", tk: "Tertip sazlamalary" },
+  bandlash: { ru: "Записать", en: "Book", kk: "Жазу", ky: "Жазуу", tg: "Сабт кардан", tk: "Bellemek" },
+  tushlik: { ru: "Обед", en: "Lunch", kk: "Түскі ас", ky: "Түшкү тамак", tg: "Хӯроки нисфирӯзӣ", tk: "Günortanlyk" },
+  "ish boshlanishi": { ru: "Начало работы", en: "Work start", kk: "Жұмыс басталуы", ky: "Иш башталышы", tg: "Оғози кор", tk: "Iş başlangyjy" },
+  "ish tugashi": { ru: "Конец работы", en: "Work end", kk: "Жұмыс аяқталуы", ky: "Иш аякталышы", tg: "Поёни кор", tk: "Iş tamamlanyşy" },
+  "vaqt oralig'i": { ru: "Интервал времени", en: "Time interval", kk: "Уақыт аралығы", ky: "Убакыт аралыгы", tg: "Фосилаи вақт", tk: "Wagt aralygy" },
+  "tushlik vaqtini belgilash": { ru: "Указать время обеда", en: "Set lunch time", kk: "Түскі ас уақытын белгілеу", ky: "Түшкү тамак убактысын белгилөө", tg: "Вақти хӯроки нисфирӯзиро таъин кардан", tk: "Günortanlyk wagtyny bellemek" },
+  "tushlik boshlanishi": { ru: "Начало обеда", en: "Lunch start", kk: "Түскі ас басталуы", ky: "Түшкү тамак башталышы", tg: "Оғози хӯрок", tk: "Günortanlyk başlangyjy" },
+  "tushlik tugashi": { ru: "Конец обеда", en: "Lunch end", kk: "Түскі ас аяқталуы", ky: "Түшкү тамак аякталышы", tg: "Поёни хӯрок", tk: "Günortanlyk tamamlanyşy" },
   "shu bilan birga qabulga ham yozish": { ru: "Одновременно записать на приём", en: "Also book an appointment", kk: "Сонымен қатар қабылдауға да жазу", ky: "Ошону менен кабылдоого да жазуу", tg: "Ҳамзамон ба қабул низ сабт кардан", tk: "Şol bilen bile kabula-da ýazmak" },
   "tashriflar tarixi": { ru: "История посещений", en: "Visit history", kk: "Келу тарихы", ky: "Келүү тарыхы", tg: "Таърихи ташрифҳо", tk: "Gelen-gidenler taryhy" },
   "hali tashrif qayd etilmagan.": { ru: "Визиты еще не зарегистрированы.", en: "No visits recorded yet.", kk: "Әзірге келу тіркелмеген.", ky: "Азырынча келүү катталган эмес.", tg: "Ҳанӯз ягон ташриф сабт нашудааст.", tk: "Heniz gelen-gideniň ýazgysy ýok." },
@@ -567,7 +577,8 @@ export default function DoctorDashboard({
   staffToken,
   onAddQueue,
   onPatientUpserted,
-  onLogout
+  onLogout,
+  onUpdateDoctorDetails
 }: DoctorDashboardProps) {
   // Translation Helper
   const localLang: keyof DoctorDictEntry | null =
@@ -957,6 +968,23 @@ export default function DoctorDashboard({
   const [newBookingDate, setNewBookingDate] = useState(new Date().toISOString().split('T')[0]);
   const [newBookingTime, setNewBookingTime] = useState('09:00');
   const [isSavingNewBooking, setIsSavingNewBooking] = useState(false);
+  // True when the modal was opened by clicking a specific empty slot in the
+  // Rejalashtirilgan grid — date/time are then shown read-only instead of
+  // editable, since the whole point of the grid is to stop free-typed times.
+  const [newBookingSlotLocked, setNewBookingSlotLocked] = useState(false);
+
+  // Doctor-editable weekly working-hours used to generate the Rejalashtirilgan
+  // time-slot grid. Falls back to a clinic-typical default when the doctor
+  // hasn't customized it yet.
+  const DEFAULT_WORKING_HOURS = { startTime: '08:00', endTime: '18:00', slotMinutes: 60, lunchStart: '13:00', lunchEnd: '14:00' };
+  const [showScheduleSettingsModal, setShowScheduleSettingsModal] = useState(false);
+  const [scheduleSettingsStart, setScheduleSettingsStart] = useState(DEFAULT_WORKING_HOURS.startTime);
+  const [scheduleSettingsEnd, setScheduleSettingsEnd] = useState(DEFAULT_WORKING_HOURS.endTime);
+  const [scheduleSettingsInterval, setScheduleSettingsInterval] = useState(DEFAULT_WORKING_HOURS.slotMinutes);
+  const [scheduleSettingsLunchEnabled, setScheduleSettingsLunchEnabled] = useState(true);
+  const [scheduleSettingsLunchStart, setScheduleSettingsLunchStart] = useState(DEFAULT_WORKING_HOURS.lunchStart);
+  const [scheduleSettingsLunchEnd, setScheduleSettingsLunchEnd] = useState(DEFAULT_WORKING_HOURS.lunchEnd);
+  const [isSavingScheduleSettings, setIsSavingScheduleSettings] = useState(false);
   // Searches the WHOLE clinic roster, not just this doctor's own patients: booking
   // is itself the mechanism that assigns a patient to a doctor (POST /api/queues
   // sets primaryDoctorId), so restricting the search to patients you already own
@@ -976,6 +1004,96 @@ export default function DoctorDashboard({
       })
       .slice(0, 8);
   }, [clinicPatients, newBookingQuery]);
+
+  // Doctor's active working-hours (their own saved value, or the clinic-typical
+  // default) — drives both the Rejalashtirilgan time-slot grid and the header
+  // "Yangi bandlash" button's slot picker.
+  const doctorWorkingHours = currentDoctor?.workingHours || DEFAULT_WORKING_HOURS;
+
+  const timeToMinutes = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
+  };
+  const minutesToTime = (mins: number) => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+
+  // Fixed list of "HH:MM" slots from startTime up to (not including) endTime,
+  // stepped by slotMinutes — e.g. 08:00,09:00,...,17:00 for the default hours.
+  const scheduleSlots = useMemo(() => {
+    const startMin = timeToMinutes(doctorWorkingHours.startTime);
+    const endMin = timeToMinutes(doctorWorkingHours.endTime);
+    const step = doctorWorkingHours.slotMinutes || 60;
+    const slots: string[] = [];
+    for (let m = startMin; m < endMin; m += step) slots.push(minutesToTime(m));
+    return slots;
+  }, [doctorWorkingHours.startTime, doctorWorkingHours.endTime, doctorWorkingHours.slotMinutes]);
+
+  const isLunchSlot = (slotTime: string) => {
+    if (!doctorWorkingHours.lunchStart || !doctorWorkingHours.lunchEnd) return false;
+    const m = timeToMinutes(slotTime);
+    return m >= timeToMinutes(doctorWorkingHours.lunchStart) && m < timeToMinutes(doctorWorkingHours.lunchEnd);
+  };
+
+  // A queue item belongs to a slot if its appointmentTime falls anywhere within
+  // [slot, nextSlot) — a range match, not exact equality, so appointments
+  // booked before this feature existed (arbitrary times) still land in the
+  // right cell instead of disappearing from the grid.
+  const getQueueSlot = (appointmentTime?: string) => {
+    if (!appointmentTime || scheduleSlots.length === 0) return null;
+    const m = timeToMinutes(appointmentTime);
+    // Clamp to the first slot instead of returning null for times before the
+    // working day starts — otherwise a legacy appointment booked outside the
+    // doctor's current hours would silently vanish from the grid entirely.
+    if (m < timeToMinutes(scheduleSlots[0])) return scheduleSlots[0];
+    let match: string = scheduleSlots[0];
+    for (const slot of scheduleSlots) {
+      if (m >= timeToMinutes(slot)) match = slot;
+      else break;
+    }
+    return match;
+  };
+
+  // Opens the booking modal either "locked" to a specific grid slot (date/time
+  // pre-set and shown read-only) or "unlocked" for the standalone header
+  // button (date still pickable, time restricted to a dropdown of real slots).
+  const openNewBookingModal = (locked: boolean, date?: string, time?: string) => {
+    setNewBookingSlotLocked(locked);
+    setNewBookingQuery('');
+    setNewBookingName('');
+    setNewBookingPhone('');
+    setNewBookingServiceId('');
+    setNewBookingDate(date || new Date().toISOString().split('T')[0]);
+    setNewBookingTime(time || scheduleSlots.find((s) => !isLunchSlot(s)) || '09:00');
+    setShowNewBookingModal(true);
+  };
+
+  const openScheduleSettingsModal = () => {
+    setScheduleSettingsStart(doctorWorkingHours.startTime);
+    setScheduleSettingsEnd(doctorWorkingHours.endTime);
+    setScheduleSettingsInterval(doctorWorkingHours.slotMinutes);
+    setScheduleSettingsLunchEnabled(!!(doctorWorkingHours.lunchStart && doctorWorkingHours.lunchEnd));
+    setScheduleSettingsLunchStart(doctorWorkingHours.lunchStart || DEFAULT_WORKING_HOURS.lunchStart);
+    setScheduleSettingsLunchEnd(doctorWorkingHours.lunchEnd || DEFAULT_WORKING_HOURS.lunchEnd);
+    setShowScheduleSettingsModal(true);
+  };
+
+  const runSaveScheduleSettings = async () => {
+    if (!currentDoctor?.id || !onUpdateDoctorDetails) return;
+    setIsSavingScheduleSettings(true);
+    try {
+      const ok = await onUpdateDoctorDetails(currentDoctor.id, {
+        workingHours: {
+          startTime: scheduleSettingsStart,
+          endTime: scheduleSettingsEnd,
+          slotMinutes: scheduleSettingsInterval,
+          lunchStart: scheduleSettingsLunchEnabled ? scheduleSettingsLunchStart : undefined,
+          lunchEnd: scheduleSettingsLunchEnabled ? scheduleSettingsLunchEnd : undefined,
+        },
+      });
+      if (ok) setShowScheduleSettingsModal(false);
+    } finally {
+      setIsSavingScheduleSettings(false);
+    }
+  };
 
   // Sync state if currentUser changes
   React.useEffect(() => {
@@ -2406,7 +2524,7 @@ export default function DoctorDashboard({
                       <option value="cancelled">{t("bekor qilindi")}</option>
                     </select>
                     <button
-                      onClick={() => setShowNewBookingModal(true)}
+                      onClick={() => openNewBookingModal(false)}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg transition-colors shadow-sm shrink-0"
                     >
                       <Plus className="w-3.5 h-3.5" /> {t("yangi bandlash")}
@@ -2643,7 +2761,13 @@ export default function DoctorDashboard({
                     <UserPlus className="w-3.5 h-3.5" /> {t("yangi bemor qo'shish")}
                   </button>
                   <button
-                    onClick={() => setShowNewBookingModal(true)}
+                    onClick={openScheduleSettingsModal}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-xs rounded-xl transition-colors"
+                  >
+                    ⚙ {t("jadval sozlamalari")}
+                  </button>
+                  <button
+                    onClick={() => openNewBookingModal(false)}
                     className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-purple-500/20"
                   >
                     <Plus className="w-3.5 h-3.5" /> {t("yangi bandlash")}
@@ -2707,70 +2831,111 @@ export default function DoctorDashboard({
                 <span className="text-sm font-black text-slate-700">{scheduleWeekLabel}</span>
               </div>
 
-              {/* Weekly schedule table: Monday-Sunday columns, appointments placed
-                  under their real weekday, always visible at a glance. */}
+              {/* Weekly schedule table: time-slot rows (from the doctor's
+                  working hours) x weekday columns. Clicking an empty, non-lunch
+                  cell books directly into that exact slot — the grid itself is
+                  now the primary booking interface, no free-typed times. */}
               <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-x-auto">
-                <div className="grid grid-cols-7 min-w-[980px]">
-                  {scheduleWeekGrid.map((day) => {
-                    const isToday = day.date === todayStr;
-                    const isWeekend = day.dateObj.getDay() === 0 || day.dateObj.getDay() === 6;
-                    return (
-                      <div key={day.date} className={`border-r border-slate-100 last:border-r-0 flex flex-col ${isWeekend ? 'bg-slate-50/60' : ''}`}>
-                        <div className={`px-3 py-3 border-b border-slate-100 text-center ${isToday ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-700'}`}>
-                          <p className="text-[10px] font-black uppercase tracking-wide">{t(day.weekday.toLowerCase())}</p>
-                          <p className="text-sm font-black">{formatDdMm(day.dateObj)}</p>
-                        </div>
-                        <div className="flex-1 p-2 space-y-2 min-h-[220px]">
-                          {day.items.length === 0 ? (
-                            <p className="text-[10px] text-slate-300 text-center pt-6">{t("bo'sh")}</p>
-                          ) : (
-                            day.items.map((q) => {
-                              const isDone = q.status === 'completed';
-                              const isCancelled = q.status === 'cancelled';
-                              const isActive = q.status === 'calling' || q.status === 'in_progress';
-                              const cardClasses = isDone
-                                ? 'bg-emerald-50/60 hover:bg-emerald-100/70 border-emerald-100'
-                                : isCancelled
-                                ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 opacity-60'
-                                : isActive
-                                ? 'bg-amber-50/60 hover:bg-amber-100/70 border-amber-100'
-                                : 'bg-blue-50/60 hover:bg-blue-100/70 border-blue-100';
-                              const timeClasses = isDone ? 'text-emerald-700' : isCancelled ? 'text-slate-400' : isActive ? 'text-amber-700' : 'text-blue-700';
-                              return (
-                                <div
-                                  key={q.id}
-                                  onClick={() => { const pid = resolvePatientIdFromQueue(q); if (pid) { setActiveView('bemorlar'); setSelectedPatientId(pid); } }}
-                                  className={`border rounded-xl p-2 cursor-pointer transition-colors ${cardClasses}`}
-                                >
-                                  <div className="flex items-center justify-between gap-1">
-                                    <p className={`text-[11px] font-black ${timeClasses}`}>{q.appointmentTime || '--:--'}</p>
-                                    {isDone && <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />}
-                                    {isCancelled && <span className="text-[9px] font-black text-slate-400 uppercase shrink-0">{t("bekor qilindi")}</span>}
+                <table className="w-full min-w-[980px] border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="w-16 px-1 py-3 border-b border-r border-slate-100 bg-slate-50 sticky left-0 z-10"></th>
+                      {scheduleWeekGrid.map((day) => {
+                        const isToday = day.date === todayStr;
+                        return (
+                          <th
+                            key={day.date}
+                            className={`px-3 py-3 border-b border-r border-slate-100 last:border-r-0 text-center ${isToday ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-700'}`}
+                          >
+                            <p className="text-[10px] font-black uppercase tracking-wide">{t(day.weekday.toLowerCase())}</p>
+                            <p className="text-sm font-black">{formatDdMm(day.dateObj)}</p>
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scheduleSlots.map((slot) => {
+                      const lunch = isLunchSlot(slot);
+                      return (
+                        <tr key={slot}>
+                          <td className="w-16 px-1 py-2 border-b border-r border-slate-100 bg-slate-50/60 text-[10px] font-black text-slate-500 text-center align-top sticky left-0 z-10">
+                            {slot}
+                          </td>
+                          {scheduleWeekGrid.map((day) => {
+                            const isWeekend = day.dateObj.getDay() === 0 || day.dateObj.getDay() === 6;
+                            const items = day.items.filter((q) => getQueueSlot(q.appointmentTime) === slot);
+                            return (
+                              <td
+                                key={day.date}
+                                className={`p-1.5 border-b border-r border-slate-100 last:border-r-0 align-top ${isWeekend ? 'bg-slate-50/40' : ''}`}
+                              >
+                                {lunch ? (
+                                  <div className="min-h-[52px] flex items-center justify-center bg-slate-50 rounded-lg">
+                                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-wide">{t("tushlik")}</span>
                                   </div>
-                                  <p className={`text-xs font-bold truncate ${isCancelled ? 'text-slate-500 line-through' : 'text-slate-800'}`}>{q.patientName}</p>
-                                  <p className="text-[10px] text-slate-400 font-mono truncate">{q.patientPhone}</p>
-                                  {q.status === 'scheduled' && (
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); onUpdateQueueStatus(q.id!, 'in_progress'); }}
-                                      className="mt-1.5 w-full py-1 bg-white hover:bg-blue-600 hover:text-white text-blue-600 font-bold text-[10px] rounded-lg transition-colors border border-blue-200"
-                                    >
-                                      {t("qabulni boshlash")}
-                                    </button>
-                                  )}
-                                  {isActive && (
-                                    <span className="mt-1.5 block w-full py-1 text-center bg-amber-100 text-amber-700 font-bold text-[10px] rounded-lg">
-                                      {t("qabulda")}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                                ) : items.length === 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openNewBookingModal(true, day.date, slot)}
+                                    className="w-full min-h-[52px] flex items-center justify-center text-slate-200 hover:text-purple-500 hover:bg-purple-50 rounded-lg transition-colors"
+                                    title={t("bandlash")}
+                                  >
+                                    <Plus className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <div className="space-y-1.5">
+                                    {items.map((q) => {
+                                      const isDone = q.status === 'completed';
+                                      const isCancelled = q.status === 'cancelled';
+                                      const isActive = q.status === 'calling' || q.status === 'in_progress';
+                                      const cardClasses = isDone
+                                        ? 'bg-emerald-50/60 hover:bg-emerald-100/70 border-emerald-100'
+                                        : isCancelled
+                                        ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 opacity-60'
+                                        : isActive
+                                        ? 'bg-amber-50/60 hover:bg-amber-100/70 border-amber-100'
+                                        : 'bg-blue-50/60 hover:bg-blue-100/70 border-blue-100';
+                                      const timeClasses = isDone ? 'text-emerald-700' : isCancelled ? 'text-slate-400' : isActive ? 'text-amber-700' : 'text-blue-700';
+                                      return (
+                                        <div
+                                          key={q.id}
+                                          onClick={() => { const pid = resolvePatientIdFromQueue(q); if (pid) { setActiveView('bemorlar'); setSelectedPatientId(pid); } }}
+                                          className={`border rounded-xl p-2 cursor-pointer transition-colors ${cardClasses}`}
+                                        >
+                                          <div className="flex items-center justify-between gap-1">
+                                            <p className={`text-[11px] font-black ${timeClasses}`}>{q.appointmentTime || '--:--'}</p>
+                                            {isDone && <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />}
+                                            {isCancelled && <span className="text-[9px] font-black text-slate-400 uppercase shrink-0">{t("bekor qilindi")}</span>}
+                                          </div>
+                                          <p className={`text-xs font-bold truncate ${isCancelled ? 'text-slate-500 line-through' : 'text-slate-800'}`}>{q.patientName}</p>
+                                          <p className="text-[10px] text-slate-400 font-mono truncate">{q.patientPhone}</p>
+                                          {q.status === 'scheduled' && (
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); onUpdateQueueStatus(q.id!, 'in_progress'); }}
+                                              className="mt-1.5 w-full py-1 bg-white hover:bg-blue-600 hover:text-white text-blue-600 font-bold text-[10px] rounded-lg transition-colors border border-blue-200"
+                                            >
+                                              {t("qabulni boshlash")}
+                                            </button>
+                                          )}
+                                          {isActive && (
+                                            <span className="mt-1.5 block w-full py-1 text-center bg-amber-100 text-amber-700 font-bold text-[10px] rounded-lg">
+                                              {t("qabulda")}
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -3207,7 +3372,7 @@ export default function DoctorDashboard({
                             </p>
                           </div>
                         </button>
-                        <button onClick={() => setShowNewBookingModal(true)} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-colors text-left group">
+                        <button onClick={() => openNewBookingModal(false)} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-colors text-left group">
                           <div className="p-2 bg-purple-50 text-purple-600 rounded-lg group-hover:bg-purple-100 transition-colors">
                             <CalendarClock className="w-4 h-4" />
                           </div>
@@ -3489,21 +3654,36 @@ export default function DoctorDashboard({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("qabul kuni")}</label>
-                  <input
-                    type="date"
-                    value={newBookingDate}
-                    onChange={(e) => setNewBookingDate(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
-                  />
+                  {newBookingSlotLocked ? (
+                    <p className="w-full border border-slate-100 bg-slate-50 rounded-xl px-3 py-2 text-sm font-bold text-slate-700">
+                      {newBookingDate.split('-').slice(1).reverse().join('.')}
+                    </p>
+                  ) : (
+                    <input
+                      type="date"
+                      value={newBookingDate}
+                      onChange={(e) => setNewBookingDate(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("qabul vaqti")}</label>
-                  <input
-                    type="time"
-                    value={newBookingTime}
-                    onChange={(e) => setNewBookingTime(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
-                  />
+                  {newBookingSlotLocked ? (
+                    <p className="w-full border border-slate-100 bg-slate-50 rounded-xl px-3 py-2 text-sm font-bold text-slate-700">
+                      {newBookingTime}
+                    </p>
+                  ) : (
+                    <select
+                      value={newBookingTime}
+                      onChange={(e) => setNewBookingTime(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                    >
+                      {scheduleSlots.filter((s) => !isLunchSlot(s)).map((s) => (
+                        <option key={s} value={s} className="text-slate-800">{s}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
             </div>
@@ -3520,6 +3700,107 @@ export default function DoctorDashboard({
                 className="px-4 py-2 text-sm font-bold bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-colors shadow-md shadow-purple-500/20"
               >
                 {t("tasdiqlash")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showScheduleSettingsModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl border border-slate-100 flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                ⚙ {t("jadval sozlamalari")}
+              </h3>
+              <button
+                onClick={() => setShowScheduleSettingsModal(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 flex flex-col gap-4 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("ish boshlanishi")}</label>
+                  <input
+                    type="time"
+                    value={scheduleSettingsStart}
+                    onChange={(e) => setScheduleSettingsStart(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("ish tugashi")}</label>
+                  <input
+                    type="time"
+                    value={scheduleSettingsEnd}
+                    onChange={(e) => setScheduleSettingsEnd(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("vaqt oralig'i")}</label>
+                <select
+                  value={scheduleSettingsInterval}
+                  onChange={(e) => setScheduleSettingsInterval(Number(e.target.value))}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                >
+                  <option value={15}>15 {t("daqiqa")}</option>
+                  <option value={30}>30 {t("daqiqa")}</option>
+                  <option value={45}>45 {t("daqiqa")}</option>
+                  <option value={60}>60 {t("daqiqa")}</option>
+                </select>
+              </div>
+              <div className="border-t border-slate-100 pt-4">
+                <label className="flex items-center gap-2 mb-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={scheduleSettingsLunchEnabled}
+                    onChange={(e) => setScheduleSettingsLunchEnabled(e.target.checked)}
+                    className="w-4 h-4 accent-purple-600"
+                  />
+                  <span className="text-xs font-bold text-slate-600">{t("tushlik vaqtini belgilash")}</span>
+                </label>
+                {scheduleSettingsLunchEnabled && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("tushlik boshlanishi")}</label>
+                      <input
+                        type="time"
+                        value={scheduleSettingsLunchStart}
+                        onChange={(e) => setScheduleSettingsLunchStart(e.target.value)}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("tushlik tugashi")}</label>
+                      <input
+                        type="time"
+                        value={scheduleSettingsLunchEnd}
+                        onChange={(e) => setScheduleSettingsLunchEnd(e.target.value)}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0">
+              <button
+                onClick={() => setShowScheduleSettingsModal(false)}
+                className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                {t("bekor qilish")}
+              </button>
+              <button
+                onClick={runSaveScheduleSettings}
+                disabled={isSavingScheduleSettings || scheduleSettingsStart >= scheduleSettingsEnd}
+                className="px-4 py-2 text-sm font-bold bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-colors shadow-md shadow-purple-500/20"
+              >
+                {isSavingScheduleSettings ? t("saqlanmoqda...") : t("saqlash")}
               </button>
             </div>
           </div>
