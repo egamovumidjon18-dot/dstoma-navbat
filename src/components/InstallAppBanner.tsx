@@ -21,6 +21,7 @@ interface Props {
 export default function InstallAppBanner({ dark = false }: Props) {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
+  const [isSafariDesktop, setIsSafariDesktop] = useState(false);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -32,11 +33,17 @@ export default function InstallAppBanner({ dark = false }: Props) {
     const dismissedAt = Number(localStorage.getItem(DISMISS_KEY) || 0);
     if (dismissedAt && Date.now() - dismissedAt < DISMISS_DAYS * 24 * 60 * 60 * 1000) return;
 
-    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    const ua = navigator.userAgent;
+    const iOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
     setIsIOS(iOS);
+    // macOS Safari never fires beforeinstallprompt and has its own "Add to
+    // Dock" flow (Safari 17+/macOS Sonoma+), completely different from the
+    // Chrome-style "browser menu" instructions used for everything else.
+    const safariDesktop = !iOS && /Safari/.test(ua) && !/Chrome|Chromium|Edg|OPR/.test(ua);
+    setIsSafariDesktop(safariDesktop);
     setVisible(true);
 
-    if (iOS) return;
+    if (iOS || safariDesktop) return;
 
     const handler = (e: Event) => {
       e.preventDefault();
@@ -63,6 +70,8 @@ export default function InstallAppBanner({ dark = false }: Props) {
 
   const hint = isIOS
     ? "Pastdagi ulashish (Share) tugmasini bosib, \"Bosh ekranga qo'shish\"ni tanlang."
+    : isSafariDesktop
+    ? "Yuqoridagi ulashish (Share) tugmasini yoki \"Fayl\" menyusini bosib, \"Dock-ga qo'shish\" (Add to Dock)ni tanlang."
     : deferredPrompt
     ? "Tezroq va qulayroq foydalanish uchun telefoningizga/kompyuteringizga o'rnating."
     : "Brauzer menyusidan (⋮ yoki ...) \"Ilovani o'rnatish\" yoki \"Bosh ekranga qo'shish\"ni tanlang.";
