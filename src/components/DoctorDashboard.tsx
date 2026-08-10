@@ -13,7 +13,6 @@ import SettingsView from "./Settings";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import InstallAppBanner from "./InstallAppBanner";
 import ProcedureCatalog from "./ProcedureCatalog";
-import { deductMaterialsForQueue } from "../utils/materialDeduction";
 import { Clinic, Doctor, Service, QueueItem, Patient, DoctorClinicLink, Reminder } from "../types";
 import { decodeLegacyEntities } from "../utils/textFormat";
 import { TRANSLATIONS, Language, translateMedicalText } from "../translations";
@@ -116,6 +115,11 @@ interface DoctorDashboardProps {
   onLogout?: () => void;
   onUpdateDoctorDetails?: (doctorId: string, updates: Partial<Doctor>) => Promise<boolean>;
 }
+
+// How far past its slot time an appointment may still be auto-called. Past this
+// it's treated as a no-show the doctor should handle deliberately, rather than
+// the system telling someone who already went home to come in.
+const AUTO_QUEUE_GRACE_MINUTES = 120;
 
 type DoctorDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
 const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
@@ -874,19 +878,13 @@ export default function DoctorDashboard({
     }
   };
 
-  // Finishing a procedure both closes the queue item and draws down the
-  // warehouse by whatever that procedure's material recipe says it consumes
-  // (configured in the Muolajalar tab). The deduction is idempotent per queue
-  // id and fails soft, so it can never block the appointment from completing.
+  // Warehouse stock for the procedure's material recipe is drawn down by the
+  // server on the status -> completed transition (see
+  // deductMaterialsForCompletedQueue in server.ts), so that completing from the
+  // Telegram bot or any other surface deducts identically. Nothing extra to do
+  // here beyond the status change itself.
   const handleCompleteQueue = (q: QueueItem) => {
-    if (!q?.id) return;
-    onUpdateQueueStatus(q.id, "completed");
-    void deductMaterialsForQueue({
-      clinicId: q.clinicId || effectiveClinicId || undefined,
-      queueId: q.id,
-      serviceId: q.serviceId,
-      doctorId: q.doctorId || currentDoctor?.id,
-    });
+    if (q?.id) onUpdateQueueStatus(q.id, "completed");
   };
 
   const handleExportPatientsCsv = () => {
@@ -1304,36 +1302,56 @@ export default function DoctorDashboard({
   // corrupting visit history and the daily revenue rollup.
   //
   // Runs client-side while the panel is open — this app has no server-side job
-  // runner. Self-limiting: an item stops matching 'scheduled' the moment it's
-  // advanced, so it cannot fire twice.
+  // runner.
+  //
+  // Everything the tick reads is held in a ref rather than in the dependency
+  // array: doctorQueues is a fresh array every render and onUpdateQueueStatus
+  // isn't memoised, so depending on them directly tore the interval down and
+  // rebuilt it on every render, meaning the 60s timer never actually elapsed
+  // and the tick effectively ran on every render instead.
+  const autoQueueRef = useRef({ doctorQueues, onUpdateQueueStatus });
+  autoQueueRef.current = { doctorQueues, onUpdateQueueStatus };
+  const autoQueueEnabled = doctorWorkingHours.autoQueue !== false;
+
   useEffect(() => {
-    if (doctorWorkingHours.autoQueue === false || !activeDoctorId) return;
+    if (!autoQueueEnabled || !activeDoctorId) return;
 
     const tick = () => {
-      // Never call a second patient while one is already being called or treated.
-      if (doctorQueues.some((q) => q.status === "calling" || q.status === "in_progress")) return;
+      const { doctorQueues: queueSnapshot, onUpdateQueueStatus: updateStatus } = autoQueueRef.current;
 
       const now = new Date();
       const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const todaysQueues = queueSnapshot.filter((q) => (q.appointmentDate || q.createdAt?.slice(0, 10)) === today);
 
-      const next = doctorQueues
+      // Never call a second patient while one is already being seen. Scoped to
+      // today: an appointment abandoned in 'in_progress' weeks ago would
+      // otherwise disable auto-queue permanently, silently and with no hint.
+      if (todaysQueues.some((q) => q.status === "calling" || q.status === "in_progress")) return;
+
+      const next = todaysQueues
         .filter(
           (q) =>
             q.status === "scheduled" &&
             q.appointmentDate === today &&
             q.appointmentTime &&
-            timeToMinutes(q.appointmentTime) <= nowMinutes,
+            // Due, but not stale. Without an upper bound the earliest still-
+            // 'scheduled' slot wins, so a morning no-show left untouched would
+            // get called hours later — telling a patient who went home that the
+            // doctor is waiting, and then blocking the guard above for the rest
+            // of the day so the person actually in the chair is never called.
+            timeToMinutes(q.appointmentTime) <= nowMinutes &&
+            nowMinutes - timeToMinutes(q.appointmentTime) <= AUTO_QUEUE_GRACE_MINUTES,
         )
         .sort((a, b) => (a.appointmentTime || "").localeCompare(b.appointmentTime || ""))[0];
 
-      if (next?.id) onUpdateQueueStatus(next.id, "calling");
+      if (next?.id) updateStatus(next.id, "calling");
     };
 
     tick();
     const timer = setInterval(tick, 60_000);
     return () => clearInterval(timer);
-  }, [doctorQueues, doctorWorkingHours.autoQueue, activeDoctorId, onUpdateQueueStatus]);
+  }, [autoQueueEnabled, activeDoctorId]);
 
   // Dashboard tab's "BUGUNGI ..." (today's) cards must reflect only today's
   // activity — doctorQueues/pendingQueues/completedQueues above are all-time

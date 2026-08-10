@@ -2052,18 +2052,22 @@ export default function ClientDashboard({
             // Same merge-upsert the doctor-side "claim patient" action uses:
             // savePatient() merges, so sending only these two fields rewrites
             // the treating doctor without disturbing the rest of the record.
+            //
+            // Only applied locally once the server confirms it. currentUser is
+            // persisted to localStorage and is never re-hydrated from
+            // /api/patients, so optimistically writing an unconfirmed value
+            // would leave the patient permanently looking at a doctor change
+            // that never actually happened — including across reloads, while
+            // the doctor it claims to have picked never sees them.
+            const res = await fetch(`${getApiUrl()}/api/patients`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: currentUser.id, primaryDoctorId: doctorId }),
+            });
+            if (!res.ok) throw new Error(`Doctor change rejected (${res.status})`);
             const updated = { ...currentUser, primaryDoctorId: doctorId };
             setPatients(prev => prev.map(p => p.id === currentUser.id ? updated : p));
             setCurrentUser(updated);
-            try {
-              await fetch(`${getApiUrl()}/api/patients`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: currentUser.id, primaryDoctorId: doctorId }),
-              });
-            } catch (err) {
-              console.warn('[ClientDashboard] Failed to change treating doctor:', err);
-            }
           }}
           familyMembers={patients.filter(p => p.managedBy === currentUser.id)}
           onLinkFamilyMember={async (member) => {

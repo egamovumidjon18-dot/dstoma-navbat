@@ -30,6 +30,7 @@ const PATIENT_PANEL_TRANSLATIONS: Record<string, PatientPanelDictEntry> = {
   "davolovchi shifokor": { ru: "Лечащий врач", en: "Treating doctor", kk: "Емдеуші дәрігер", ky: "Дарылоочу дарыгер", tg: "Табиби муолиҷакунанда", tk: "Bejeriji lukman" },
   "shifokorni tanlang": { ru: "Выберите врача", en: "Select a doctor", kk: "Дәрігерді таңдаңыз", ky: "Дарыгерди тандаңыз", tg: "Табибро интихоб кунед", tk: "Lukmany saýlaň" },
   "hali biriktirilmagan": { ru: "Еще не назначен", en: "Not assigned yet", kk: "Әлі тағайындалмаған", ky: "Али дайындалган эмес", tg: "Ҳанӯз таъин нашудааст", tk: "Heniz bellenmedik" },
+  "saqlanmadi, qayta urinib ko'ring": { ru: "Не сохранено, попробуйте еще раз", en: "Not saved, please try again", kk: "Сақталмады, қайталап көріңіз", ky: "Сакталган жок, кайра аракет кылыңыз", tg: "Захира нашуд, дубора кӯшиш кунед", tk: "Ýatda saklanmady, gaýtadan synanyşyň" },
   "o'zgartirish": { ru: "Изменить", en: "Change", kk: "Өзгерту", ky: "Өзгөртүү", tg: "Тағйир додан", tk: "Üýtgetmek" },
   saqlash: { ru: "Сохранить", en: "Save", kk: "Сақтау", ky: "Сактоо", tg: "Захира кардан", tk: "Ýatda saklamak" },
   "bosh sahifa": { ru: "Главная", en: "Home", kk: "Басты бет", ky: "Башкы бет", tg: "Саҳифаи асосӣ", tk: "Baş sahypa" },
@@ -1084,6 +1085,7 @@ function TreatingDoctorCard({
   const [isEditing, setIsEditing] = useState(false);
   const [picked, setPicked] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
 
   // Only doctors at the patient's own clinic — switching to a doctor at another
   // branch would silently move the patient out of their clinic's roster.
@@ -1095,9 +1097,14 @@ function TreatingDoctorCard({
   const save = async () => {
     if (!picked || picked === patient.primaryDoctorId) { setIsEditing(false); return; }
     setIsSaving(true);
+    setSaveError(false);
     try {
       await onChangeDoctor(picked);
       setIsEditing(false);
+    } catch {
+      // Keep the editor open and say so — silently closing would tell the
+      // patient their treating doctor changed when the server rejected it.
+      setSaveError(true);
     } finally {
       setIsSaving(false);
     }
@@ -1112,16 +1119,21 @@ function TreatingDoctorCard({
         <div className="min-w-0">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">{t('davolovchi shifokor')}</p>
           {isEditing ? (
-            <select
-              value={picked || patient.primaryDoctorId || ''}
-              onChange={(e) => setPicked(e.target.value)}
-              className="mt-1 border border-slate-200 rounded-xl px-3 py-1.5 text-sm font-bold text-slate-800 bg-white outline-none focus:border-blue-500"
-            >
-              <option value="">{t('shifokorni tanlang')}</option>
-              {options.map((d) => (
-                <option key={d.id} value={d.id}>{d.name} — {d.specialty}</option>
-              ))}
-            </select>
+            <>
+              <select
+                value={picked}
+                onChange={(e) => setPicked(e.target.value)}
+                className="mt-1 border border-slate-200 rounded-xl px-3 py-1.5 text-sm font-bold text-slate-800 bg-white outline-none focus:border-blue-500"
+              >
+                <option value="">{t('shifokorni tanlang')}</option>
+                {options.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name} — {d.specialty}</option>
+                ))}
+              </select>
+              {saveError && (
+                <p className="text-[11px] font-bold text-rose-500 mt-1">{t('saqlanmadi, qayta urinib ko\'ring')}</p>
+              )}
+            </>
           ) : (
             <p className="font-bold text-slate-900 text-sm truncate">
               {current ? current.name : t('hali biriktirilmagan')}

@@ -294,7 +294,7 @@ if (!g._serverServices) {
 
 // FIREBASE INIT
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, getDoc, runTransaction } from 'firebase/firestore';
 import firebaseConfig from './firebase-applet-config.json';
 
 let fDb: any = null;
@@ -370,6 +370,77 @@ async function saveQueue(q: QueueItem) {
 async function deleteQueue(id: string) {
   if (fDb) await deleteDoc(doc(fDb, "queues", id));
   else if (g._queuesDb) g._queuesDb = g._queuesDb.filter((x: any) => x.id !== id);
+}
+
+// Draws consumables down from the warehouse when a procedure is finished, using
+// the per-service recipe the doctor configured in the "Muolajalar" tab.
+//
+// This lives on the server, next to the other things that happen on the
+// status -> completed transition (the ClinicVisit record and the daily revenue
+// rollup), so that EVERY way of completing an appointment consumes stock — the
+// web dashboard, the doctor's Telegram bot button, and any direct PATCH alike.
+// An earlier browser-only version silently skipped the bot path entirely, which
+// let stock drift upward from reality with no audit record to reconcile against.
+//
+// One transaction does the whole thing:
+//  - creates clinics/{clinicId}/materialUsage/{queueId}, which is both the audit
+//    trail and the idempotency guard, so re-completing the same appointment (or
+//    two surfaces racing) cannot deduct twice;
+//  - writes stock from values read inside the transaction, so two doctors
+//    finishing procedures that share a material can't lose each other's update.
+// Fails soft: never let a warehouse problem block completing an appointment.
+async function deductMaterialsForCompletedQueue(q: any) {
+  const clinicId = q?.clinicId;
+  const queueId = q?.id;
+  const serviceId = q?.serviceId;
+  if (!fDb || !clinicId || !queueId || !serviceId) return;
+
+  try {
+    await runTransaction(fDb, async (tx: any) => {
+      const usageRef = doc(fDb, `clinics/${clinicId}/materialUsage`, queueId);
+      if ((await tx.get(usageRef)).exists()) return;
+
+      const recipeSnap = await tx.get(doc(fDb, `clinics/${clinicId}/serviceMaterials`, serviceId));
+      if (!recipeSnap.exists()) return;
+
+      // Merge duplicate rows so a material listed twice is deducted once.
+      const merged = new Map<string, number>();
+      for (const item of (recipeSnap.data()?.items || [])) {
+        if (!item?.materialId || !(Number(item.qty) > 0)) continue;
+        merged.set(item.materialId, (merged.get(item.materialId) || 0) + Number(item.qty));
+      }
+      if (merged.size === 0) return;
+
+      // Firestore requires every read in a transaction before any write.
+      const reads = await Promise.all(
+        Array.from(merged, async ([materialId, qty]) => {
+          const ref = doc(fDb, `clinics/${clinicId}/materials`, materialId);
+          return { materialId, qty, ref, snap: await tx.get(ref) };
+        })
+      );
+
+      const applied: any[] = [];
+      for (const { materialId, qty, ref, snap } of reads) {
+        if (!snap.exists()) continue;
+        const mat = snap.data() || {};
+        const current = Number(mat.quantity) || 0;
+        // Clamped at zero: negative stock would read as the warehouse owing
+        // supplies rather than simply being empty.
+        tx.update(ref, { quantity: Math.max(0, current - qty) });
+        applied.push({ materialId, name: mat.name || materialId, qty, unit: mat.unit || '' });
+      }
+
+      tx.set(usageRef, {
+        queueId,
+        serviceId,
+        doctorId: q?.doctorId || null,
+        items: applied,
+        deductedAt: new Date().toISOString(),
+      });
+    });
+  } catch (e) {
+    console.error("[Materials] deduction failed for queue", queueId, e);
+  }
 }
 async function getClinics() {
   if (fDb) {
@@ -1248,7 +1319,13 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
     const q = req.body;
     const clinicId = sanitizeString(q.clinic_id || q.clinicId || 'samarqand');
   const doctorId = sanitizeString(q.doctor_id || q.doctorId || 'doc_sm_1');
-  const serviceId = sanitizeString(q.service_id || q.serviceId || 'srv_sm_1');
+  // No fallback service id on purpose. The old 'srv_sm_1' default silently
+  // labelled every self-booked appointment (the patient wizard only collects
+  // clinic + doctor) as one specific procedure — which now also decides which
+  // consumables get deducted from the warehouse, so a wrong guess quietly
+  // drains the wrong materials. Empty means "not chosen yet", and the
+  // deduction skips it rather than consuming something arbitrary.
+  const serviceId = sanitizeString(q.service_id || q.serviceId || '');
   const patientName = sanitizeString(q.patient_name || q.patientName || 'Mehmon');
   const patientPhone = sanitizeString(q.patient_phone || q.patientPhone || '');
   const telegramChatId = q.telegram_chat_id || q.telegramChatId || null;
@@ -1437,6 +1514,13 @@ app.patch("/api/queues/:id", async (req, res) => {
              patientObj = pat;
            }
          } catch(e) {}
+      }
+
+      // Deliberately not inside the `patientObj &&` branch below: consumables are
+      // spent on the procedure whether or not the queue ticket could be matched
+      // back to a registered patient record.
+      if (item.status === 'completed' && itemMatch.status !== 'completed') {
+        await deductMaterialsForCompletedQueue(item);
       }
 
       if (patientObj && item.status === 'completed' && itemMatch.status !== 'completed') {
@@ -3677,6 +3761,7 @@ async function handleDoctorCallbackQuery(token: string, chatId: number, callback
     if (callingItem) {
       callingItem.status = 'completed';
       await saveQueue(callingItem);
+      await deductMaterialsForCompletedQueue(callingItem);
       if (callingItem.telegramChatId) {
         await sendBgTelegramMessage(callingItem.telegramChatId, `✅ *Rahmat!* \n\nShifokor ko'rigi muvaffaqiyatli yakunlandi. Salomat bo'ling! Iltimos, shaxsiy kabinetingizda shifokorga baho bering. ⭐`, callingItem.clinicId);
       }

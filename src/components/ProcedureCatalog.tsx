@@ -5,6 +5,11 @@ import { ClipboardList, Search, Plus, Trash2, Package, Check, X, Edit2, AlertTri
 import { Service } from '../types';
 import { RecipeItem, ServiceRecipe, recipesPath, materialsPath, saveServiceRecipe } from '../utils/materialDeduction';
 
+interface DraftRow {
+  materialId: string;
+  qty: string;
+}
+
 interface MaterialLite {
   id: string;
   name: string;
@@ -33,7 +38,10 @@ export default function ProcedureCatalog({
   const [searchQuery, setSearchQuery] = useState('');
   const [onlyWithRecipe, setOnlyWithRecipe] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
-  const [draftItems, setDraftItems] = useState<RecipeItem[]>([]);
+  // qty is held as a string while editing so partial input survives: coercing
+  // every keystroke through Number() rewrites "0." back to "0", which makes
+  // fractional amounts (0.5 ml of anaesthetic) impossible to type at all.
+  const [draftItems, setDraftItems] = useState<DraftRow[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -94,15 +102,15 @@ export default function ProcedureCatalog({
 
   const openEditor = (service: Service) => {
     setEditingService(service);
-    setDraftItems((recipes[service.id] || []).map((i) => ({ ...i })));
+    setDraftItems((recipes[service.id] || []).map((i) => ({ materialId: i.materialId, qty: String(i.qty) })));
   };
 
   const addDraftRow = () => {
     const firstUnused = materials.find((m) => !draftItems.some((i) => i.materialId === m.id));
-    setDraftItems((prev) => [...prev, { materialId: firstUnused?.id || '', qty: 1 }]);
+    setDraftItems((prev) => [...prev, { materialId: firstUnused?.id || '', qty: '1' }]);
   };
 
-  const updateDraftRow = (index: number, patch: Partial<RecipeItem>) => {
+  const updateDraftRow = (index: number, patch: Partial<DraftRow>) => {
     setDraftItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   };
 
@@ -116,7 +124,10 @@ export default function ProcedureCatalog({
     try {
       // Drop blank/zero rows so a half-filled row can never silently deduct nothing
       // (or worse, deduct against an empty materialId) at completion time.
-      const clean = draftItems.filter((i) => i.materialId && Number(i.qty) > 0)
+      // saveServiceRecipe also merges duplicate materials, so the same material
+      // picked on two rows is stored once instead of being deducted twice.
+      const clean = draftItems
+        .filter((i) => i.materialId && Number(i.qty) > 0)
         .map((i) => ({ materialId: i.materialId, qty: Number(i.qty) }));
       await saveServiceRecipe(clinicId, editingService.id, clean);
       setEditingService(null);
@@ -314,7 +325,7 @@ export default function ProcedureCatalog({
                           min="0"
                           step="any"
                           value={item.qty}
-                          onChange={(e) => updateDraftRow(index, { qty: Number(e.target.value) })}
+                          onChange={(e) => updateDraftRow(index, { qty: e.target.value })}
                           className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium bg-white text-slate-800"
                         />
                       </div>
