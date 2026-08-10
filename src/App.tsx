@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Analytics } from '@vercel/analytics/react';
 import { useAppState } from './hooks/useAppState';
 import ClientDashboard from './components/ClientDashboard';
 import DoctorDashboard from './components/DoctorDashboard';
@@ -359,7 +358,6 @@ export default function App() {
       <footer className="py-6 border-t border-slate-900 bg-[#020712] text-center text-xs text-slate-500 font-mono">
         <p>© 2026 DStoma SaaS Technologies Inc. All Rights Reserved. Dynamic Multi-Tenant Network.</p>
       </footer>
-      <Analytics />
     </div>
   );
 }
