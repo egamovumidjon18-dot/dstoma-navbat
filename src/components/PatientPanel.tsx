@@ -5,9 +5,9 @@ import {
   Home, Calendar, FileText, CreditCard,
   Smile, Clock, Bell, Users, Folder, Settings,
   HelpCircle, ChevronDown, BellRing,
-  User, Star, Check, Phone, MessageCircle, Plus, Search, UserPlus, X, Trash2, Menu, Bot, Send, ImagePlus
+  User, Star, Check, Phone, MessageCircle, Plus, Search, UserPlus, X, Trash2, Menu, Bot, Send, ImagePlus, Stethoscope
 } from 'lucide-react';
-import { Patient, QueueItem, Clinic } from '../types';
+import { Patient, QueueItem, Clinic, Doctor } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
 import { TreatmentItem } from './TreatmentPlan';
 import AdBanner from './AdBanner';
@@ -27,6 +27,11 @@ interface NewFamilyMemberInfo {
 
 type PatientPanelDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
 const PATIENT_PANEL_TRANSLATIONS: Record<string, PatientPanelDictEntry> = {
+  "davolovchi shifokor": { ru: "Лечащий врач", en: "Treating doctor", kk: "Емдеуші дәрігер", ky: "Дарылоочу дарыгер", tg: "Табиби муолиҷакунанда", tk: "Bejeriji lukman" },
+  "shifokorni tanlang": { ru: "Выберите врача", en: "Select a doctor", kk: "Дәрігерді таңдаңыз", ky: "Дарыгерди тандаңыз", tg: "Табибро интихоб кунед", tk: "Lukmany saýlaň" },
+  "hali biriktirilmagan": { ru: "Еще не назначен", en: "Not assigned yet", kk: "Әлі тағайындалмаған", ky: "Али дайындалган эмес", tg: "Ҳанӯз таъин нашудааст", tk: "Heniz bellenmedik" },
+  "o'zgartirish": { ru: "Изменить", en: "Change", kk: "Өзгерту", ky: "Өзгөртүү", tg: "Тағйир додан", tk: "Üýtgetmek" },
+  saqlash: { ru: "Сохранить", en: "Save", kk: "Сақтау", ky: "Сактоо", tg: "Захира кардан", tk: "Ýatda saklamak" },
   "bosh sahifa": { ru: "Главная", en: "Home", kk: "Басты бет", ky: "Башкы бет", tg: "Саҳифаи асосӣ", tk: "Baş sahypa" },
   "mening navbatlarim": { ru: "Мои очереди", en: "My queues", kk: "Менің кезектерім", ky: "Менин кезектерим", tg: "Навбатҳои ман", tk: "Meniň nobatlarym" },
   "davolash rejam": { ru: "Мой план лечения", en: "My treatment plan", kk: "Менің емдеу жоспарым", ky: "Менин дарылоо планым", tg: "Нақшаи муолиҷаи ман", tk: "Meniň bejergi meýilnamam" },
@@ -130,6 +135,8 @@ export default function PatientPanel({
   onSearchFamilyMember,
   onRegisterFamilyMember,
   language,
+  doctors = [],
+  onChangeDoctor,
 }: {
   patient: Patient;
   onLogout: () => void;
@@ -142,6 +149,8 @@ export default function PatientPanel({
   onSearchFamilyMember?: (query: string) => Promise<Patient[]>;
   onRegisterFamilyMember?: (info: NewFamilyMemberInfo) => Promise<Patient>;
   language?: Language;
+  doctors?: Doctor[];
+  onChangeDoctor?: (doctorId: string) => Promise<void>;
 }) {
   const localLang: keyof PatientPanelDictEntry | null =
     (language === "ru" || language === "en" || language === "kk" || language === "ky" || language === "tg" || language === "tk")
@@ -430,6 +439,12 @@ export default function PatientPanel({
           {activeTab === 'bosh_sahifa' && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <InstallAppBanner />
+              <TreatingDoctorCard
+                patient={patient}
+                doctors={doctors}
+                onChangeDoctor={onChangeDoctor}
+                t={t}
+              />
               {/* Main Welcome Banner */}
               <div className="md:col-span-2 bg-blue-50/50 rounded-3xl p-8 border border-blue-100 flex items-center justify-between overflow-hidden relative">
                 <div className="max-w-sm z-10">
@@ -1047,6 +1062,99 @@ export default function PatientPanel({
         onBook={() => onGoToBooking?.()}
         onOpenMore={() => setIsMobileNavOpen(true)}
       />
+    </div>
+  );
+}
+
+// Lets the patient see and change who treats them. Until now the only way to
+// switch doctors was to book a new appointment with someone else (which is what
+// reassigns primaryDoctorId server-side) — there was no way to just say "I want
+// a different doctor from now on".
+function TreatingDoctorCard({
+  patient,
+  doctors,
+  onChangeDoctor,
+  t,
+}: {
+  patient: Patient;
+  doctors: Doctor[];
+  onChangeDoctor?: (doctorId: string) => Promise<void>;
+  t: (s: string) => string;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [picked, setPicked] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Only doctors at the patient's own clinic — switching to a doctor at another
+  // branch would silently move the patient out of their clinic's roster.
+  const options = doctors.filter((d) => d.clinicId === patient.clinicId);
+  const current = doctors.find((d) => d.id === patient.primaryDoctorId);
+
+  if (!onChangeDoctor || options.length === 0) return null;
+
+  const save = async () => {
+    if (!picked || picked === patient.primaryDoctorId) { setIsEditing(false); return; }
+    setIsSaving(true);
+    try {
+      await onChangeDoctor(picked);
+      setIsEditing(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="md:col-span-3 bg-white rounded-2xl p-4 border border-slate-100 flex items-center justify-between gap-4 flex-wrap">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
+          <Stethoscope size={18} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">{t('davolovchi shifokor')}</p>
+          {isEditing ? (
+            <select
+              value={picked || patient.primaryDoctorId || ''}
+              onChange={(e) => setPicked(e.target.value)}
+              className="mt-1 border border-slate-200 rounded-xl px-3 py-1.5 text-sm font-bold text-slate-800 bg-white outline-none focus:border-blue-500"
+            >
+              <option value="">{t('shifokorni tanlang')}</option>
+              {options.map((d) => (
+                <option key={d.id} value={d.id}>{d.name} — {d.specialty}</option>
+              ))}
+            </select>
+          ) : (
+            <p className="font-bold text-slate-900 text-sm truncate">
+              {current ? current.name : t('hali biriktirilmagan')}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {isEditing ? (
+          <>
+            <button
+              onClick={() => setIsEditing(false)}
+              className="px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+            >
+              {t('bekor qilish')}
+            </button>
+            <button
+              onClick={save}
+              disabled={isSaving}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition-colors"
+            >
+              {isSaving ? '...' : t('saqlash')}
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => { setPicked(patient.primaryDoctorId || ''); setIsEditing(true); }}
+            className="px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold rounded-xl transition-colors"
+          >
+            {t("o'zgartirish")}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

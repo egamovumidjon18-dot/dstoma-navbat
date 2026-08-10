@@ -57,6 +57,10 @@ export interface Doctor {
     slotMinutes: number; // 15 | 30 | 45 | 60
     lunchStart?: string; // "13:00"
     lunchEnd?: string;   // "14:00"
+    // When on (default), the doctor's open panel automatically moves today's
+    // scheduled appointments to 'calling' once their slot time arrives, so the
+    // queue advances without the doctor starting each one by hand.
+    autoQueue?: boolean;
   };
 }
 

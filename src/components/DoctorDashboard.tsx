@@ -12,6 +12,8 @@ import Prescriptions from "./Prescriptions";
 import SettingsView from "./Settings";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import InstallAppBanner from "./InstallAppBanner";
+import ProcedureCatalog from "./ProcedureCatalog";
+import { deductMaterialsForQueue } from "../utils/materialDeduction";
 import { Clinic, Doctor, Service, QueueItem, Patient, DoctorClinicLink, Reminder } from "../types";
 import { decodeLegacyEntities } from "../utils/textFormat";
 import { TRANSLATIONS, Language, translateMedicalText } from "../translations";
@@ -74,6 +76,7 @@ import {
   AlertCircle,
   CalendarClock,
   Package,
+  ClipboardCheck,
 } from "lucide-react";
 import MaterialsInventory from "./MaterialsInventory";
 
@@ -187,6 +190,12 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "tushlik vaqtini belgilash": { ru: "Указать время обеда", en: "Set lunch time", kk: "Түскі ас уақытын белгілеу", ky: "Түшкү тамак убактысын белгилөө", tg: "Вақти хӯроки нисфирӯзиро таъин кардан", tk: "Günortanlyk wagtyny bellemek" },
   "tushlik boshlanishi": { ru: "Начало обеда", en: "Lunch start", kk: "Түскі ас басталуы", ky: "Түшкү тамак башталышы", tg: "Оғози хӯрок", tk: "Günortanlyk başlangyjy" },
   "tushlik tugashi": { ru: "Конец обеда", en: "Lunch end", kk: "Түскі ас аяқталуы", ky: "Түшкү тамак аякталышы", tg: "Поёни хӯрок", tk: "Günortanlyk tamamlanyşy" },
+  "avtomatik navbat": { ru: "Автоматическая очередь", en: "Automatic queue", kk: "Автоматты кезек", ky: "Автоматтык кезек", tg: "Навбати худкор", tk: "Awtomatik nobat" },
+  "belgilangan vaqt kelganda navbatdagi bemor avtomatik chaqiriladi": { ru: "Когда наступает назначенное время, следующий пациент вызывается автоматически", en: "When the scheduled time arrives, the next patient is called automatically", kk: "Белгіленген уақыт келгенде, кезектегі пациент автоматты түрде шақырылады", ky: "Белгиленген убакыт келгенде, кезектеги бейтап автоматтык түрдө чакырылат", tg: "Ҳангоми расидани вақти таъиншуда, бемори навбатӣ худкор даъват мешавад", tk: "Bellenen wagt gelende, nobatdaky näsag awtomatik çagyrylýar" },
+  Muolajalar: { ru: "Процедуры", en: "Procedures", kk: "Емшаралар", ky: "Процедуралар", tg: "Муолиҷаҳо", tk: "Bejergiler" },
+  "biriktirilmagan bemorlar": { ru: "Непривязанные пациенты", en: "Unassigned patients", kk: "Тіркелмеген пациенттер", ky: "Бекитилбеген бейтаптар", tg: "Беморони новобаста", tk: "Berkidilmedik näsaglar" },
+  "o'zimga biriktirish": { ru: "Привязать к себе", en: "Assign to me", kk: "Өзіме тіркеу", ky: "Өзүмө бекитүү", tg: "Ба худам вобаста кардан", tk: "Özüme berkitmek" },
+  "bu bemorlar hali hech bir shifokorga biriktirilmagan": { ru: "Эти пациенты еще не привязаны ни к одному врачу", en: "These patients are not yet assigned to any doctor", kk: "Бұл пациенттер әлі ешбір дәрігерге тіркелмеген", ky: "Бул бейтаптар али эч бир дарыгерге бекитилген эмес", tg: "Ин беморон ҳанӯз ба ҳеҷ табибе вобаста нашудаанд", tk: "Bu näsaglar heniz hiç bir lukmana berkidilmedik" },
   "shu bilan birga qabulga ham yozish": { ru: "Одновременно записать на приём", en: "Also book an appointment", kk: "Сонымен қатар қабылдауға да жазу", ky: "Ошону менен кабылдоого да жазуу", tg: "Ҳамзамон ба қабул низ сабт кардан", tk: "Şol bilen bile kabula-da ýazmak" },
   "tashriflar tarixi": { ru: "История посещений", en: "Visit history", kk: "Келу тарихы", ky: "Келүү тарыхы", tg: "Таърихи ташрифҳо", tk: "Gelen-gidenler taryhy" },
   "hali tashrif qayd etilmagan.": { ru: "Визиты еще не зарегистрированы.", en: "No visits recorded yet.", kk: "Әзірге келу тіркелмеген.", ky: "Азырынча келүү катталган эмес.", tg: "Ҳанӯз ягон ташриф сабт нашудааст.", tk: "Heniz gelen-gideniň ýazgysy ýok." },
@@ -671,16 +680,19 @@ export default function DoctorDashboard({
   // clinicPatients itself stays clinic-wide — it still backs Statistics, bulk
   // Telegram messaging, and resolving a patient from any clinic queue, which all
   // legitimately need the full clinic roster.
-  // Unassigned patients (no primaryDoctorId yet) are shown to every doctor in the
-  // clinic, NOT hidden. They aren't another doctor's patients, so hiding them
-  // served nobody — it made self-registered patients (ClientDashboard registration
-  // never sets primaryDoctorId) and every pre-existing record invisible to the
-  // entire clinic at once, which is what made the system feel "disconnected".
-  // The privacy rule the user asked for still holds: another doctor's patients
-  // stay hidden until the patient books with you, which reassigns primaryDoctorId.
+  // Strictly this doctor's own patients. Patients with no primaryDoctorId yet
+  // (self-registered via the Telegram bot / ClientDashboard, neither of which
+  // sets it) are deliberately NOT mixed in here — they'd otherwise appear in
+  // every doctor's list and inflate everyone's counts. They surface instead in
+  // their own "Biriktirilmagan" section below, where any doctor can claim them,
+  // so nobody falls through the cracks either.
   const myPatients = useMemo(
-    () => clinicPatients.filter((p) => !p.primaryDoctorId || p.primaryDoctorId === currentDoctor?.id),
+    () => clinicPatients.filter((p) => p.primaryDoctorId === currentDoctor?.id),
     [clinicPatients, currentDoctor?.id]
+  );
+  const unassignedPatients = useMemo(
+    () => clinicPatients.filter((p) => !p.primaryDoctorId),
+    [clinicPatients]
   );
   const filteredClinicPatients = useMemo(() => {
     const q = patientListSearch.trim().toLowerCase();
@@ -840,6 +852,43 @@ export default function DoctorDashboard({
     }
   };
 
+  // Claims an unassigned patient (nobody's primaryDoctorId) for this doctor.
+  // POST /api/patients is an upsert and savePatient() merges, so sending just
+  // { id, primaryDoctorId } updates that one field without touching the rest of
+  // the record — the same shape the superadmin backfill endpoint uses.
+  const [claimingPatientId, setClaimingPatientId] = useState<string | null>(null);
+  const handleClaimPatient = async (patient: Patient) => {
+    if (!currentDoctor?.id || !patient?.id) return;
+    setClaimingPatientId(patient.id);
+    try {
+      const res = await fetch("/api/patients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: patient.id, primaryDoctorId: currentDoctor.id }),
+      });
+      if (res.ok) onPatientUpserted?.({ ...patient, primaryDoctorId: currentDoctor.id });
+    } catch (err) {
+      console.warn("[DoctorDashboard] Failed to claim patient:", err);
+    } finally {
+      setClaimingPatientId(null);
+    }
+  };
+
+  // Finishing a procedure both closes the queue item and draws down the
+  // warehouse by whatever that procedure's material recipe says it consumes
+  // (configured in the Muolajalar tab). The deduction is idempotent per queue
+  // id and fails soft, so it can never block the appointment from completing.
+  const handleCompleteQueue = (q: QueueItem) => {
+    if (!q?.id) return;
+    onUpdateQueueStatus(q.id, "completed");
+    void deductMaterialsForQueue({
+      clinicId: q.clinicId || effectiveClinicId || undefined,
+      queueId: q.id,
+      serviceId: q.serviceId,
+      doctorId: q.doctorId || currentDoctor?.id,
+    });
+  };
+
   const handleExportPatientsCsv = () => {
     const header = ["Ism", "Telefon", "Tug'ilgan sana", "Pasport", "Tashriflar soni"];
     const rows = filteredClinicPatients.map((p) => [
@@ -976,7 +1025,7 @@ export default function DoctorDashboard({
   // Doctor-editable weekly working-hours used to generate the Rejalashtirilgan
   // time-slot grid. Falls back to a clinic-typical default when the doctor
   // hasn't customized it yet.
-  const DEFAULT_WORKING_HOURS = { startTime: '08:00', endTime: '18:00', slotMinutes: 60, lunchStart: '13:00', lunchEnd: '14:00' };
+  const DEFAULT_WORKING_HOURS = { startTime: '08:00', endTime: '18:00', slotMinutes: 60, lunchStart: '13:00', lunchEnd: '14:00', autoQueue: true };
   const [showScheduleSettingsModal, setShowScheduleSettingsModal] = useState(false);
   const [scheduleSettingsStart, setScheduleSettingsStart] = useState(DEFAULT_WORKING_HOURS.startTime);
   const [scheduleSettingsEnd, setScheduleSettingsEnd] = useState(DEFAULT_WORKING_HOURS.endTime);
@@ -984,6 +1033,7 @@ export default function DoctorDashboard({
   const [scheduleSettingsLunchEnabled, setScheduleSettingsLunchEnabled] = useState(true);
   const [scheduleSettingsLunchStart, setScheduleSettingsLunchStart] = useState(DEFAULT_WORKING_HOURS.lunchStart);
   const [scheduleSettingsLunchEnd, setScheduleSettingsLunchEnd] = useState(DEFAULT_WORKING_HOURS.lunchEnd);
+  const [scheduleSettingsAutoQueue, setScheduleSettingsAutoQueue] = useState(true);
   const [isSavingScheduleSettings, setIsSavingScheduleSettings] = useState(false);
   // Searches the WHOLE clinic roster, not just this doctor's own patients: booking
   // is itself the mechanism that assigns a patient to a doctor (POST /api/queues
@@ -1073,6 +1123,7 @@ export default function DoctorDashboard({
     setScheduleSettingsLunchEnabled(!!(doctorWorkingHours.lunchStart && doctorWorkingHours.lunchEnd));
     setScheduleSettingsLunchStart(doctorWorkingHours.lunchStart || DEFAULT_WORKING_HOURS.lunchStart);
     setScheduleSettingsLunchEnd(doctorWorkingHours.lunchEnd || DEFAULT_WORKING_HOURS.lunchEnd);
+    setScheduleSettingsAutoQueue(doctorWorkingHours.autoQueue !== false);
     setShowScheduleSettingsModal(true);
   };
 
@@ -1087,6 +1138,7 @@ export default function DoctorDashboard({
           slotMinutes: scheduleSettingsInterval,
           lunchStart: scheduleSettingsLunchEnabled ? scheduleSettingsLunchStart : undefined,
           lunchEnd: scheduleSettingsLunchEnabled ? scheduleSettingsLunchEnd : undefined,
+          autoQueue: scheduleSettingsAutoQueue,
         },
       });
       if (ok) setShowScheduleSettingsModal(false);
@@ -1094,6 +1146,7 @@ export default function DoctorDashboard({
       setIsSavingScheduleSettings(false);
     }
   };
+
 
   // Sync state if currentUser changes
   React.useEffect(() => {
@@ -1241,6 +1294,46 @@ export default function DoctorDashboard({
   const overdueScheduledQueues = scheduledQueues.filter(
     (q) => q.appointmentDate && q.appointmentDate < todayStr,
   );
+
+  // Auto-queue: once a scheduled appointment's slot time arrives, advance it on
+  // its own so the doctor doesn't have to start every appointment by hand.
+  // Only ever advances to 'calling' (which the server turns into the patient's
+  // "your turn" Telegram notice) — never straight to 'in_progress', because a
+  // doctor running late with the previous patient would otherwise get the next
+  // one recorded as "in treatment" while they're still in the waiting room,
+  // corrupting visit history and the daily revenue rollup.
+  //
+  // Runs client-side while the panel is open — this app has no server-side job
+  // runner. Self-limiting: an item stops matching 'scheduled' the moment it's
+  // advanced, so it cannot fire twice.
+  useEffect(() => {
+    if (doctorWorkingHours.autoQueue === false || !activeDoctorId) return;
+
+    const tick = () => {
+      // Never call a second patient while one is already being called or treated.
+      if (doctorQueues.some((q) => q.status === "calling" || q.status === "in_progress")) return;
+
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+      const next = doctorQueues
+        .filter(
+          (q) =>
+            q.status === "scheduled" &&
+            q.appointmentDate === today &&
+            q.appointmentTime &&
+            timeToMinutes(q.appointmentTime) <= nowMinutes,
+        )
+        .sort((a, b) => (a.appointmentTime || "").localeCompare(b.appointmentTime || ""))[0];
+
+      if (next?.id) onUpdateQueueStatus(next.id, "calling");
+    };
+
+    tick();
+    const timer = setInterval(tick, 60_000);
+    return () => clearInterval(timer);
+  }, [doctorQueues, doctorWorkingHours.autoQueue, activeDoctorId, onUpdateQueueStatus]);
 
   // Dashboard tab's "BUGUNGI ..." (today's) cards must reflect only today's
   // activity — doctorQueues/pendingQueues/completedQueues above are all-time
@@ -1500,6 +1593,7 @@ export default function DoctorDashboard({
           <SidebarItem icon={CalendarClock} label={t("Rejalashtirilgan")} id="rejalashtirilgan" />
           <SidebarItem icon={Users} label={t("Bemorlar")} id="bemorlar" />
           <SidebarItem icon={Bell} label={t("Eslatmalar")} id="eslatmalar" />
+          <SidebarItem icon={ClipboardCheck} label={t("Muolajalar")} id="muolajalar" />
           <SidebarItem icon={Package} label={t("Material va Anjomlar")} id="materiallar" />
           <SidebarItem icon={BarChart2} label={t("Statistika")} id="statistika" />
           <SidebarItem icon={Settings} label={t("sozlamalar")} id="sozlamalar" />
@@ -1824,7 +1918,7 @@ export default function DoctorDashboard({
                                     </>
                                   ) : q.status === 'in_progress' ? (
                                     <button 
-                                      onClick={() => onUpdateQueueStatus(q.id!, 'completed')}
+                                      onClick={() => handleCompleteQueue(q)}
                                       className="p-1.5 text-blue-500 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors tooltip"
                                       title={t("yakunlash")}
                                     >
@@ -2620,7 +2714,7 @@ export default function DoctorDashboard({
                                   </>
                                 ) : q.status === 'in_progress' ? (
                                   <button 
-                                    onClick={() => onUpdateQueueStatus(q.id!, 'completed')}
+                                    onClick={() => handleCompleteQueue(q)}
                                     className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg transition-colors flex items-center gap-1 shadow-sm"
                                   >
                                     <Check className="w-3 h-3" /> {t("yakunlash")}
@@ -2952,6 +3046,47 @@ export default function DoctorDashboard({
               />
             ) : (
               <div className="space-y-6">
+                {/* Patients nobody is treating yet (self-registered via the bot or
+                    the public site, which never set primaryDoctorId). Any doctor
+                    can claim them, which is what moves them into "my patients". */}
+                {unassignedPatients.length > 0 && (
+                  <div className="bg-amber-50/60 border border-amber-100 rounded-2xl p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                      <h3 className="text-xs font-black text-slate-700 uppercase tracking-wide">
+                        {t("biriktirilmagan bemorlar")} ({unassignedPatients.length})
+                      </h3>
+                    </div>
+                    <p className="text-[11px] text-slate-500 font-semibold mb-3 ml-6">
+                      {t("bu bemorlar hali hech bir shifokorga biriktirilmagan")}
+                    </p>
+                    <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                      {unassignedPatients.map((p) => (
+                        <div
+                          key={p.id}
+                          className="bg-white border border-amber-100 rounded-xl px-3 py-2 flex items-center justify-between gap-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-800 truncate">
+                              {decodeLegacyEntities(p.fullName)}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-mono truncate">
+                              {decodeLegacyEntities(p.phone)}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleClaimPatient(p)}
+                            disabled={claimingPatientId === p.id}
+                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-[11px] rounded-lg transition-colors shrink-0"
+                          >
+                            {claimingPatientId === p.id ? t("saqlanmoqda...") : t("o'zimga biriktirish")}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Top Stats Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
@@ -3563,6 +3698,10 @@ export default function DoctorDashboard({
             </div>
           )}
 
+          {activeView === "muolajalar" && (
+            <ProcedureCatalog clinicId={effectiveClinicId || undefined} services={services} />
+          )}
+
           {activeView === "materiallar" && (
             <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
               <MaterialsInventory clinicId={effectiveClinicId || undefined} />
@@ -3754,6 +3893,23 @@ export default function DoctorDashboard({
                   <option value={60}>60 {t("daqiqa")}</option>
                 </select>
               </div>
+              <div className="border-t border-slate-100 pt-4">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={scheduleSettingsAutoQueue}
+                    onChange={(e) => setScheduleSettingsAutoQueue(e.target.checked)}
+                    className="w-4 h-4 accent-purple-600 mt-0.5"
+                  />
+                  <span>
+                    <span className="text-xs font-bold text-slate-600 block">{t("avtomatik navbat")}</span>
+                    <span className="text-[11px] text-slate-400 font-semibold leading-snug block mt-0.5">
+                      {t("belgilangan vaqt kelganda navbatdagi bemor avtomatik chaqiriladi")}
+                    </span>
+                  </span>
+                </label>
+              </div>
+
               <div className="border-t border-slate-100 pt-4">
                 <label className="flex items-center gap-2 mb-3 cursor-pointer">
                   <input

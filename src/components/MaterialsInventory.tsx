@@ -380,7 +380,9 @@ export default function MaterialsInventory({ clinicId }: { clinicId?: string }) 
                     <option value="quti">Quti</option>
                     <option value="shprits">Shprits</option>
                     <option value="ml">Kapsula/ml</option>
-                    <option value="kg">Kilo/Gramm</option>
+                    <option value="gr">Gramm (gr)</option>
+                    <option value="mg">Milligramm (mg)</option>
+                    <option value="kg">Kilogramm (kg)</option>
                   </select>
                 </div>
               </div>
@@ -555,7 +557,9 @@ export default function MaterialsInventory({ clinicId }: { clinicId?: string }) 
                     <option value="quti">Quti</option>
                     <option value="shprits">Shprits</option>
                     <option value="ml">Kapsula/ml</option>
-                    <option value="kg">Kilo/Gramm</option>
+                    <option value="gr">Gramm (gr)</option>
+                    <option value="mg">Milligramm (mg)</option>
+                    <option value="kg">Kilogramm (kg)</option>
                   </select>
                 </div>
               </div>

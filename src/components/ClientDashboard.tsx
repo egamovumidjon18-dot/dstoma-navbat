@@ -2047,6 +2047,24 @@ export default function ClientDashboard({
             setActiveSubView('booking');
           }}
           language={language}
+          doctors={doctors}
+          onChangeDoctor={async (doctorId) => {
+            // Same merge-upsert the doctor-side "claim patient" action uses:
+            // savePatient() merges, so sending only these two fields rewrites
+            // the treating doctor without disturbing the rest of the record.
+            const updated = { ...currentUser, primaryDoctorId: doctorId };
+            setPatients(prev => prev.map(p => p.id === currentUser.id ? updated : p));
+            setCurrentUser(updated);
+            try {
+              await fetch(`${getApiUrl()}/api/patients`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: currentUser.id, primaryDoctorId: doctorId }),
+              });
+            } catch (err) {
+              console.warn('[ClientDashboard] Failed to change treating doctor:', err);
+            }
+          }}
           familyMembers={patients.filter(p => p.managedBy === currentUser.id)}
           onLinkFamilyMember={async (member) => {
             const updated = { ...member, managedBy: currentUser.id };
