@@ -772,6 +772,38 @@ export default function SuperAdminDashboard({
     }
   };
 
+  // One-off cleanup: removes a fixed, hand-verified list of queue/patient
+  // records created during this app's own development/testing (e.g. "SYNC
+  // BOOKING TEST"). Matched by exact id server-side, never by name — can't
+  // accidentally touch a real patient. Safe to re-run.
+  const [isCleaningTestData, setIsCleaningTestData] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState<string | null>(null);
+  const runTestDataCleanup = async () => {
+    if (!superadminToken) {
+      setCleanupResult("Superadmin sessiyasi topilmadi — qayta kiring.");
+      return;
+    }
+    setIsCleaningTestData(true);
+    setCleanupResult(null);
+    try {
+      const res = await fetch('/api/admin/cleanup-test-data', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${superadminToken}` },
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setCleanupResult(`✅ ${data.deletedQueues} ta test navbat va ${data.deletedPatients} ta test bemor o'chirildi.`);
+        addLog(`Test ma'lumotlar tozalandi: ${data.deletedQueues} navbat, ${data.deletedPatients} bemor`, 'success');
+      } else {
+        setCleanupResult(`⚠️ ${data.error || 'Amal bajarilmadi.'}`);
+      }
+    } catch (err: any) {
+      setCleanupResult(`⚠️ Tarmoq xatosi: ${err?.message || 'noma\'lum'}`);
+    } finally {
+      setIsCleaningTestData(false);
+    }
+  };
+
   return (
     <div className="space-y-6 font-sans text-left pb-12">
       {/* Toast Notification */}
@@ -1418,6 +1450,45 @@ export default function SuperAdminDashboard({
             {backfillResult && (
               <p className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-150 rounded-xl p-3">
                 {backfillResult}
+              </p>
+            )}
+          </div>
+
+          {/* ==================== 1B. TEST DATA CLEANUP ==================== */}
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4 font-sans text-left">
+            <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+              <div className="flex items-center gap-1.5">
+                <span className="p-1.5 bg-rose-50 text-rose-600 rounded-lg">🧹</span>
+                <div>
+                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                    Test ma'lumotlarni tozalash
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-semibold leading-none mt-0.5">
+                    Tekshiruv vaqtida yaratilgan soxta yozuvlarni o'chirish
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+              Dastur tekshiruvi paytida yaratilgan 5 ta soxta navbat va 2 ta soxta bemor yozuvini
+              (masalan "SYNC BOOKING TEST", "Bot Test Patient") o'chiradi. Aniq belgilangan
+              yozuvlargagina tegadi — haqiqiy bemorlarga hech qachon ta'sir qilmaydi.
+              Istalgan vaqtda qayta bosish mumkin (allaqachon o'chirilganlar o'tkazib yuboriladi).
+            </p>
+
+            <button
+              type="button"
+              onClick={runTestDataCleanup}
+              disabled={isCleaningTestData}
+              className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black rounded-xl shadow-md transition-all"
+            >
+              {isCleaningTestData ? 'Bajarilmoqda...' : 'Test ma\'lumotlarni tozalash'}
+            </button>
+
+            {cleanupResult && (
+              <p className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-150 rounded-xl p-3">
+                {cleanupResult}
               </p>
             )}
           </div>

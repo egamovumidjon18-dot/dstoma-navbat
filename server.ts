@@ -879,6 +879,47 @@ app.post("/api/admin/backfill-primary-doctor", requireSuperAdmin, async (req, re
   res.json({ ok: true, totalPatients: allPatients.length, updated });
 });
 
+// One-time cleanup: removes a fixed, hand-verified list of queue/patient records
+// created during this app's own development/testing (e.g. "SYNC BOOKING TEST",
+// "Bot Test Patient") — identified by exact id, never by name pattern, so this
+// can never accidentally match a real patient. Idempotent — already-deleted ids
+// are silently skipped.
+const KNOWN_TEST_QUEUE_IDS = [
+  "q_3lu4ajk1d", // SYNC BOOKING TEST
+  "q_3z9ritwbk", // Combined Test Patient
+  "q_8914mab8q", // Booking Test Patient
+  "q_bottest_28jb21", // Bot Test Patient
+  "q_jop2l7etn", // fdtrttry
+];
+const KNOWN_TEST_PATIENT_IDS = [
+  "pat_3hg3o", // Combined Test Patient
+  "pat_k2aoe", // SYNC BOOKING TEST
+];
+
+app.post("/api/admin/cleanup-test-data", requireSuperAdmin, async (req, res) => {
+  const [allQueues, allPatients] = await Promise.all([getQueues(), getPatients()]);
+  const existingQueueIds = new Set(allQueues.map((q: any) => q.id));
+  const existingPatientIds = new Set(allPatients.map((p: any) => p.id));
+
+  let deletedQueues = 0;
+  for (const id of KNOWN_TEST_QUEUE_IDS) {
+    if (existingQueueIds.has(id)) {
+      await deleteQueue(id);
+      deletedQueues++;
+    }
+  }
+
+  let deletedPatients = 0;
+  for (const id of KNOWN_TEST_PATIENT_IDS) {
+    if (existingPatientIds.has(id)) {
+      await deletePatient(id);
+      deletedPatients++;
+    }
+  }
+
+  res.json({ ok: true, deletedQueues, deletedPatients });
+});
+
 // Superadmin-only: log into any Director or Doctor panel WITHOUT needing that
 // account's own password — the superadmin's own token already proves who they are.
 // Never accepts a patient's own password here; identity is entirely established by
