@@ -2,6 +2,24 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../services/firebase';
 import { ClipboardList, Search, Plus, Trash2, Package, Check, X, Edit2, AlertTriangle } from 'lucide-react';
+import { Language } from '../translations';
+import { createTranslator, Dict } from '../utils/translate';
+
+const CATALOG_TRANSLATIONS: Dict = {
+  "har bir muolaja uchun sarflanadigan materiallarni kiriting. qabul yakunlangach, shu muolajaga biriktirilgan materiallar ombordan avtomatik ravishda kamayadi. miqdor har bir materialning o'z o'lchov birligida (dona, gr, ml va h.k.) kiritiladi.": { ru: "Укажите расходные материалы для каждой процедуры. После завершения приема привязанные к процедуре материалы автоматически списываются со склада. Количество указывается в собственной единице измерения материала (шт, г, мл и т.д.).", en: "Set the consumables for each procedure. When a consultation is completed, the materials linked to that procedure are automatically deducted from the warehouse. Quantity is entered in each material's own unit (pcs, g, ml, etc.).", kk: "Әр процедура үшін шығын материалдарын енгізіңіз. Қабылдау аяқталған соң, процедураға байланған материалдар қоймадан автоматты түрде шегеріледі. Мөлшер материалдың өз өлшем бірлігінде енгізіледі (дана, г, мл, т.б.).", ky: "Ар бир процедура үчүн сарптоо материалдарын киргизиңиз. Кабылдоо аяктагандан кийин, процедурага байланган материалдар кампадан автоматтык түрдө кемийт. Саны материалдын өз өлчөө бирдигинде киргизилет (даана, г, мл ж.б.).", tg: "Барои ҳар муолиҷа маводҳои сарфшавандаро ворид кунед. Пас аз анҷоми қабул, маводҳои ба ин муолиҷа вобаста аз анбор худкор кам мешаванд. Миқдор дар воҳиди ченаки худи мавод ворид мешавад (дона, г, мл ва ғ.).", tk: "Her prosedura üçin sarp materiallary giriziň. Kabul tamamlanandan soň, şu procedura baglanan materiallar ammardan awtomatik azalýar. Mukdar her materialyň öz ölçeg birliginde girizilýär (sany, g, ml we ş.m.)." },
+
+  "klinika tanlanmagan": { ru: "Клиника не выбрана", en: "No clinic selected", kk: "Клиника таңдалмаған", ky: "Клиника тандалган жок", tg: "Клиника интихоб нашудааст", tk: "Klinika saýlanmady" },
+  "jami muolajalar": { ru: "Всего процедур", en: "Total procedures", kk: "Барлық процедуралар", ky: "Бардык процедуралар", tg: "Ҳамаи муолиҷаҳо", tk: "Jemi proseduralar" },
+  "sarf materiali kiritilgan": { ru: "С заданными расходниками", en: "With consumables defined", kk: "Шығын материалы енгізілген", ky: "Сарптоо материалы киргизилген", tg: "Бо маводи сарфшаванда", tk: "Sarp materialy girizilen" },
+  "omborda materiallar": { ru: "Материалов на складе", en: "Materials in warehouse", kk: "Қоймадағы материалдар", ky: "Кампадагы материалдар", tg: "Маводҳо дар анбор", tk: "Ammardaky materiallar" },
+  "muolaja nomi bo'yicha qidiring...": { ru: "Поиск по названию процедуры...", en: "Search by procedure name...", kk: "Процедура атауы бойынша іздеу...", ky: "Процедура аты боюнча издөө...", tg: "Ҷустуҷӯ аз рӯи номи муолиҷа...", tk: "Prosedura ady boýunça gözleg..." },
+  "faqat materiali borlari": { ru: "Только с материалами", en: "Only those with materials", kk: "Тек материалы барлары", ky: "Материалы барлар гана", tg: "Танҳо онҳое ки мавод доранд", tk: "Diňe materialy barlar" },
+  "muolaja topilmadi": { ru: "Процедуры не найдены", en: "No procedures found", kk: "Процедуралар табылмады", ky: "Процедуралар табылган жок", tg: "Муолиҷа ёфт нашуд", tk: "Prosedura tapylmady" },
+  "material": { ru: "Материал", en: "Material", kk: "Материал", ky: "Материал", tg: "Мавод", tk: "Material" },
+  "o'chirish": { ru: "Удалить", en: "Delete", kk: "Жою", ky: "Өчүрүү", tg: "Нест кардан", tk: "Pozmak" },
+};
+
+
 import { Service } from '../types';
 import { RecipeItem, ServiceRecipe, recipesPath, materialsPath, saveServiceRecipe } from '../utils/materialDeduction';
 
@@ -29,10 +47,13 @@ interface MaterialLite {
 export default function ProcedureCatalog({
   clinicId,
   services,
+  language,
 }: {
   clinicId?: string;
   services: Service[];
+  language?: Language;
 }) {
+  const t = createTranslator(language, CATALOG_TRANSLATIONS);
   const [materials, setMaterials] = useState<MaterialLite[]>([]);
   const [recipes, setRecipes] = useState<Record<string, RecipeItem[]>>({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -143,7 +164,7 @@ export default function ProcedureCatalog({
   if (!clinicId) {
     return (
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-8 text-center">
-        <p className="text-sm font-bold text-slate-400">Klinika tanlanmagan</p>
+        <p className="text-sm font-bold text-slate-400">{t("Klinika tanlanmagan")}</p>
       </div>
     );
   }
@@ -157,7 +178,7 @@ export default function ProcedureCatalog({
             <ClipboardList className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Jami muolajalar</p>
+            <p className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">{t("Jami muolajalar")}</p>
             <p className="text-2xl font-black text-slate-800">{clinicServices.length}</p>
           </div>
         </div>
@@ -166,7 +187,7 @@ export default function ProcedureCatalog({
             <Check className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Sarf materiali kiritilgan</p>
+            <p className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">{t("Sarf materiali kiritilgan")}</p>
             <p className="text-2xl font-black text-slate-800">{configuredCount}</p>
           </div>
         </div>
@@ -175,7 +196,7 @@ export default function ProcedureCatalog({
             <Package className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Omborda materiallar</p>
+            <p className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">{t("Omborda materiallar")}</p>
             <p className="text-2xl font-black text-slate-800">{materials.length}</p>
           </div>
         </div>
@@ -184,9 +205,7 @@ export default function ProcedureCatalog({
       <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-4 flex items-start gap-3">
         <Package className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
         <p className="text-xs text-slate-600 font-semibold leading-relaxed">
-          Har bir muolaja uchun sarflanadigan materiallarni kiriting. Qabul yakunlangach,
-          shu muolajaga biriktirilgan materiallar ombordan avtomatik ravishda kamayadi.
-          Miqdor har bir materialning o'z o'lchov birligida (dona, gr, ml va h.k.) kiritiladi.
+          {t("Har bir muolaja uchun sarflanadigan materiallarni kiriting. Qabul yakunlangach, shu muolajaga biriktirilgan materiallar ombordan avtomatik ravishda kamayadi. Miqdor har bir materialning o'z o'lchov birligida (dona, gr, ml va h.k.) kiritiladi.")}
         </p>
       </div>
 
@@ -198,7 +217,7 @@ export default function ProcedureCatalog({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Muolaja nomi bo'yicha qidiring..."
+            placeholder={t("Muolaja nomi bo'yicha qidiring...")}
             className="w-full border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm outline-none focus:border-blue-500 font-medium bg-white text-slate-800"
           />
         </div>
@@ -209,14 +228,14 @@ export default function ProcedureCatalog({
             onChange={(e) => setOnlyWithRecipe(e.target.checked)}
             className="w-4 h-4 accent-blue-600"
           />
-          <span className="text-xs font-bold text-slate-600">Faqat materiali borlari</span>
+          <span className="text-xs font-bold text-slate-600">{t("Faqat materiali borlari")}</span>
         </label>
       </div>
 
       {/* Service list */}
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm divide-y divide-slate-50">
         {filteredServices.length === 0 ? (
-          <p className="p-8 text-center text-sm font-bold text-slate-400">Muolaja topilmadi</p>
+          <p className="p-8 text-center text-sm font-bold text-slate-400">{t("Muolaja topilmadi")}</p>
         ) : (
           filteredServices.map((service) => {
             const items = recipes[service.id] || [];
@@ -302,7 +321,7 @@ export default function ProcedureCatalog({
                   return (
                     <div key={index} className="flex items-end gap-2">
                       <div className="flex-1 min-w-0">
-                        <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Material</label>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">{t("Material")}</label>
                         <select
                           value={item.materialId}
                           onChange={(e) => updateDraftRow(index, { materialId: e.target.value })}
@@ -332,7 +351,7 @@ export default function ProcedureCatalog({
                       <button
                         onClick={() => removeDraftRow(index)}
                         className="p-2 mb-0.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0"
-                        title="O'chirish"
+                        title={t("O'chirish")}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

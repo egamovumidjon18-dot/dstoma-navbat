@@ -48,6 +48,7 @@ interface PatientProfileProps {
 
 type PatientProfileDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
 const PATIENT_PROFILE_TRANSLATIONS: Record<string, PatientProfileDictEntry> = {
+  "so'rov telegram orqali yuborildi.": { ru: "Запрос отправлен через Telegram.", en: "Request sent via Telegram.", kk: "Сұрау Telegram арқылы жіберілді.", ky: "Суроо Telegram аркылуу жөнөтүлдү.", tg: "Дархост тавассути Telegram фиристода шуд.", tk: "Isleg Telegram arkaly iberildi." },
   "noma'lum bemor": { ru: "Неизвестный пациент", en: "Unknown patient", kk: "Белгісіз пациент", ky: "Белгисиз бейтап", tg: "Бемори номаълум", tk: "Näbelli näsag" },
   faol: { ru: "Активен", en: "Active", kk: "Белсенді", ky: "Активдүү", tg: "Фаъол", tk: "Işjeň" },
   yangi: { ru: "Новый", en: "New", kk: "Жаңа", ky: "Жаңы", tg: "Нав", tk: "Täze" },
@@ -633,25 +634,33 @@ export default function PatientProfile({
 
             {activeTab === "plan" && (
               <div className="h-full">
-                <TreatmentPlan patientId={patientId.toString()} />
+                <TreatmentPlan patientId={patientId.toString()}
+                  language={language}
+                />
               </div>
             )}
 
             {activeTab === "xray" && (
               <div className="h-full">
-                <XRayCenter patientId={patientId.toString()} clinicId={patient?.clinicId} patientName={patient?.fullName} />
+                <XRayCenter patientId={patientId.toString()} clinicId={patient?.clinicId} patientName={patient?.fullName}
+                  language={language}
+                />
               </div>
             )}
             
             {activeTab === "history" && (
               <div className="h-full">
-                <TreatmentHistory patientId={patientId.toString()} patientName={patient?.fullName} />
+                <TreatmentHistory patientId={patientId.toString()} patientName={patient?.fullName}
+                  language={language}
+                />
               </div>
             )}
             
             {activeTab === "photos" && (
               <div className="h-full">
-                <PhotoGallery patientId={patientId.toString()} patientName={patient?.fullName} />
+                <PhotoGallery patientId={patientId.toString()} patientName={patient?.fullName}
+                  language={language}
+                />
               </div>
             )}
             
@@ -661,6 +670,7 @@ export default function PatientProfile({
                   patientId={patientId.toString()}
                   patientName={patient?.fullName}
                   patientTelegramChatId={patient?.telegramChatId}
+                  language={language}
                 />
               </div>
             )}

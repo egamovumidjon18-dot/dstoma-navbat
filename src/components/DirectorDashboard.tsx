@@ -252,6 +252,12 @@ export default function DirectorDashboard({
 
     type LocalDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
     const dict: Record<string, LocalDictEntry> = {
+      "boshqaruv markazi": { ru: "Центр управления", en: "Control Center", kk: "Басқару орталығы", ky: "Башкаруу борбору", tg: "Маркази идоракунӣ", tk: "Dolandyryş merkezi" },
+      "chipta": { ru: "Талон", en: "Ticket", kk: "Талон", ky: "Талон", tg: "Чипта", tk: "Bilet" },
+      "klinika havolasi": { ru: "Ссылка на клинику", en: "Clinic link", kk: "Клиника сілтемесі", ky: "Клиника шилтемеси", tg: "Пайванди клиника", tk: "Klinika salgysy" },
+      "uzs": { ru: "UZS", en: "UZS", kk: "UZS", ky: "UZS", tg: "UZS", tk: "UZS" },
+      "⚠️ oylik to'lov muddati bo'yicha eslatma": { ru: "⚠️ Напоминание о сроке ежемесячной оплаты", en: "⚠️ Monthly payment due reminder", kk: "⚠️ Айлық төлем мерзімі туралы еске салу", ky: "⚠️ Айлык төлөм мөөнөтү тууралуу эскертүү", tg: "⚠️ Ёдоварӣ дар бораи мӯҳлати пардохти моҳона", tk: "⚠️ Aýlyk töleg möhleti barada ýatlatma" },
+      "👑 boshliq paneli": { ru: "👑 Панель директора", en: "👑 Director Panel", kk: "👑 Басшы панелі", ky: "👑 Жетекчи панели", tg: "👑 Панели роҳбар", tk: "👑 Ýolbaşçy paneli" },
       "asosiy kabinet": { ru: "Главный кабинет", en: "Main Cabinet", kk: "Негізгі кабинет", ky: "Негизги кабинет", tg: "Кабинети асосӣ", tk: "Esasy kabinet" },
       "bemor qidirish": { ru: "Поиск пациентов", en: "Search Patients", kk: "Пациент іздеу", ky: "Бейтап издөө", tg: "Ҷустуҷӯи бемор", tk: "Näsag gözlemek" },
       "bemorlarni qidirish": { ru: "Поиск пациентов", en: "Search Patients", kk: "Пациенттерді іздеу", ky: "Бейтаптарды издөө", tg: "Ҷустуҷӯи беморон", tk: "Näsaglary gözlemek" },

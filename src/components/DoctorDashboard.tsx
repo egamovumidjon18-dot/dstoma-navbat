@@ -122,7 +122,29 @@ interface DoctorDashboardProps {
 const AUTO_QUEUE_GRACE_MINUTES = 120;
 
 type DoctorDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
+// Sidebar ids are not display text — the page heading used to print the raw id,
+// which meant it never translated. Map each id to the same label the sidebar shows.
+const VIEW_TITLES: Record<string, string> = {
+  dashboard: "Dashboard",
+  navbatlar: "Navbatlar",
+  rejalashtirilgan: "Rejalashtirilgan",
+  bemorlar: "Bemorlar",
+  eslatmalar: "Eslatmalar",
+  muolajalar: "Muolajalar",
+  materiallar: "Material va Anjomlar",
+  statistika: "Statistika",
+  sozlamalar: "Sozlamalar",
+};
+
 const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
+  "rejalashtirilgan": { ru: "Запланировано", en: "Scheduled", kk: "Жоспарланған", ky: "Пландаштырылган", tg: "Ба нақша гирифташуда", tk: "Meýilleşdirilen" },
+  "o'chirish": { ru: "Удалить", en: "Delete", kk: "Жою", ky: "Өчүрүү", tg: "Нест кардан", tk: "Pozmak" },
+
+  "stomatolog-ortoped": { ru: "Стоматолог-ортопед", en: "Prosthodontist", kk: "Стоматолог-ортопед", ky: "Стоматолог-ортопед", tg: "Дандонпизишки ортопед", tk: "Stomatolog-ortoped" },
+  "kabinetga kirish uchun": { ru: "для входа в кабинет", en: "to sign in to the cabinet", kk: "кабинетке кіру үшін", ky: "кабинетке кирүү үчүн", tg: "барои воридшавӣ ба кабинет", tk: "kabinete girmek üçin" },
+  "masalan: penitsillin guruhiga": { ru: "Например: на группу пенициллина", en: "For example: to the penicillin group", kk: "Мысалы: пенициллин тобына", ky: "Мисалы: пенициллин тобуна", tg: "Масалан: ба гурӯҳи пенитсиллин", tk: "Meselem: penisillin toparyna" },
+  "yurak, qon bosimi, qandli diabet va h.k.": { ru: "Сердце, давление, сахарный диабет и т.д.", en: "Heart, blood pressure, diabetes, etc.", kk: "Жүрек, қан қысымы, қант диабеті және т.б.", ky: "Жүрөк, кан басымы, кант диабети ж.б.", tg: "Дил, фишори хун, диабети қанд ва ғ.", tk: "Ýürek, gan basyşy, süýji diabet we ş.m." },
+  "tanlang (noma'lum)": { ru: "Выберите (неизвестно)", en: "Select (unknown)", kk: "Таңдаңыз (белгісіз)", ky: "Тандаңыз (белгисиз)", tg: "Интихоб кунед (номаълум)", tk: "Saýlaň (näbelli)" },
   sozlamalar: { ru: "Настройки", en: "Settings", kk: "Баптаулар", ky: "Жөндөөлөр", tg: "Танзимот", tk: "Sazlamalar" },
   chiqish: { ru: "Выход", en: "Log Out", kk: "Шығу", ky: "Чыгуу", tg: "Баромадан", tk: "Çykmak" },
   dashboard: { ru: "Панель управления", en: "Dashboard", kk: "Басқару тақтасы", ky: "Башкаруу панели", tg: "Тахтаи идоракунӣ", tk: "Dolandyryş paneli" },
@@ -1669,7 +1691,7 @@ export default function DoctorDashboard({
               >
                 <Menu className="w-5 h-5 text-slate-400" />
               </button>
-              {activeView.replace("_", " ")}
+              {VIEW_TITLES[activeView] ? t(VIEW_TITLES[activeView]) : activeView.replace("_", " ")}
             </h2>
           </div>
           <div className="flex items-center gap-4">
@@ -3645,7 +3667,9 @@ export default function DoctorDashboard({
           {activeView === "davolash_rejasi" && (
             selectedPatientId ? (
               <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-                <TreatmentPlan patientId={selectedPatientId} />
+                <TreatmentPlan patientId={selectedPatientId}
+                  language={language}
+                />
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
@@ -3708,6 +3732,7 @@ export default function DoctorDashboard({
                   patientName={clinicPatients.find((p) => p.id === selectedPatientId)?.fullName}
                   doctorName={currentDoctor?.name}
                   patientTelegramChatId={clinicPatients.find((p) => p.id === selectedPatientId)?.telegramChatId}
+                  language={language}
                 />
               </div>
             ) : (
@@ -3734,12 +3759,14 @@ export default function DoctorDashboard({
           )}
 
           {activeView === "muolajalar" && (
-            <ProcedureCatalog clinicId={effectiveClinicId || undefined} services={services} />
+            <ProcedureCatalog clinicId={effectiveClinicId || undefined} services={services}
+                  language={language}
+                />
           )}
 
           {activeView === "materiallar" && (
             <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-              <MaterialsInventory clinicId={effectiveClinicId || undefined} />
+              <MaterialsInventory clinicId={effectiveClinicId || undefined} language={language} />
             </div>
           )}
         </div>

@@ -5,6 +5,48 @@ import {
   FileText, Plus, Check, Clock, XCircle, PlayCircle, 
   Download, Send, Sparkles, User, Calendar, Trash2, Search
 } from 'lucide-react';
+import { Language } from '../translations';
+import { createTranslator, Dict } from '../utils/translate';
+
+const PLAN_TRANSLATIONS: Dict = {
+  "davolash rejasi": { ru: "План лечения", en: "Treatment plan", kk: "Емдеу жоспары", ky: "Дарылоо планы", tg: "Нақшаи муолиҷа", tk: "Bejergi meýilnamasy" },
+  "yangi muolaja": { ru: "Новая процедура", en: "New procedure", kk: "Жаңа процедура", ky: "Жаңы процедура", tg: "Муолиҷаи нав", tk: "Täze prosedura" },
+  "so'm": { ru: "сум", en: "UZS", kk: "сом", ky: "сом", tg: "сӯм", tk: "som" },
+
+  "bemorning kompleks davolash bosqichlari": { ru: "Этапы комплексного лечения пациента", en: "Stages of the patient's comprehensive treatment", kk: "Пациентті кешенді емдеу кезеңдері", ky: "Бейтапты комплекстүү дарылоо этаптары", tg: "Марҳилаҳои табобати комплексии бемор", tk: "Näsagyň toplumlaýyn bejergi tapgyrlary" },
+  "telegram orqali yuborish": { ru: "Отправить через Telegram", en: "Send via Telegram", kk: "Telegram арқылы жіберу", ky: "Telegram аркылуу жөнөтүү", tg: "Фиристодан тавассути Telegram", tk: "Telegram arkaly ibermek" },
+  "chop etish / pdf": { ru: "Печать / PDF", en: "Print / PDF", kk: "Басып шығару / PDF", ky: "Басып чыгаруу / PDF", tg: "Чоп / PDF", tk: "Çap etmek / PDF" },
+  "umumiy progress": { ru: "Общий прогресс", en: "Overall progress", kk: "Жалпы прогресс", ky: "Жалпы прогресс", tg: "Пешрафти умумӣ", tk: "Umumy progres" },
+  "moliyaviy hisobot": { ru: "Финансовый отчет", en: "Financial summary", kk: "Қаржылық есеп", ky: "Каржылык отчет", tg: "Ҳисоботи молиявӣ", tk: "Maliýe hasabaty" },
+  "umumiy summa:": { ru: "Общая сумма:", en: "Total amount:", kk: "Жалпы сома:", ky: "Жалпы сумма:", tg: "Маблағи умумӣ:", tk: "Umumy jemi:" },
+  "bajarilgan muolajalar:": { ru: "Выполненные процедуры:", en: "Completed procedures:", kk: "Орындалған процедуралар:", ky: "Аткарылган процедуралар:", tg: "Муолиҷаҳои иҷрошуда:", tk: "Ýerine ýetirilen proseduralar:" },
+  "qolgan summa:": { ru: "Оставшаяся сумма:", en: "Remaining amount:", kk: "Қалған сома:", ky: "Калган сумма:", tg: "Маблағи боқимонда:", tk: "Galan jemi:" },
+  "ai tavsiyasi": { ru: "Рекомендация AI", en: "AI recommendation", kk: "AI ұсынысы", ky: "AI сунушу", tg: "Тавсияи AI", tk: "AI maslahaty" },
+  "tish": { ru: "Зуб", en: "Tooth", kk: "Тіс", ky: "Тиш", tg: "Дандон", tk: "Diş" },
+  "muolaja": { ru: "Процедура", en: "Procedure", kk: "Процедура", ky: "Процедура", tg: "Муолиҷа", tk: "Prosedura" },
+  "narx": { ru: "Цена", en: "Price", kk: "Бағасы", ky: "Баасы", tg: "Нарх", tk: "Bahasy" },
+  "shifokor": { ru: "Врач", en: "Doctor", kk: "Дәрігер", ky: "Дарыгер", tg: "Духтур", tk: "Lukman" },
+  "sana": { ru: "Дата", en: "Date", kk: "Күні", ky: "Күнү", tg: "Сана", tk: "Sene" },
+  "holat": { ru: "Статус", en: "Status", kk: "Күйі", ky: "Абалы", tg: "Ҳолат", tk: "Ýagdaý" },
+  "amal": { ru: "Действие", en: "Action", kk: "Әрекет", ky: "Аракет", tg: "Амал", tk: "Amal" },
+  "rejalashtirilgan": { ru: "Запланировано", en: "Planned", kk: "Жоспарланған", ky: "Пландаштырылган", tg: "Ба нақша гирифташуда", tk: "Meýilleşdirilen" },
+  "jarayonda": { ru: "В процессе", en: "In progress", kk: "Үрдісте", ky: "Процессте", tg: "Дар ҷараён", tk: "Dowam edýär" },
+  "bajarildi": { ru: "Выполнено", en: "Completed", kk: "Орындалды", ky: "Аткарылды", tg: "Иҷро шуд", tk: "Ýerine ýetirildi" },
+  "bekor qilindi": { ru: "Отменено", en: "Cancelled", kk: "Болдырылмады", ky: "Жокко чыгарылды", tg: "Бекор карда шуд", tk: "Ýatyryldy" },
+  "o'chirish": { ru: "Удалить", en: "Delete", kk: "Жою", ky: "Өчүрүү", tg: "Нест кардан", tk: "Pozmak" },
+  "yangi muolaja qo'shish": { ru: "Добавить новую процедуру", en: "Add new procedure", kk: "Жаңа процедура қосу", ky: "Жаңы процедура кошуу", tg: "Иловаи муолиҷаи нав", tk: "Täze prosedura goşmak" },
+  "tish raqami (fdi)": { ru: "Номер зуба (FDI)", en: "Tooth number (FDI)", kk: "Тіс нөмірі (FDI)", ky: "Тиш номери (FDI)", tg: "Рақами дандон (FDI)", tk: "Diş belgisi (FDI)" },
+  "masalan: 36": { ru: "Например: 36", en: "For example: 36", kk: "Мысалы: 36", ky: "Мисалы: 36", tg: "Масалан: 36", tk: "Meselem: 36" },
+  "holati": { ru: "Статус", en: "Status", kk: "Күйі", ky: "Абалы", tg: "Ҳолат", tk: "Ýagdaý" },
+  "muolaja katalogi": { ru: "Каталог процедур", en: "Procedure catalog", kk: "Процедуралар каталогы", ky: "Процедуралар каталогу", tg: "Феҳристи муолиҷаҳо", tk: "Prosedura kataology" },
+  "katalogdan qidirish...": { ru: "Поиск в каталоге...", en: "Search the catalog...", kk: "Каталогтан іздеу...", ky: "Каталогдон издөө...", tg: "Ҷустуҷӯ дар феҳрист...", tk: "Katalogdan gözle..." },
+  "katalogda xizmat topilmadi": { ru: "Услуга в каталоге не найдена", en: "No service found in the catalog", kk: "Каталогтан қызмет табылмады", ky: "Каталогдон кызмат табылган жок", tg: "Хизмат дар феҳрист ёфт нашуд", tk: "Katalogda hyzmat tapylmady" },
+  "muolaja nomi (maxsus)": { ru: "Название процедуры (особое)", en: "Procedure name (custom)", kk: "Процедура атауы (арнайы)", ky: "Процедура аты (өзгөчө)", tg: "Номи муолиҷа (махсус)", tk: "Prosedura ady (ýörite)" },
+  "kanal tozalash va plomba": { ru: "Чистка канала и пломба", en: "Root canal cleaning and filling", kk: "Арнаны тазалау және пломба", ky: "Каналды тазалоо жана пломба", tg: "Тозакунии канал ва пломба", tk: "Kanal arassalamak we plomba" },
+  "narxi (so'm)": { ru: "Цена (сум)", en: "Price (UZS)", kk: "Бағасы (сум)", ky: "Баасы (сум)", tg: "Нарх (сӯм)", tk: "Bahasy (som)" },
+};
+
+
 import { STANDARD_SERVICES_CATALOG } from './DirectorDashboard';
 
 export interface TreatmentItem {
@@ -17,7 +59,8 @@ export interface TreatmentItem {
   createdAt: string;
 }
 
-export default function TreatmentPlan({ patientId }: { patientId: string }) {
+export default function TreatmentPlan({ patientId, language }: { patientId: string; language?: Language }) {
+  const t = createTranslator(language, PLAN_TRANSLATIONS);
   const [items, setItems] = useState<TreatmentItem[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedCatalogCategory, setSelectedCatalogCategory] = useState(0);
@@ -123,29 +166,29 @@ export default function TreatmentPlan({ patientId }: { patientId: string }) {
             <div>
               <h3 className="text-xl font-bold text-white mb-1 flex items-center gap-2">
                 <FileText className="w-5 h-5 text-emerald-500" />
-                Davolash Rejasi
+                {t("Davolash rejasi")}
               </h3>
-              <p className="text-sm text-slate-500">Bemorning kompleks davolash bosqichlari</p>
+              <p className="text-sm text-slate-500">{t("Bemorning kompleks davolash bosqichlari")}</p>
             </div>
             <div className="flex gap-2">
-              <button onClick={handleTelegramShare} className="p-2 bg-[#111827] hover:bg-[#1f2937] text-indigo-400 rounded-lg border border-slate-800 transition-colors tooltip" title="Telegram orqali yuborish">
+              <button onClick={handleTelegramShare} className="p-2 bg-[#111827] hover:bg-[#1f2937] text-indigo-400 rounded-lg border border-slate-800 transition-colors tooltip" title={t("Telegram orqali yuborish")}>
                 <Send className="w-4 h-4" />
               </button>
-              <button onClick={handlePrint} className="p-2 bg-[#111827] hover:bg-[#1f2937] text-rose-400 rounded-lg border border-slate-800 transition-colors tooltip" title="Chop etish / PDF">
+              <button onClick={handlePrint} className="p-2 bg-[#111827] hover:bg-[#1f2937] text-rose-400 rounded-lg border border-slate-800 transition-colors tooltip" title={t("Chop etish / PDF")}>
                 <Download className="w-4 h-4" />
               </button>
               <button 
                 onClick={() => setShowAdd(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold text-sm transition-all shadow-lg shadow-emerald-500/20"
               >
-                <Plus className="w-4 h-4" /> Yangi muolaja
+                <Plus className="w-4 h-4" /> {t("Yangi muolaja")}
               </button>
             </div>
           </div>
 
           {/* Progress Bar */}
           <div className="mb-2 flex justify-between items-end">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Umumiy progress</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t("Umumiy progress")}</span>
             <span className="text-2xl font-black text-white">{progressPercent}%</span>
           </div>
           <div className="h-3 w-full bg-[#111827] rounded-full overflow-hidden border border-slate-800">
@@ -161,21 +204,21 @@ export default function TreatmentPlan({ patientId }: { patientId: string }) {
         {/* Financial Summary */}
         <div className="w-full lg:w-[350px] bg-[#0a0f1d] rounded-2xl border border-slate-800 p-6 flex flex-col justify-between">
           <div>
-            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Moliyaviy hisobot</h4>
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">{t("Moliyaviy hisobot")}</h4>
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-slate-400">Umumiy summa:</span>
-                <span className="text-lg font-bold text-white">{totalCost.toLocaleString()} so'm</span>
+                <span className="text-sm text-slate-400">{t("Umumiy summa:")}</span>
+                <span className="text-lg font-bold text-white">{totalCost.toLocaleString()} {t("so'm")}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-slate-400">Bajarilgan muolajalar:</span>
-                <span className="text-lg font-bold text-emerald-400">{completedCost.toLocaleString()} so'm</span>
+                <span className="text-sm text-slate-400">{t("Bajarilgan muolajalar:")}</span>
+                <span className="text-lg font-bold text-emerald-400">{completedCost.toLocaleString()} {t("so'm")}</span>
               </div>
             </div>
           </div>
           <div className="mt-6 pt-4 border-t border-slate-800 flex justify-between items-center">
-            <span className="text-sm text-slate-400">Qolgan summa:</span>
-            <span className="text-xl font-black text-amber-400">{(totalCost - completedCost).toLocaleString()} so'm</span>
+            <span className="text-sm text-slate-400">{t("Qolgan summa:")}</span>
+            <span className="text-xl font-black text-amber-400">{(totalCost - completedCost).toLocaleString()} {t("so'm")}</span>
           </div>
         </div>
       </div>
@@ -186,7 +229,7 @@ export default function TreatmentPlan({ patientId }: { patientId: string }) {
           <Sparkles className="w-6 h-6 text-indigo-400" />
         </div>
         <div>
-          <h4 className="text-sm font-bold text-indigo-300 mb-1">AI Tavsiyasi</h4>
+          <h4 className="text-sm font-bold text-indigo-300 mb-1">{t("AI Tavsiyasi")}</h4>
           <p className="text-sm text-slate-400 leading-relaxed">
             Bemor tarixiga asoslanib, avval muammoli tishlardagi kariesni davolash, so'ngra implant o'rnatish bosqichiga o'tish tavsiya etiladi. Davolash davomiyligi taxminan 3-4 hafta.
           </p>
@@ -199,13 +242,13 @@ export default function TreatmentPlan({ patientId }: { patientId: string }) {
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-[#111827] text-slate-400 border-b border-slate-800">
               <tr>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">Tish</th>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">Muolaja</th>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">Narx</th>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">Shifokor</th>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">Sana</th>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-center">Holat</th>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-right">Amal</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">{t("Tish")}</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">{t("Muolaja")}</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">{t("Narx")}</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">{t("Shifokor")}</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">{t("Sana")}</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-center">{t("Holat")}</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-right">{t("Amal")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
@@ -236,10 +279,10 @@ export default function TreatmentPlan({ patientId }: { patientId: string }) {
                         className={`appearance-none cursor-pointer pl-3 pr-8 py-1.5 rounded-full text-xs font-bold border outline-none transition-all ${getStatusColor(item.status)}`}
                         style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
                       >
-                        <option value="Planned" className="bg-[#111827] text-amber-400">Rejalashtirilgan</option>
-                        <option value="In Progress" className="bg-[#111827] text-blue-400">Jarayonda</option>
-                        <option value="Completed" className="bg-[#111827] text-emerald-400">Bajarildi</option>
-                        <option value="Cancelled" className="bg-[#111827] text-rose-400">Bekor qilindi</option>
+                        <option value="Planned" className="bg-[#111827] text-amber-400">{t("Rejalashtirilgan")}</option>
+                        <option value="In Progress" className="bg-[#111827] text-blue-400">{t("Jarayonda")}</option>
+                        <option value="Completed" className="bg-[#111827] text-emerald-400">{t("Bajarildi")}</option>
+                        <option value="Cancelled" className="bg-[#111827] text-rose-400">{t("Bekor qilindi")}</option>
                       </select>
                     </div>
                   </td>
@@ -247,7 +290,7 @@ export default function TreatmentPlan({ patientId }: { patientId: string }) {
                     <button 
                       onClick={() => handleDelete(item.id)}
                       className="p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
-                      title="O'chirish"
+                      title={t("O'chirish")}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -270,7 +313,7 @@ export default function TreatmentPlan({ patientId }: { patientId: string }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020712]/80 backdrop-blur-sm p-4">
           <div className="bg-[#0a0f1d] rounded-2xl border border-slate-800 shadow-2xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-white">Yangi muolaja qo'shish</h3>
+              <h3 className="text-lg font-bold text-white">{t("Yangi muolaja qo'shish")}</h3>
               <button onClick={() => setShowAdd(false)} className="text-slate-500 hover:text-white transition-colors">
                 <XCircle className="w-6 h-6" />
               </button>
@@ -279,38 +322,38 @@ export default function TreatmentPlan({ patientId }: { patientId: string }) {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-1.5">Tish raqami (FDI)</label>
+                  <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Tish raqami (FDI)")}</label>
                   <input 
                     type="text" 
-                    placeholder="Masalan: 36"
+                    placeholder={t("Masalan: 36")}
                     value={newItem.toothId}
                     onChange={e => setNewItem({...newItem, toothId: e.target.value})}
                     className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-1.5">Holati</label>
+                  <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Holati")}</label>
                   <select 
                     value={newItem.status}
                     onChange={e => setNewItem({...newItem, status: e.target.value as any})}
                     className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
                   >
-                    <option value="Planned">Rejalashtirilgan</option>
-                    <option value="In Progress">Jarayonda</option>
-                    <option value="Completed">Bajarildi</option>
+                    <option value="Planned">{t("Rejalashtirilgan")}</option>
+                    <option value="In Progress">{t("Jarayonda")}</option>
+                    <option value="Completed">{t("Bajarildi")}</option>
                   </select>
                 </div>
               </div>
               
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-xs font-bold text-slate-400">Muolaja Katalogi</label>
+                  <label className="block text-xs font-bold text-slate-400">{t("Muolaja Katalogi")}</label>
                 </div>
                 <div className="bg-[#111827] border border-slate-700 rounded-xl p-3">
                   <div className="relative mb-3">
                     <input
                       type="text"
-                      placeholder="Katalogdan qidirish..."
+                      placeholder={t("Katalogdan qidirish...")}
                       value={catalogSearchQuery}
                       onChange={(e) => setCatalogSearchQuery(e.target.value)}
                       className="w-full bg-[#1f2937] border border-slate-700 text-xs font-bold text-slate-100 rounded-lg pl-8 pr-3 py-2.5 outline-none focus:border-emerald-500 transition-colors"
@@ -351,7 +394,7 @@ export default function TreatmentPlan({ patientId }: { patientId: string }) {
                       });
 
                       if (results.length === 0) {
-                        return <div className="py-4 text-center text-xs font-bold text-slate-500">Katalogda xizmat topilmadi</div>;
+                        return <div className="py-4 text-center text-xs font-bold text-slate-500">{t("Katalogda xizmat topilmadi")}</div>;
                       }
 
                       return results.map((item, idX) => (
@@ -368,7 +411,7 @@ export default function TreatmentPlan({ patientId }: { patientId: string }) {
                           <span className="text-[9px] font-black text-emerald-500/70 uppercase tracking-widest">{item.category}</span>
                           <div className="flex justify-between items-center w-full">
                             <span className="text-xs font-bold text-slate-100">{item.name}</span>
-                            <span className="text-xs font-black text-emerald-400">{item.price.toLocaleString()} so'm</span>
+                            <span className="text-xs font-black text-emerald-400">{item.price.toLocaleString()} {t("so'm")}</span>
                           </div>
                         </button>
                       ));
@@ -378,10 +421,10 @@ export default function TreatmentPlan({ patientId }: { patientId: string }) {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1.5">Muolaja nomi (Maxsus)</label>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Muolaja nomi (Maxsus)")}</label>
                 <input 
                   type="text" 
-                  placeholder="Kanal tozalash va plomba"
+                  placeholder={t("Kanal tozalash va plomba")}
                   value={newItem.treatment}
                   onChange={e => setNewItem({...newItem, treatment: e.target.value})}
                   className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
@@ -389,7 +432,7 @@ export default function TreatmentPlan({ patientId }: { patientId: string }) {
               </div>
               
               <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1.5">Narxi (so'm)</label>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Narxi (so'm)")}</label>
                 <input 
                   type="number" 
                   placeholder="0"
@@ -400,7 +443,7 @@ export default function TreatmentPlan({ patientId }: { patientId: string }) {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1.5">Shifokor</label>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Shifokor")}</label>
                 <input 
                   type="text" 
                   value={newItem.doctorName}

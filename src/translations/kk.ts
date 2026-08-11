@@ -147,6 +147,7 @@ export const kk = {
   selectClinicLabel: "📍 ТАҢДАУ",
   routeNavigatorsLabel: "🗺️ Бағыт навигаторлары:",
   detectingLocationLabel: "Орналасқан жер анықталуда...",
+  tashkent: "Ташкент",
   myLocationLabel: "Менің орным",
   closeLabel: "✕ Жабу",
   verifiedClinicLabel: "Расталған клиника",

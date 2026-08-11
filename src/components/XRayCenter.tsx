@@ -9,6 +9,36 @@ import {
   Brain, FileText, SplitSquareHorizontal,
   Image as ImageIcon, ChevronLeft, X, Check, Ban
 } from 'lucide-react';
+import { Language } from '../translations';
+import { createTranslator, Dict } from '../utils/translate';
+
+const XRAY_TRANSLATIONS: Dict = {
+  "yuklanmoqda...": { ru: "Загружается...", en: "Uploading...", kk: "Жүктелуде...", ky: "Жүктөлүүдө...", tg: "Боргирӣ мешавад...", tk: "Ýüklenýär..." },
+
+  "rentgenlar galereyasi": { ru: "Галерея рентгенов", en: "X-ray gallery", kk: "Рентгендер галереясы", ky: "Рентгендер галереясы", tg: "Галереяи рентгенҳо", tk: "Rentgen galereýasy" },
+  "yuklash": { ru: "Загрузить", en: "Upload", kk: "Жүктеу", ky: "Жүктөө", tg: "Боргирӣ", tk: "Ýüklemek" },
+
+  "bemorning barcha rentgen va tomografiya tasvirlari": { ru: "Все рентген- и томографические снимки пациента", en: "All X-ray and tomography images of the patient", kk: "Пациенттің барлық рентген және томография суреттері", ky: "Бейтаптын бардык рентген жана томография сүрөттөрү", tg: "Ҳамаи тасвирҳои рентгенӣ ва томографии бемор", tk: "Näsagyň ähli rentgen we tomografiýa suratlary" },
+  "hozircha rentgen tasvirlari mavjud emas": { ru: "Рентген-снимков пока нет", en: "No X-ray images yet", kk: "Әзірге рентген суреттері жоқ", ky: "Азырынча рентген сүрөттөрү жок", tg: "То ҳол тасвирҳои рентгенӣ мавҷуд нестанд", tk: "Häzirlikçe rentgen suratlary ýok" },
+  "bepul sinov muddati tugagan. davom etish uchun klinika premium obunaga o'tishi kerak.": { ru: "Бесплатный пробный период закончился. Для продолжения клинике нужно перейти на Premium-подписку.", en: "The free trial has ended. To continue, the clinic must upgrade to a Premium subscription.", kk: "Тегін сынақ мерзімі аяқталды. Жалғастыру үшін клиника Premium жазылымға өтуі керек.", ky: "Акысыз сыноо мөөнөтү бүттү. Улантуу үчүн клиника Premium жазылууга өтүшү керек.", tg: "Мӯҳлати санҷиши ройгон ба охир расид. Барои идома клиника бояд ба обунаи Premium гузарад.", tk: "Mugt synag möhleti gutardy. Dowam etmek üçin klinika Premium abuna geçmeli." },
+  "ai xulosasi": { ru: "Заключение AI", en: "AI conclusion", kk: "AI қорытындысы", ky: "AI корутундусу", tg: "Хулосаи AI", tk: "AI netijesi" },
+  "ishonch darajasi": { ru: "Уровень уверенности", en: "Confidence level", kk: "Сенімділік деңгейі", ky: "Ишеним деңгээли", tg: "Дараҷаи боварӣ", tk: "Ynam derejesi" },
+  "aniq topilma yo'q.": { ru: "Явных находок нет.", en: "No definite findings.", kk: "Нақты табылған нәрсе жоқ.", ky: "Так табылган нерсе жок.", tg: "Ёфтаи аниқ нест.", tk: "Anyk tapyndy ýok." },
+  "tish:": { ru: "Зуб:", en: "Tooth:", kk: "Тіс:", ky: "Тиш:", tg: "Дандон:", tk: "Diş:" },
+  "taqqoslash rejimi": { ru: "Режим сравнения", en: "Comparison mode", kk: "Салыстыру режимі", ky: "Салыштыруу режими", tg: "Реҷаи муқоиса", tk: "Deňeşdirme tertibi" },
+  "yangi rentgen yuklash": { ru: "Загрузить новый рентген", en: "Upload new X-ray", kk: "Жаңа рентген жүктеу", ky: "Жаңы рентген жүктөө", tg: "Боргирии рентгени нав", tk: "Täze rentgen ýükle" },
+  "tasvir turi": { ru: "Тип снимка", en: "Image type", kk: "Сурет түрі", ky: "Сүрөт түрү", tg: "Навъи тасвир", tk: "Surat görnüşi" },
+  "panoramali (opg)": { ru: "Панорамный (OPG)", en: "Panoramic (OPG)", kk: "Панорамалық (OPG)", ky: "Панорамалык (OPG)", tg: "Панорамӣ (OPG)", tk: "Panorama (OPG)" },
+  "vizual (rvg)": { ru: "Визиографический (RVG)", en: "Visiograph (RVG)", kk: "Визуалды (RVG)", ky: "Визуалдык (RVG)", tg: "Визуалӣ (RVG)", tk: "Wizual (RVG)" },
+  "tomografiya (cbct)": { ru: "Томография (CBCT)", en: "Tomography (CBCT)", kk: "Томография (CBCT)", ky: "Томография (CBCT)", tg: "Томография (CBCT)", tk: "Tomografiýa (CBCT)" },
+  "boshqa": { ru: "Другое", en: "Other", kk: "Басқа", ky: "Башка", tg: "Дигар", tk: "Beýleki" },
+  "bosqich": { ru: "Этап", en: "Stage", kk: "Кезең", ky: "Этап", tg: "Марҳила", tk: "Tapgyr" },
+  "oldin (muolajadan oldin)": { ru: "До (до процедуры)", en: "Before (pre-treatment)", kk: "Дейін (процедураға дейін)", ky: "Мурун (процедурадан мурун)", tg: "Пеш (пеш аз муолиҷа)", tk: "Öň (proseduradan öň)" },
+  "jarayon (davolash jarayoni)": { ru: "Процесс (в ходе лечения)", en: "During (treatment in progress)", kk: "Үрдіс (емдеу барысында)", ky: "Процесс (дарылоо учурунда)", tg: "Ҷараён (дар ҷараёни табобат)", tk: "Prosess (bejergi dowamynda)" },
+  "keyin (muolajadan keyin)": { ru: "После (после процедуры)", en: "After (post-treatment)", kk: "Кейін (процедурадан кейін)", ky: "Кийин (процедурадан кийин)", tg: "Пас (пас аз муолиҷа)", tk: "Soň (proseduradan soň)" },
+};
+
+
 
 export interface XRay {
   id: string;
@@ -34,7 +64,8 @@ export interface AIAnalysis {
   overallConfidence: number;
 }
 
-export default function XRayCenter({ patientId, clinicId, patientName, doctorName }: { patientId: string; clinicId?: string; patientName?: string; doctorName?: string }) {
+export default function XRayCenter({ patientId, clinicId, patientName, doctorName, language }: { patientId: string; clinicId?: string; patientName?: string; doctorName?: string; language?: Language }) {
+  const t = createTranslator(language, XRAY_TRANSLATIONS);
   const [xrays, setXrays] = useState<XRay[]>([]);
   const [activeView, setActiveView] = useState<'gallery' | 'viewer' | 'compare'>('gallery');
   const [selectedXRay, setSelectedXRay] = useState<XRay | null>(null);
@@ -270,9 +301,9 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
           <div className="flex justify-between items-center mb-6">
             <div>
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                <ImageIcon className="w-5 h-5 text-emerald-500" /> Rentgenlar Galereyasi
+                <ImageIcon className="w-5 h-5 text-emerald-500" /> {t("Rentgenlar galereyasi")}
               </h3>
-              <p className="text-sm text-slate-500">Bemorning barcha rentgen va tomografiya tasvirlari</p>
+              <p className="text-sm text-slate-500">{t("Bemorning barcha rentgen va tomografiya tasvirlari")}</p>
             </div>
             <div className="flex items-center gap-3">
               <div className="relative">
@@ -287,7 +318,7 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
                 onClick={() => setShowUpload(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-emerald-500/20"
               >
-                <Upload className="w-4 h-4" /> Yuklash
+                <Upload className="w-4 h-4" /> {t("Yuklash")}
               </button>
             </div>
           </div>
@@ -333,7 +364,7 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
             {xrays.length === 0 && (
               <div className="py-12 flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-800 rounded-2xl">
                 <ImageIcon className="w-12 h-12 mb-4 text-slate-700" />
-                <p>Hozircha rentgen tasvirlari mavjud emas</p>
+                <p>{t("Hozircha rentgen tasvirlari mavjud emas")}</p>
               </div>
             )}
           </div>
@@ -396,23 +427,23 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
               {requiresPremium && (
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-center space-y-1.5">
                   <p className="text-sm font-bold text-amber-400">🔒 AI Yordamchi — Premium xizmat</p>
-                  <p className="text-xs text-slate-400">Bepul sinov muddati tugagan. Davom etish uchun klinika Premium obunaga o'tishi kerak.</p>
+                  <p className="text-xs text-slate-400">{t("Bepul sinov muddati tugagan. Davom etish uchun klinika Premium obunaga o'tishi kerak.")}</p>
                 </div>
               )}
 
               {analysis && (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center pb-3 border-b border-slate-800">
-                    <h5 className="font-bold text-white">AI Xulosasi</h5>
+                    <h5 className="font-bold text-white">{t("AI Xulosasi")}</h5>
                     <div className="flex flex-col items-end">
-                       <span className="text-xs text-slate-500">Ishonch darajasi</span>
+                       <span className="text-xs text-slate-500">{t("Ishonch darajasi")}</span>
                        <span className="text-lg font-black text-emerald-400">{analysis.overallConfidence}%</span>
                     </div>
                   </div>
                   
                   <div className="space-y-3">
                     {analysis.findings.length === 0 && (
-                      <p className="text-xs text-slate-500 text-center py-4">Aniq topilma yo'q.</p>
+                      <p className="text-xs text-slate-500 text-center py-4">{t("Aniq topilma yo'q.")}</p>
                     )}
                     {analysis.findings.map(finding => (
                       <div key={finding.id} className="bg-[#111827] p-3 rounded-xl border border-slate-800">
@@ -424,7 +455,7 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
                         </div>
                         {finding.toothNumber && (
                           <div className="text-xs text-slate-400 mt-2 flex items-center justify-between">
-                            <span>Tish: <span className="text-emerald-400 font-bold">{finding.toothNumber}</span></span>
+                            <span>{t("Tish:")}<span className="text-emerald-400 font-bold">{finding.toothNumber}</span></span>
                             <div className="flex gap-2">
                                <button
                                  onClick={() => handleAddFindingToChart(finding)}
@@ -483,7 +514,7 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
             <button onClick={() => setActiveView('viewer')} className="flex items-center gap-2 text-slate-400 hover:text-white px-3 py-1.5 rounded-lg transition-colors">
               <ChevronLeft className="w-4 h-4" /> Ortga qaytish
             </button>
-            <h4 className="text-white font-bold">Taqqoslash Rejimi</h4>
+            <h4 className="text-white font-bold">{t("Taqqoslash Rejimi")}</h4>
             <div className="w-24"></div>
           </div>
           
@@ -523,7 +554,7 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020712]/80 backdrop-blur-sm p-4">
           <div className="bg-[#0a0f1d] rounded-2xl border border-slate-800 shadow-2xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-white">Yangi rentgen yuklash</h3>
+              <h3 className="text-lg font-bold text-white">{t("Yangi rentgen yuklash")}</h3>
               <button onClick={() => setShowUpload(false)} className="text-slate-500 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
@@ -532,29 +563,29 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-1.5">Tasvir turi</label>
+                  <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Tasvir turi")}</label>
                   <select 
                     value={uploadType}
                     onChange={(e) => setUploadType(e.target.value as any)}
                     className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
                   >
-                    <option value="OPG">Panoramali (OPG)</option>
-                    <option value="RVG">Vizual (RVG)</option>
-                    <option value="CBCT">Tomografiya (CBCT)</option>
-                    <option value="Other">Boshqa</option>
+                    <option value="OPG">{t("Panoramali (OPG)")}</option>
+                    <option value="RVG">{t("Vizual (RVG)")}</option>
+                    <option value="CBCT">{t("Tomografiya (CBCT)")}</option>
+                    <option value="Other">{t("Boshqa")}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-1.5">Bosqich</label>
+                  <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Bosqich")}</label>
                   <select 
                     value={uploadStage}
                     onChange={(e) => setUploadStage(e.target.value as any)}
                     className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
                   >
-                    <option value="Oldin">Oldin (Muolajadan oldin)</option>
-                    <option value="Jarayon">Jarayon (Davolash jarayoni)</option>
-                    <option value="Keyin">Keyin (Muolajadan keyin)</option>
-                    <option value="Boshqa">Boshqa</option>
+                    <option value="Oldin">{t("Oldin (Muolajadan oldin)")}</option>
+                    <option value="Jarayon">{t("Jarayon (Davolash jarayoni)")}</option>
+                    <option value="Keyin">{t("Keyin (Muolajadan keyin)")}</option>
+                    <option value="Boshqa">{t("Boshqa")}</option>
                   </select>
                 </div>
               </div>
@@ -590,7 +621,7 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
                   disabled={isUploading || !previewUrl}
                   className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors shadow-lg shadow-emerald-500/20"
                 >
-                  {isUploading ? "Yuklanmoqda..." : "Yuklash"}
+                  {isUploading ? t("Yuklanmoqda...") : t("Yuklash")}
                 </button>
               </div>
             </div>

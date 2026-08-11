@@ -147,6 +147,7 @@ export const tk = {
   selectClinicLabel: "📍 SAÝLAMAK",
   routeNavigatorsLabel: "🗺️ Ugur nawigatorlary:",
   detectingLocationLabel: "Ýerleşýän ýer kesgitlenýär...",
+  tashkent: "Daşkent",
   myLocationLabel: "Meniň ýerim",
   closeLabel: "✕ Ýapmak",
   verifiedClinicLabel: "Tassyklanan klinika",

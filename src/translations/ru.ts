@@ -147,6 +147,7 @@ export const ru = {
   selectClinicLabel: "📍 ВЫБРАТЬ ФИЛИАЛ",
   routeNavigatorsLabel: "🗺️ Навигаторы маршрутов:",
   detectingLocationLabel: "Определение Местоположения...",
+  tashkent: "Ташкент",
   myLocationLabel: "Моё место",
   closeLabel: "✕ Закрыть",
   verifiedClinicLabel: "Проверенная клиника",

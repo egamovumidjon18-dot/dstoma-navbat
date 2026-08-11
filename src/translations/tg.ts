@@ -147,6 +147,7 @@ export const tg = {
   selectClinicLabel: "📍 ИНТИХОБ КАРДАН",
   routeNavigatorsLabel: "🗺️ Навигаторҳои масир:",
   detectingLocationLabel: "Ҷойгиршавӣ муайян карда мешавад...",
+  tashkent: "Тошканд",
   myLocationLabel: "Ҷои ман",
   closeLabel: "✕ Пӯшидан",
   verifiedClinicLabel: "Клиникаи тасдиқшуда",

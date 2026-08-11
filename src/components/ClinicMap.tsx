@@ -454,7 +454,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
           iconAnchor: [10, 10]
         }),
         zIndexOffset: 1000
-      }).bindPopup(t('myLocation')).addTo(map._markersGroup);
+      }).bindPopup(t('myLocationLabel')).addTo(map._markersGroup);
 
       // 2. Clinic markers
       clinics.forEach((clinic) => {
@@ -576,7 +576,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
               >
                 <option value="samarqand">📍 {t('samarkandCity')} (M: 39.65, 66.95)</option>
                 <option value="buxoro">📍 {t('bukharaCity')} (M: 39.77, 64.42)</option>
-                <option value="toshkent">📍 {t('toshkentCity')} (M: 41.29, 69.24)</option>
+                <option value="toshkent">📍 {t('tashkent')} (M: 41.29, 69.24)</option>
                 {gpsStatus === 'active' && <option value="custom">🛰️ {t('realGeolocationLabel')}</option>}
               </select>
 

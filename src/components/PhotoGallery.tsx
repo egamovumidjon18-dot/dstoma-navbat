@@ -9,6 +9,45 @@ import {
   Image as ImageIcon, ChevronLeft, X,
   SplitSquareHorizontal, Download, Lock, Unlock, Tag, Trash2, Calendar
 } from 'lucide-react';
+import { Language } from '../translations';
+import { createTranslator, Dict } from '../utils/translate';
+
+const GALLERY_TRANSLATIONS: Dict = {
+  "yuklash": { ru: "Загрузить", en: "Upload", kk: "Жүктеу", ky: "Жүктөө", tg: "Боргирӣ", tk: "Ýüklemek" },
+
+  "foto galereya": { ru: "Фотогалерея", en: "Photo gallery", kk: "Фотогалерея", ky: "Фотогалерея", tg: "Галереяи аксҳо", tk: "Foto galereýa" },
+  "galereya": { ru: "Галерея", en: "Gallery", kk: "Галерея", ky: "Галерея", tg: "Галерея", tk: "Galereýa" },
+  "taymlayn": { ru: "Таймлайн", en: "Timeline", kk: "Таймлайн", ky: "Таймлайн", tg: "Хатти вақт", tk: "Wagt çyzgysy" },
+  "pdf yuklash": { ru: "Скачать PDF", en: "Download PDF", kk: "PDF жүктеу", ky: "PDF жүктөө", tg: "Боргирии PDF", tk: "PDF ýükle" },
+
+  "bemorning klinik fotolari va natijalar": { ru: "Клинические фото пациента и результаты", en: "Patient's clinical photos and results", kk: "Пациенттің клиникалық фотолары және нәтижелер", ky: "Бейтаптын клиникалык сүрөттөрү жана натыйжалар", tg: "Аксҳои клиникии бемор ва натиҷаҳо", tk: "Näsagyň kliniki suratlary we netijeler" },
+  "qidirish (tish raqami, eslatma)...": { ru: "Поиск (номер зуба, примечание)...", en: "Search (tooth number, note)...", kk: "Іздеу (тіс нөмірі, ескертпе)...", ky: "Издөө (тиш номери, эскертүү)...", tg: "Ҷустуҷӯ (рақами дандон, эзоҳ)...", tk: "Gözleg (diş belgisi, bellik)..." },
+  "barcha toifalar": { ru: "Все категории", en: "All categories", kk: "Барлық санаттар", ky: "Бардык категориялар", tg: "Ҳамаи категорияҳо", tk: "Ähli kategoriýalar" },
+  "oldin": { ru: "До", en: "Before", kk: "Дейін", ky: "Мурун", tg: "Пеш", tk: "Öň" },
+  "keyin": { ru: "После", en: "After", kk: "Кейін", ky: "Кийин", tg: "Пас", tk: "Soň" },
+  "hozircha fotosuratlar mavjud emas": { ru: "Фотографий пока нет", en: "No photos yet", kk: "Әзірге фотосуреттер жоқ", ky: "Азырынча сүрөттөр жок", tg: "То ҳол аксҳо мавҷуд нестанд", tk: "Häzirlikçe suratlar ýok" },
+  "rasm ma'lumotlari": { ru: "Сведения об изображении", en: "Image details", kk: "Сурет мәліметтері", ky: "Сүрөт маалыматтары", tg: "Маълумоти тасвир", tk: "Surat maglumatlary" },
+  "yuklangan sana": { ru: "Дата загрузки", en: "Upload date", kk: "Жүктелген күні", ky: "Жүктөлгөн күнү", tg: "Санаи боргирӣ", tk: "Ýüklenen senesi" },
+  "maxfiylik": { ru: "Конфиденциальность", en: "Privacy", kk: "Құпиялылық", ky: "Купуялуулук", tg: "Махфият", tk: "Gizlinlik" },
+  "faqat shifokorlar uchun": { ru: "Только для врачей", en: "Doctors only", kk: "Тек дәрігерлер үшін", ky: "Дарыгерлер үчүн гана", tg: "Танҳо барои духтурон", tk: "Diňe lukmanlar üçin" },
+  "bemor ko'rishi mumkin": { ru: "Пациент может видеть", en: "Patient can view", kk: "Пациент көре алады", ky: "Бейтап көрө алат", tg: "Бемор дида метавонад", tk: "Näsag görüp biler" },
+  "eslatma": { ru: "Примечание", en: "Note", kk: "Ескертпе", ky: "Эскертүү", tg: "Эзоҳ", tk: "Bellik" },
+  "solishtirish rejimi": { ru: "Режим сравнения", en: "Comparison mode", kk: "Салыстыру режимі", ky: "Салыштыруу режими", tg: "Реҷаи муқоиса", tk: "Deňeşdirme tertibi" },
+  "yangi foto yuklash": { ru: "Загрузить новое фото", en: "Upload new photo", kk: "Жаңа фото жүктеу", ky: "Жаңы сүрөт жүктөө", tg: "Боргирии акси нав", tk: "Täze surat ýükle" },
+  "toifa": { ru: "Категория", en: "Category", kk: "Санат", ky: "Категория", tg: "Категория", tk: "Kategoriýa" },
+  "umumiy yuz": { ru: "Общий вид лица", en: "Full face", kk: "Жалпы бет", ky: "Жалпы бет", tg: "Рӯи умумӣ", tk: "Umumy ýüz" },
+  "intraoral": { ru: "Интраоральный", en: "Intraoral", kk: "Интраоральды", ky: "Интраоралдык", tg: "Дохилидаҳонӣ", tk: "Intraoral" },
+  "tabassum": { ru: "Улыбка", en: "Smile", kk: "Күлкі", ky: "Жылмаюу", tg: "Табассум", tk: "Ýylgyryş" },
+  "boshqa": { ru: "Другое", en: "Other", kk: "Басқа", ky: "Башка", tg: "Дигар", tk: "Beýleki" },
+  "bosqich": { ru: "Этап", en: "Stage", kk: "Кезең", ky: "Этап", tg: "Марҳила", tk: "Tapgyr" },
+  "oldin (muolajadan oldin)": { ru: "До (до процедуры)", en: "Before (pre-treatment)", kk: "Дейін (процедураға дейін)", ky: "Мурун (процедурадан мурун)", tg: "Пеш (пеш аз муолиҷа)", tk: "Öň (proseduradan öň)" },
+  "jarayon (davolash jarayoni)": { ru: "Процесс (в ходе лечения)", en: "During (treatment in progress)", kk: "Үрдіс (емдеу барысында)", ky: "Процесс (дарылоо учурунда)", tg: "Ҷараён (дар ҷараёни табобат)", tk: "Prosess (bejergi dowamynda)" },
+  "keyin (muolajadan keyin)": { ru: "После (после процедуры)", en: "After (post-treatment)", kk: "Кейін (процедурадан кейін)", ky: "Кийин (процедурадан кийин)", tg: "Пас (пас аз муолиҷа)", tk: "Soň (proseduradan soň)" },
+  "tish raqami (ixtiyoriy)": { ru: "Номер зуба (необязательно)", en: "Tooth number (optional)", kk: "Тіс нөмірі (міндетті емес)", ky: "Тиш номери (милдеттүү эмес)", tg: "Рақами дандон (ихтиёрӣ)", tk: "Diş belgisi (hökman däl)" },
+  "shaxsiy (bemor ko'ra olmaydi)": { ru: "Личное (пациент не увидит)", en: "Private (patient cannot see)", kk: "Жеке (пациент көре алмайды)", ky: "Жеке (бейтап көрө албайт)", tg: "Шахсӣ (бемор дида наметавонад)", tk: "Şahsy (näsag görüp bilmez)" },
+};
+
+
 
 export interface Photo {
   id: string;
@@ -31,7 +70,8 @@ export interface BeforeAfterPair {
   date: string;
 }
 
-export default function PhotoGallery({ patientId, patientName, doctorName }: { patientId: string; patientName?: string; doctorName?: string }) {
+export default function PhotoGallery({ patientId, patientName, doctorName, language }: { patientId: string; patientName?: string; doctorName?: string; language?: Language }) {
+  const t = createTranslator(language, GALLERY_TRANSLATIONS);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [pairs, setPairs] = useState<BeforeAfterPair[]>([]);
   
@@ -213,9 +253,9 @@ export default function PhotoGallery({ patientId, patientName, doctorName }: { p
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
           <h3 className="text-xl font-bold text-white flex items-center gap-2">
-            <Camera className="w-5 h-5 text-emerald-500" /> Foto Galereya
+            <Camera className="w-5 h-5 text-emerald-500" /> {t("Foto galereya")}
           </h3>
-          <p className="text-sm text-slate-500">Bemorning klinik fotolari va natijalar</p>
+          <p className="text-sm text-slate-500">{t("Bemorning klinik fotolari va natijalar")}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -225,13 +265,13 @@ export default function PhotoGallery({ patientId, patientName, doctorName }: { p
                 onClick={() => setActiveView('gallery')}
                 className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${activeView === 'gallery' ? 'bg-[#111827] text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
               >
-                Galereya
+                {t("Galereya")}
               </button>
               <button 
                 onClick={() => setActiveView('timeline')}
                 className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${activeView === 'timeline' ? 'bg-[#111827] text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
               >
-                Taymlayn
+                {t("Taymlayn")}
               </button>
             </div>
           )}
@@ -249,7 +289,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName }: { p
                 onClick={() => setShowUpload(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-emerald-500/20"
               >
-                <Upload className="w-4 h-4" /> Yuklash
+                <Upload className="w-4 h-4" /> {t("Yuklash")}
               </button>
             </>
           )}
@@ -272,7 +312,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName }: { p
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input 
                 type="text" 
-                placeholder="Qidirish (tish raqami, eslatma)..." 
+                placeholder={t("Qidirish (tish raqami, eslatma)...")} 
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 bg-[#111827] border border-slate-800 rounded-xl text-sm text-white focus:border-emerald-500 outline-none transition-colors"
@@ -285,7 +325,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName }: { p
                 onChange={e => setFilterCategory(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 bg-[#111827] border border-slate-800 rounded-xl text-sm text-white focus:border-emerald-500 outline-none transition-colors appearance-none"
               >
-                <option value="All">Barcha toifalar</option>
+                <option value="All">{t("Barcha toifalar")}</option>
                 {categories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
@@ -312,11 +352,11 @@ export default function PhotoGallery({ patientId, patientName, doctorName }: { p
                       <div className="flex h-32">
                         <div className="w-1/2 border-r border-slate-800 relative">
                           <img src={beforePhoto.url} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                          <span className="absolute bottom-1 left-1 bg-[#020712]/80 text-[10px] font-bold text-white px-1.5 py-0.5 rounded">Oldin</span>
+                          <span className="absolute bottom-1 left-1 bg-[#020712]/80 text-[10px] font-bold text-white px-1.5 py-0.5 rounded">{t("Oldin")}</span>
                         </div>
                         <div className="w-1/2 relative">
                           <img src={afterPhoto.url} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                          <span className="absolute bottom-1 right-1 bg-[#020712]/80 text-[10px] font-bold text-white px-1.5 py-0.5 rounded">Keyin</span>
+                          <span className="absolute bottom-1 right-1 bg-[#020712]/80 text-[10px] font-bold text-white px-1.5 py-0.5 rounded">{t("Keyin")}</span>
                         </div>
                       </div>
                       <div className="p-3">
@@ -388,7 +428,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName }: { p
             {filteredPhotos.length === 0 && (
               <div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-800 rounded-2xl">
                 <ImageIcon className="w-12 h-12 mb-4 text-slate-700" />
-                <p>Hozircha fotosuratlar mavjud emas</p>
+                <p>{t("Hozircha fotosuratlar mavjud emas")}</p>
               </div>
             )}
           </div>
@@ -442,22 +482,22 @@ export default function PhotoGallery({ patientId, patientName, doctorName }: { p
             </div>
           </div>
           <div className="w-full lg:w-[300px] bg-[#0a0f1d] rounded-2xl border border-slate-800 p-5 flex flex-col">
-            <h4 className="font-bold text-white mb-4 border-b border-slate-800 pb-2">Rasm ma'lumotlari</h4>
+            <h4 className="font-bold text-white mb-4 border-b border-slate-800 pb-2">{t("Rasm ma'lumotlari")}</h4>
             
             <div className="space-y-4 mb-6">
               <div>
-                <span className="block text-xs font-bold text-slate-500 mb-1">Yuklangan sana</span>
+                <span className="block text-xs font-bold text-slate-500 mb-1">{t("Yuklangan sana")}</span>
                 <p className="text-sm text-slate-300">{new Date(selectedPhoto.date).toLocaleString()}</p>
               </div>
               <div>
-                <span className="block text-xs font-bold text-slate-500 mb-1">Maxfiylik</span>
+                <span className="block text-xs font-bold text-slate-500 mb-1">{t("Maxfiylik")}</span>
                 <p className="text-sm text-slate-300 flex items-center gap-2">
-                  {selectedPhoto.isPrivate ? <><Lock className="w-4 h-4 text-rose-400" /> Faqat shifokorlar uchun</> : <><Unlock className="w-4 h-4 text-emerald-400" /> Bemor ko'rishi mumkin</>}
+                  {selectedPhoto.isPrivate ? <><Lock className="w-4 h-4 text-rose-400" />{t("Faqat shifokorlar uchun")}</> : <><Unlock className="w-4 h-4 text-emerald-400" />{t("Bemor ko'rishi mumkin")}</>}
                 </p>
               </div>
               {selectedPhoto.notes && (
                 <div>
-                  <span className="block text-xs font-bold text-slate-500 mb-1">Eslatma</span>
+                  <span className="block text-xs font-bold text-slate-500 mb-1">{t("Eslatma")}</span>
                   <p className="text-sm text-slate-300 bg-[#111827] p-3 rounded-xl border border-slate-800">{selectedPhoto.notes}</p>
                 </div>
               )}
@@ -486,7 +526,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName }: { p
         <div className="flex-1 flex flex-col min-h-0">
           <div className="text-center mb-4">
             <h4 className="text-lg font-bold text-white">{comparePair.title}</h4>
-            <p className="text-sm text-slate-500">Solishtirish rejimi</p>
+            <p className="text-sm text-slate-500">{t("Solishtirish rejimi")}</p>
           </div>
           
           <div className="flex-1 bg-[#0a0f1d] rounded-2xl border border-slate-800 overflow-hidden relative select-none">
@@ -525,8 +565,8 @@ export default function PhotoGallery({ patientId, patientName, doctorName }: { p
                       className="absolute inset-0 w-full h-full opacity-0 cursor-ew-resize z-20"
                     />
 
-                    <div className="absolute top-4 left-4 bg-[#020712]/80 text-white px-3 py-1 rounded text-xs font-bold z-10 pointer-events-none">Oldin</div>
-                    <div className="absolute top-4 right-4 bg-emerald-500/80 text-white px-3 py-1 rounded text-xs font-bold z-10 pointer-events-none">Keyin</div>
+                    <div className="absolute top-4 left-4 bg-[#020712]/80 text-white px-3 py-1 rounded text-xs font-bold z-10 pointer-events-none">{t("Oldin")}</div>
+                    <div className="absolute top-4 right-4 bg-emerald-500/80 text-white px-3 py-1 rounded text-xs font-bold z-10 pointer-events-none">{t("Keyin")}</div>
                   </div>
                 </div>
               );
@@ -540,7 +580,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName }: { p
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020712]/80 backdrop-blur-sm p-4">
           <div className="bg-[#0a0f1d] rounded-2xl border border-slate-800 shadow-2xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-white">Yangi foto yuklash</h3>
+              <h3 className="text-lg font-bold text-white">{t("Yangi foto yuklash")}</h3>
               <button onClick={() => setShowUpload(false)} className="text-slate-500 hover:text-white transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -573,34 +613,34 @@ export default function PhotoGallery({ patientId, patientName, doctorName }: { p
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-1.5">Toifa</label>
+                  <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Toifa")}</label>
                   <select 
                     value={uploadData.category}
                     onChange={e => setUploadData({...uploadData, category: e.target.value})}
                     className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
                   >
-                    <option value="General">Umumiy yuz</option>
-                    <option value="Intraoral">Intraoral</option>
-                    <option value="Smile">Tabassum</option>
-                    <option value="Other">Boshqa</option>
+                    <option value="General">{t("Umumiy yuz")}</option>
+                    <option value="Intraoral">{t("Intraoral")}</option>
+                    <option value="Smile">{t("Tabassum")}</option>
+                    <option value="Other">{t("Boshqa")}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-1.5">Bosqich</label>
+                  <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Bosqich")}</label>
                   <select 
                     value={uploadData.stage}
                     onChange={e => setUploadData({...uploadData, stage: e.target.value as any})}
                     className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
                   >
-                    <option value="Oldin">Oldin (Muolajadan oldin)</option>
-                    <option value="Jarayon">Jarayon (Davolash jarayoni)</option>
-                    <option value="Keyin">Keyin (Muolajadan keyin)</option>
-                    <option value="Boshqa">Boshqa</option>
+                    <option value="Oldin">{t("Oldin (Muolajadan oldin)")}</option>
+                    <option value="Jarayon">{t("Jarayon (Davolash jarayoni)")}</option>
+                    <option value="Keyin">{t("Keyin (Muolajadan keyin)")}</option>
+                    <option value="Boshqa">{t("Boshqa")}</option>
                   </select>
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1.5">Tish raqami (ixtiyoriy)</label>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Tish raqami (ixtiyoriy)")}</label>
                 <input 
                   type="text" 
                   placeholder="Masalan: 36"
@@ -611,7 +651,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName }: { p
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1.5">Eslatma</label>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Eslatma")}</label>
                 <textarea 
                   rows={2}
                   value={uploadData.notes}
@@ -628,7 +668,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName }: { p
                   onChange={e => setUploadData({...uploadData, isPrivate: e.target.checked})}
                   className="w-4 h-4 rounded bg-[#111827] border-slate-700 text-emerald-500 focus:ring-emerald-500"
                 />
-                <label htmlFor="isPrivate" className="text-sm font-bold text-slate-300">Shaxsiy (Bemor ko'ra olmaydi)</label>
+                <label htmlFor="isPrivate" className="text-sm font-bold text-slate-300">{t("Shaxsiy (Bemor ko'ra olmaydi)")}</label>
               </div>
 
               <div className="pt-4">

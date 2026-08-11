@@ -147,6 +147,7 @@ export const ky = {
   selectClinicLabel: "📍 ТАНДОО",
   routeNavigatorsLabel: "🗺️ Багыт навигаторлору:",
   detectingLocationLabel: "Жайгашкан жер аныкталууда...",
+  tashkent: "Ташкент",
   myLocationLabel: "Менин ордум",
   closeLabel: "✕ Жабуу",
   verifiedClinicLabel: "Текшерилген клиника",

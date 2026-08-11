@@ -7,6 +7,51 @@ import {
   Send, Download, Printer, Trash2, Calendar,
   Clock, CheckCircle, BrainCircuit, X, AlertTriangle, AlertCircle
 } from 'lucide-react';
+import { Language } from '../translations';
+import { createTranslator, Dict } from '../utils/translate';
+
+const PRESCRIPTIONS_TRANSLATIONS: Dict = {
+  "retseptlar": { ru: "Рецепты", en: "Prescriptions", kk: "Рецепттер", ky: "Рецепттер", tg: "Дорухатҳо", tk: "Reseptler" },
+  "barcha retseptlar": { ru: "Все рецепты", en: "All prescriptions", kk: "Барлық рецепттер", ky: "Бардык рецепттер", tg: "Ҳамаи дорухатҳо", tk: "Ähli reseptler" },
+  "bemor uchun dorilar ro'yxati va davolash rejimini belgilash": { ru: "Список лекарств и режим лечения для пациента", en: "Medication list and treatment regimen for the patient", kk: "Пациентке арналған дәрілер тізімі және емдеу режимі", ky: "Бейтап үчүн дарылар тизмеси жана дарылоо режими", tg: "Рӯйхати доруҳо ва низоми табобат барои бемор", tk: "Näsag üçin dermanlar sanawy we bejergi tertibi" },
+  "klinikadagi barcha yozilgan retseptlar ro'yxati": { ru: "Список всех выписанных в клинике рецептов", en: "List of all prescriptions issued at the clinic", kk: "Клиникада жазылған барлық рецепттер тізімі", ky: "Клиникада жазылган бардык рецепттердин тизмеси", tg: "Рӯйхати ҳамаи дорухатҳои дар клиника навишташуда", tk: "Klinikada ýazylan ähli reseptleriň sanawy" },
+  "barchasini yuklash": { ru: "Скачать все", en: "Download all", kk: "Барлығын жүктеу", ky: "Баарын жүктөө", tg: "Ҳамаро боргирӣ кардан", tk: "Ählisini ýüklemek" },
+  "yangi retsept": { ru: "Новый рецепт", en: "New prescription", kk: "Жаңа рецепт", ky: "Жаңы рецепт", tg: "Дорухати нав", tk: "Täze resept" },
+  "yangi retsept yaratish": { ru: "Создать новый рецепт", en: "Create a new prescription", kk: "Жаңа рецепт жасау", ky: "Жаңы рецепт түзүү", tg: "Эҷоди дорухати нав", tk: "Täze resept döretmek" },
+
+  "tashxis yoki dori nomi bo'yicha qidirish...": { ru: "Поиск по диагнозу или названию лекарства...", en: "Search by diagnosis or medicine name...", kk: "Диагноз немесе дәрі атауы бойынша іздеу...", ky: "Диагноз же дары аты боюнча издөө...", tg: "Ҷустуҷӯ аз рӯи ташхис ё номи дору...", tk: "Diagnoz ýa-da derman ady boýunça gözleg..." },
+  "pdf yuklash": { ru: "Скачать PDF", en: "Download PDF", kk: "PDF жүктеу", ky: "PDF жүктөө", tg: "Боргирии PDF", tk: "PDF ýükle" },
+  "telegramga yuborish": { ru: "Отправить в Telegram", en: "Send to Telegram", kk: "Telegram-ға жіберу", ky: "Telegram'га жөнөтүү", tg: "Ба Telegram фиристодан", tk: "Telegrama ibermek" },
+  "retseptlar topilmadi": { ru: "Рецепты не найдены", en: "No prescriptions found", kk: "Рецептер табылмады", ky: "Рецепттер табылган жок", tg: "Дорухатҳо ёфт нашуданд", tk: "Reseptler tapylmady" },
+  "tashxis yoki sabab (ixtiyoriy)": { ru: "Диагноз или причина (необязательно)", en: "Diagnosis or reason (optional)", kk: "Диагноз немесе себеп (міндетті емес)", ky: "Диагноз же себеп (милдеттүү эмес)", tg: "Ташхис ё сабаб (ихтиёрӣ)", tk: "Diagnoz ýa-da sebäp (hökman däl)" },
+  "masalan: tish olingandan keyingi holat": { ru: "Например: состояние после удаления зуба", en: "For example: condition after tooth extraction", kk: "Мысалы: тіс жұлғаннан кейінгі жағдай", ky: "Мисалы: тиш жулгандан кийинки абал", tg: "Масалан: ҳолат пас аз кашидани дандон", tk: "Meselem: diş aýrylandan soňky ýagdaý" },
+  "ovozli kiritish (voice to text)": { ru: "Голосовой ввод (Voice to text)", en: "Voice input (Voice to text)", kk: "Дауыстық енгізу (Voice to text)", ky: "Үн менен киргизүү (Voice to text)", tg: "Вуруди овозӣ (Voice to text)", tk: "Ses bilen girizmek (Voice to text)" },
+  "dorilar ro'yxati": { ru: "Список лекарств", en: "Medication list", kk: "Дәрілер тізімі", ky: "Дарылар тизмеси", tg: "Рӯйхати доруҳо", tk: "Dermanlaryň sanawy" },
+  "ai assistant tahlili": { ru: "Анализ AI-ассистента", en: "AI assistant analysis", kk: "AI көмекшісінің талдауы", ky: "AI жардамчысынын талдоосу", tg: "Таҳлили ёрдамчии AI", tk: "AI kömekçisiniň derňewi" },
+  "qo'shish": { ru: "Добавить", en: "Add", kk: "Қосу", ky: "Кошуу", tg: "Илова кардан", tk: "Goşmak" },
+  "antibakterial terapiya": { ru: "Антибактериальная терапия", en: "Antibacterial therapy", kk: "Антибактериалды терапия", ky: "Антибактериалдык терапия", tg: "Табобати зидди бактериявӣ", tk: "Antibakterial terapiýa" },
+  "yallig'lanishga qarshi va og'riqsizlantiruvchi": { ru: "Противовоспалительное и обезболивающее", en: "Anti-inflammatory and painkiller", kk: "Қабынуға қарсы және ауырсынуды басатын", ky: "Сезгенүүгө каршы жана оорутпоочу", tg: "Зидди илтиҳоб ва беддардкунанда", tk: "Çişmä garşy we agyry aýryjy" },
+  "dori nomi": { ru: "Название лекарства", en: "Medicine name", kk: "Дәрі атауы", ky: "Дары аты", tg: "Номи дору", tk: "Derman ady" },
+  "masalan: paratsetamol": { ru: "Например: Парацетамол", en: "For example: Paracetamol", kk: "Мысалы: Парацетамол", ky: "Мисалы: Парацетамол", tg: "Масалан: Парасетамол", tk: "Meselem: Parasetamol" },
+  "doza": { ru: "Доза", en: "Dose", kk: "Доза", ky: "Доза", tg: "Вояи дору", tk: "Doza" },
+  "masalan: 500 mg": { ru: "Например: 500 мг", en: "For example: 500 mg", kk: "Мысалы: 500 мг", ky: "Мисалы: 500 мг", tg: "Масалан: 500 мг", tk: "Meselem: 500 mg" },
+  "davomiyligi": { ru: "Продолжительность", en: "Duration", kk: "Ұзақтығы", ky: "Узактыгы", tg: "Давомнокӣ", tk: "Dowamlylygy" },
+  "masalan: 5 kun": { ru: "Например: 5 дней", en: "For example: 5 days", kk: "Мысалы: 5 күн", ky: "Мисалы: 5 күн", tg: "Масалан: 5 рӯз", tk: "Meselem: 5 gün" },
+  "qabul qilish tartibi": { ru: "Порядок приема", en: "Dosage schedule", kk: "Қабылдау тәртібі", ky: "Кабыл алуу тартиби", tg: "Тартиби қабул", tk: "Kabul ediş tertibi" },
+  "masalan: 1 tabletkadan 3 mahal": { ru: "Например: по 1 таблетке 3 раза", en: "For example: 1 tablet 3 times", kk: "Мысалы: 1 таблеткадан 3 рет", ky: "Мисалы: 1 таблеткадан 3 жолу", tg: "Масалан: 1 ҳаб 3 маротиба", tk: "Meselem: 1 tabletkadan 3 gezek" },
+  "qo'shimcha eslatma": { ru: "Дополнительное примечание", en: "Additional note", kk: "Қосымша ескертпе", ky: "Кошумча эскертүү", tg: "Эзоҳи иловагӣ", tk: "Goşmaça bellik" },
+  "masalan: ovqatdan keyin ko'p suv bilan": { ru: "Например: после еды, запивая водой", en: "For example: after meals with plenty of water", kk: "Мысалы: тамақтан кейін көп сумен", ky: "Мисалы: тамактан кийин көп суу менен", tg: "Масалан: пас аз хӯрок бо оби зиёд", tk: "Meselem: naharadan soň köp suw bilen" },
+  "hozircha hech qanday dori qo'shilmadi": { ru: "Пока не добавлено ни одного лекарства", en: "No medication added yet", kk: "Әзірге ешқандай дәрі қосылмады", ky: "Азырынча эч кандай дары кошулган жок", tg: "То ҳол ягон дору илова нашудааст", tk: "Häzirlikçe hiç bir derman goşulmady" },
+  "navbati": { ru: "Очередь", en: "Queue", kk: "Кезегі", ky: "Кезеги", tg: "Навбат", tk: "Nobaty" },
+  "zamonaviy stomatologiya klinikasi": { ru: "Современная стоматологическая клиника", en: "Modern dental clinic", kk: "Заманауи стоматологиялық клиника", ky: "Заманбап стоматологиялык клиника", tg: "Клиникаи муосири дандонпизишкӣ", tk: "Döwrebap stomatologiýa klinikasy" },
+  "bemor:": { ru: "Пациент:", en: "Patient:", kk: "Пациент:", ky: "Бейтап:", tg: "Бемор:", tk: "Näsag:" },
+  "sana:": { ru: "Дата:", en: "Date:", kk: "Күні:", ky: "Күнү:", tg: "Сана:", tk: "Sene:" },
+  "tashxis / ko'rsatma:": { ru: "Диагноз / показание:", en: "Diagnosis / indication:", kk: "Диагноз / көрсеткіш:", ky: "Диагноз / көрсөтмө:", tg: "Ташхис / нишондод:", tk: "Diagnoz / görkezme:" },
+  "qabul qilish:": { ru: "Прием:", en: "Intake:", kk: "Қабылдау:", ky: "Кабыл алуу:", tg: "Қабул:", tk: "Kabul ediş:" },
+  "davomiyligi:": { ru: "Продолжительность:", en: "Duration:", kk: "Ұзақтығы:", ky: "Узактыгы:", tg: "Давомнокӣ:", tk: "Dowamlylygy:" },
+  "shifokor:": { ru: "Врач:", en: "Doctor:", kk: "Дәрігер:", ky: "Дарыгер:", tg: "Духтур:", tk: "Lukman:" },
+  "imzo / muhr": { ru: "Подпись / печать", en: "Signature / stamp", kk: "Қолы / мөрі", ky: "Кол / мөөр", tg: "Имзо / мӯҳр", tk: "Gol / möhür" },
+};
 
 export interface Medication {
   id: string;
@@ -36,7 +81,8 @@ const MEDICATION_TEMPLATES = [
   { name: 'Xlorgeksidin', dosage: '0.05%', frequency: 'Kuniga 2-3 marta chayiladi', duration: '5-7 kun', notes: 'Muolajadan so\'ng og\'iz bo\'shlig\'ini chayish uchun.' },
 ];
 
-export default function Prescriptions({ patientId, patientName, doctorName, patientTelegramChatId }: { patientId?: string; patientName?: string; doctorName?: string; patientTelegramChatId?: string }) {
+export default function Prescriptions({ patientId, patientName, doctorName, patientTelegramChatId, language }: { patientId?: string; patientName?: string; doctorName?: string; patientTelegramChatId?: string; language?: Language }) {
+  const t = createTranslator(language, PRESCRIPTIONS_TRANSLATIONS);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -189,10 +235,10 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
           <h3 className="text-xl font-bold text-white flex items-center gap-2">
-            <Pill className="w-5 h-5 text-emerald-500" /> {patientId ? 'Retseptlar' : 'Barcha retseptlar'}
+            <Pill className="w-5 h-5 text-emerald-500" /> {patientId ? t("Retseptlar") : t("Barcha retseptlar")}
           </h3>
           <p className="text-sm text-slate-500">
-            {patientId ? "Bemor uchun dorilar ro'yxati va davolash rejimini belgilash" : "Klinikadagi barcha yozilgan retseptlar ro'yxati"}
+            {patientId ? t("Bemor uchun dorilar ro'yxati va davolash rejimini belgilash") : t("Klinikadagi barcha yozilgan retseptlar ro'yxati")}
           </p>
         </div>
 
@@ -202,14 +248,14 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
             disabled={filteredPrescriptions.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-white border border-slate-800 rounded-xl text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Download className="w-4 h-4" /> Barchasini yuklash
+            <Download className="w-4 h-4" /> {t("Barchasini yuklash")}
           </button>
           {patientId && !showForm && !selectedPrescription && (
             <button 
               onClick={() => setShowForm(true)}
               className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-emerald-500/20"
             >
-              <Plus className="w-4 h-4" /> Yangi retsept
+              <Plus className="w-4 h-4" /> {t("Yangi retsept")}
             </button>
           )}
         </div>
@@ -222,7 +268,7 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <input 
                 type="text" 
-                placeholder="Tashxis yoki dori nomi bo'yicha qidirish..." 
+                placeholder={t("Tashxis yoki dori nomi bo'yicha qidirish...")} 
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 bg-[#111827] border border-slate-800 rounded-xl text-sm text-white focus:border-emerald-500 outline-none transition-colors"
@@ -264,7 +310,7 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                     <button
                       onClick={(e) => { e.stopPropagation(); exportPrescriptionPdf(patientName, p); }}
                       className="p-1.5 text-slate-400 hover:text-white bg-[#111827] rounded-lg transition-colors"
-                      title="PDF Yuklash"
+                      title={t("PDF Yuklash")}
                     >
                       <Download className="w-3.5 h-3.5" />
                     </button>
@@ -272,7 +318,7 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                       onClick={(e) => { e.stopPropagation(); handleSendTelegram(p); }}
                       disabled={isSendingTelegram === p.id}
                       className="p-1.5 text-slate-400 hover:text-[#0088cc] bg-[#111827] rounded-lg transition-colors disabled:opacity-50"
-                      title="Telegramga yuborish"
+                      title={t("Telegramga yuborish")}
                     >
                       <Send className="w-3.5 h-3.5" />
                     </button>
@@ -284,13 +330,13 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
             {filteredPrescriptions.length === 0 && (
               <div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-800 rounded-2xl">
                 <FileText className="w-12 h-12 mb-4 text-slate-700" />
-                <p>Retseptlar topilmadi</p>
+                <p>{t("Retseptlar topilmadi")}</p>
                 {patientId && (
                   <button 
                     onClick={() => setShowForm(true)}
                     className="mt-4 px-4 py-2 bg-[#111827] text-white rounded-xl text-sm font-bold border border-slate-800 hover:bg-emerald-500 hover:border-emerald-500 transition-colors"
                   >
-                    Yangi retsept yaratish
+                    {t("Yangi retsept yaratish")}
                   </button>
                 )}
               </div>
@@ -315,18 +361,18 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
 
               <div className="space-y-4 mb-6">
                 <div className="relative">
-                  <label className="block text-xs font-bold text-slate-400 mb-1.5">Tashxis yoki Sabab (Ixtiyoriy)</label>
+                  <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Tashxis yoki Sabab (Ixtiyoriy)")}</label>
                   <div className="flex gap-2">
                     <input 
                       type="text" 
-                      placeholder="Masalan: Tish olingandan keyingi holat"
+                      placeholder={t("Masalan: Tish olingandan keyingi holat")}
                       value={formData.diagnosis}
                       onChange={e => setFormData({...formData, diagnosis: e.target.value})}
                       className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
                     />
                     <button 
                       type="button"
-                      title="Ovozli kiritish (Voice to text)"
+                      title={t("Ovozli kiritish (Voice to text)")}
                       onClick={() => alert("Ovozli kiritish funksiyasi ishga tushirildi")}
                       className="px-4 bg-[#111827] border border-slate-700 hover:border-indigo-500 hover:text-indigo-400 text-slate-400 rounded-xl transition-colors flex items-center justify-center"
                     >
@@ -338,7 +384,7 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
 
               <div className="border-t border-slate-800 pt-6">
                 <div className="flex justify-between items-center mb-4">
-                  <h5 className="font-bold text-white">Dorilar ro'yxati</h5>
+                  <h5 className="font-bold text-white">{t("Dorilar ro'yxati")}</h5>
                   <div className="flex gap-2">
                     <button 
                       onClick={() => setShowAiRecommendations(true)}
@@ -380,22 +426,22 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                       <div className="flex gap-3 items-start">
                         <BrainCircuit className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
                         <div>
-                          <h6 className="font-bold text-indigo-300 text-sm mb-1">AI Assistant Tahlili</h6>
+                          <h6 className="font-bold text-indigo-300 text-sm mb-1">{t("AI Assistant Tahlili")}</h6>
                           <p className="text-xs text-indigo-200/70 mb-3">Bemorning oxirgi muolajasi "Periodontit (36-tish)" asosida quyidagi preparatlar tavsiya etiladi:</p>
                           <div className="space-y-2">
                             <div className="flex justify-between items-center bg-[#020712]/50 p-2 rounded-lg border border-indigo-500/10">
                               <div>
                                 <p className="font-bold text-white text-xs">Amoksiklav 625 mg</p>
-                                <p className="text-[10px] text-slate-500">Antibakterial terapiya</p>
+                                <p className="text-[10px] text-slate-500">{t("Antibakterial terapiya")}</p>
                               </div>
-                              <button onClick={() => applyTemplate(MEDICATION_TEMPLATES[0])} className="text-[10px] bg-indigo-500 text-white px-2 py-1 rounded">Qo'shish</button>
+                              <button onClick={() => applyTemplate(MEDICATION_TEMPLATES[0])} className="text-[10px] bg-indigo-500 text-white px-2 py-1 rounded">{t("Qo'shish")}</button>
                             </div>
                             <div className="flex justify-between items-center bg-[#020712]/50 p-2 rounded-lg border border-indigo-500/10">
                               <div>
                                 <p className="font-bold text-white text-xs">Nimesil</p>
-                                <p className="text-[10px] text-slate-500">Yallig'lanishga qarshi va og'riqsizlantiruvchi</p>
+                                <p className="text-[10px] text-slate-500">{t("Yallig'lanishga qarshi va og'riqsizlantiruvchi")}</p>
                               </div>
-                              <button onClick={() => applyTemplate(MEDICATION_TEMPLATES[1])} className="text-[10px] bg-indigo-500 text-white px-2 py-1 rounded">Qo'shish</button>
+                              <button onClick={() => applyTemplate(MEDICATION_TEMPLATES[1])} className="text-[10px] bg-indigo-500 text-white px-2 py-1 rounded">{t("Qo'shish")}</button>
                             </div>
                           </div>
                         </div>
@@ -407,50 +453,50 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                 <div className="bg-[#111827] border border-slate-800 rounded-xl p-4 mb-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                     <div className="col-span-1 md:col-span-2">
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Dori nomi</label>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">{t("Dori nomi")}</label>
                       <input 
                         type="text" 
-                        placeholder="Masalan: Paratsetamol"
+                        placeholder={t("Masalan: Paratsetamol")}
                         value={currentMed.name || ''}
                         onChange={e => setCurrentMed({...currentMed, name: e.target.value})}
                         className="w-full bg-[#0a0f1d] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Doza</label>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">{t("Doza")}</label>
                       <input 
                         type="text" 
-                        placeholder="Masalan: 500 mg"
+                        placeholder={t("Masalan: 500 mg")}
                         value={currentMed.dosage || ''}
                         onChange={e => setCurrentMed({...currentMed, dosage: e.target.value})}
                         className="w-full bg-[#0a0f1d] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Davomiyligi</label>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">{t("Davomiyligi")}</label>
                       <input 
                         type="text" 
-                        placeholder="Masalan: 5 kun"
+                        placeholder={t("Masalan: 5 kun")}
                         value={currentMed.duration || ''}
                         onChange={e => setCurrentMed({...currentMed, duration: e.target.value})}
                         className="w-full bg-[#0a0f1d] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
                       />
                     </div>
                     <div className="col-span-1 md:col-span-2">
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Qabul qilish tartibi</label>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">{t("Qabul qilish tartibi")}</label>
                       <input 
                         type="text" 
-                        placeholder="Masalan: 1 tabletkadan 3 mahal"
+                        placeholder={t("Masalan: 1 tabletkadan 3 mahal")}
                         value={currentMed.frequency || ''}
                         onChange={e => setCurrentMed({...currentMed, frequency: e.target.value})}
                         className="w-full bg-[#0a0f1d] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
                       />
                     </div>
                     <div className="col-span-1 md:col-span-2">
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Qo'shimcha eslatma</label>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">{t("Qo'shimcha eslatma")}</label>
                       <input 
                         type="text" 
-                        placeholder="Masalan: Ovqatdan keyin ko'p suv bilan"
+                        placeholder={t("Masalan: Ovqatdan keyin ko'p suv bilan")}
                         value={currentMed.notes || ''}
                         onChange={e => setCurrentMed({...currentMed, notes: e.target.value})}
                         className="w-full bg-[#0a0f1d] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
@@ -491,7 +537,7 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                     </div>
                   ))}
                   {formData.medications?.length === 0 && (
-                    <p className="text-center text-sm text-slate-500 py-4">Hozircha hech qanday dori qo'shilmadi</p>
+                    <p className="text-center text-sm text-slate-500 py-4">{t("Hozircha hech qanday dori qo'shilmadi")}</p>
                   )}
                 </div>
               </div>
@@ -552,8 +598,8 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
            <div className="flex-1 bg-white p-8 md:p-12 rounded-2xl overflow-y-auto custom-scrollbar text-slate-800 max-w-3xl mx-auto w-full">
              <div className="flex justify-between items-start border-b-2 border-emerald-500 pb-6 mb-6">
                 <div>
-                  <h1 className="text-3xl font-black text-slate-900 mb-1">DStoma<span className="text-emerald-500">Navbati</span></h1>
-                  <p className="text-sm text-slate-500">Zamonaviy stomatologiya klinikasi</p>
+                  <h1 className="text-3xl font-black text-slate-900 mb-1">DStoma<span className="text-emerald-500">{t("Navbati")}</span></h1>
+                  <p className="text-sm text-slate-500">{t("Zamonaviy stomatologiya klinikasi")}</p>
                 </div>
                 <div className="text-right text-sm text-slate-600">
                   <p>Manzil: Toshkent sh., Chilonzor tumani</p>
@@ -563,18 +609,18 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
 
              <div className="flex justify-between mb-8 text-sm">
                 <div>
-                  <p className="text-slate-500 mb-1">Bemor:</p>
+                  <p className="text-slate-500 mb-1">{t("Bemor:")}</p>
                   <p className="font-bold text-lg">{/* We don't have patient name here easily without prop, fallback to text */} Bemor ID: {patientId}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-slate-500 mb-1">Sana:</p>
+                  <p className="text-slate-500 mb-1">{t("Sana:")}</p>
                   <p className="font-bold text-lg">{new Date(selectedPrescription.date).toLocaleDateString()}</p>
                 </div>
              </div>
 
              {selectedPrescription.diagnosis && (
                <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-200">
-                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Tashxis / Ko'rsatma:</p>
+                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{t("Tashxis / Ko'rsatma:")}</p>
                  <p className="font-bold text-slate-900">{selectedPrescription.diagnosis}</p>
                </div>
              )}
@@ -591,8 +637,8 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                        {idx + 1}. {med.name} <span className="font-normal text-slate-500 text-sm">- {med.dosage}</span>
                      </p>
                      <div className="mt-2 pl-6 border-l-2 border-emerald-500 ml-2 space-y-1 text-slate-700">
-                       <p><span className="font-bold">Qabul qilish:</span> {med.frequency}</p>
-                       <p><span className="font-bold">Davomiyligi:</span> {med.duration}</p>
+                       <p><span className="font-bold">{t("Qabul qilish:")}</span> {med.frequency}</p>
+                       <p><span className="font-bold">{t("Davomiyligi:")}</span> {med.duration}</p>
                        {med.notes && <p className="text-sm italic text-slate-500 mt-2">"{med.notes}"</p>}
                      </div>
                    </div>
@@ -602,12 +648,12 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
 
              <div className="flex justify-between items-end mt-16 pt-6 border-t border-slate-200">
                <div>
-                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Shifokor:</p>
+                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{t("Shifokor:")}</p>
                  <p className="font-bold text-lg text-slate-900">{selectedPrescription.doctorName}</p>
                </div>
                <div className="text-center">
                  <div className="w-48 border-b border-slate-400 mb-2"></div>
-                 <p className="text-xs text-slate-500 uppercase tracking-wider">Imzo / Muhr</p>
+                 <p className="text-xs text-slate-500 uppercase tracking-wider">{t("Imzo / Muhr")}</p>
                </div>
              </div>
            </div>

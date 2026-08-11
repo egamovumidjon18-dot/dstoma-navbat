@@ -147,6 +147,7 @@ export const uz = {
   selectClinicLabel: "📍 TANLASH",
   routeNavigatorsLabel: "🗺️ Marshrut navigatorlari:",
   detectingLocationLabel: "Joylashuv Aniqlanmoqda...",
+  tashkent: "Toshkent",
   myLocationLabel: "Joylashuvim",
   closeLabel: "✕ Yopish",
   verifiedClinicLabel: "Tasdiqlangan klinika",

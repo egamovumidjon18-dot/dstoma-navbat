@@ -147,6 +147,7 @@ export const en = {
   selectClinicLabel: "📍 SELECT CLINIC",
   routeNavigatorsLabel: "🗺️ Route Navigators:",
   detectingLocationLabel: "Detecting Location...",
+  tashkent: "Tashkent",
   myLocationLabel: "My Location",
   closeLabel: "✕ Close",
   verifiedClinicLabel: "Verified clinic",

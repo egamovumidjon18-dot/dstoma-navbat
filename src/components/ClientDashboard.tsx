@@ -90,6 +90,19 @@ export default function ClientDashboard({
 
     type LocalDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
     const dict: Record<string, LocalDictEntry> = {
+      "avval klinikani tanlang": { ru: "Сначала выберите клинику", en: "Select a clinic first", kk: "Алдымен клиниканы таңдаңыз", ky: "Адегенде клиниканы тандаңыз", tg: "Аввал клиникаро интихоб кунед", tk: "Ilki klinikany saýlaň" },
+      "avval klinikani, so'ng shifokorni tanlang": { ru: "Сначала выберите клинику, затем врача", en: "Select a clinic first, then a doctor", kk: "Алдымен клиниканы, сосын дәрігерді таңдаңыз", ky: "Адегенде клиниканы, анан дарыгерди тандаңыз", tg: "Аввал клиника, баъд духтурро интихоб кунед", tk: "Ilki klinikany, soňra lukmany saýlaň" },
+      "bu klinikada hozircha shifokorlar yo'q": { ru: "В этой клинике пока нет врачей", en: "This clinic has no doctors yet", kk: "Бұл клиникада әзірге дәрігерлер жоқ", ky: "Бул клиникада азырынча дарыгерлер жок", tg: "Дар ин клиника ҳанӯз духтур нест", tk: "Bu klinikada heniz lukmanlar ýok" },
+      "kabinetga qaytish": { ru: "Вернуться в кабинет", en: "Back to cabinet", kk: "Кабинетке оралу", ky: "Кабинетке кайтуу", tg: "Бозгашт ба кабинет", tk: "Kabinete dolanmak" },
+      "kirish": { ru: "Вход", en: "Sign in", kk: "Кіру", ky: "Кирүү", tg: "Даромадан", tk: "Girmek" },
+      "klinikani tanlang": { ru: "Выберите клинику", en: "Select a clinic", kk: "Клиниканы таңдаңыз", ky: "Клиниканы тандаңыз", tg: "Клиникаро интихоб кунед", tk: "Klinikany saýlaň" },
+      "masalan: tishim og'riyapti...": { ru: "Например: болит зуб...", en: "For example: my tooth hurts...", kk: "Мысалы: тісім ауырады...", ky: "Мисалы: тишим ооруйт...", tg: "Масалан: дандонам дард мекунад...", tk: "Meselem: dişim agyrýar..." },
+      "navbatni tasdiqlash": { ru: "Подтвердить очередь", en: "Confirm booking", kk: "Кезекті растау", ky: "Кезекти ырастоо", tg: "Тасдиқи навбат", tk: "Nobaty tassyklamak" },
+      "ro'yxat": { ru: "Список", en: "List", kk: "Тізім", ky: "Тизме", tg: "Рӯйхат", tk: "Sanaw" },
+      "shikoyatingiz (ixtiyoriy)": { ru: "Ваша жалоба (необязательно)", en: "Your complaint (optional)", kk: "Шағымыңыз (міндетті емес)", ky: "Арызыңыз (милдеттүү эмес)", tg: "Шикояти шумо (ихтиёрӣ)", tk: "Şikaýatyňyz (hökman däl)" },
+      "xarita": { ru: "Карта", en: "Map", kk: "Карта", ky: "Карта", tg: "Харита", tk: "Karta" },
+      "yangi navbat olish": { ru: "Взять новую очередь", en: "Book a new appointment", kk: "Жаңа кезек алу", ky: "Жаңы кезек алуу", tg: "Гирифтани навбати нав", tk: "Täze nobat almak" },
+
       "tanlangan filial": { ru: "Выбранный филиал", en: "Selected Branch", kk: "Таңдалған филиал", ky: "Тандалган филиал", tg: "Филиали интихобшуда", tk: "Saýlanan şahamça" },
       "faol filial monito'rlari": { ru: "Мониторинг активного филиала", en: "Active Branch Monitoring", kk: "Белсенді филиал мониторингі", ky: "Активдүү филиал мониторинги", tg: "Мониторинги филиали фаъол", tk: "Işjeň şahamça monitoringi" },
       "klinika tanlanmadi": { ru: "Филиал не выбран", en: "Clinic not selected", kk: "Филиал таңдалмады", ky: "Филиал тандалган жок", tg: "Филиал интихоб нашудааст", tk: "Şahamça saýlanmady" },
