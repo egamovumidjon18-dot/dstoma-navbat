@@ -3029,7 +3029,10 @@ export default function DoctorDashboard({
                                           </div>
                                           <p className={`text-xs font-bold truncate ${isCancelled ? 'text-slate-500 line-through' : 'text-slate-800'}`}>{q.patientName}</p>
                                           <p className="text-[10px] text-slate-400 font-mono truncate">{q.patientPhone}</p>
-                                          {q.status === 'scheduled' && (
+                                          {/* A consultation can only be started once its day has
+                                              arrived — offering it on a future column is how
+                                              tomorrow's appointments ended up stuck "in consultation". */}
+                                          {q.status === 'scheduled' && day.date <= todayStr && (
                                             <button
                                               onClick={(e) => { e.stopPropagation(); onUpdateQueueStatus(q.id!, 'in_progress'); }}
                                               className="mt-1.5 w-full py-1 bg-white hover:bg-blue-600 hover:text-white text-blue-600 font-bold text-[10px] rounded-lg transition-colors border border-blue-200"
@@ -3037,10 +3040,17 @@ export default function DoctorDashboard({
                                               {t("qabulni boshlash")}
                                             </button>
                                           )}
+                                          {/* Finishing has to be reachable from the same place it was
+                                              started, otherwise a consultation opened here stays
+                                              "in consultation" forever and the slot never frees up. */}
                                           {isActive && (
-                                            <span className="mt-1.5 block w-full py-1 text-center bg-amber-100 text-amber-700 font-bold text-[10px] rounded-lg">
-                                              {t("qabulda")}
-                                            </span>
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); handleCompleteQueue(q); }}
+                                              className="mt-1.5 w-full py-1 bg-amber-100 hover:bg-emerald-600 hover:text-white text-amber-700 font-bold text-[10px] rounded-lg transition-colors"
+                                              title={t("davolashni yakunlash ✓")}
+                                            >
+                                              {t("qabulda")} · {t("yakunlash")}
+                                            </button>
                                           )}
                                         </div>
                                       );

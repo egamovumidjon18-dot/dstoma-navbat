@@ -729,6 +729,11 @@ export function useAppState() {
 
   const handleUpdateQueueStatus = async (id: string, newStatus: QueueItem['status'], serviceId?: string, medicalNotes?: string, appointmentDate?: string, appointmentTime?: string) => {
     isSyncingRef.current = true;
+    // Kept so a rejected change can be put back. Without this the optimistic
+    // update stood until the 4s poll quietly reverted it, which is exactly what
+    // a broken button looks like from the outside: it appears to work, then
+    // undoes itself with no explanation.
+    const previousQueues = queues;
     setQueues(prev => prev.map(q => q.id === id ? { ...q, status: newStatus, ...(serviceId ? { serviceId } : {}), ...(medicalNotes ? { medicalNotes } : {}), ...(appointmentDate ? { appointmentDate } : {}), ...(appointmentTime ? { appointmentTime } : {}) } : q));
 
     try {
@@ -737,14 +742,26 @@ export function useAppState() {
       if (medicalNotes) payload.medical_notes = medicalNotes;
       if (appointmentDate) payload.appointmentDate = appointmentDate;
       if (appointmentTime) payload.appointmentTime = appointmentTime;
-      
-      await fetch(`/api/queues/${id}`, {
+
+      const res = await fetch(`/api/queues/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...superAdminAuthHeaders(), ...staffAuthHeaders() },
         body: JSON.stringify(payload)
       });
+      if (!res.ok) {
+        setQueues(previousQueues);
+        alert(
+          res.status === 401
+            ? "Navbat holatini o'zgartirib bo'lmadi: sessiya muddati tugagan. Iltimos, qaytadan kiring."
+            : "Navbat holatini o'zgartirib bo'lmadi: server o'zgarishni qabul qilmadi."
+        );
+        return;
+      }
     } catch (err) {
       console.warn("[AppState Hook] Status mutation sync failed", err);
+      setQueues(previousQueues);
+      alert("Tarmoqqa ulanmadi — navbat holati o'zgartirilmadi.");
+      return;
     } finally {
       isSyncingRef.current = false;
     }
