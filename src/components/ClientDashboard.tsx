@@ -283,6 +283,22 @@ export default function ClientDashboard({
     else localStorage.removeItem(PATIENT_SESSION_KEY);
   }, [currentUser]);
 
+  // Patients who logged in before session tokens existed have a remembered
+  // cabinet but nothing to authenticate their writes with, so every self-service
+  // save would fail with 401 for no visible reason. Retire those sessions once
+  // so they log in again and pick up a token.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (currentUser && !patientToken) {
+      setCurrentUser(null);
+      setActiveSubView('login');
+      showToast("Xavfsizlik yangilandi — iltimos, qaytadan kiring.", "error");
+    }
+    // Intentionally runs only on mount: mid-session logout would fight the
+    // login flow, which sets the token and the user in the same tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Screen control state matching user screenshots
   // 'home' -> Screenshot 1 (Main page with buttons, Shifokorlar & Xizmatlar listas)
   // 'register' -> Screenshot 2 (Bemor ma'lumotlari)
