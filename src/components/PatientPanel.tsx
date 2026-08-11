@@ -201,6 +201,7 @@ export default function PatientPanel({
     fullName: '', phone: '', passportSerial: '', birthDate: '', password: '',
   });
   const [isRegisteringFamilyMember, setIsRegisteringFamilyMember] = useState(false);
+  const [familyRegisterError, setFamilyRegisterError] = useState('');
 
   type AiChatMessage = { role: 'user' | 'assistant'; text: string; isSimulation?: boolean };
   const [aiChatMessages, setAiChatMessages] = useState<AiChatMessage[]>([]);
@@ -269,10 +270,16 @@ export default function PatientPanel({
     if (!newFamilyMember.fullName.trim() || !newFamilyMember.phone.trim() || !newFamilyMember.passportSerial.trim() || !newFamilyMember.password.trim()) return;
     if (!onRegisterFamilyMember) return;
     setIsRegisteringFamilyMember(true);
+    setFamilyRegisterError('');
     try {
       await onRegisterFamilyMember(newFamilyMember);
       setShowRegisterFamilyForm(false);
       setNewFamilyMember({ fullName: '', phone: '', passportSerial: '', birthDate: '', password: '' });
+    } catch (err: any) {
+      // Keep the form open with what they typed — the server rejects a passport
+      // that already belongs to someone, and closing silently would show a
+      // family member that was never actually saved.
+      setFamilyRegisterError(err?.message || t("A'zoni qo'shishda xatolik yuz berdi."));
     } finally {
       setIsRegisteringFamilyMember(false);
     }
@@ -1041,6 +1048,9 @@ export default function PatientPanel({
                 <p className="text-[10px] text-slate-400 mt-1">{t("a'zo kattalashganda shu pasport va parol bilan o'z alohida kabinetiga kira oladi.")}</p>
               </div>
             </div>
+            {familyRegisterError && (
+              <p className="text-xs font-bold text-rose-500 mt-4">{familyRegisterError}</p>
+            )}
             <div className="flex justify-end gap-2 mt-6">
               <button onClick={() => setShowRegisterFamilyForm(false)} className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">
                 {t("bekor qilish")}

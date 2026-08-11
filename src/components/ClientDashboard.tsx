@@ -599,6 +599,7 @@ export default function ClientDashboard({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...patientAuthHeaders(),
         },
         body: JSON.stringify(updatedUser)
       });
@@ -2165,16 +2166,22 @@ export default function ClientDashboard({
               password: info.password,
               managedBy: currentUser.id,
             };
-            setPatients(prev => [...prev, newMember]);
-            try {
-              await fetch(`${getApiUrl()}/api/patients`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...patientAuthHeaders() },
-                body: JSON.stringify(newMember),
-              });
-            } catch (err) {
-              console.warn('[ClientDashboard] Failed to register family member', err);
+            // Confirm before adding locally: the server rejects a passport that
+            // already belongs to someone, and swallowing that would leave a
+            // family member visible in the cabinet that was never saved.
+            const res = await fetch(`${getApiUrl()}/api/patients`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...patientAuthHeaders() },
+              body: JSON.stringify(newMember),
+            });
+            if (!res.ok) {
+              throw new Error(
+                res.status === 401
+                  ? "Bu pasport seriyasi allaqachon ro'yxatdan o'tgan."
+                  : "A'zoni qo'shishda xatolik yuz berdi."
+              );
             }
+            setPatients(prev => [...prev, newMember]);
             return newMember;
           }}
         />
