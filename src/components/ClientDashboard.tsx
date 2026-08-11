@@ -255,12 +255,21 @@ export default function ClientDashboard({
     };
   }, []);
 
-  // Patient login never issues a server session token (see /api/patient-login) — the
-  // patient record itself, once verified, IS the session. Persisted to localStorage so
-  // a device stays logged in across restarts instead of asking for passport+password
-  // every visit; a useEffect below keeps this in sync with every setCurrentUser call
-  // rather than touching each of the many call sites individually.
+  // Persisted to localStorage so a device stays logged in across restarts instead
+  // of asking for passport+password every visit; a useEffect below keeps this in
+  // sync with every setCurrentUser call rather than touching each of the many
+  // call sites individually.
   const PATIENT_SESSION_KEY = 'dstoma_patient_session';
+  // Session token from /api/patient-login. Required by POST /api/patients to edit
+  // an already-existing record — self-service writes (changing treating doctor,
+  // managing family members) have to prove they come from that patient rather
+  // than from anyone who happens to know a patient id.
+  const PATIENT_TOKEN_KEY = 'dstoma_patient_token';
+  const [patientToken, setPatientToken] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : localStorage.getItem(PATIENT_TOKEN_KEY)
+  );
+  const patientAuthHeaders = (): Record<string, string> =>
+    patientToken ? { Authorization: `Bearer ${patientToken}` } : {};
   const [currentUser, setCurrentUser] = useState<Patient | null>(() => {
     if (typeof window === 'undefined') return null;
     const saved = localStorage.getItem(PATIENT_SESSION_KEY);
@@ -938,22 +947,38 @@ export default function ClientDashboard({
       telegramChatId: telegramIdInput
     };
     
-    // Save locally
-    setPatients(prev => [...prev, newPatient]);
-    setCurrentUser(newPatient);
-    showToast("Muvaffaqiyatli ro'yxatdan o'tdingiz!");
-    setActiveSubView('cabinet');
-
-    // Post to server backend
+    // Confirm with the server BEFORE showing success. This used to announce
+    // "registered!" and drop the patient into the cabinet immediately, ignoring
+    // the response — so any rejection left them logged into a record that only
+    // existed in their own browser. It also matters more now: the server
+    // refuses to overwrite a passport that is already registered (that was an
+    // account-takeover path), and the patient needs to be told to log in
+    // instead of being handed a phantom account.
     try {
-      await fetch(`${getApiUrl()}/api/patients`, {
+      const res = await fetch(`${getApiUrl()}/api/patients`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newPatient)
       });
+      if (!res.ok) {
+        showToast(
+          res.status === 401
+            ? "Bu pasport seriyasi allaqachon ro'yxatdan o'tgan. Iltimos, \"Kirish\" orqali tizimga kiring."
+            : "Ro'yxatdan o'tishda xatolik yuz berdi. Qayta urinib ko'ring.",
+          "error"
+        );
+        return;
+      }
     } catch (err) {
       console.warn("[ClientDashboard] Backend sync for patient registration failed", err);
+      showToast("Tarmoqqa ulanishda xatolik. Qayta urinib ko'ring.", "error");
+      return;
     }
+
+    setPatients(prev => [...prev, newPatient]);
+    setCurrentUser(newPatient);
+    showToast("Muvaffaqiyatli ro'yxatdan o'tdingiz!");
+    setActiveSubView('cabinet');
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -975,6 +1000,10 @@ export default function ClientDashboard({
       if (res.ok) {
         const data = await res.json();
         const foundPatient: Patient = data.patient;
+        if (data.token) {
+          setPatientToken(data.token);
+          localStorage.setItem(PATIENT_TOKEN_KEY, data.token);
+        }
         setPatients(prev => prev.some(p => p.id === foundPatient.id) ? prev.map(p => p.id === foundPatient.id ? foundPatient : p) : [...prev, foundPatient]);
         setCurrentUser(foundPatient);
         setTelegramIdInput(foundPatient.telegramChatId || '');
@@ -991,6 +1020,8 @@ export default function ClientDashboard({
 
   const handleLogout = () => {
     setCurrentUser(null);
+    setPatientToken(null);
+    localStorage.removeItem(PATIENT_TOKEN_KEY);
     showToast("Kabinetdan chiqdingiz");
     setActiveSubView('home');
   };
@@ -1006,7 +1037,7 @@ export default function ClientDashboard({
       try {
         await fetch(`${getApiUrl()}/api/patients`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...patientAuthHeaders() },
           body: JSON.stringify(updated)
         });
       } catch (err) {
@@ -2061,7 +2092,7 @@ export default function ClientDashboard({
             // the doctor it claims to have picked never sees them.
             const res = await fetch(`${getApiUrl()}/api/patients`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', ...patientAuthHeaders() },
               body: JSON.stringify({ id: currentUser.id, primaryDoctorId: doctorId }),
             });
             if (!res.ok) throw new Error(`Doctor change rejected (${res.status})`);
@@ -2076,7 +2107,7 @@ export default function ClientDashboard({
             try {
               await fetch(`${getApiUrl()}/api/patients`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...patientAuthHeaders() },
                 body: JSON.stringify(updated),
               });
             } catch (err) {
@@ -2089,7 +2120,7 @@ export default function ClientDashboard({
             try {
               await fetch(`${getApiUrl()}/api/patients`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...patientAuthHeaders() },
                 body: JSON.stringify(rest),
               });
             } catch (err) {
@@ -2122,7 +2153,7 @@ export default function ClientDashboard({
             try {
               await fetch(`${getApiUrl()}/api/patients`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...patientAuthHeaders() },
                 body: JSON.stringify(newMember),
               });
             } catch (err) {

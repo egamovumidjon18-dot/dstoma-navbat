@@ -599,6 +599,13 @@ export default function DoctorDashboard({
       ? language
       : null;
 
+  // POST /api/patients only lets an already-existing record be edited by someone
+  // who can prove they're allowed to — staff of that clinic, the patient
+  // themselves, or the superadmin. Every doctor-side patient write has to carry
+  // the staff session token or the server rejects it.
+  const staffAuthHeaders = (): Record<string, string> =>
+    staffToken ? { Authorization: `Bearer ${staffToken}` } : {};
+
   const t = (text: string) => {
     if (!language) return text;
 
@@ -745,7 +752,7 @@ export default function DoctorDashboard({
     try {
       const res = await fetch("/api/patients", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...staffAuthHeaders() },
         body: JSON.stringify({
           clinicId: effectiveClinicId,
           fullName: quickAddPatient.fullName.trim(),
@@ -818,7 +825,7 @@ export default function DoctorDashboard({
       if (!existingByPhone && typedPhoneDigits) {
         const res = await fetch("/api/patients", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...staffAuthHeaders() },
           body: JSON.stringify({
             clinicId: effectiveClinicId,
             fullName: newBookingName.trim(),
@@ -867,7 +874,7 @@ export default function DoctorDashboard({
     try {
       const res = await fetch("/api/patients", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...staffAuthHeaders() },
         body: JSON.stringify({ id: patient.id, primaryDoctorId: currentDoctor.id }),
       });
       if (res.ok) onPatientUpserted?.({ ...patient, primaryDoctorId: currentDoctor.id });
@@ -973,7 +980,7 @@ export default function DoctorDashboard({
       };
       await fetch("/api/patients", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...staffAuthHeaders() },
         body: JSON.stringify(updatedPatient),
       });
       setCrossClinicViewPatient(null);

@@ -59,6 +59,10 @@ const superAdminSessions = new Map<string, number>(); // token -> expiresAt (ms)
 const SUPERADMIN_SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const staffSessions = new Map<string, { role: 'director' | 'doctor'; clinicId: string; doctorId?: string; expiresAt: number }>();
 const STAFF_SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+// Patients get a session too, so a self-service write (changing their treating
+// doctor, managing family members) can be proven to come from that patient
+// instead of being accepted from anyone who knows a patient id.
+const patientSessions = new Map<string, { patientId: string; expiresAt: number }>();
 
 // A slow/unreachable Firestore connection must never hang an HTTP response —
 // races any promise against a timeout so callers always get an answer.
@@ -96,7 +100,18 @@ async function saveStaffSession(token: string, data: { role: 'director' | 'docto
   }
 }
 
-async function getAuthContext(req: any): Promise<{ isSuperAdmin: boolean; staff?: { role: 'director' | 'doctor'; clinicId: string; doctorId?: string } }> {
+async function savePatientSession(token: string, data: { patientId: string; expiresAt: number }) {
+  patientSessions.set(token, data);
+  if (fDb) {
+    try {
+      await withTimeout(setDoc(doc(fDb, "sessions", token), { type: "patient", ...data }), 4000);
+    } catch (err) {
+      console.error("[Session] Failed to persist patient session to Firestore:", err);
+    }
+  }
+}
+
+async function getAuthContext(req: any): Promise<{ isSuperAdmin: boolean; staff?: { role: 'director' | 'doctor'; clinicId: string; doctorId?: string }; patient?: { patientId: string } }> {
   const authHeader = String(req.headers["authorization"] || "");
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
   if (!token) return { isSuperAdmin: false };
@@ -105,6 +120,10 @@ async function getAuthContext(req: any): Promise<{ isSuperAdmin: boolean; staff?
   if (saExpiry && saExpiry > Date.now()) return { isSuperAdmin: true };
   const staff = staffSessions.get(token);
   if (staff && staff.expiresAt > Date.now()) return { isSuperAdmin: false, staff };
+  const patientSession = patientSessions.get(token);
+  if (patientSession && patientSession.expiresAt > Date.now()) {
+    return { isSuperAdmin: false, patient: { patientId: patientSession.patientId } };
+  }
 
   // Cache miss (e.g. a fresh serverless instance) — fall back to Firestore, the
   // persistent source of truth, and repopulate the in-memory cache on a hit. Bounded
@@ -124,6 +143,10 @@ async function getAuthContext(req: any): Promise<{ isSuperAdmin: boolean; staff?
             const staffData = { role: data.role, clinicId: data.clinicId, doctorId: data.doctorId, expiresAt: data.expiresAt };
             staffSessions.set(token, staffData);
             return { isSuperAdmin: false, staff: staffData };
+          }
+          if (data.type === "patient") {
+            patientSessions.set(token, { patientId: data.patientId, expiresAt: data.expiresAt });
+            return { isSuperAdmin: false, patient: { patientId: data.patientId } };
           }
         }
       }
@@ -897,7 +920,9 @@ app.post("/api/patient-login", rateLimiter(10, 60 * 1000), async (req, res) => {
     await savePatient({ id: matched.id, password: hashPassword(password) } as any);
   }
   const { password: _pw, ...safePatient } = matched;
-  return res.json({ ok: true, patient: safePatient });
+  const token = crypto.randomBytes(32).toString("hex");
+  await savePatientSession(token, { patientId: matched.id!, expiresAt: Date.now() + STAFF_SESSION_TTL_MS });
+  return res.json({ ok: true, patient: safePatient, token });
 });
 
 // Superadmin-only: full clinic/doctor records INCLUDING credentials, for the SuperAdmin
@@ -1294,11 +1319,35 @@ app.post("/api/patients", rateLimiter(30, 60 * 1000), async (req, res) => {
   }
 
   const patDb = await getPatients();
+  // Match on id too, not just passport/telegram. savePatient() merges by id, so a
+  // body carrying a known id was already editing that record — it just wasn't
+  // being recognised as an edit, which is what let anyone rewrite any patient.
   const existingIdx = patDb.findIndex(p => {
     const existingSerial = (p.passportSerial || '').replace(/\s+/g, '').toUpperCase();
-    return (existingSerial && existingSerial === serialClean) ||
+    return (newPatient.id && p.id === newPatient.id) ||
+           (existingSerial && existingSerial === serialClean) ||
            (newPatient.telegramChatId && String(p.telegramChatId) === String(newPatient.telegramChatId));
   });
+
+  // Creating a brand-new record stays open — patients self-register here (public
+  // site and Telegram bot) before they have any credentials to present. Editing
+  // a record that already exists is what has to be proven.
+  if (existingIdx !== -1) {
+    const existing: any = patDb[existingIdx];
+    const auth = await getAuthContext(req);
+    const isStaffForClinic = auth.staff && auth.staff.clinicId === existing.clinicId;
+    const selfOrManaged = auth.patient && (
+      // their own record
+      auth.patient.patientId === existing.id ||
+      // a family member they already manage
+      existing.managedBy === auth.patient.patientId ||
+      // claiming someone as a family member (the family-cabinet link flow)
+      newPatient.managedBy === auth.patient.patientId
+    );
+    if (!auth.isSuperAdmin && !isStaffForClinic && !selfOrManaged) {
+      return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+    }
+  }
 
   if (existingIdx === -1) {
     await savePatient(newPatient);
