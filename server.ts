@@ -56,9 +56,14 @@ app.use(async (req, res, next) => {
 // below are kept purely as a same-instance fast-path cache to avoid a Firestore
 // round-trip on every request; Firestore is always the source of truth.
 const superAdminSessions = new Map<string, number>(); // token -> expiresAt (ms)
-const SUPERADMIN_SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+// Sessions are sliding, not fixed: getAuthContext() below renews expiresAt on
+// every request past the halfway point of the window, so someone who keeps
+// the panel open and actually uses it never hits the wall — only real
+// inactivity for the full window logs them out. 24h was a fixed wall: a
+// doctor mid-shift who logged in that morning got kicked while still working.
+const SUPERADMIN_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days, sliding
 const staffSessions = new Map<string, { role: 'director' | 'doctor'; clinicId: string; doctorId?: string; expiresAt: number }>();
-const STAFF_SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+const STAFF_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days, sliding
 // Patients get a session too, so a self-service write (changing their treating
 // doctor, managing family members) can be proven to come from that patient
 // instead of being accepted from anyone who knows a patient id.
@@ -111,17 +116,34 @@ async function savePatientSession(token: string, data: { patientId: string; expi
   }
 }
 
+// Extends a session past the halfway point of its window instead of on every
+// single request — otherwise every authenticated call would carry a Firestore
+// write. Fire-and-forget: a missed renewal just gets retried on the next
+// request, it never blocks the response that triggered it.
+function renewIfHalfway(token: string, expiresAt: number, ttlMs: number, save: (newExpiresAt: number) => void) {
+  if (expiresAt - Date.now() < ttlMs / 2) {
+    save(Date.now() + ttlMs);
+  }
+}
+
 async function getAuthContext(req: any): Promise<{ isSuperAdmin: boolean; staff?: { role: 'director' | 'doctor'; clinicId: string; doctorId?: string }; patient?: { patientId: string } }> {
   const authHeader = String(req.headers["authorization"] || "");
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
   if (!token) return { isSuperAdmin: false };
 
   const saExpiry = superAdminSessions.get(token);
-  if (saExpiry && saExpiry > Date.now()) return { isSuperAdmin: true };
+  if (saExpiry && saExpiry > Date.now()) {
+    renewIfHalfway(token, saExpiry, SUPERADMIN_SESSION_TTL_MS, (exp) => { saveSuperAdminSession(token, exp); });
+    return { isSuperAdmin: true };
+  }
   const staff = staffSessions.get(token);
-  if (staff && staff.expiresAt > Date.now()) return { isSuperAdmin: false, staff };
+  if (staff && staff.expiresAt > Date.now()) {
+    renewIfHalfway(token, staff.expiresAt, STAFF_SESSION_TTL_MS, (exp) => { saveStaffSession(token, { ...staff, expiresAt: exp }); });
+    return { isSuperAdmin: false, staff };
+  }
   const patientSession = patientSessions.get(token);
   if (patientSession && patientSession.expiresAt > Date.now()) {
+    renewIfHalfway(token, patientSession.expiresAt, STAFF_SESSION_TTL_MS, (exp) => { savePatientSession(token, { ...patientSession, expiresAt: exp }); });
     return { isSuperAdmin: false, patient: { patientId: patientSession.patientId } };
   }
 
@@ -137,15 +159,18 @@ async function getAuthContext(req: any): Promise<{ isSuperAdmin: boolean; staff?
         if (data.expiresAt > Date.now()) {
           if (data.type === "superadmin") {
             superAdminSessions.set(token, data.expiresAt);
+            renewIfHalfway(token, data.expiresAt, SUPERADMIN_SESSION_TTL_MS, (exp) => { saveSuperAdminSession(token, exp); });
             return { isSuperAdmin: true };
           }
           if (data.type === "staff") {
             const staffData = { role: data.role, clinicId: data.clinicId, doctorId: data.doctorId, expiresAt: data.expiresAt };
             staffSessions.set(token, staffData);
+            renewIfHalfway(token, data.expiresAt, STAFF_SESSION_TTL_MS, (exp) => { saveStaffSession(token, { ...staffData, expiresAt: exp }); });
             return { isSuperAdmin: false, staff: staffData };
           }
           if (data.type === "patient") {
             patientSessions.set(token, { patientId: data.patientId, expiresAt: data.expiresAt });
+            renewIfHalfway(token, data.expiresAt, STAFF_SESSION_TTL_MS, (exp) => { savePatientSession(token, { patientId: data.patientId, expiresAt: exp }); });
             return { isSuperAdmin: false, patient: { patientId: data.patientId } };
           }
         }
