@@ -727,7 +727,33 @@ export function useAppState() {
     }
   };
 
-  const handleUpdateQueueStatus = async (id: string, newStatus: QueueItem['status'], serviceId?: string, medicalNotes?: string, appointmentDate?: string, appointmentTime?: string) => {
+  // Permanently removes a queue entry (as opposed to handleCancelQueue, which
+  // marks it 'cancelled' but keeps the record) — used for the doctor's own
+  // scheduling mistakes, e.g. a slot booked into the wrong day.
+  const handleDeleteQueue = async (id: string) => {
+    const previousQueues = queues;
+    setQueues(prev => prev.filter(q => q.id !== id));
+    try {
+      const res = await fetch(`/api/queues/${id}`, {
+        method: 'DELETE',
+        headers: { ...superAdminAuthHeaders(), ...staffAuthHeaders() },
+      });
+      if (!res.ok) {
+        setQueues(previousQueues);
+        alert(
+          res.status === 401
+            ? "Navbatni o'chirib bo'lmadi: sessiya muddati tugagan. Iltimos, qaytadan kiring."
+            : "Navbatni o'chirib bo'lmadi: server so'rovni qabul qilmadi."
+        );
+      }
+    } catch (err) {
+      console.warn("[AppState Hook] Queue deletion sync failed", err);
+      setQueues(previousQueues);
+      alert("Tarmoqqa ulanmadi — navbat o'chirilmadi.");
+    }
+  };
+
+  const handleUpdateQueueStatus = async (id: string, newStatus: QueueItem['status'], serviceId?: string, medicalNotes?: string, appointmentDate?: string, appointmentTime?: string, opts?: { silent?: boolean }) => {
     isSyncingRef.current = true;
     // Kept so a rejected change can be put back. Without this the optimistic
     // update stood until the 4s poll quietly reverted it, which is exactly what
@@ -750,17 +776,25 @@ export function useAppState() {
       });
       if (!res.ok) {
         setQueues(previousQueues);
-        alert(
-          res.status === 401
-            ? "Navbat holatini o'zgartirib bo'lmadi: sessiya muddati tugagan. Iltimos, qaytadan kiring."
-            : "Navbat holatini o'zgartirib bo'lmadi: server o'zgarishni qabul qilmadi."
-        );
+        // Background callers (the auto-queue tick, which retries every 60s
+        // unattended) must never alert() — a blocking dialog popping up on its
+        // own, possibly repeatedly, is worse than the silent failure it
+        // replaced. Only a doctor's own button click gets the explanation.
+        if (!opts?.silent) {
+          alert(
+            res.status === 401
+              ? "Navbat holatini o'zgartirib bo'lmadi: sessiya muddati tugagan. Iltimos, qaytadan kiring."
+              : "Navbat holatini o'zgartirib bo'lmadi: server o'zgarishni qabul qilmadi."
+          );
+        } else {
+          console.warn("[AppState Hook] Silent status mutation rejected:", res.status);
+        }
         return;
       }
     } catch (err) {
       console.warn("[AppState Hook] Status mutation sync failed", err);
       setQueues(previousQueues);
-      alert("Tarmoqqa ulanmadi — navbat holati o'zgartirilmadi.");
+      if (!opts?.silent) alert("Tarmoqqa ulanmadi — navbat holati o'zgartirilmadi.");
       return;
     } finally {
       isSyncingRef.current = false;
@@ -1153,6 +1187,7 @@ export function useAppState() {
     handleLogout,
     handleAddQueue,
     handleCancelQueue,
+    handleDeleteQueue,
     handleUpdateQueueStatus,
     handleUpdateDoctorRating,
     handleUpdateClinicSubscription,

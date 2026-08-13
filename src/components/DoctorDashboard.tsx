@@ -94,7 +94,8 @@ interface DoctorDashboardProps {
     serviceId?: string,
     medicalNotes?: string,
     appointmentDate?: string,
-    appointmentTime?: string
+    appointmentTime?: string,
+    opts?: { silent?: boolean }
   ) => void;
   selectedClinic: Clinic | null;
   setActiveTab?: (
@@ -111,6 +112,7 @@ interface DoctorDashboardProps {
   onRequestPremiumUpgrade?: (clinicId: string) => void;
   staffToken?: string | null;
   onAddQueue?: (q: QueueItem) => void;
+  onDeleteQueue?: (id: string) => void;
   onPatientUpserted?: (p: Patient) => void;
   onLogout?: () => void;
   onUpdateDoctorDetails?: (doctorId: string, updates: Partial<Doctor>) => Promise<boolean>;
@@ -137,6 +139,8 @@ const VIEW_TITLES: Record<string, string> = {
 };
 
 const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
+  "bu navbatni o'chirmoqchimisiz?": { ru: "Удалить эту запись?", en: "Delete this appointment?", kk: "Осы жазбаны жоясыз ба?", ky: "Бул жазууну өчүрөсүзбү?", tg: "Ин навбатро нест мекунед?", tk: "Bu ýazgyny pozmakçymy?" },
+
   "rejalashtirilgan": { ru: "Запланировано", en: "Scheduled", kk: "Жоспарланған", ky: "Пландаштырылган", tg: "Ба нақша гирифташуда", tk: "Meýilleşdirilen" },
   "o'chirish": { ru: "Удалить", en: "Delete", kk: "Жою", ky: "Өчүрүү", tg: "Нест кардан", tk: "Pozmak" },
 
@@ -611,6 +615,7 @@ export default function DoctorDashboard({
   onRequestPremiumUpgrade,
   staffToken,
   onAddQueue,
+  onDeleteQueue,
   onPatientUpserted,
   onLogout,
   onUpdateDoctorDetails
@@ -833,6 +838,16 @@ export default function DoctorDashboard({
     if (!newBookingName.trim() || !newBookingDate || !newBookingTime || !effectiveClinicId || !onAddQueue) return;
     setIsSavingNewBooking(true);
     try {
+      if (editingQueueId) {
+        // Editing only touches service/date/time — the patient is already tied
+        // to this queue entry, and renaming them here would silently detach
+        // from their real Patient record instead of actually renaming it.
+        onUpdateQueueStatus(editingQueueId, editingQueueStatus, newBookingServiceId, undefined, newBookingDate, newBookingTime);
+        setShowNewBookingModal(false);
+        setEditingQueueId(null);
+        return;
+      }
+
       // Booking someone by free-typed name/phone (as opposed to picking them from
       // the search results) never used to create a real Patient record — only a
       // queue ticket with those two fields as plain text. The person then couldn't
@@ -1048,6 +1063,12 @@ export default function DoctorDashboard({
   // Rejalashtirilgan grid — date/time are then shown read-only instead of
   // editable, since the whole point of the grid is to stop free-typed times.
   const [newBookingSlotLocked, setNewBookingSlotLocked] = useState(false);
+  // Set when the same modal was opened to edit an existing slot instead of
+  // creating a new one — patient identity stays fixed (that's the Patient
+  // record, not this modal's job); only service/date/time are re-submitted
+  // through onUpdateQueueStatus rather than onAddQueue.
+  const [editingQueueId, setEditingQueueId] = useState<string | null>(null);
+  const [editingQueueStatus, setEditingQueueStatus] = useState<QueueItem['status']>('scheduled');
 
   // Doctor-editable weekly working-hours used to generate the Rejalashtirilgan
   // time-slot grid. Falls back to a clinic-typical default when the doctor
@@ -1133,6 +1154,7 @@ export default function DoctorDashboard({
   // pre-set and shown read-only) or "unlocked" for the standalone header
   // button (date still pickable, time restricted to a dropdown of real slots).
   const openNewBookingModal = (locked: boolean, date?: string, time?: string) => {
+    setEditingQueueId(null);
     setNewBookingSlotLocked(locked);
     setNewBookingQuery('');
     setNewBookingName('');
@@ -1140,6 +1162,25 @@ export default function DoctorDashboard({
     setNewBookingServiceId('');
     setNewBookingDate(date || new Date().toISOString().split('T')[0]);
     setNewBookingTime(time || scheduleSlots.find((s) => !isLunchSlot(s)) || '09:00');
+    setShowNewBookingModal(true);
+  };
+
+  // Reuses the same modal for an existing slot — locked (like a grid-opened
+  // booking) since the point is to change service/date/time, not re-type a
+  // patient who's already attached to this queue entry.
+  const openEditQueueModal = (q: QueueItem) => {
+    setEditingQueueId(q.id!);
+    setEditingQueueStatus(q.status);
+    // Unlocked, not locked: locked mode makes date/time read-only static text
+    // (used for the grid's "book this exact slot" flow) — editing an existing
+    // appointment needs date/time to stay changeable, that's the whole point.
+    setNewBookingSlotLocked(false);
+    setNewBookingQuery('');
+    setNewBookingName(q.patientName || '');
+    setNewBookingPhone(q.patientPhone || '');
+    setNewBookingServiceId(q.serviceId || '');
+    setNewBookingDate(q.appointmentDate || new Date().toISOString().split('T')[0]);
+    setNewBookingTime(q.appointmentTime || scheduleSlots.find((s) => !isLunchSlot(s)) || '09:00');
     setShowNewBookingModal(true);
   };
 
@@ -1374,7 +1415,7 @@ export default function DoctorDashboard({
         )
         .sort((a, b) => (a.appointmentTime || "").localeCompare(b.appointmentTime || ""))[0];
 
-      if (next?.id) updateStatus(next.id, "calling");
+      if (next?.id) updateStatus(next.id, "calling", undefined, undefined, undefined, undefined, { silent: true });
     };
 
     tick();
@@ -3048,6 +3089,30 @@ export default function DoctorDashboard({
                                             <p className={`text-[11px] font-black ${timeClasses}`}>{q.appointmentTime || '--:--'}</p>
                                             {isDone && <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />}
                                             {isCancelled && <span className="text-[9px] font-black text-slate-400 uppercase shrink-0">{t("bekor qilindi")}</span>}
+                                            {/* Editing/deleting a completed or already-cancelled visit would
+                                                rewrite medical history after the fact — only scheduled slots
+                                                (not yet started) are safe to change here. */}
+                                            {q.status === 'scheduled' && (
+                                              <div className="flex items-center gap-0.5 shrink-0">
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); openEditQueueModal(q); }}
+                                                  className="p-0.5 text-slate-400 hover:text-blue-600 transition-colors"
+                                                  title={t("tahrirlash")}
+                                                >
+                                                  <Edit2 className="w-3 h-3" />
+                                                </button>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (window.confirm(t("bu navbatni o'chirmoqchimisiz?"))) onDeleteQueue?.(q.id!);
+                                                  }}
+                                                  className="p-0.5 text-slate-400 hover:text-rose-600 transition-colors"
+                                                  title={t("o'chirish")}
+                                                >
+                                                  <Trash2 className="w-3 h-3" />
+                                                </button>
+                                              </div>
+                                            )}
                                           </div>
                                           <p className={`text-xs font-bold truncate ${isCancelled ? 'text-slate-500 line-through' : 'text-slate-800'}`}>{q.patientName}</p>
                                           <p className="text-[10px] text-slate-400 font-mono truncate">{q.patientPhone}</p>
@@ -3778,7 +3843,7 @@ export default function DoctorDashboard({
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
               <h3 className="font-bold text-slate-800 flex items-center gap-2">
                 <CalendarClock className="w-5 h-5 text-purple-500" />
-                {t("yangi bandlash")}
+                {editingQueueId ? t("tahrirlash") : t("yangi bandlash")}
               </h3>
               <button
                 onClick={() => setShowNewBookingModal(false)}
@@ -3788,6 +3853,7 @@ export default function DoctorDashboard({
               </button>
             </div>
             <div className="p-5 flex flex-col gap-4 overflow-y-auto">
+              {!editingQueueId && (
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("bemorni qidirish")}</label>
                 <input
@@ -3817,6 +3883,7 @@ export default function DoctorDashboard({
                   </div>
                 )}
               </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("to'liq ism *")}</label>
@@ -3824,7 +3891,8 @@ export default function DoctorDashboard({
                     type="text"
                     value={newBookingName}
                     onChange={(e) => setNewBookingName(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                    readOnly={!!editingQueueId}
+                    className={`w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium text-slate-800 ${editingQueueId ? 'bg-slate-50' : 'bg-white'}`}
                     placeholder={t("ism familiya")}
                   />
                 </div>
@@ -3834,7 +3902,8 @@ export default function DoctorDashboard({
                     type="text"
                     value={newBookingPhone}
                     onChange={(e) => setNewBookingPhone(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                    readOnly={!!editingQueueId}
+                    className={`w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium text-slate-800 ${editingQueueId ? 'bg-slate-50' : 'bg-white'}`}
                     placeholder="+998 90 123 45 67"
                   />
                 </div>
@@ -3900,7 +3969,7 @@ export default function DoctorDashboard({
                 disabled={!newBookingName.trim() || !newBookingDate || !newBookingTime || isSavingNewBooking}
                 className="px-4 py-2 text-sm font-bold bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-colors shadow-md shadow-purple-500/20"
               >
-                {t("tasdiqlash")}
+                {editingQueueId ? t("saqlash") : t("tasdiqlash")}
               </button>
             </div>
           </div>

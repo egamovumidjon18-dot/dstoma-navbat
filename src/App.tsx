@@ -53,6 +53,7 @@ export default function App() {
     handlePatientUpserted,
     handleAddQueue,
     handleCancelQueue,
+    handleDeleteQueue,
     handleUpdateQueueStatus,
     handleUpdateDoctorRating,
     handleToggleClinicStatus,
@@ -115,6 +116,7 @@ export default function App() {
           onRequestPremiumUpgrade={handleRequestPremiumUpgrade}
           staffToken={staffToken}
           onAddQueue={handleAddQueue}
+          onDeleteQueue={handleDeleteQueue}
           onPatientUpserted={handlePatientUpserted}
           onLogout={handleLogout}
           onUpdateDoctorDetails={handleUpdateDoctorDetails}

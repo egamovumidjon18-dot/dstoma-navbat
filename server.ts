@@ -2264,6 +2264,23 @@ async function callGemini(opts: {
 
 console.log("[DStoma Core] Booting Production-Ready Full-Stack Web App...");
 
+// All three /api/ai/* endpoints told Gemini "Uzbek (uz)" / "Russian (ru)" /
+// otherwise "English (en)" — every non-uz/ru language (kk, ky, tg, tk) fell
+// through to English even though the app's UI supports all seven. A doctor
+// asking in Kazakh got an English answer.
+const AI_PROMPT_LANGUAGE_NAMES: Record<string, string> = {
+  uz: "Uzbek (uz)",
+  ru: "Russian (ru)",
+  en: "English (en)",
+  kk: "Kazakh (kk)",
+  ky: "Kyrgyz (ky)",
+  tg: "Tajik (tg)",
+  tk: "Turkmen (tk)",
+};
+function aiPromptLanguageName(lang: string): string {
+  return AI_PROMPT_LANGUAGE_NAMES[lang] || AI_PROMPT_LANGUAGE_NAMES.uz;
+}
+
 /**
  * Endpoint for Real-time AI Dental Diagnostics and Telemetry
  * Securely calls Gemini on the server side to protect secrets.
@@ -2317,7 +2334,7 @@ app.post("/api/ai/diagnostic", rateLimiter(10, 60 * 1000), async (req, res) => {
     let promptText = `Perform a professional, clinically accurate dental diagnostic evaluation for the specified tooth:
 Tooth index number: #${toothNumber} (Mandibular active tooth node)
 Patient reported symptoms or diagnostic logs: "${symptoms || 'None - routine scanner telemetry check'}"
-Target language for all text strings: ${requestedLang === 'uz' ? 'Uzbek (uz)' : requestedLang === 'ru' ? 'Russian (ru)' : 'English (en)'}`;
+Target language for all text strings: ${aiPromptLanguageName(requestedLang)}`;
 
     if (image && image.data && image.mimeType) {
       promptText += `\n\n[IMAGE INCLUDED] A physical picture has been provided by the patient. 
@@ -2372,7 +2389,7 @@ Return the JSON response adhering strictly to this schema:
           }
         }
       },
-      systemInstruction: "You are an expert, highly precise robotic AI dental system operating in DStoma Digital Hub. You analyze selected human teeth numbers and deliver clear, medical-quality descriptions, estimations, and treatments. Speak as an objective virtual dental clinic scientist. Strictly structure everything in the language requested (Uzbek, Russian, or English)."
+      systemInstruction: "You are an expert, highly precise robotic AI dental system operating in DStoma Digital Hub. You analyze selected human teeth numbers and deliver clear, medical-quality descriptions, estimations, and treatments. Speak as an objective virtual dental clinic scientist. Strictly structure everything in the language requested — it may be Uzbek, Russian, English, Kazakh, Kyrgyz, Tajik, or Turkmen."
     });
 
     if (response && response.text) {
@@ -2430,7 +2447,7 @@ app.post("/api/ai/xray-analysis", rateLimiter(10, 60 * 1000), async (req, res) =
     }
 
     const promptText = `Analyze this dental ${xrayType || 'X-ray'} image as an expert radiologist.
-Target language for all text strings: ${requestedLang === 'uz' ? 'Uzbek (uz)' : requestedLang === 'ru' ? 'Russian (ru)' : 'English (en)'}
+Target language for all text strings: ${aiPromptLanguageName(requestedLang)}
 Identify every visible pathology or notable finding (caries, bone loss, impacted teeth, periapical lesions, existing restorations, etc.), each tied to a specific tooth number (FDI notation) where possible.
 Return strict JSON matching this schema:
 {
@@ -2507,7 +2524,7 @@ app.post("/api/ai/patient-chat", rateLimiter(10, 60 * 1000), async (req, res) =>
       return res.json({ reply: getPatientBotSimulatedReply(message || '', !!image), isSimulation: true });
     }
 
-    const systemPrompt = `You are an expert robotic AI dental scientist operating in DStoma Digital Hub. You analyze dental questions, symptoms, and human teeth/mouth photos/x-rays. Respond in ${requestedLang === 'uz' ? 'Uzbek' : requestedLang === 'ru' ? 'Russian' : 'English'} (unless the patient writes in a different language). Be warm, precise, professional, and very helpful. Format with bullet points where necessary. Keep the answer under 150 words. Always include a reminder that AI diagnostics is estimated and you must schedule/consult real dentists at DStoma.`;
+    const systemPrompt = `You are an expert robotic AI dental scientist operating in DStoma Digital Hub. You analyze dental questions, symptoms, and human teeth/mouth photos/x-rays. Respond in ${aiPromptLanguageName(requestedLang)} (unless the patient writes in a different language). Be warm, precise, professional, and very helpful. Format with bullet points where necessary. Keep the answer under 150 words. Always include a reminder that AI diagnostics is estimated and you must schedule/consult real dentists at DStoma.`;
     const userPrompt = message ? message : "Diagnose this uploaded tooth/mouth photo and give preventative dental advice.";
 
     const parts: any[] = [];

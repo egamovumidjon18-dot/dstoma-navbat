@@ -9,6 +9,8 @@ import { Language } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';
 
 const PLAN_TRANSLATIONS: Dict = {
+  "bemor tarixiga asoslanib, avval muammoli tishlardagi kariesni davolash, so'ngra implant o'rnatish bosqichiga o'tish tavsiya etiladi. davolash davomiyligi taxminan 3-4 hafta.": { ru: "На основе истории пациента рекомендуется сначала вылечить кариес в проблемных зубах, затем перейти к этапу установки имплантов. Продолжительность лечения примерно 3-4 недели.", en: "Based on the patient's history, it is recommended to first treat caries in the problem teeth, then move on to implant placement. Treatment duration is approximately 3-4 weeks.", kk: "Пациенттің тарихына сүйене отырып, алдымен проблемалы тістердегі кариесті емдеу, содан кейін имплант орнату кезеңіне өту ұсынылады. Емдеу ұзақтығы шамамен 3-4 апта.", ky: "Бейтаптын тарыхына таянып, адегенде көйгөйлүү тиштердеги кариести дарылоо, андан кийин имплант орнотуу этабына өтүү сунушталат. Дарылоо узактыгы болжол менен 3-4 жума.", tg: "Дар асоси таърихи бемор тавсия дода мешавад, ки аввал кариесро дар дандонҳои мушкилдор табобат кунед, сипас ба марҳилаи гузоштани имплант гузаред. Давомнокии табобат тахминан 3-4 ҳафта.", tk: "Näsagyň taryhyna esaslanyp, ilki kynçylykly dişlerdäki kariesi bejermek, soňra implant oturtmak tapgyryna geçmek maslahat berilýär. Bejergi dowamlylygy takmynan 3-4 hepde." },
+
   "davolash rejasi": { ru: "План лечения", en: "Treatment plan", kk: "Емдеу жоспары", ky: "Дарылоо планы", tg: "Нақшаи муолиҷа", tk: "Bejergi meýilnamasy" },
   "yangi muolaja": { ru: "Новая процедура", en: "New procedure", kk: "Жаңа процедура", ky: "Жаңы процедура", tg: "Муолиҷаи нав", tk: "Täze prosedura" },
   "so'm": { ru: "сум", en: "UZS", kk: "сом", ky: "сом", tg: "сӯм", tk: "som" },
@@ -231,7 +233,7 @@ export default function TreatmentPlan({ patientId, language }: { patientId: stri
         <div>
           <h4 className="text-sm font-bold text-indigo-300 mb-1">{t("AI Tavsiyasi")}</h4>
           <p className="text-sm text-slate-400 leading-relaxed">
-            Bemor tarixiga asoslanib, avval muammoli tishlardagi kariesni davolash, so'ngra implant o'rnatish bosqichiga o'tish tavsiya etiladi. Davolash davomiyligi taxminan 3-4 hafta.
+            {t("Bemor tarixiga asoslanib, avval muammoli tishlardagi kariesni davolash, so'ngra implant o'rnatish bosqichiga o'tish tavsiya etiladi. Davolash davomiyligi taxminan 3-4 hafta.")}
           </p>
         </div>
       </div>

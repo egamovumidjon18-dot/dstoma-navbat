@@ -119,7 +119,7 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
         body: JSON.stringify({
           image: { data: base64Data || xray.url, mimeType },
           xrayType: xray.type,
-          language: 'uz',
+          language: language || 'uz',
           clinicId,
         }),
       });
