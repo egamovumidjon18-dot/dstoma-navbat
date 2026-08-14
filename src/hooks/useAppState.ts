@@ -740,11 +740,12 @@ export function useAppState() {
       });
       if (!res.ok) {
         setQueues(previousQueues);
-        alert(
-          res.status === 401
-            ? "Navbatni o'chirib bo'lmadi: sessiya muddati tugagan. Iltimos, qaytadan kiring."
-            : "Navbatni o'chirib bo'lmadi: server so'rovni qabul qilmadi."
-        );
+        if (res.status === 401) {
+          alert("Sessiya muddati tugagan. Iltimos, qaytadan kiring.");
+          handleLogout();
+        } else {
+          alert("Navbatni o'chirib bo'lmadi: server so'rovni qabul qilmadi.");
+        }
       }
     } catch (err) {
       console.warn("[AppState Hook] Queue deletion sync failed", err);
@@ -777,15 +778,17 @@ export function useAppState() {
       if (!res.ok) {
         setQueues(previousQueues);
         // Background callers (the auto-queue tick, which retries every 60s
-        // unattended) must never alert() — a blocking dialog popping up on its
-        // own, possibly repeatedly, is worse than the silent failure it
-        // replaced. Only a doctor's own button click gets the explanation.
+        // unattended) must never alert() or force a logout — a blocking dialog
+        // (or being kicked out) triggered by its own silent retry, possibly
+        // repeatedly, is worse than the silent failure it replaced. Only a
+        // doctor's own button click gets the explanation and the redirect.
         if (!opts?.silent) {
-          alert(
-            res.status === 401
-              ? "Navbat holatini o'zgartirib bo'lmadi: sessiya muddati tugagan. Iltimos, qaytadan kiring."
-              : "Navbat holatini o'zgartirib bo'lmadi: server o'zgarishni qabul qilmadi."
-          );
+          if (res.status === 401) {
+            alert("Sessiya muddati tugagan. Iltimos, qaytadan kiring.");
+            handleLogout();
+          } else {
+            alert("Navbat holatini o'zgartirib bo'lmadi: server o'zgarishni qabul qilmadi.");
+          }
         } else {
           console.warn("[AppState Hook] Silent status mutation rejected:", res.status);
         }
