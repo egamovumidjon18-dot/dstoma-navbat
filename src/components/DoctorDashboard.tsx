@@ -139,6 +139,12 @@ const VIEW_TITLES: Record<string, string> = {
 };
 
 const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
+  "bemor qo'shildi": { ru: "Пациент добавлен", en: "Patient added", kk: "Пациент қосылды", ky: "Бейтап кошулду", tg: "Бемор илова шуд", tk: "Näsag goşuldy" },
+  "bo'sh qoldirsangiz avtomatik yaratiladi": { ru: "Если оставить пустым, будет создан автоматически", en: "If left blank, one is generated automatically", kk: "Бос қалдырсаңыз, автоматты түрде жасалады", ky: "Бош калтырсаңыз, автоматтык түрдө түзүлөт", tg: "Агар холӣ монед, ба таври худкор эҷод мешавад", tk: "Boş goýsaňyz, awtomatik döredilýär" },
+  "qo'shimcha ma'lumot (ixtiyoriy)": { ru: "Дополнительная информация (необязательно)", en: "Additional information (optional)", kk: "Қосымша ақпарат (міндетті емес)", ky: "Кошумча маалымат (милдеттүү эмес)", tg: "Маълумоти иловагӣ (ихтиёрӣ)", tk: "Goşmaça maglumat (hökman däl)" },
+  "bemor o'z kabinetiga kirishi uchun quyidagi login va parolni unga bering": { ru: "Дайте пациенту следующий логин и пароль для входа в его кабинет", en: "Give the patient the following login and password to access their cabinet", kk: "Пациентке кабинетіне кіру үшін мына логин мен парольді беріңіз", ky: "Бейтапка кабинетине кирүү үчүн мына логин жана паролду бериңиз", tg: "Ба бемор логин ва рамзи зерин барои воридшавӣ ба кабинети худ диҳед", tk: "Näsaga öz kabinetine girmek üçin şu login we paroly beriň" },
+  "login": { ru: "Логин", en: "Login", kk: "Логин", ky: "Логин", tg: "Логин", tk: "Login" },
+  "tushunarli": { ru: "Понятно", en: "Got it", kk: "Түсінікті", ky: "Түшүнүктүү", tg: "Фаҳмо", tk: "Düşnükli" },
   "bu navbatni o'chirmoqchimisiz?": { ru: "Удалить эту запись?", en: "Delete this appointment?", kk: "Осы жазбаны жоясыз ба?", ky: "Бул жазууну өчүрөсүзбү?", tg: "Ин навбатро нест мекунед?", tk: "Bu ýazgyny pozmakçymy?" },
 
   "rejalashtirilgan": { ru: "Запланировано", en: "Scheduled", kk: "Жоспарланған", ky: "Пландаштырылган", tg: "Ба нақша гирифташуда", tk: "Meýilleşdirilen" },
@@ -683,6 +689,11 @@ export default function DoctorDashboard({
     appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: "09:00",
   });
   const [isSavingQuickAddPatient, setIsSavingQuickAddPatient] = useState(false);
+  // Shown once, right after a doctor-added patient is saved — loginCode only
+  // ever appears in that one server response, and the doctor is the one who
+  // has to relay it (plus the password) to the patient, since the patient
+  // isn't the one filling out this form.
+  const [justAddedPatientCreds, setJustAddedPatientCreds] = useState<{ loginCode: string; password: string } | null>(null);
   const [isSendingBulkTelegram, setIsSendingBulkTelegram] = useState(false);
   const [showCrossClinicSearch, setShowCrossClinicSearch] = useState(false);
   const [crossClinicQuery, setCrossClinicQuery] = useState("");
@@ -776,6 +787,9 @@ export default function DoctorDashboard({
   const handleQuickAddPatient = async () => {
     if (!quickAddPatient.fullName.trim() || !effectiveClinicId) return;
     setIsSavingQuickAddPatient(true);
+    // Auto-generated when the doctor leaves the password blank — they're the
+    // one who has to relay it to the patient afterward, not compose one.
+    const passwordToUse = quickAddPatient.password.trim() || Math.random().toString(36).slice(2, 8);
     try {
       const res = await fetch("/api/patients", {
         method: "POST",
@@ -783,10 +797,10 @@ export default function DoctorDashboard({
         body: JSON.stringify({
           clinicId: effectiveClinicId,
           fullName: quickAddPatient.fullName.trim(),
-          phone: quickAddPatient.phone.trim(),
-          passportSerial: quickAddPatient.passportSerial.trim(),
+          phone: quickAddPatient.phone.trim() || undefined,
+          passportSerial: quickAddPatient.passportSerial.trim() || undefined,
           birthDate: quickAddPatient.birthDate || undefined,
-          password: quickAddPatient.password.trim() || undefined,
+          password: passwordToUse,
           bloodGroup: quickAddPatient.bloodGroup || undefined,
           allergies: quickAddPatient.allergies.trim() || undefined,
           chronicDiseases: quickAddPatient.chronicDiseases.trim() || undefined,
@@ -822,6 +836,9 @@ export default function DoctorDashboard({
           appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: "09:00",
         });
         setShowQuickAddPatient(false);
+        if (savedPatient.loginCode) {
+          setJustAddedPatientCreds({ loginCode: savedPatient.loginCode, password: passwordToUse });
+        }
       }
     } catch (err) {
       console.warn("[DoctorDashboard] Failed to add patient:", err);
@@ -4263,73 +4280,86 @@ export default function DoctorDashboard({
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("pasport seriyasi")}</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("parol")}</label>
                 <input
                   type="text"
-                  value={quickAddPatient.passportSerial}
-                  onChange={(e) => setQuickAddPatient({ ...quickAddPatient, passportSerial: e.target.value })}
+                  value={quickAddPatient.password}
+                  onChange={(e) => setQuickAddPatient({ ...quickAddPatient, password: e.target.value })}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
-                  placeholder="AD1234567"
+                  placeholder={t("bo'sh qoldirsangiz avtomatik yaratiladi")}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("tug'ilgan sana")}</label>
-                  <input
-                    type="date"
-                    value={quickAddPatient.birthDate}
-                    onChange={(e) => setQuickAddPatient({ ...quickAddPatient, birthDate: e.target.value })}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
-                  />
+
+              {/* Everything below used to be required up front. Passport,
+                  birth date, and medical background are now filled in later
+                  by the patient (or the doctor) from their own cabinet — a
+                  doctor adding a patient mid-appointment shouldn't be blocked
+                  on details they may not have on hand yet. */}
+              <details className="group">
+                <summary className="text-xs font-bold text-emerald-600 cursor-pointer select-none list-none flex items-center gap-1">
+                  <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" />
+                  {t("Qo'shimcha ma'lumot (ixtiyoriy)")}
+                </summary>
+                <div className="space-y-3 mt-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("pasport seriyasi")}</label>
+                    <input
+                      type="text"
+                      value={quickAddPatient.passportSerial}
+                      onChange={(e) => setQuickAddPatient({ ...quickAddPatient, passportSerial: e.target.value })}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
+                      placeholder="AD1234567"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("tug'ilgan sana")}</label>
+                    <input
+                      type="date"
+                      value={quickAddPatient.birthDate}
+                      onChange={(e) => setQuickAddPatient({ ...quickAddPatient, birthDate: e.target.value })}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("qon guruhi")}</label>
+                    <select
+                      value={quickAddPatient.bloodGroup}
+                      onChange={(e) => setQuickAddPatient({ ...quickAddPatient, bloodGroup: e.target.value })}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
+                    >
+                      <option value="">{t("tanlang (noma'lum)")}</option>
+                      <option value="I+">I (O) Rh+</option>
+                      <option value="I-">I (O) Rh-</option>
+                      <option value="II+">II (A) Rh+</option>
+                      <option value="II-">II (A) Rh-</option>
+                      <option value="III+">III (B) Rh+</option>
+                      <option value="III-">III (B) Rh-</option>
+                      <option value="IV+">IV (AB) Rh+</option>
+                      <option value="IV-">IV (AB) Rh-</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("allergiyalar")}</label>
+                    <input
+                      type="text"
+                      value={quickAddPatient.allergies}
+                      onChange={(e) => setQuickAddPatient({ ...quickAddPatient, allergies: e.target.value })}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
+                      placeholder={t("masalan: penitsillin guruhiga")}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("surunkali kasalliklar")}</label>
+                    <textarea
+                      value={quickAddPatient.chronicDiseases}
+                      onChange={(e) => setQuickAddPatient({ ...quickAddPatient, chronicDiseases: e.target.value })}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800 h-16 resize-none"
+                      placeholder={t("yurak, qon bosimi, qandli diabet va h.k.")}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("parol")}</label>
-                  <input
-                    type="text"
-                    value={quickAddPatient.password}
-                    onChange={(e) => setQuickAddPatient({ ...quickAddPatient, password: e.target.value })}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
-                    placeholder={t("kabinetga kirish uchun")}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("qon guruhi")}</label>
-                <select
-                  value={quickAddPatient.bloodGroup}
-                  onChange={(e) => setQuickAddPatient({ ...quickAddPatient, bloodGroup: e.target.value })}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
-                >
-                  <option value="">{t("tanlang (noma'lum)")}</option>
-                  <option value="I+">I (O) Rh+</option>
-                  <option value="I-">I (O) Rh-</option>
-                  <option value="II+">II (A) Rh+</option>
-                  <option value="II-">II (A) Rh-</option>
-                  <option value="III+">III (B) Rh+</option>
-                  <option value="III-">III (B) Rh-</option>
-                  <option value="IV+">IV (AB) Rh+</option>
-                  <option value="IV-">IV (AB) Rh-</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("allergiyalar")}</label>
-                <input
-                  type="text"
-                  value={quickAddPatient.allergies}
-                  onChange={(e) => setQuickAddPatient({ ...quickAddPatient, allergies: e.target.value })}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
-                  placeholder={t("masalan: penitsillin guruhiga")}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("surunkali kasalliklar")}</label>
-                <textarea
-                  value={quickAddPatient.chronicDiseases}
-                  onChange={(e) => setQuickAddPatient({ ...quickAddPatient, chronicDiseases: e.target.value })}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800 h-16 resize-none"
-                  placeholder={t("yurak, qon bosimi, qandli diabet va h.k.")}
-                />
-              </div>
+              </details>
+
               <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl flex items-start gap-2.5">
                 <input
                   type="checkbox"
@@ -4400,6 +4430,39 @@ export default function DoctorDashboard({
                 {isSavingQuickAddPatient ? t("saqlanmoqda...") : t("saqlash")}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Shown once, right after a doctor-added patient is saved. The patient
+          isn't the one who filled this form in, so the doctor is who has to
+          write down / relay the login code and password afterward. */}
+      {justAddedPatientCreds && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+            <div className="w-14 h-14 mx-auto bg-emerald-100 rounded-2xl flex items-center justify-center mb-4">
+              <UserPlus className="w-7 h-7 text-emerald-600" />
+            </div>
+            <h3 className="text-base font-black text-slate-900 mb-1.5">{t("Bemor qo'shildi")}</h3>
+            <p className="text-xs text-slate-500 font-semibold mb-4">
+              {t("Bemor o'z kabinetiga kirishi uchun quyidagi login va parolni unga bering")}:
+            </p>
+            <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl py-4 mb-5 space-y-2">
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">{t("Login")}</p>
+                <p className="text-xl font-black text-slate-900 tracking-[0.2em] font-mono">{justAddedPatientCreds.loginCode}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">{t("Parol")}</p>
+                <p className="text-xl font-black text-slate-900 tracking-[0.2em] font-mono">{justAddedPatientCreds.password}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setJustAddedPatientCreds(null)}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-black uppercase tracking-wider rounded-2xl transition-all"
+            >
+              {t("Tushunarli")}
+            </button>
           </div>
         </div>
       )}

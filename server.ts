@@ -241,6 +241,20 @@ function sanitizeString(str: string): string {
   return str.replace(/[<>]/g, '');
 }
 
+// Registration only asks for a name and a password now, so there's no
+// passport to log in with anymore — this is what a patient (or the doctor who
+// added them) is actually given to log in. 6 digits, retried on collision;
+// globally unique the same way passportSerial-based login already was
+// (patient-login has no clinicId, so it matches across all clinics).
+function generateUniqueLoginCode(existingPatients: { loginCode?: string }[]): string {
+  const taken = new Set(existingPatients.map(p => p.loginCode).filter(Boolean));
+  let code: string;
+  do {
+    code = String(Math.floor(100000 + Math.random() * 900000));
+  } while (taken.has(code));
+  return code;
+}
+
 // Firestore's setDoc rejects any field whose value is explicitly `undefined`
 // (e.g. an optional field spread from a partial update object) — every save*
 // function below runs its payload through this before writing.
@@ -284,8 +298,9 @@ interface Patient {
   id: string;
   clinicId: string;
   fullName: string;
-  passportSerial: string;
-  phone: string;
+  passportSerial?: string;
+  phone?: string;
+  loginCode?: string;
   birthDate?: string;
   password?: string;
   bloodGroup?: string;
@@ -931,15 +946,26 @@ app.post("/api/doctor-login", rateLimiter(5, 60 * 1000), async (req, res) => {
 
 // POST endpoint for secure patient login (passport serial + password) — same rationale.
 app.post("/api/patient-login", rateLimiter(10, 60 * 1000), async (req, res) => {
-  const { passportSerial, password } = req.body;
-  if (!passportSerial || !password) {
-    return res.status(400).json({ ok: false, error: "Pasport seriyasi va parol talab qilinadi" });
+  // loginId accepts either: the loginCode issued at registration (current
+  // flow, since passport is no longer collected up front) or a passportSerial
+  // (older accounts that do have one, from before this change). passportSerial
+  // is still accepted as an alias so nothing already deployed breaks.
+  const loginId = req.body.loginId ?? req.body.passportSerial;
+  const { password } = req.body;
+  if (!loginId || !password) {
+    return res.status(400).json({ ok: false, error: "Login va parol talab qilinadi" });
   }
-  const cleanedPassport = String(passportSerial).replace(/\s+/g, "").toUpperCase();
+  const cleanedLoginCode = String(loginId).trim();
+  const cleanedPassport = String(loginId).replace(/\s+/g, "").toUpperCase();
   const allPatients = await getPatients();
-  const matched = allPatients.find((p: any) => p && p.passportSerial && p.passportSerial.replace(/\s+/g, "").toUpperCase() === cleanedPassport && verifyPassword(password, p.password));
+  const matched = allPatients.find((p: any) => {
+    if (!p) return false;
+    const codeMatch = p.loginCode && p.loginCode === cleanedLoginCode;
+    const passportMatch = p.passportSerial && p.passportSerial.replace(/\s+/g, "").toUpperCase() === cleanedPassport;
+    return (codeMatch || passportMatch) && verifyPassword(password, p.password);
+  });
   if (!matched) {
-    return res.status(401).json({ ok: false, error: "Pasport seriyasi yoki parol noto'g'ri" });
+    return res.status(401).json({ ok: false, error: "Login yoki parol noto'g'ri" });
   }
   if (!isHashedPassword(matched.password)) {
     await savePatient({ id: matched.id, password: hashPassword(password) } as any);
@@ -1375,6 +1401,12 @@ app.post("/api/patients", rateLimiter(30, 60 * 1000), async (req, res) => {
   }
 
   if (existingIdx === -1) {
+    // Registration no longer collects a passport, so a brand-new patient
+    // needs some other way to log back in later — generated once, at
+    // creation, never regenerated on later edits.
+    if (!newPatient.loginCode) {
+      newPatient.loginCode = generateUniqueLoginCode(patDb);
+    }
     await savePatient(newPatient);
   } else {
     await savePatient({ ...patDb[existingIdx], ...newPatient });
@@ -3358,7 +3390,7 @@ async function handleRegistrationStep(token: string, chatId: number, session: an
     
     // Check if passport is already used
     const patDb = await getPatients();
-    const duplicate = patDb.find((p: any) => p.passportSerial.toUpperCase() === passport);
+    const duplicate = patDb.find((p: any) => p.passportSerial && p.passportSerial.toUpperCase() === passport);
     if (duplicate) {
       await tgApi(token, 'sendMessage', {
         chat_id: chatId,

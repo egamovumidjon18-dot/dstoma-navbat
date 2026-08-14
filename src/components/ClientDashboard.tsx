@@ -283,6 +283,10 @@ export default function ClientDashboard({
   );
   const patientAuthHeaders = (): Record<string, string> =>
     patientToken ? { Authorization: `Bearer ${patientToken}` } : {};
+  // Shown once, right after registration — the loginCode only ever appears in
+  // that one server response, never again, so this is the patient's only
+  // chance to see and save it before it scrolls off into their cabinet.
+  const [justRegisteredCode, setJustRegisteredCode] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<Patient | null>(() => {
     if (typeof window === 'undefined') return null;
     const saved = localStorage.getItem(PATIENT_SESSION_KEY);
@@ -958,7 +962,7 @@ export default function ClientDashboard({
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !phone || !passport || !password) {
+    if (!fullName || !password) {
       showToast("Iltimos, yulduzcha (*) qo'yilgan barcha majburiy maydonlarni to'ldiring!", "error");
       return;
     }
@@ -966,24 +970,21 @@ export default function ClientDashboard({
       id: 'pat_' + Math.random().toString(36).substr(2, 9),
       clinicId: selectedClinic?.id || 'samarqand',
       fullName,
-      passportSerial: passport.toUpperCase(),
-      phone,
-      birthDate,
       password,
-      bloodGroup,
-      allergies,
-      chronicDiseases,
       hasInfection,
-      telegramChatId: telegramIdInput
+      // telegramIdInput defaults to a leftover demo placeholder ('57896431')
+      // that was never meant to represent a real chat id — every registration
+      // used to send it verbatim, so any two patients who both left it
+      // untouched collided on telegramChatId and got treated as the same
+      // person by POST /api/patients' dedup matching. The real Telegram link
+      // is set later, from Sozlamalar, once the patient actually has one.
     };
-    
+
     // Confirm with the server BEFORE showing success. This used to announce
     // "registered!" and drop the patient into the cabinet immediately, ignoring
     // the response — so any rejection left them logged into a record that only
-    // existed in their own browser. It also matters more now: the server
-    // refuses to overwrite a passport that is already registered (that was an
-    // account-takeover path), and the patient needs to be told to log in
-    // instead of being handed a phantom account.
+    // existed in their own browser.
+    let savedPatient: Patient;
     try {
       const res = await fetch(`${getApiUrl()}/api/patients`, {
         method: 'POST',
@@ -991,41 +992,65 @@ export default function ClientDashboard({
         body: JSON.stringify(newPatient)
       });
       if (!res.ok) {
-        showToast(
-          res.status === 401
-            ? "Bu pasport seriyasi allaqachon ro'yxatdan o'tgan. Iltimos, \"Kirish\" orqali tizimga kiring."
-            : "Ro'yxatdan o'tishda xatolik yuz berdi. Qayta urinib ko'ring.",
-          "error"
-        );
+        showToast("Ro'yxatdan o'tishda xatolik yuz berdi. Qayta urinib ko'ring.", "error");
         return;
       }
+      // The server generates loginCode (registration no longer collects a
+      // passport, so this is the only thing the patient can log back in
+      // with) — it only exists in this response, never in the local object.
+      savedPatient = await res.json();
     } catch (err) {
       console.warn("[ClientDashboard] Backend sync for patient registration failed", err);
       showToast("Tarmoqqa ulanishda xatolik. Qayta urinib ko'ring.", "error");
       return;
     }
 
-    setPatients(prev => [...prev, newPatient]);
-    setCurrentUser(newPatient);
-    showToast("Muvaffaqiyatli ro'yxatdan o'tdingiz!");
+    // Registering doesn't hand back a session token the way logging in does,
+    // but every self-service save from inside the cabinet (completing the
+    // profile, changing doctor) now requires one — so log straight in with
+    // the credentials just set, immediately after.
+    try {
+      const loginRes = await fetch(`${getApiUrl()}/api/patient-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ loginId: savedPatient.loginCode, password })
+      });
+      if (loginRes.ok) {
+        const loginData = await loginRes.json();
+        if (loginData.token) {
+          setPatientToken(loginData.token);
+          localStorage.setItem(PATIENT_TOKEN_KEY, loginData.token);
+        }
+      }
+    } catch (err) {
+      console.warn("[ClientDashboard] Auto-login after registration failed", err);
+    }
+
+    setPatients(prev => [...prev, savedPatient]);
+    setCurrentUser(savedPatient);
+    setJustRegisteredCode(savedPatient.loginCode || null);
     setActiveSubView('cabinet');
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!passport || !password) {
-      showToast("Iltimos, pasport seriyasi va parolingizni kiriting", "error");
+      showToast("Iltimos, login kodingiz va parolingizni kiriting", "error");
       return;
     }
 
-    const cleanedPassport = passport.trim().toUpperCase();
+    // Field still doubles as "loginId" — the server matches it against either
+    // loginCode (current accounts) or passportSerial (older ones), so the
+    // same single input works for both without asking the patient which kind
+    // of account they have.
+    const cleanedLoginId = passport.trim().toUpperCase();
     const cleanedPassword = password.trim();
 
     try {
       const res = await fetch(`${getApiUrl()}/api/patient-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ passportSerial: cleanedPassport, password: cleanedPassword })
+        body: JSON.stringify({ loginId: cleanedLoginId, password: cleanedPassword })
       });
       if (res.ok) {
         const data = await res.json();
@@ -1040,7 +1065,7 @@ export default function ClientDashboard({
         showToast("Kabinetga muvaffaqiyatli kirdingiz!");
         setActiveSubView('cabinet');
       } else {
-        showToast("Pasport seriyasi yoki parol noto'g'ri. Hisobingiz yo'q bo'lsa, 'Ro'yxatdan o'tish' orqali yarating.", "error");
+        showToast("Login yoki parol noto'g'ri. Hisobingiz yo'q bo'lsa, 'Ro'yxatdan o'tish' orqali yarating.", "error");
       }
     } catch (err) {
       console.warn("[ClientDashboard] Patient login failed", err);
@@ -1227,6 +1252,32 @@ export default function ClientDashboard({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Shown once, right after registration — loginCode is generated
+          server-side and only ever appears in that one response, so this is
+          the patient's only chance to see and save it. */}
+      {justRegisteredCode && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center">
+            <div className="w-14 h-14 mx-auto bg-emerald-100 rounded-2xl flex items-center justify-center mb-4">
+              <CheckCircle2 className="w-7 h-7 text-emerald-600" />
+            </div>
+            <h3 className="text-base font-black text-slate-900 mb-1.5">Muvaffaqiyatli ro'yxatdan o'tdingiz!</h3>
+            <p className="text-xs text-slate-500 font-semibold mb-4">
+              Kabinetga kirish uchun quyidagi kodni saqlab qo'ying — bu kod parolingiz bilan birga kerak bo'ladi.
+            </p>
+            <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl py-4 mb-5">
+              <p className="text-2xl font-black text-slate-900 tracking-[0.3em] font-mono">{justRegisteredCode}</p>
+            </div>
+            <button
+              onClick={() => setJustRegisteredCode(null)}
+              className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white text-xs font-black uppercase tracking-wider rounded-2xl transition-all"
+            >
+              Tushunarli, davom etish
+            </button>
+          </div>
+        </div>
+      )}
 
       <InstallAppBanner dark />
 
@@ -1734,9 +1785,14 @@ export default function ClientDashboard({
             <p className="text-[10px] text-slate-450 font-semibold mt-1">Iltimos, elektron kartangizni ochish uchun formulani to'ldiring</p>
           </div>
 
-          {/* Body Form */}
+          {/* Body Form — deliberately just name + password. Passport, phone,
+              birth date, blood group, allergies, and chronic disease notes
+              used to all be required here; they're now filled in later from
+              inside the cabinet (Sozlamalar), so a first-time patient isn't
+              blocked from registering by fields they may not have on hand
+              (passport, especially) right when they're trying to book. */}
           <form onSubmit={handleRegister} className="p-6 md:p-8 space-y-5">
-            
+
             {/* Full Name */}
             <div>
               <label className="text-xs font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
@@ -1752,134 +1808,24 @@ export default function ClientDashboard({
               />
             </div>
 
-            {/* Passport & Birthdate Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
-                  Pasport seriyasi va raqami *
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={9}
-                  value={passport}
-                  onChange={(e) => setPassport(e.target.value.toUpperCase())}
-                  placeholder="AA1234567"
-                  className="w-full bg-slate-50/70 text-xs font-bold text-slate-800 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 focus:outline-none transition-all uppercase font-mono tracking-widest placeholder:text-slate-400"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
-                  Tug'ilgan sana *
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
-                  className="w-full bg-slate-50/70 text-xs font-bold text-slate-800 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 focus:outline-none transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Phone & Password Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
-                  Telefon raqam *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+998 (90) 123-45-67"
-                  className="w-full bg-slate-50/70 text-xs font-bold text-slate-800 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 focus:outline-none transition-all placeholder:text-slate-400"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
-                  Parol *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Xavfsiz parol kiriting"
-                  className="w-full bg-slate-50/70 text-xs font-semibold text-slate-800 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 focus:outline-none transition-all placeholder:text-slate-400"
-                />
-              </div>
-            </div>
-
-            {/* Blood group & Allergies Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
-                  Qon guruhi
-                </label>
-                <select
-                  value={bloodGroup}
-                  onChange={(e) => setBloodGroup(e.target.value)}
-                  className="w-full bg-slate-50/70 text-xs font-semibold text-slate-850 border border-slate-200 rounded-xl px-3 py-3 focus:bg-white focus:border-indigo-500 focus:outline-none transition-all"
-                >
-                  <option value="Noma'lum">Tanlang (Noma'lum)</option>
-                  <option value="I+">I (O) Rh+</option>
-                  <option value="I-">I (O) Rh-</option>
-                  <option value="II+">II (A) Rh+</option>
-                  <option value="II-">II (A) Rh-</option>
-                  <option value="III+">III (B) Rh+</option>
-                  <option value="III-">III (B) Rh-</option>
-                  <option value="IV+">IV (AB) Rh+</option>
-                  <option value="IV-">IV (AB) Rh-</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
-                  Allergiyalar
-                </label>
-                <input
-                  type="text"
-                  value={allergies}
-                  onChange={(e) => setAllergies(e.target.value)}
-                  placeholder="Masalan: Penitsillin guruhiga"
-                  className="w-full bg-slate-50/70 text-xs font-semibold text-slate-700 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 focus:outline-none transition-all placeholder:text-slate-400"
-                />
-              </div>
-            </div>
-
-            {/* Chronic diseases */}
+            {/* Password */}
             <div>
               <label className="text-xs font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
-                Surunkali kasalliklar
+                Parol *
               </label>
-              <textarea
-                value={chronicDiseases}
-                onChange={(e) => setChronicDiseases(e.target.value)}
-                placeholder="Yurak, Qon bosimi, qandli diabet yoki boshqa jiddiy muammolar haqida..."
-                className="w-full bg-slate-50/70 text-xs font-semibold text-slate-700 border border-slate-200 rounded-xl px-4 py-3 h-20 resize-none focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 focus:outline-none transition-all placeholder:text-slate-400"
+              <input
+                type="text"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Xavfsiz parol kiriting"
+                className="w-full bg-slate-50/70 text-xs font-semibold text-slate-800 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 focus:outline-none transition-all placeholder:text-slate-400"
               />
             </div>
 
-            {/* Red Alert warning Box matching Screenshot 2 */}
-            <div className="bg-rose-50/50 border border-rose-200/60 p-4.5 rounded-2xl flex items-start gap-3.5">
-              <input
-                type="checkbox"
-                id="has-infection-chk"
-                checked={hasInfection}
-                onChange={(e) => setHasInfection(e.target.checked)}
-                className="rounded border-rose-300 text-rose-600 focus:ring-rose-500 w-5 h-5 cursor-pointer mt-0.5 shrink-0 transition-transform active:scale-90"
-              />
-              <label htmlFor="has-infection-chk" className="text-xs font-extrabold text-rose-900 leading-tight cursor-pointer select-none">
-                DIQQAT: Jiddiy yuqumli kasalliklar mavjud bo'lsa belgilang.
-                <span className="block font-normal text-[10px] text-rose-600 mt-1 leading-relaxed">
-                  Gepatit, OIV yoki boshqa asbob-uskunalar daxlsizligiga bevosita ta'sir qiladigan kasalliklar mavjud bo'lsa, shifokor uchun buni belgilashingiz qat'iyan tavsiya etiladi.
-                </span>
-              </label>
-            </div>
+            <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+              Telefon, pasport va boshqa ma'lumotlarni kabinetingizga kirgandan so'ng, "Sozlamalar" bo'limida to'ldirasiz.
+            </p>
 
             {/* Submit Action Buttons exactly formatted as Screenshot 2 */}
             <div className="flex items-center gap-3.5 pt-4">
@@ -1913,24 +1859,23 @@ export default function ClientDashboard({
               Bemor Kabinetiga Kirish
             </h2>
             <p className="text-[10px] text-slate-450 font-semibold mt-1">
-              Shaxsiy tibbiy kartangizga kirish uchun pasport va parolingizni kiriting
+              Ro'yxatdan o'tishda olgan kodingiz (yoki pasportingiz) va parolingizni kiriting
             </p>
           </div>
 
           {/* Body Form */}
           <form onSubmit={handleLogin} className="p-6 md:p-8 space-y-5">
-            {/* Passport Serial */}
+            {/* Login code (or, for older accounts, passport) */}
             <div>
               <label className="text-xs font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
-                Pasport seriyasi va raqami *
+                Login kodi (yoki pasport) *
               </label>
               <input
                 type="text"
                 required
-                maxLength={9}
                 value={passport}
                 onChange={(e) => setPassport(e.target.value.toUpperCase())}
-                placeholder="AA1234567"
+                placeholder="482913"
                 className="w-full bg-slate-50/70 text-xs font-bold text-slate-800 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/25 focus:outline-none transition-all uppercase font-mono tracking-widest placeholder:text-slate-400"
               />
             </div>
@@ -2127,6 +2072,21 @@ export default function ClientDashboard({
             });
             if (!res.ok) throw new Error(`Doctor change rejected (${res.status})`);
             const updated = { ...currentUser, primaryDoctorId: doctorId };
+            setPatients(prev => prev.map(p => p.id === currentUser.id ? updated : p));
+            setCurrentUser(updated);
+          }}
+          onUpdateProfile={async (updates) => {
+            // Same merge-upsert pattern as onChangeDoctor above: savePatient()
+            // merges by id, so sending just the changed fields rewrites only
+            // those — this is how the deferred registration fields (phone,
+            // passport, birth date, ...) actually get filled in.
+            const res = await fetch(`${getApiUrl()}/api/patients`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...patientAuthHeaders() },
+              body: JSON.stringify({ id: currentUser.id, ...updates }),
+            });
+            if (!res.ok) throw new Error(`Profile update rejected (${res.status})`);
+            const updated = { ...currentUser, ...updates };
             setPatients(prev => prev.map(p => p.id === currentUser.id ? updated : p));
             setCurrentUser(updated);
           }}

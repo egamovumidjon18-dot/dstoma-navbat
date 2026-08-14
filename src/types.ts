@@ -152,8 +152,18 @@ export interface Patient {
   id: string;
   clinicId: string;
   fullName: string;
-  passportSerial: string;
-  phone: string;
+  // Registration only collects fullName + password now — passport, phone, and
+  // the rest are filled in later from the patient's own cabinet (Sozlamalar),
+  // so none of them can be guaranteed present at creation time.
+  passportSerial?: string;
+  phone?: string;
+  // Short, patient-facing code auto-generated at registration (see server.ts
+  // generateUniqueLoginCode). Passport used to be the only login identifier;
+  // it's no longer collected up front, so this is what /api/patient-login
+  // matches against for accounts created after this change. Older accounts
+  // that do have a passportSerial keep logging in with it — the login form
+  // and endpoint accept either.
+  loginCode?: string;
   telegramChatId?: string;
   birthDate?: string;
   password?: string;

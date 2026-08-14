@@ -27,6 +27,10 @@ interface NewFamilyMemberInfo {
 
 type PatientPanelDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
 const PATIENT_PANEL_TRANSLATIONS: Record<string, PatientPanelDictEntry> = {
+  "qon guruhi": { ru: "Группа крови", en: "Blood group", kk: "Қан тобы", ky: "Кан тобу", tg: "Гурӯҳи хун", tk: "Gan topary" },
+  "allergiyalar": { ru: "Аллергии", en: "Allergies", kk: "Аллергия", ky: "Аллергия", tg: "Аллергияҳо", tk: "Allergiýalar" },
+  "surunkali kasalliklar": { ru: "Хронические заболевания", en: "Chronic diseases", kk: "Созылмалы аурулар", ky: "Уланма ооруулар", tg: "Бемориҳои музмин", tk: "Dowamly keseller" },
+  "tanlang (noma'lum)": { ru: "Выберите (неизвестно)", en: "Select (unknown)", kk: "Таңдаңыз (белгісіз)", ky: "Тандаңыз (белгисиз)", tg: "Интихоб кунед (номаълум)", tk: "Saýlaň (näbelli)" },
   "ai yordamchi": { ru: "AI-помощник", en: "AI assistant", kk: "AI көмекші", ky: "AI жардамчы", tg: "Ёрдамчии AI", tk: "AI kömekçi" },
   "ai yordamchi — premium xizmat. bepul sinov muddati tugagan.": { ru: "AI-помощник — Premium-услуга. Бесплатный пробный период закончился.", en: "AI assistant is a Premium feature. The free trial has ended.", kk: "AI көмекші — Premium қызмет. Тегін сынақ мерзімі аяқталды.", ky: "AI жардамчы — Premium кызмат. Акысыз сыноо мөөнөтү бүттү.", tg: "Ёрдамчии AI — хизмати Premium. Мӯҳлати санҷиши ройгон ба охир расид.", tk: "AI kömekçi — Premium hyzmat. Mugt synag möhleti gutardy." },
   "(taxminiy javob — ai hozircha band, birozdan so'ng qayta urinib ko'ring)": { ru: "(Примерный ответ — AI сейчас занят, попробуйте чуть позже)", en: "(Approximate answer — the AI is busy right now, try again shortly)", kk: "(Болжамды жауап — AI қазір бос емес, сәлден соң қайталап көріңіз)", ky: "(Болжолдуу жооп — AI азыр бош эмес, бир аздан кийин кайра аракет кылыңыз)", tg: "(Ҷавоби тахминӣ — AI ҳоло банд аст, пас аз чанде такрор кунед)", tk: "(Takmyny jogap — AI häzir meşgul, biraz soň gaýtadan synanyşyň)" },
@@ -151,6 +155,7 @@ export default function PatientPanel({
   language,
   doctors = [],
   onChangeDoctor,
+  onUpdateProfile,
 }: {
   patient: Patient;
   onLogout: () => void;
@@ -165,6 +170,7 @@ export default function PatientPanel({
   language?: Language;
   doctors?: Doctor[];
   onChangeDoctor?: (doctorId: string) => Promise<void>;
+  onUpdateProfile?: (updates: Partial<Patient>) => Promise<void>;
 }) {
   const localLang: keyof PatientPanelDictEntry | null =
     (language === "ru" || language === "en" || language === "kk" || language === "ky" || language === "tg" || language === "tk")
@@ -188,6 +194,54 @@ export default function PatientPanel({
   };
 
   const [activeTab, setActiveTab] = useState('bosh_sahifa');
+  // Registration now only collects fullName + password (see ClientDashboard's
+  // register form) — phone, passport, birth date, and the medical fields below
+  // are deliberately deferred to here, so this is the one place they actually
+  // get filled in.
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    phone: patient?.phone || '',
+    passportSerial: patient?.passportSerial || '',
+    birthDate: patient?.birthDate || '',
+    bloodGroup: patient?.bloodGroup || '',
+    allergies: patient?.allergies || '',
+    chronicDiseases: patient?.chronicDiseases || '',
+  });
+  useEffect(() => {
+    if (isEditingProfile) return;
+    setProfileForm({
+      phone: patient?.phone || '',
+      passportSerial: patient?.passportSerial || '',
+      birthDate: patient?.birthDate || '',
+      bloodGroup: patient?.bloodGroup || '',
+      allergies: patient?.allergies || '',
+      chronicDiseases: patient?.chronicDiseases || '',
+    });
+    // Only re-sync from the incoming patient prop while NOT editing — otherwise
+    // the background poll refreshing `patient` every few seconds would stomp
+    // on whatever the user is mid-typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient?.id, patient?.phone, patient?.passportSerial, patient?.birthDate, patient?.bloodGroup, patient?.allergies, patient?.chronicDiseases, isEditingProfile]);
+  const handleSaveProfile = async () => {
+    if (!onUpdateProfile) return;
+    setIsSavingProfile(true);
+    try {
+      await onUpdateProfile({
+        phone: profileForm.phone.trim() || undefined,
+        passportSerial: profileForm.passportSerial.trim() || undefined,
+        birthDate: profileForm.birthDate || undefined,
+        bloodGroup: profileForm.bloodGroup || undefined,
+        allergies: profileForm.allergies.trim() || undefined,
+        chronicDiseases: profileForm.chronicDiseases.trim() || undefined,
+      });
+      setIsEditingProfile(false);
+    } catch (err) {
+      console.warn('[PatientPanel] Failed to save profile', err);
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
   // Sidebar is always-visible on desktop; on narrow (phone) screens it's an off-canvas
   // drawer toggled by a hamburger button, closed by default and after picking a tab.
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -973,25 +1027,134 @@ export default function PatientPanel({
 
           {activeTab === 'sozlamalar' && (
             <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm max-w-lg">
-              <h3 className="font-bold text-slate-900 mb-4">{t("sozlamalar")}</h3>
-              <div className="space-y-4 text-sm">
-                <div className="flex justify-between border-b border-slate-100 pb-3">
-                  <span className="text-slate-500">{t("ism familiya")}</span>
-                  <span className="font-bold text-slate-900">{decodeLegacyEntities(patient?.fullName)}</span>
-                </div>
-                <div className="flex justify-between border-b border-slate-100 pb-3">
-                  <span className="text-slate-500">{t("telefon")}</span>
-                  <span className="font-bold text-slate-900">{decodeLegacyEntities(patient?.phone)}</span>
-                </div>
-                <div className="flex justify-between border-b border-slate-100 pb-3">
-                  <span className="text-slate-500">{t("pasport seriyasi")}</span>
-                  <span className="font-bold text-slate-900">{decodeLegacyEntities(patient?.passportSerial) || '—'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">{t("tug'ilgan sana")}</span>
-                  <span className="font-bold text-slate-900">{patient?.birthDate || '—'}</span>
-                </div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-slate-900">{t("sozlamalar")}</h3>
+                {!isEditingProfile && (
+                  <button
+                    onClick={() => setIsEditingProfile(true)}
+                    className="text-xs font-bold text-blue-600 hover:underline"
+                  >
+                    {t("o'zgartirish")}
+                  </button>
+                )}
               </div>
+
+              <div className="flex justify-between border-b border-slate-100 pb-3 mb-4 text-sm">
+                <span className="text-slate-500">{t("ism familiya")}</span>
+                <span className="font-bold text-slate-900">{decodeLegacyEntities(patient?.fullName)}</span>
+              </div>
+
+              {!isEditingProfile ? (
+                <div className="space-y-4 text-sm">
+                  <div className="flex justify-between border-b border-slate-100 pb-3">
+                    <span className="text-slate-500">{t("telefon")}</span>
+                    <span className="font-bold text-slate-900">{decodeLegacyEntities(patient?.phone) || '—'}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-100 pb-3">
+                    <span className="text-slate-500">{t("pasport seriyasi")}</span>
+                    <span className="font-bold text-slate-900">{decodeLegacyEntities(patient?.passportSerial) || '—'}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-100 pb-3">
+                    <span className="text-slate-500">{t("tug'ilgan sana")}</span>
+                    <span className="font-bold text-slate-900">{patient?.birthDate || '—'}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-100 pb-3">
+                    <span className="text-slate-500">{t("qon guruhi")}</span>
+                    <span className="font-bold text-slate-900">{patient?.bloodGroup || '—'}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-100 pb-3">
+                    <span className="text-slate-500">{t("allergiyalar")}</span>
+                    <span className="font-bold text-slate-900">{decodeLegacyEntities(patient?.allergies) || '—'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">{t("surunkali kasalliklar")}</span>
+                    <span className="font-bold text-slate-900">{decodeLegacyEntities(patient?.chronicDiseases) || '—'}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("telefon")}</label>
+                    <input
+                      type="text"
+                      value={profileForm.phone}
+                      onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium text-slate-800"
+                      placeholder="+998 90 123 45 67"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("pasport seriyasi")}</label>
+                    <input
+                      type="text"
+                      value={profileForm.passportSerial}
+                      onChange={(e) => setProfileForm({ ...profileForm, passportSerial: e.target.value.toUpperCase() })}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium text-slate-800 uppercase"
+                      placeholder="AA1234567"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("tug'ilgan sana")}</label>
+                    <input
+                      type="date"
+                      value={profileForm.birthDate}
+                      onChange={(e) => setProfileForm({ ...profileForm, birthDate: e.target.value })}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("qon guruhi")}</label>
+                    <select
+                      value={profileForm.bloodGroup}
+                      onChange={(e) => setProfileForm({ ...profileForm, bloodGroup: e.target.value })}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium text-slate-800"
+                    >
+                      <option value="">{t("tanlang (noma'lum)")}</option>
+                      <option value="I+">I (O) Rh+</option>
+                      <option value="I-">I (O) Rh-</option>
+                      <option value="II+">II (A) Rh+</option>
+                      <option value="II-">II (A) Rh-</option>
+                      <option value="III+">III (B) Rh+</option>
+                      <option value="III-">III (B) Rh-</option>
+                      <option value="IV+">IV (AB) Rh+</option>
+                      <option value="IV-">IV (AB) Rh-</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("allergiyalar")}</label>
+                    <input
+                      type="text"
+                      value={profileForm.allergies}
+                      onChange={(e) => setProfileForm({ ...profileForm, allergies: e.target.value })}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("surunkali kasalliklar")}</label>
+                    <textarea
+                      value={profileForm.chronicDiseases}
+                      onChange={(e) => setProfileForm({ ...profileForm, chronicDiseases: e.target.value })}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium text-slate-800 h-16 resize-none"
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={handleSaveProfile}
+                      disabled={isSavingProfile}
+                      className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-colors"
+                    >
+                      {isSavingProfile ? t("saqlanmoqda...") : t("saqlash")}
+                    </button>
+                    <button
+                      onClick={() => setIsEditingProfile(false)}
+                      disabled={isSavingProfile}
+                      className="px-4 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-500 text-xs font-bold rounded-xl transition-colors"
+                    >
+                      {t("bekor qilish")}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
