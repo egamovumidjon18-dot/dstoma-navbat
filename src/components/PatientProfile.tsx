@@ -519,7 +519,7 @@ export default function PatientProfile({
         </div>
 
         {/* Right Content */}
-        <div className="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[700px]">
+        <div className="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[500px] lg:h-[700px]">
           <div className="flex overflow-x-auto border-b border-slate-100 hide-scrollbar">
             {tabs.map((tab) => (
               <button

@@ -215,24 +215,24 @@ export default function MaterialsInventory({ clinicId, language }: { clinicId?: 
   return (
     <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden">
       {/* Header */}
-      <div className="bg-white px-8 py-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+      <div className="bg-white px-4 sm:px-8 py-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
           <h1 className="text-2xl font-black text-slate-800 flex items-center gap-3">
             <Package className="w-7 h-7 text-blue-500" /> {t("Materiallar ombori")}
           </h1>
           <p className="text-slate-500 mt-1 font-medium">{t("Klinikadagi barcha sarflanadigan materiallar va anjomlar hisobi")}</p>
         </div>
-        <button 
+        <button
           onClick={() => setShowAddModal(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-blue-600/20 flex items-center gap-2"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-blue-600/20 flex items-center gap-2 self-start sm:self-auto"
         >
           <Plus className="w-5 h-5" /> {t("Yangi material")}
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-8 custom-scrollbar">
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-8">
           <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex items-center gap-5">
             <div className="w-14 h-14 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center">
               <Package className="w-7 h-7" />
