@@ -1050,6 +1050,24 @@ export default function DoctorDashboard({
   const [scheduleTime, setScheduleTime] = useState('09:00');
   const [scheduleServiceId, setScheduleServiceId] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // The sidebar used to be a normal flex child at all widths — on a 320-375px
+  // phone even the "collapsed" 80px state ate a chunk of the screen, and the
+  // "expanded" 280px state left almost nothing for content. Below md (768px)
+  // it now renders as an off-canvas drawer instead (same pattern PatientPanel
+  // already uses). Tracked in JS rather than relying purely on Tailwind's
+  // responsive variants for the transform — this project's Tailwind v4 setup
+  // doesn't reliably apply md:-prefixed transform utilities (see PatientPanel).
+  const [isDesktopViewport, setIsDesktopViewport] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+  );
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(min-width: 768px)');
+    const handler = () => setIsDesktopViewport(mq.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   // "Yangi bandlash" — book a patient (existing or new) for a chosen future
   // date/time directly, without needing an already-existing queue ticket first
@@ -1590,6 +1608,11 @@ export default function DoctorDashboard({
   );
   const avgRating = currentDoctor ? currentDoctor.rating : 4.7;
 
+  // On mobile the drawer is either fully open or fully closed — no point
+  // opening it into the icon-only "collapsed" state, so its content always
+  // renders expanded there regardless of the desktop collapse toggle.
+  const sidebarExpanded = isDesktopViewport ? isSidebarOpen : true;
+
   const SidebarItem = ({ icon: Icon, label, id, badge }: any) => {
     const isActive = activeView === id;
     return (
@@ -1598,19 +1621,20 @@ export default function DoctorDashboard({
           e.stopPropagation();
           setActiveView(id);
           setIsSidebarOpen(false);
+          setIsMobileNavOpen(false);
         }}
-        className={`w-full flex items-center ${isSidebarOpen ? 'justify-between px-4' : 'justify-center px-0'} py-3 rounded-xl transition-all ${
+        className={`w-full flex items-center ${sidebarExpanded ? 'justify-between px-4' : 'justify-center px-0'} py-3 rounded-xl transition-all ${
           isActive
             ? "bg-blue-600 text-white shadow-md shadow-blue-900/20"
             : "text-slate-300 hover:bg-[#1a2b56] hover:text-white"
         }`}
-        title={!isSidebarOpen ? label : ""}
+        title={!sidebarExpanded ? label : ""}
       >
         <div className="flex items-center gap-3">
           <Icon className="w-5 h-5 shrink-0" />
-          {isSidebarOpen && <span className="font-semibold text-sm">{label}</span>}
+          {sidebarExpanded && <span className="font-semibold text-sm">{label}</span>}
         </div>
-        {badge && isSidebarOpen && (
+        {badge && sidebarExpanded && (
           <span className="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
             {badge}
           </span>
@@ -1621,14 +1645,28 @@ export default function DoctorDashboard({
 
   return (
     <div className="flex h-screen bg-[#f8f9fa] font-sans overflow-hidden">
-      {/* SIDEBAR */}
-      <div 
-        className={`${isSidebarOpen ? 'w-[280px]' : 'w-[80px]'} transition-all duration-300 ease-in-out bg-[#101b33] text-white flex flex-col shrink-0 h-full overflow-y-auto custom-scrollbar cursor-pointer group z-20`}
-        onClick={() => !isSidebarOpen && setIsSidebarOpen(true)}
+      {/* Mobile-only backdrop, tap to close the drawer */}
+      {isMobileNavOpen && !isDesktopViewport && (
+        <div
+          className="fixed inset-0 z-30 bg-slate-900/40"
+          onClick={() => setIsMobileNavOpen(false)}
+        />
+      )}
+      {/* SIDEBAR — normal in-flow flex child on desktop (collapsible 80px/280px,
+          as before); an off-canvas drawer below md, since even the "collapsed"
+          80px state left too little room for content on a 320-375px phone. */}
+      <div
+        className={`${isDesktopViewport ? (isSidebarOpen ? 'w-[280px]' : 'w-[80px]') : 'w-[280px]'} transition-all duration-300 ease-in-out bg-[#101b33] text-white flex flex-col shrink-0 h-full overflow-y-auto custom-scrollbar cursor-pointer group z-40`}
+        style={{
+          position: isDesktopViewport ? 'static' : 'fixed',
+          top: 0, bottom: 0, left: 0,
+          transform: isDesktopViewport || isMobileNavOpen ? 'translateX(0)' : 'translateX(-100%)',
+        }}
+        onClick={() => !isSidebarOpen && isDesktopViewport && setIsSidebarOpen(true)}
       >
         {/* Profile Card */}
-        <div className={`p-6 ${!isSidebarOpen ? 'px-2 flex flex-col items-center' : ''}`}>
-          <div className={`flex items-center ${isSidebarOpen ? 'gap-3 mb-8' : 'justify-center mb-8'}`}>
+        <div className={`p-6 ${!sidebarExpanded ? 'px-2 flex flex-col items-center' : ''}`}>
+          <div className={`flex items-center ${sidebarExpanded ? 'gap-3 mb-8' : 'justify-center mb-8'}`}>
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -1644,7 +1682,7 @@ export default function DoctorDashboard({
                 fill="currentColor"
               />
             </svg>
-            {isSidebarOpen && (
+            {sidebarExpanded && (
               <div className="overflow-hidden whitespace-nowrap">
                 <h1 className="font-bold text-lg leading-tight tracking-tight">
                   DStoma
@@ -1655,7 +1693,7 @@ export default function DoctorDashboard({
               </div>
             )}
           </div>
-          <div className={`flex items-center ${isSidebarOpen ? 'gap-3' : 'justify-center'}`}>
+          <div className={`flex items-center ${sidebarExpanded ? 'gap-3' : 'justify-center'}`}>
             <img
               src={avatarUrl || currentDoctor?.image}
               alt={currentDoctor?.name}
@@ -1667,7 +1705,7 @@ export default function DoctorDashboard({
                   currentDoctor?.name;
               }}
             />
-            {isSidebarOpen && (
+            {sidebarExpanded && (
               <div className="overflow-hidden whitespace-nowrap">
                 <h2 className="font-bold text-[13px] leading-tight text-white mb-0.5 truncate max-w-[150px]">
                   {currentDoctor?.name || "Dr. Asilbek Xolmirzayev"}
@@ -1687,7 +1725,7 @@ export default function DoctorDashboard({
         </div>
 
         {/* Navigation Links */}
-        <div className={`flex-1 px-4 py-2 space-y-1 ${!isSidebarOpen ? 'px-2' : ''}`}>
+        <div className={`flex-1 px-4 py-2 space-y-1 ${!sidebarExpanded ? 'px-2' : ''}`}>
           <SidebarItem icon={Home} label={t("Dashboard")} id="dashboard" />
           <SidebarItem icon={List} label={t("Navbatlar")} id="navbatlar" />
           <SidebarItem icon={CalendarClock} label={t("Rejalashtirilgan")} id="rejalashtirilgan" />
@@ -1700,8 +1738,8 @@ export default function DoctorDashboard({
         </div>
 
         {/* Footer Area */}
-        <div className={`p-4 mt-auto space-y-2 ${!isSidebarOpen ? 'px-2' : ''}`}>
-          {isSidebarOpen && (
+        <div className={`p-4 mt-auto space-y-2 ${!sidebarExpanded ? 'px-2' : ''}`}>
+          {sidebarExpanded && (
             <div className="bg-[#17254d] p-3 rounded-xl border border-white/5 relative">
               <span className="text-[10px] text-slate-400 block mb-1 font-semibold">
                 {t("klinika rejimi")}
@@ -1717,11 +1755,11 @@ export default function DoctorDashboard({
               e.stopPropagation();
               onLogout ? onLogout() : (setActiveTab && setActiveTab("bemor"));
             }}
-            className={`w-full flex items-center ${isSidebarOpen ? 'gap-3 px-3' : 'justify-center px-0'} py-3 text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer rounded-xl`}
-            title={!isSidebarOpen ? t("chiqish") : ""}
+            className={`w-full flex items-center ${sidebarExpanded ? 'gap-3 px-3' : 'justify-center px-0'} py-3 text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer rounded-xl`}
+            title={!sidebarExpanded ? t("chiqish") : ""}
           >
             <LogOut className="w-4 h-4 shrink-0" />
-            {isSidebarOpen && <span className="text-sm font-semibold">{t("chiqish")}</span>}
+            {sidebarExpanded && <span className="text-sm font-semibold">{t("chiqish")}</span>}
           </button>
         </div>
       </div>
@@ -1732,15 +1770,15 @@ export default function DoctorDashboard({
         <div className="bg-white h-[72px] border-b border-slate-200 shrink-0 flex items-center justify-between px-6 z-10">
           <div className="flex items-center gap-3">
             <button 
-              className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg lg:hidden"
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg md:hidden"
+              onClick={() => setIsMobileNavOpen(true)}
             >
               <Menu className="w-5 h-5" />
             </button>
             <h2 className="font-bold text-xl text-slate-800 capitalize tracking-tight flex items-center gap-2">
               <button 
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="hover:bg-slate-100 p-1.5 rounded-lg transition-colors cursor-pointer hidden lg:block"
+                className="hover:bg-slate-100 p-1.5 rounded-lg transition-colors cursor-pointer hidden md:block"
               >
                 <Menu className="w-5 h-5 text-slate-400" />
               </button>
