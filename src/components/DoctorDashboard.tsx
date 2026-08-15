@@ -140,6 +140,8 @@ const VIEW_TITLES: Record<string, string> = {
 
 const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "bemor qo'shildi": { ru: "Пациент добавлен", en: "Patient added", kk: "Пациент қосылды", ky: "Бейтап кошулду", tg: "Бемор илова шуд", tk: "Näsag goşuldy" },
+  "bemor topilmadi. yangi bemor uchun \"yangi bemor qo'shish\" tugmasidan foydalaning.": { ru: "Пациент не найден. Для нового пациента используйте кнопку «Добавить пациента».", en: "Patient not found. Use the \"Add patient\" button for a new patient.", kk: "Пациент табылмады. Жаңа пациент үшін «Пациент қосу» түймесін пайдаланыңыз.", ky: "Бейтап табылган жок. Жаңы бейтап үчүн \"Бемор кошуу\" баскычын колдонуңуз.", tg: "Бемор ёфт нашуд. Барои бемори нав тугмаи «Иловаи бемор»-ро истифода баред.", tk: "Näsag tapylmady. Täze näsag üçin \"Näsag goşmak\" düwmesini ulanyň." },
+  "boshqa bemorni tanlash": { ru: "Выбрать другого пациента", en: "Choose a different patient", kk: "Басқа пациентті таңдау", ky: "Башка бейтапты тандоо", tg: "Интихоби бемори дигар", tk: "Başga näsagy saýlamak" },
   "bo'sh qoldirsangiz avtomatik yaratiladi": { ru: "Если оставить пустым, будет создан автоматически", en: "If left blank, one is generated automatically", kk: "Бос қалдырсаңыз, автоматты түрде жасалады", ky: "Бош калтырсаңыз, автоматтык түрдө түзүлөт", tg: "Агар холӣ монед, ба таври худкор эҷод мешавад", tk: "Boş goýsaňyz, awtomatik döredilýär" },
   "qo'shimcha ma'lumot (ixtiyoriy)": { ru: "Дополнительная информация (необязательно)", en: "Additional information (optional)", kk: "Қосымша ақпарат (міндетті емес)", ky: "Кошумча маалымат (милдеттүү эмес)", tg: "Маълумоти иловагӣ (ихтиёрӣ)", tk: "Goşmaça maglumat (hökman däl)" },
   "bemor o'z kabinetiga kirishi uchun quyidagi login va parolni unga bering": { ru: "Дайте пациенту следующий логин и пароль для входа в его кабинет", en: "Give the patient the following login and password to access their cabinet", kk: "Пациентке кабинетіне кіру үшін мына логин мен парольді беріңіз", ky: "Бейтапка кабинетине кирүү үчүн мына логин жана паролду бериңиз", tg: "Ба бемор логин ва рамзи зерин барои воридшавӣ ба кабинети худ диҳед", tk: "Näsaga öz kabinetine girmek üçin şu login we paroly beriň" },
@@ -865,31 +867,16 @@ export default function DoctorDashboard({
         return;
       }
 
-      // Booking someone by free-typed name/phone (as opposed to picking them from
-      // the search results) never used to create a real Patient record — only a
-      // queue ticket with those two fields as plain text. The person then couldn't
-      // be found on the NEXT booking either, forcing another from-scratch retype
-      // (this is exactly how "elmutodov javoxir" / "elmurodov javoxir" ended up as
-      // two separate near-duplicate entries in production). Upsert a real Patient
-      // by phone before creating the queue so this only ever has to happen once.
-      const typedPhoneDigits = newBookingPhone.trim().replace(/\D/g, "");
-      const existingByPhone = typedPhoneDigits
-        ? clinicPatients.find((p) => (p.phone || "").replace(/\D/g, "") === typedPhoneDigits)
-        : undefined;
-      if (!existingByPhone && typedPhoneDigits) {
-        const res = await fetch("/api/patients", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...staffAuthHeaders() },
-          body: JSON.stringify({
-            clinicId: effectiveClinicId,
-            fullName: newBookingName.trim(),
-            phone: newBookingPhone.trim(),
-            primaryDoctorId: currentDoctor?.id,
-          }),
-        });
-        const savedPatient = await res.json().catch(() => null);
-        if (res.ok && savedPatient) onPatientUpserted?.(savedPatient);
-      }
+      // "Yangi bandlash" books an EXISTING patient only — name/phone are
+      // read-only in the form below and only ever get set by picking a
+      // search result, so newBookingSelectedPatientId being unset here means
+      // nothing was actually picked (the submit button is also disabled in
+      // that case, this is just the belt-and-braces check). No Patient
+      // record gets created from this modal anymore; that upsert-on-booking
+      // behavior was itself the "second way to add a patient" this modal
+      // wasn't supposed to be — "Yangi bemor qo'shish" is the only place
+      // that creates one now.
+      if (!newBookingSelectedPatientId) return;
 
       const newQueue: QueueItem = {
         id: 'q_' + Math.random().toString(36).substr(2, 9),
@@ -909,6 +896,7 @@ export default function DoctorDashboard({
       setNewBookingQuery('');
       setNewBookingName('');
       setNewBookingPhone('');
+      setNewBookingSelectedPatientId(null);
       setNewBookingServiceId('');
       setNewBookingDate(new Date().toISOString().split('T')[0]);
       setNewBookingTime('09:00');
@@ -1072,6 +1060,12 @@ export default function DoctorDashboard({
   const [newBookingQuery, setNewBookingQuery] = useState('');
   const [newBookingName, setNewBookingName] = useState('');
   const [newBookingPhone, setNewBookingPhone] = useState('');
+  // "Yangi bandlash" books an existing patient — it must not also be a second
+  // way to create one. Set only by picking a search result; name/phone are
+  // read-only until then, so there's no free-text path left that could
+  // silently upsert a new Patient record (that's "Yangi bemor qo'shish"'s job
+  // alone now).
+  const [newBookingSelectedPatientId, setNewBookingSelectedPatientId] = useState<string | null>(null);
   const [newBookingServiceId, setNewBookingServiceId] = useState('');
   const [newBookingDate, setNewBookingDate] = useState(new Date().toISOString().split('T')[0]);
   const [newBookingTime, setNewBookingTime] = useState('09:00');
@@ -1176,6 +1170,7 @@ export default function DoctorDashboard({
     setNewBookingQuery('');
     setNewBookingName('');
     setNewBookingPhone('');
+    setNewBookingSelectedPatientId(null);
     setNewBookingServiceId('');
     setNewBookingDate(date || new Date().toISOString().split('T')[0]);
     setNewBookingTime(time || scheduleSlots.find((s) => !isLunchSlot(s)) || '09:00');
@@ -3870,9 +3865,13 @@ export default function DoctorDashboard({
               </button>
             </div>
             <div className="p-5 flex flex-col gap-4 overflow-y-auto">
-              {!editingQueueId && (
+              {/* Booking an existing patient is the only thing this modal does —
+                  name/phone are never directly typable, only ever set by picking
+                  a search result below. Creating a new patient lives solely in
+                  "Yangi bemor qo'shish" now. */}
+              {!editingQueueId && !newBookingSelectedPatientId && (
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("bemorni qidirish")}</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("bemorni qidirish")} *</label>
                 <input
                   type="text"
                   value={newBookingQuery}
@@ -3889,6 +3888,7 @@ export default function DoctorDashboard({
                         onClick={() => {
                           setNewBookingName(decodeLegacyEntities(p.fullName) || '');
                           setNewBookingPhone(decodeLegacyEntities(p.phone) || '');
+                          setNewBookingSelectedPatientId(p.id!);
                           setNewBookingQuery('');
                         }}
                         className="w-full text-left px-3 py-2 hover:bg-slate-50 transition-colors"
@@ -3899,18 +3899,22 @@ export default function DoctorDashboard({
                     ))}
                   </div>
                 )}
+                {newBookingQuery.trim() && newBookingSearchResults.length === 0 && (
+                  <p className="mt-1.5 text-[11px] text-slate-400 font-medium">
+                    {t("bemor topilmadi. yangi bemor uchun \"yangi bemor qo'shish\" tugmasidan foydalaning.")}
+                  </p>
+                )}
               </div>
               )}
+              {(editingQueueId || newBookingSelectedPatientId) && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("to'liq ism *")}</label>
                   <input
                     type="text"
                     value={newBookingName}
-                    onChange={(e) => setNewBookingName(e.target.value)}
-                    readOnly={!!editingQueueId}
-                    className={`w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium text-slate-800 ${editingQueueId ? 'bg-slate-50' : 'bg-white'}`}
-                    placeholder={t("ism familiya")}
+                    readOnly
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none font-medium text-slate-800 bg-slate-50"
                   />
                 </div>
                 <div>
@@ -3918,13 +3922,25 @@ export default function DoctorDashboard({
                   <input
                     type="text"
                     value={newBookingPhone}
-                    onChange={(e) => setNewBookingPhone(e.target.value)}
-                    readOnly={!!editingQueueId}
-                    className={`w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium text-slate-800 ${editingQueueId ? 'bg-slate-50' : 'bg-white'}`}
-                    placeholder="+998 90 123 45 67"
+                    readOnly
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none font-medium text-slate-800 bg-slate-50"
                   />
                 </div>
+                {!editingQueueId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewBookingSelectedPatientId(null);
+                      setNewBookingName('');
+                      setNewBookingPhone('');
+                    }}
+                    className="col-span-2 text-xs font-bold text-purple-600 hover:underline text-left"
+                  >
+                    {t("boshqa bemorni tanlash")}
+                  </button>
+                )}
               </div>
+              )}
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("muolaja / xizmat")}</label>
                 <select
@@ -3983,7 +3999,7 @@ export default function DoctorDashboard({
               </button>
               <button
                 onClick={handleNewBooking}
-                disabled={!newBookingName.trim() || !newBookingDate || !newBookingTime || isSavingNewBooking}
+                disabled={!newBookingName.trim() || !newBookingDate || !newBookingTime || isSavingNewBooking || (!editingQueueId && !newBookingSelectedPatientId)}
                 className="px-4 py-2 text-sm font-bold bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-colors shadow-md shadow-purple-500/20"
               >
                 {editingQueueId ? t("saqlash") : t("tasdiqlash")}
