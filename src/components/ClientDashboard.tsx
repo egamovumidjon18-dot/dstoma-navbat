@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clinic, Doctor, Service, QueueItem, Patient, ToothDiagnosis } from '../types';
-import { DjangoAPI, getApiUrl } from '../services/api';
+import { getApiUrl } from '../services/api';
 import { TRANSLATIONS, Language, translateMedicalText } from '../translations';
 import PatientPanel from './PatientPanel';
 import ThreeDentalModel from './ThreeDentalModel';
