@@ -188,6 +188,12 @@ export interface Patient {
 export interface QueueItem {
   id: string;
   clinicId: string;
+  // patientName/patientPhone are the legacy link back to a Patient record —
+  // free-text matches that silently break if a name/phone is blank or
+  // reformatted. patientId is the reliable link for anything created after
+  // this field existed; code reading "my queue" should prefer it and only
+  // fall back to phone-matching for older queues that predate it.
+  patientId?: string;
   patientName: string;
   patientPhone: string;
   doctorId: string;

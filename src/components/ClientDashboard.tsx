@@ -932,57 +932,20 @@ export default function ClientDashboard({
   };
 
   // Prepopulated queue entries matching screenshots
-  const [myQueues, setMyQueues] = useState<QueueItem[]>([
-    {
-      id: 'q_pre_1',
-      clinicId: 'samarqand',
-      patientName: 'Test Bemor 2',
-      patientPhone: '+998 (90) 123-45-67',
-      doctorId: 'doc_sm_1',
-      serviceId: 'srv_sm_3',
-      number: 102,
-      status: 'completed',
-      rating: 5,
-      createdAt: '2026-06-03T11:20:00Z'
-    },
-    {
-      id: 'q_pre_2',
-      clinicId: 'samarqand',
-      patientName: 'Test Bemor 2',
-      patientPhone: '+998 (90) 123-45-67',
-      doctorId: 'doc_sm_2',
-      serviceId: 'srv_sm_1',
-      number: 105,
-      status: 'pending',
-      createdAt: new Date().toISOString()
-    }
-  ]);
-
-  // Sync myQueues statuses and ratings with main parent queues in real time
-  React.useEffect(() => {
-    setMyQueues((prevMyQueues) => {
-      const updated = prevMyQueues.map((myQ) => {
-        const masterQ = queues.find((q) => q.id === myQ.id);
-        if (masterQ) {
-          return { ...myQ, status: masterQ.status, rating: masterQ.rating || myQ.rating };
-        }
-        return myQ;
-      });
-
-      // Also append any new master queue item that belongs to this user if it's not already in local myQueues!
-      if (currentUser) {
-        queues.forEach((q) => {
-          if (
-            (q.patientPhone === currentUser.phone || q.patientName === currentUser.fullName) &&
-            !updated.some((item) => item.id === q.id)
-          ) {
-            updated.unshift(q);
-          }
-        });
-      }
-      return updated;
-    });
-  }, [queues, currentUser]);
+  // The patient's own queues, derived straight from the master `queues` list —
+  // matched by patientId (reliable) and, for older queues that predate that
+  // field, by normalized phone as a fallback. There used to be a separate
+  // locally-tracked `myQueues` state here (seeded with hardcoded demo data)
+  // that PatientPanel never actually read, so it silently drifted from
+  // reality; this replaces it with a single derived source of truth.
+  const normalizedUserPhone = (currentUser?.phone || '').replace(/\D/g, '');
+  const myQueues = queues.filter((q) => {
+    if (currentUser?.id && q.patientId) return q.patientId === currentUser.id;
+    if (!normalizedUserPhone) return false;
+    return (q.patientPhone || '').replace(/\D/g, '') === normalizedUserPhone;
+  });
+  const ACTIVE_QUEUE_STATUSES: QueueItem['status'][] = ['pending', 'scheduled', 'calling', 'in_progress'];
+  const myActiveQueue = myQueues.find((q) => ACTIVE_QUEUE_STATUSES.includes(q.status)) || null;
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1128,6 +1091,17 @@ export default function ClientDashboard({
   const handleBookQueue = (e?: React.FormEvent) => {
     e?.preventDefault();
 
+    // One active ticket per patient — checked here (immediate, no round trip)
+    // as well as server-side in POST /api/queues (defense in depth against
+    // double-submits). Blocking here instead of just disabling the "Navbat
+    // olish" entry point means a stale booking form left open in another tab
+    // still can't slip a second ticket through.
+    if (myActiveQueue) {
+      showToast("Sizda allaqachon faol navbat mavjud. Yangisini olishdan oldin uni bekor qiling.", "error");
+      setActiveSubView('cabinet');
+      return;
+    }
+
     // The patient must explicitly pick a clinic and one of THAT clinic's doctors —
     // never silently fall back to "first doctor of first clinic".
     const clinic = clinics.find(c => c.id === bookingClinicId);
@@ -1137,11 +1111,12 @@ export default function ClientDashboard({
       return;
     }
 
-    const ticketNo = queues.length + myQueues.length + 107;
+    const ticketNo = queues.length + 107;
 
     const newQueue: QueueItem = {
       id: 'q_' + Math.random().toString(36).substr(2, 9),
       clinicId: clinic.id,
+      patientId: currentUser?.id,
       patientName: currentUser?.fullName || 'Mehmon',
       patientPhone: currentUser?.phone || phone,
       doctorId: doc.id,
@@ -1155,28 +1130,11 @@ export default function ClientDashboard({
       newQueue.telegramChatId = currentUser?.telegramChatId || telegramIdInput;
     }
 
-    // Add locally
-    setMyQueues([newQueue, ...myQueues]);
     onAddQueue(newQueue);
     setComplaint('');
     // Return to the cabinet so the fresh ticket is immediately visible in "Mening navbatlarim".
     setActiveSubView('cabinet');
     showToast(`Navbatingiz olindi! Elektron chipta raqamingiz: #${ticketNo}`);
-  };
-
-  const handleCancelLocalQueue = (id: string) => {
-    setMyQueues(myQueues.map(q => q.id === id ? { ...q, status: 'cancelled' } : q));
-    onCancelQueue(id);
-    showToast("Navbat bekor qilindi", "error");
-  };
-
-  const handleRatingLocalQueue = (id: string, rating: number) => {
-    setMyQueues(myQueues.map(q => q.id === id ? { ...q, rating } : q));
-    const item = myQueues.find(q => q.id === id);
-    if (item) {
-      onUpdateDoctorRating(item.doctorId, rating);
-    }
-    showToast("Baho berganingiz uchun rahmat! ❤️");
   };
 
   const [servicesSearchTerm, setServicesSearchTerm] = useState('');
@@ -1645,7 +1603,17 @@ export default function ClientDashboard({
           onLogout={() => { setActiveSubView('home'); setCurrentUser(null); }}
           queues={queues}
           clinic={selectedClinic}
+          onCancelQueue={(id) => {
+            onCancelQueue(id);
+            showToast("Navbat bekor qilindi", "error");
+          }}
           onGoToBooking={() => {
+            // One active ticket per patient — send them to their existing
+            // ticket instead of a wizard that would just get rejected on submit.
+            if (myActiveQueue) {
+              showToast("Sizda allaqachon faol navbat mavjud. Yangisini olishdan oldin uni bekor qiling.", "error");
+              return;
+            }
             // No pre-fill: the wizard opens on the map and only shows a
             // clinic's doctors once the patient actually clicks that clinic
             // — pre-selecting here made the doctor list appear before any

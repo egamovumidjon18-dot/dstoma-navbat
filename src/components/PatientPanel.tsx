@@ -132,6 +132,7 @@ const PATIENT_PANEL_TRANSLATIONS: Record<string, PatientPanelDictEntry> = {
     tk: "Agza ulalanda şu pasport we parol bilen öz aýratyn kabinetine girip biler."
   },
   "bekor qilish": { ru: "Отмена", en: "Cancel", kk: "Болдырмау", ky: "Жокко чыгаруу", tg: "Бекор кардан", tk: "Ýatyrmak" },
+  "navbatni bekor qilmoqchimisiz?": { ru: "Отменить очередь?", en: "Cancel this queue?", kk: "Кезекті болдырмайсыз ба?", ky: "Кезекти жокко чыгарасызбы?", tg: "Навбатро бекор мекунед?", tk: "Nobaty ýatyrmakçymysyňyz?" },
   "saqlanmoqda...": { ru: "Сохраняется...", en: "Saving...", kk: "Сақталуда...", ky: "Сакталууда...", tg: "Захира мешавад...", tk: "Ýatda saklanýar..." },
   "ro'yxatdan o'tkazish": { ru: "Зарегистрировать", en: "Register", kk: "Тіркеу", ky: "Каттоо", tg: "Сабти ном", tk: "Hasaba almak" },
   bajarildi: { ru: "Выполнено", en: "Done", kk: "Орындалды", ky: "Аткарылды", tg: "Иҷро шуд", tk: "Ýerine ýetirildi" },
@@ -147,6 +148,7 @@ export default function PatientPanel({
   queues = [],
   clinic,
   onGoToBooking,
+  onCancelQueue,
   familyMembers = [],
   onLinkFamilyMember,
   onUnlinkFamilyMember,
@@ -162,6 +164,7 @@ export default function PatientPanel({
   queues?: QueueItem[];
   clinic?: Clinic | null;
   onGoToBooking?: () => void;
+  onCancelQueue?: (queueId: string) => void;
   familyMembers?: Patient[];
   onLinkFamilyMember?: (member: Patient) => Promise<void>;
   onUnlinkFamilyMember?: (member: Patient) => Promise<void>;
@@ -370,8 +373,17 @@ export default function PatientPanel({
     return () => unsub();
   }, [viewingPatient?.id]);
 
+  // patientId is the reliable link; normalized phone is only a fallback for
+  // queues created before that field existed (or by a legacy client). Phone-only
+  // matching used to be the sole check, which silently showed no queue at all
+  // for any patient who hadn't filled in a phone number yet — registration only
+  // requires fullName + password now, so that's common for freshly-booked patients.
   const normalizedPhone = (viewingPatient?.phone || '').replace(/\D/g, '');
-  const myQueues = queues.filter((q) => (q.patientPhone || '').replace(/\D/g, '') === normalizedPhone && normalizedPhone);
+  const myQueues = queues.filter((q) => {
+    if (viewingPatient?.id && q.patientId) return q.patientId === viewingPatient.id;
+    if (!normalizedPhone) return false;
+    return (q.patientPhone || '').replace(/\D/g, '') === normalizedPhone;
+  });
   const nextQueue = myQueues
     .filter((q) => ['pending', 'scheduled', 'calling', 'in_progress'].includes(q.status))
     .sort((a, b) => new Date(a.appointmentDate || a.createdAt).getTime() - new Date(b.appointmentDate || b.createdAt).getTime())[0] || null;
@@ -568,9 +580,20 @@ export default function PatientPanel({
                   <p className="text-sm text-slate-400 py-6 text-center">{t("hozircha faol navbatingiz yo'q")}</p>
                 )}
                 {nextQueue && <AdBanner placement="web_queue_screen" clinicId={patient?.clinicId} />}
-                <button onClick={onGoToBooking} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm py-3 rounded-xl transition-colors shadow-md shadow-blue-600/20">
-                  {nextQueue ? t("yangi navbat olish") : t("navbat olish")}
-                </button>
+                {nextQueue ? (
+                  <button
+                    onClick={() => {
+                      if (window.confirm(t("navbatni bekor qilmoqchimisiz?"))) onCancelQueue?.(nextQueue.id);
+                    }}
+                    className="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-sm py-3 rounded-xl transition-colors border border-rose-100"
+                  >
+                    {t("bekor qilish")}
+                  </button>
+                ) : (
+                  <button onClick={onGoToBooking} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm py-3 rounded-xl transition-colors shadow-md shadow-blue-600/20">
+                    {t("navbat olish")}
+                  </button>
+                )}
               </div>
 
               {/* Treatment Plan */}
@@ -727,6 +750,7 @@ export default function PatientPanel({
                       completed: t('bajarildi'),
                       cancelled: t('bekor qilingan'),
                     };
+                    const isActive = ['pending', 'scheduled', 'calling', 'in_progress'].includes(q.status);
                     return (
                       <div key={q.id} className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                         <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex flex-col items-center justify-center shrink-0 leading-none">
@@ -740,6 +764,17 @@ export default function PatientPanel({
                         <span className={`px-3 py-1 text-[10px] font-bold rounded-lg uppercase border shrink-0 ${statusStyle[q.status] || 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                           {statusLabel[q.status] || q.status}
                         </span>
+                        {isActive && onCancelQueue && (
+                          <button
+                            onClick={() => {
+                              if (window.confirm(t("navbatni bekor qilmoqchimisiz?"))) onCancelQueue(q.id);
+                            }}
+                            className="shrink-0 p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            title={t("bekor qilish")}
+                          >
+                            <X size={16} />
+                          </button>
+                        )}
                       </div>
                     );
                   })}

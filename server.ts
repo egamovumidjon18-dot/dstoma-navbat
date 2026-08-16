@@ -317,6 +317,7 @@ interface Patient {
 interface QueueItem {
   id: string;
   clinicId: string;
+  patientId?: string;
   patientName: string;
   patientPhone: string;
   doctorId: string;
@@ -1432,6 +1433,7 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
   // drains the wrong materials. Empty means "not chosen yet", and the
   // deduction skips it rather than consuming something arbitrary.
   const serviceId = sanitizeString(q.service_id || q.serviceId || '');
+  const patientId = sanitizeString(q.patient_id || q.patientId || '');
   const patientName = sanitizeString(q.patient_name || q.patientName || 'Mehmon');
   const patientPhone = sanitizeString(q.patient_phone || q.patientPhone || '');
   const telegramChatId = q.telegram_chat_id || q.telegramChatId || null;
@@ -1442,11 +1444,33 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
   const appointmentTime = sanitizeString(q.appointment_time ?? q.appointmentTime ?? '');
 
   const qDb = await getQueues();
+
+  // A patient may only hold one active self-booked ticket at a time — a
+  // double-submit (or reopening the booking wizard) would otherwise silently
+  // stack up duplicate tickets with no way for the patient to tell which is
+  // real. Scoped to patientId specifically: only the patient-app booking
+  // wizard sends it, so staff-initiated bookings (walk-ins, multi-visit
+  // treatment plans scheduled by a doctor/director) are unaffected.
+  if (patientId) {
+    const ACTIVE_QUEUE_STATUSES = ['pending', 'scheduled', 'calling', 'in_progress'];
+    const existingActive = qDb.find(
+      (item) => item.patientId === patientId && ACTIVE_QUEUE_STATUSES.includes(item.status)
+    );
+    if (existingActive) {
+      return res.status(409).json({
+        ok: false,
+        error: "Sizda allaqachon faol navbat mavjud. Yangisini olishdan oldin uni bekor qiling.",
+        existingQueue: existingActive
+      });
+    }
+  }
+
   const ticketNo = qDb.filter(item => item.clinicId === clinicId).length + 104;
 
   const newQueueItem: any = {
     id: q.id || 'q_' + Math.random().toString(36).substr(2, 9),
     clinicId,
+    patientId: patientId || undefined,
     patientName,
     patientPhone,
     doctorId,
@@ -1540,6 +1564,7 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
     clinic_id: clinicId,
     doctor_id: doctorId,
     service_id: serviceId,
+    patient_id: patientId || undefined,
     patient_name: patientName,
     patient_phone: patientPhone,
     telegram_chat_id: telegramChatId,

@@ -682,6 +682,7 @@ export function useAppState() {
           clinicId: newQueue.clinicId,
           doctorId: newQueue.doctorId,
           serviceId: newQueue.serviceId,
+          patientId: newQueue.patientId,
           patientName: newQueue.patientName,
           patientPhone: newQueue.patientPhone,
           hasInfection: newQueue.hasInfection,
@@ -700,6 +701,7 @@ export function useAppState() {
           clinicId: saved.clinicId || saved.clinic_id || '',
           doctorId: saved.doctorId || saved.doctor_id || '',
           serviceId: saved.serviceId || saved.service_id || '',
+          patientId: saved.patientId || saved.patient_id || undefined,
           number: saved.number || newQueue.number,
           patientName: saved.patientName || saved.patient_name || '',
           patientPhone: saved.patientPhone || saved.patient_phone || '',
@@ -713,6 +715,20 @@ export function useAppState() {
           createdAt: saved.createdAt || saved.created_at || new Date().toISOString()
         };
         setQueues(prev => prev.map(q => q.id === newQueue.id ? mapped : q));
+      } else {
+        // Server rejected it (e.g. 409 duplicate-active-queue) — the optimistic
+        // add above would otherwise leave a phantom ticket in state that the
+        // patient sees but that was never actually saved.
+        const errBody = await res.json().catch(() => null);
+        setQueues(prev => prev.filter(q => q.id !== newQueue.id));
+        if (newQueue.status !== 'scheduled') {
+          setClinics(prev => prev.map(c =>
+            c.id === newQueue.clinicId && c.activePatients > 0
+              ? { ...c, activePatients: c.activePatients - 1 }
+              : c
+          ));
+        }
+        console.warn("[AppState Hook] Queue creation rejected:", errBody?.error || res.status);
       }
     } catch (err) {
       console.warn("[AppState Hook] Backend sync failed, using offline state", err);
