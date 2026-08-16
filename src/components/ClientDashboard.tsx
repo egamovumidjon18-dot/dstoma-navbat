@@ -2039,8 +2039,11 @@ export default function ClientDashboard({
           queues={queues}
           clinic={selectedClinic}
           onGoToBooking={() => {
-            // Pre-select the patient's own clinic, but leave the doctor an explicit choice.
-            setBookingClinicId(currentUser?.clinicId || activeClinic?.id || '');
+            // No pre-fill: the wizard opens on the map and only shows a
+            // clinic's doctors once the patient actually clicks that clinic
+            // — pre-selecting here made the doctor list appear before any
+            // real interaction, which looked like the map wasn't working.
+            setBookingClinicId('');
             setBookingDoctorId('');
             setActiveSubView('booking');
           }}
