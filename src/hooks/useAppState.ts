@@ -271,14 +271,20 @@ export function useAppState() {
     });
   };
 
-  const handleLoginSubmit = async (e: React.FormEvent) => {
+  // Tries every account type in turn so one login form can serve patients,
+  // doctors, directors and the superadmin without asking which kind of
+  // account they have. Each check is verified server-side — the client never
+  // holds a list of plaintext passwords to compare against locally. Returns
+  // which role matched (so the caller can route to the right screen) or null
+  // if none did.
+  const handleLoginSubmit = async (
+    e: React.FormEvent
+  ): Promise<'superadmin' | 'director' | 'doctor' | 'patient' | null> => {
     e.preventDefault();
     setAuthError(null);
     const userLower = authUsername.trim();
     const passLower = authPassword.trim();
 
-    // All three role checks are verified server-side — the client never holds a full
-    // list of plaintext passwords to compare against locally.
     try {
       // 1. Superadmin
       const adminLoginRes = await fetch('/api/admin-login', {
@@ -297,7 +303,7 @@ export function useAppState() {
         }
         setAuthUsername('');
         setAuthPassword('');
-        return;
+        return 'superadmin';
       }
 
       // 2. Director (clinic owner)
@@ -320,7 +326,7 @@ export function useAppState() {
         setSelectedClinic(matchedClinic);
         setAuthUsername('');
         setAuthPassword('');
-        return;
+        return 'director';
       }
 
       // 3. Doctor
@@ -344,15 +350,36 @@ export function useAppState() {
         setActiveDoctorClinicId(matchedDoctor.clinicId);
         setAuthUsername('');
         setAuthPassword('');
-        return;
+        return 'doctor';
+      }
+
+      // 4. Patient. Patient sessions are tracked separately from the staff
+      // `currentUser` above (ClientDashboard owns its own session state), so
+      // this writes directly to the same localStorage keys ClientDashboard
+      // reads on mount rather than going through setCurrentUser/writeUserSession.
+      const patientLoginRes = await fetch('/api/patient-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ loginId: userLower.toUpperCase(), password: passLower })
+      });
+      if (patientLoginRes.ok) {
+        const data = await patientLoginRes.json();
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('dstoma_patient_session', JSON.stringify(data.patient));
+          if (data.token) localStorage.setItem('dstoma_patient_token', data.token);
+        }
+        setAuthUsername('');
+        setAuthPassword('');
+        return 'patient';
       }
     } catch (err) {
       console.warn("Login request failed:", err);
       setAuthError(t('credIncorrect'));
-      return;
+      return null;
     }
 
     setAuthError(t('credIncorrect'));
+    return null;
   };
 
   const handleLogout = () => {

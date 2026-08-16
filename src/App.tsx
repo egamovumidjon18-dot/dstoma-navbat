@@ -5,6 +5,7 @@ import DoctorDashboard from './components/DoctorDashboard';
 import DirectorDashboard from './components/DirectorDashboard';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import WelcomeScreen from './components/WelcomeScreen';
+import UnifiedLoginScreen from './components/welcome/UnifiedLoginScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { KeyRound, ShieldAlert, LogOut, CheckCircle, Smartphone, Lock, ClipboardCheck, ChevronDown, Check } from 'lucide-react';
@@ -86,10 +87,34 @@ export default function App() {
     );
   });
   const [welcomeTarget, setWelcomeTarget] = useState<'home' | 'register' | 'login'>('home');
+  // "Kirish" from the welcome screen opens this role-agnostic login instead of
+  // jumping straight into the patient dashboard — handleLoginSubmit tries every
+  // account type and this screen just waits for it to say which one matched.
+  const [showUnifiedLogin, setShowUnifiedLogin] = useState(false);
 
   const enterFromWelcome = (target: 'register' | 'login') => {
+    if (target === 'login') {
+      setShowUnifiedLogin(true);
+      return;
+    }
     setWelcomeTarget(target);
     setActiveTab('bemor');
+    setHasEnteredApp(true);
+  };
+
+  const handleUnifiedLogin = async (e: React.FormEvent) => {
+    const role = await handleLoginSubmit(e);
+    if (!role) return; // authError is already set for display
+    setShowUnifiedLogin(false);
+    if (role === 'patient') {
+      setActiveTab('bemor');
+    } else if (role === 'superadmin') {
+      setActiveTab('superadmin');
+    } else if (role === 'director') {
+      setActiveTab('boshliq');
+    } else if (role === 'doctor') {
+      setActiveTab('shifokor');
+    }
     setHasEnteredApp(true);
   };
 
@@ -117,6 +142,27 @@ export default function App() {
   );
 
   if (!hasEnteredApp && !currentUser) {
+    if (showUnifiedLogin) {
+      return (
+        <ErrorBoundary>
+          <UnifiedLoginScreen
+            language={language}
+            setLanguage={setLanguage}
+            username={authUsername}
+            setUsername={setAuthUsername}
+            password={authPassword}
+            setPassword={setAuthPassword}
+            error={authError}
+            onSubmit={handleUnifiedLogin}
+            onBack={() => setShowUnifiedLogin(false)}
+            onGoRegister={() => {
+              setShowUnifiedLogin(false);
+              enterFromWelcome('register');
+            }}
+          />
+        </ErrorBoundary>
+      );
+    }
     return (
       <ErrorBoundary>
         <WelcomeScreen
@@ -235,6 +281,7 @@ export default function App() {
                   language={language}
                   userLocationRef={userLocationRef}
                   initialSubView={welcomeTarget}
+                  onExitToWelcome={() => setHasEnteredApp(false)}
                 />
               </ErrorBoundary>
             )}

@@ -65,6 +65,10 @@ interface ClientDashboardProps {
   // screen uses it to send visitors straight into register/login instead of
   // dropping them on the logged-out home view.
   initialSubView?: 'home' | 'register' | 'login';
+  // Called when an anonymous visitor lands on the now-empty 'home' subview
+  // (e.g. a stale ?tab=bemor link, or logging out) — App.tsx uses it to send
+  // them back to the welcome screen, this dashboard's actual front door.
+  onExitToWelcome?: () => void;
 }
 
 export default function ClientDashboard({
@@ -80,7 +84,8 @@ export default function ClientDashboard({
   setActiveTab,
   language,
   userLocationRef,
-  initialSubView
+  initialSubView,
+  onExitToWelcome
 }: ClientDashboardProps) {
 
   // Translation Helper for ClientDashboard
@@ -333,6 +338,16 @@ export default function ClientDashboard({
     if (localStorage.getItem('dstoma_patient_session')) return 'cabinet';
     return initialSubView ?? 'home';
   });
+
+  // 'home' no longer renders anything — it used to be a full marketing landing
+  // page, which the welcome screen now owns (shown before the app is entered
+  // at all). Anything that still lands here — a stale ?tab=bemor link, or
+  // logging out — bounces straight back out to that welcome screen instead.
+  useEffect(() => {
+    if (activeSubView === 'home' && !currentUser) {
+      onExitToWelcome?.();
+    }
+  }, [activeSubView, currentUser]);
 
   // Form States
   const [fullName, setFullName] = useState('');
@@ -1299,419 +1314,11 @@ export default function ClientDashboard({
           where the patient picks a clinic on the map before taking a queue. */}
 
       {/* ----------------- CLIENT DASHBOARD WORKSPACE ----------------- */}
-      {activeSubView === 'home' && (
-        <div className="space-y-6">
-          {/* ----------------- HERO ----------------- */}
-          <div className="bg-[#0a0f1d] rounded-3xl p-6 sm:p-10 border border-[#1e3256]/60 relative overflow-hidden">
-            <div className="absolute -right-16 -top-16 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute -left-10 bottom-0 w-40 h-40 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-              <div className="max-w-xl">
-                <h1 className="text-2xl sm:text-4xl font-black text-white leading-tight">
-                  Eng yaqin stomatologik klinikani <span className="text-emerald-400">toping</span>
-                </h1>
-                <p className="text-sm text-slate-400 mt-3 leading-relaxed">
-                  Onlayn navbat oling va vaqtni tejang. Sog'lig'ingiz biz uchun muhim!
-                </p>
-                <form
-                  onSubmit={(e) => { e.preventDefault(); scrollToClinics(); }}
-                  className="mt-6 flex flex-col sm:flex-row items-stretch gap-3"
-                >
-                  <div className="flex-1 flex items-center gap-2 bg-[#111827] border border-[#1e3256]/60 rounded-xl px-4">
-                    <Search className="w-4 h-4 text-slate-500 shrink-0" />
-                    <input
-                      type="text"
-                      value={heroSearchTerm}
-                      onChange={(e) => setHeroSearchTerm(e.target.value)}
-                      placeholder="Klinika yoki manzilni qidiring..."
-                      className="flex-1 bg-transparent py-3 text-sm text-white placeholder:text-slate-500 outline-none min-w-0"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={scrollToClinics}
-                    className="flex items-center justify-center gap-2 px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-[#04120c] text-sm font-black rounded-xl transition-colors shrink-0"
-                  >
-                    <Navigation className="w-4 h-4" /> GPS orqali topish
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white text-sm font-black rounded-xl transition-colors shrink-0"
-                  >
-                    <Calendar className="w-4 h-4" /> Navbat olish
-                  </button>
-                </form>
-              </div>
-
-              {/* Creative animated tooth centerpiece — desktop only, mirrors the reference mockup */}
-              <div className="relative hidden lg:flex items-center justify-center h-80">
-                <motion.div
-                  className="absolute bottom-6 w-56 h-56 rounded-full bg-emerald-500/20 blur-3xl"
-                  animate={{ opacity: [0.35, 0.65, 0.35], scale: [1, 1.08, 1] }}
-                  transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-                />
-                <motion.div
-                  className="absolute bottom-10 w-44 h-7 rounded-full bg-cyan-400/25 blur-xl"
-                  animate={{ opacity: [0.25, 0.55, 0.25], scaleX: [1, 1.15, 1] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                />
-
-                <motion.div
-                  className="absolute w-64 h-64 rounded-full border border-emerald-500/20"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 22, repeat: Infinity, ease: 'linear' }}
-                />
-                <motion.div
-                  className="absolute w-52 h-52 rounded-full border border-dashed border-cyan-500/20"
-                  animate={{ rotate: -360 }}
-                  transition={{ duration: 28, repeat: Infinity, ease: 'linear' }}
-                />
-
-                {[...Array(6)].map((_, i) => (
-                  <motion.span
-                    key={i}
-                    className="absolute w-1.5 h-1.5 rounded-full bg-emerald-300"
-                    style={{
-                      top: `${18 + (i * 11) % 60}%`,
-                      left: `${(i % 2 === 0 ? 8 : 88) + (i * 4)}%`,
-                    }}
-                    animate={{ opacity: [0.2, 1, 0.2], scale: [0.6, 1.3, 0.6] }}
-                    transition={{ duration: 2 + i * 0.4, repeat: Infinity, ease: 'easeInOut', delay: i * 0.3 }}
-                  />
-                ))}
-
-                <motion.div
-                  className="relative z-10"
-                  animate={{ y: [0, -14, 0], rotate: [-2, 2, -2] }}
-                  transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  <div className="absolute inset-4 blur-3xl bg-emerald-400/20 rounded-full" />
-                  <svg width="180" height="210" viewBox="0 0 180 210" fill="none" className="relative drop-shadow-[0_18px_32px_rgba(16,185,129,0.35)]">
-                    <defs>
-                      <linearGradient id="heroToothBody" x1="15%" y1="0%" x2="90%" y2="100%">
-                        <stop offset="0%" stopColor="#ffffff" />
-                        <stop offset="35%" stopColor="#eef8ff" />
-                        <stop offset="70%" stopColor="#c2ddf0" />
-                        <stop offset="100%" stopColor="#86aecb" />
-                      </linearGradient>
-                      <linearGradient id="heroToothShade" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
-                        <stop offset="55%" stopColor="#ffffff" stopOpacity="0" />
-                        <stop offset="100%" stopColor="#33607f" stopOpacity="0.55" />
-                      </linearGradient>
-                      <radialGradient id="heroToothShine" cx="32%" cy="20%" r="38%">
-                        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
-                        <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-                      </radialGradient>
-                    </defs>
-
-                    {/* grounding shadow */}
-                    <ellipse cx="90" cy="202" rx="48" ry="7" fill="#02101f" opacity="0.35" />
-
-                    {/* classic molar silhouette: broad two-cusp crown, tapered waist,
-                        two rounded roots with a clear notch between them */}
-                    <path
-                      d="M90 12
-                         C 62 12, 35 26, 31 58
-                         C 28 82, 35 100, 45 116
-                         C 55 132, 57 152, 59 172
-                         C 60 185, 65 195, 73 195
-                         C 81 195, 83 182, 84 169
-                         C 85 155, 87 143, 90 143
-                         C 93 143, 95 155, 96 169
-                         C 97 182, 99 195, 107 195
-                         C 115 195, 120 185, 121 172
-                         C 123 152, 125 132, 135 116
-                         C 145 100, 152 82, 149 58
-                         C 145 26, 118 12, 90 12 Z"
-                      fill="url(#heroToothBody)"
-                      stroke="#67e8f9"
-                      strokeWidth="2.5"
-                      strokeOpacity="0.85"
-                    />
-                    {/* volumetric shading pass over the same silhouette */}
-                    <path
-                      d="M90 12
-                         C 62 12, 35 26, 31 58
-                         C 28 82, 35 100, 45 116
-                         C 55 132, 57 152, 59 172
-                         C 60 185, 65 195, 73 195
-                         C 81 195, 83 182, 84 169
-                         C 85 155, 87 143, 90 143
-                         C 93 143, 95 155, 96 169
-                         C 97 182, 99 195, 107 195
-                         C 115 195, 120 185, 121 172
-                         C 123 152, 125 132, 135 116
-                         C 145 100, 152 82, 149 58
-                         C 145 26, 118 12, 90 12 Z"
-                      fill="url(#heroToothShade)"
-                    />
-                    {/* crown cusp dimple */}
-                    <path d="M64 30 Q90 44 116 30" stroke="#7ba3c2" strokeWidth="3" strokeLinecap="round" opacity="0.7" fill="none" />
-                    {/* enamel-gum line across the crown */}
-                    <path d="M36 82 Q90 104 144 82" stroke="#7ba3c2" strokeWidth="2" opacity="0.5" fill="none" />
-                    {/* inner root-notch contour so the two legs read clearly */}
-                    <path d="M84 169 C 85 155, 87 143, 90 143 C 93 143, 95 155, 96 169" stroke="#5c86a5" strokeWidth="2" strokeLinecap="round" opacity="0.6" fill="none" />
-                    {/* glossy highlight */}
-                    <ellipse cx="64" cy="54" rx="26" ry="34" fill="url(#heroToothShine)" />
-                  </svg>
-                </motion.div>
-
-                <motion.div
-                  className="absolute top-6 left-2 w-11 h-11 rounded-2xl bg-[#0c1225] border border-emerald-500/30 flex items-center justify-center shadow-lg"
-                  animate={{ y: [0, -10, 0] }}
-                  transition={{ duration: 3.6, repeat: Infinity, ease: 'easeInOut', delay: 0.4 }}
-                >
-                  <Sparkles className="w-5 h-5 text-emerald-400" />
-                </motion.div>
-                <motion.div
-                  className="absolute bottom-16 right-0 w-11 h-11 rounded-2xl bg-[#0c1225] border border-cyan-500/30 flex items-center justify-center shadow-lg"
-                  animate={{ y: [0, 10, 0] }}
-                  transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut', delay: 0.9 }}
-                >
-                  <ShieldCheck className="w-5 h-5 text-cyan-400" />
-                </motion.div>
-                <motion.div
-                  className="absolute top-14 right-2 w-9 h-9 rounded-xl bg-[#0c1225] border border-blue-500/30 flex items-center justify-center shadow-lg"
-                  animate={{ y: [0, -8, 0] }}
-                  transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut', delay: 1.3 }}
-                >
-                  <Zap className="w-4 h-4 text-blue-400" />
-                </motion.div>
-              </div>
-            </div>
-          </div>
-
-          {/* ----------------- NEARBY CLINICS: map + card list ----------------- */}
-          <div ref={nearbyClinicsRef} className="scroll-mt-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-black text-white uppercase tracking-wider">Sizga eng yaqin klinikalar</h2>
-              <span className="text-[11px] font-bold text-slate-500">{clinics.length} ta klinika</span>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-              <ClinicMap
-                clinics={clinics}
-                selectedClinic={selectedClinic}
-                onSelectClinic={onSelectClinic}
-                language={language}
-                userLocationRef={userLocationRef}
-              />
-              <div className="space-y-3">
-                {clinics.length === 0 ? (
-                  <div className="bg-[#0c1225] border border-[#1e3256]/60 rounded-2xl p-8 text-center text-sm text-slate-500">
-                    Hozircha tizimda klinikalar mavjud emas.
-                  </div>
-                ) : (
-                  clinics
-                    .filter((c) => !heroSearchTerm.trim() || c.name.toLowerCase().includes(heroSearchTerm.trim().toLowerCase()) || (c.address || '').toLowerCase().includes(heroSearchTerm.trim().toLowerCase()))
-                    .map((c) => (
-                      <ClinicCard key={c.id} clinic={c} onBook={() => onSelectClinic(c)} />
-                    ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          <AdBanner placement="web_home" />
-
-          {activeClinic ? (
-            <div className="space-y-6 animate-fade-in text-left">
-
-            {/* CROSS-CHANNEL SMART DUAL ONBOARDING & QR PANEL */}
-            <div className="bg-[#10172a] rounded-3xl p-6 border border-slate-800 text-left relative overflow-hidden shadow-[0_15px_40px_rgba(0,0,0,0.3)] animate-fade-in select-none">
-              <div className="absolute -right-12 -top-12 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute -left-12 -bottom-12 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-              
-              <div className="flex items-center gap-3 border-b border-slate-800 pb-4 mb-4 z-10 relative">
-                <span className="p-1.5 bg-gradient-to-br from-indigo-505 to-emerald-500 rounded-xl text-white font-extrabold text-[10px] uppercase font-mono tracking-widest flex items-center gap-1 shrink-0">
-                  <QrCode className="w-4 h-4 animate-pulse text-emerald-300" /> INTEGRATED
-                </span>
-                <div>
-                  <h3 className="text-xs font-black text-slate-100 uppercase tracking-widest leading-none">
-                    Dual Kirish va Tizim Integratsiyasi (Cross-Channel Access)
-                  </h3>
-                  <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
-                    Bemorlarimiz xohlasa QR kod orqali ushbu Ilovaga, xohlasa Telegram Bot manzili orqali to'g'ridan-to'g'ri Telegram-da navbat ola oladilar.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">
-                {/* Channel A: Web Application QR */}
-                <div className="bg-[#1e293b]/70 rounded-2xl p-4 border border-slate-700/60 flex flex-col sm:flex-row items-center gap-4 hover:border-indigo-500/40 transition-all group">
-                  <div className="bg-white p-2.5 rounded-xl shrink-0 shadow-lg shadow-black/30 group-hover:scale-105 transition-transform duration-300">
-                    <svg viewBox="0 0 100 100" className="w-24 h-24 text-slate-900" fill="currentColor">
-                      <rect x="0" y="0" width="22" height="22" />
-                      <rect x="2" y="2" width="18" height="18" fill="white" />
-                      <rect x="5" y="5" width="12" height="12" />
-                      
-                      <rect x="78" y="0" width="22" height="22" />
-                      <rect x="80" y="2" width="18" height="18" fill="white" />
-                      <rect x="83" y="5" width="12" height="12" />
-                      
-                      <rect x="0" y="78" width="22" height="22" />
-                      <rect x="2" y="80" width="18" height="18" fill="white" />
-                      <rect x="5" y="83" width="12" height="12" />
-                      
-                      <rect x="30" y="4" width="6" height="6" />
-                      <rect x="42" y="10" width="8" height="4" />
-                      <rect x="58" y="2" width="4" height="10" />
-                      <rect x="34" y="20" width="12" height="4" />
-                      <rect x="4" y="30" width="6" height="6" />
-                      <rect x="18" y="42" width="10" height="4" />
-                      <rect x="32" y="32" width="36" height="6" />
-                      <rect x="32" y="44" width="8" height="16" />
-                      <rect x="48" y="44" width="16" height="4" />
-                      <rect x="56" y="54" width="14" height="14" />
-                      <rect x="78" y="32" width="16" height="6" />
-                      <rect x="82" y="48" width="8" height="12" />
-                      <rect x="78" y="78" width="10" height="10" />
-                      <rect x="90" y="68" width="8" height="16" />
-                    </svg>
-                  </div>
-                  <div className="text-center sm:text-left space-y-2 flex-1">
-                    <span className="px-2 py-0.5 bg-indigo-500/15 text-indigo-300 font-mono text-[9px] font-black rounded uppercase border border-indigo-500/20">
-                      🌐 DStoma Web App
-                    </span>
-                    <h4 className="text-xs font-black text-slate-100">
-                      Mobil Telefon orqali UI Ilovaga kirish
-                    </h4>
-                    <p className="text-[10.5px] text-slate-400 leading-relaxed">
-                      Kamerangizni skanerga tuting va smart 3D tish holati datchigi hamda interaktiv xaritaga kiring!
-                    </p>
-                    <a
-                      href={window.location.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-[10px] font-black text-indigo-400 hover:text-indigo-300 transition-all underline"
-                    >
-                      Ilova havolasini ochish 🚀
-                    </a>
-                  </div>
-                </div>
-
-                {/* Channel B: Telegram Bot QR */}
-                <div className="bg-[#1e293b]/70 rounded-2xl p-4 border border-slate-700/60 flex flex-col sm:flex-row items-center gap-4 hover:border-emerald-500/40 transition-all group">
-                  <div className="bg-white p-2.5 rounded-xl shrink-0 shadow-lg shadow-black/30 group-hover:scale-105 transition-transform duration-300">
-                    <svg viewBox="0 0 100 100" className="w-24 h-24 text-teal-900" fill="currentColor">
-                      <rect x="0" y="0" width="22" height="22" />
-                      <rect x="2" y="2" width="18" height="18" fill="white" />
-                      <rect x="5" y="5" width="12" height="12" />
-                      
-                      <rect x="78" y="0" width="22" height="22" />
-                      <rect x="80" y="2" width="18" height="18" fill="white" />
-                      <rect x="83" y="5" width="12" height="12" />
-                      
-                      <rect x="0" y="78" width="22" height="22" />
-                      <rect x="2" y="80" width="18" height="18" fill="white" />
-                      <rect x="5" y="83" width="12" height="12" />
-                      
-                      <rect x="34" y="6" width="14" height="4" />
-                      <rect x="52" y="2" width="8" height="8" />
-                      <rect x="30" y="20" width="16" height="4" />
-                      <rect x="10" y="34" width="8" height="12" />
-                      <rect x="24" y="32" width="6" height="18" />
-                      <rect x="42" y="32" width="28" height="10" />
-                      <rect x="54" y="46" width="10" height="16" />
-                      <rect x="78" y="30" width="12" height="12" />
-                      <rect x="72" y="48" width="12" height="6" />
-                      <rect x="78" y="62" width="18" height="6" />
-                      <rect x="32" y="78" width="14" height="12" />
-                      <rect x="50" y="82" width="18" height="8" />
-                      
-                      <circle cx="50" cy="50" r="6" fill="#02c39a" />
-                    </svg>
-                  </div>
-                  <div className="text-center sm:text-left space-y-2 flex-1">
-                    <span className="px-2 py-0.5 bg-emerald-500/15 text-emerald-300 font-mono text-[9px] font-black rounded uppercase border border-emerald-500/20">
-                      🤖 telegram bot manzili
-                    </span>
-                    <h4 className="text-xs font-black text-slate-100">
-                      Smart Telegram Botimiz: @dstoma_bot
-                    </h4>
-                    <p className="text-[10.5px] text-slate-400 leading-relaxed">
-                      {t("To'g'ridan-to'g'ri Telegram-da navbat olish, shifokorlar bilan chat va sun'iy intellekt shifokori maslahatlari integratsiyasi!")}
-                    </p>
-                    <a
-                      href="https://t.me/dstoma_bot"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-[10px] font-black text-emerald-400 hover:text-emerald-300 transition-all underline"
-                    >
-                      {t("Telegram-da ulanish va boshlash 💬")}
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* 🏥 CLINICAL SERVICES PRICING & SELECTION CATALOG HAS BEEN MOVED TO PATIENT CABINET */}
-            </div>
-          ) : (
-            /* Segment when there is no selected clinic yet, prompt them clearly and show the maps for manual selection */
-            <div className="bg-[#0b1022]/85 border border-[#203254]/80 rounded-3xl p-8 text-center space-y-3 max-w-2xl mx-auto animate-fade-in shadow-2xl relative">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
-              <div className="w-12 h-12 bg-slate-900 border border-slate-800 text-yellow-500 rounded-2xl mx-auto flex items-center justify-center text-xl shadow-lg">
-                📍
-              </div>
-              <h3 className="text-xs font-black text-slate-100 uppercase tracking-widest font-sans">
-                {t("Klinika Filiali Tanlanmagan")}
-              </h3>
-              <p className="text-[11px] text-slate-400 font-semibold max-w-md mx-auto leading-relaxed">
-                {t("Xizmatlarni ko'rish va navbat olish uchun yuqoridagi interaktiv xaritadan yoki ro'yxatdan o'zingiz xohlagan filialni tanlang. Sizga eng yaqini maxsus belgi orqali tavsiya qilinadi.")}
-              </p>
-            </div>
-          )}
-
-          {/* ----------------- STATS (real, live-computed — never fabricated) ----------------- */}
-          {(() => {
-            const ratedClinics = clinics.filter((c) => (c.ratingCount || 0) > 0);
-            const avgRating = ratedClinics.length > 0
-              ? (ratedClinics.reduce((sum, c) => sum + c.rating, 0) / ratedClinics.length).toFixed(1)
-              : null;
-            const stats = [
-              { icon: <Building2 className="text-emerald-400" />, value: clinics.length, label: "Hamkor klinikalar" },
-              { icon: <User className="text-blue-400" />, value: doctors.length, label: "Shifokorlar" },
-              { icon: <Ticket className="text-indigo-400" />, value: queues.length, label: "Xizmat ko'rsatilgan chiptalar" },
-              { icon: <Star className="text-amber-400" />, value: avgRating || "—", label: "O'rtacha reyting" },
-            ];
-            return (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {stats.map((s, i) => (
-                  <div key={i} className="bg-[#0c1225] border border-[#1e3256]/60 rounded-2xl p-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center shrink-0">{s.icon}</div>
-                    <div className="min-w-0">
-                      <p className="text-lg font-black text-white leading-none">{s.value}</p>
-                      <p className="text-[10px] text-slate-500 mt-1 truncate">{s.label}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-
-          {/* ----------------- WHY DSTOMA ----------------- */}
-          <div className="bg-[#0c1225] border border-[#1e3256]/60 rounded-3xl p-6">
-            <h2 className="text-sm font-black text-white uppercase tracking-wider mb-4">Nima uchun DStoma Queue?</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { icon: <Calendar className="text-emerald-400" />, title: "Onlayn navbat", desc: "Navbatni oldindan oling" },
-                { icon: <MapPin className="text-cyan-400" />, title: "GPS va xarita", desc: "Eng yaqin klinikani toping" },
-                { icon: <Bot className="text-indigo-400" />, title: "AI yordamchi", desc: "Tez tashxis maslahati" },
-                { icon: <ShieldCheck className="text-blue-400" />, title: "Xavfsiz va ishonchli", desc: "Ma'lumotlaringiz himoyalangan" },
-              ].map((f, i) => (
-                <div key={i} className="flex items-start gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">{f.icon}</div>
-                  <div>
-                    <p className="text-xs font-bold text-white">{f.title}</p>
-                    <p className="text-[10.5px] text-slate-500 mt-0.5 leading-snug">{f.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* activeSubView 'home' used to render a full marketing landing page
+          (hero, map, QR codes, stats) here — that's now the welcome screen's
+          job, shown before the app is even entered. Reaching 'home' after
+          entering (e.g. a stale ?tab=bemor link, or logging out) bounces
+          straight back out via the effect above, so there's nothing to render. */}
 
 
       {/* ---------------- VIEW 2: REGISTER PATIENT FORM (SCREENSHOT 2) ---------------- */}
