@@ -4,6 +4,7 @@ import ClientDashboard from './components/ClientDashboard';
 import DoctorDashboard from './components/DoctorDashboard';
 import DirectorDashboard from './components/DirectorDashboard';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
+import WelcomeScreen from './components/WelcomeScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { KeyRound, ShieldAlert, LogOut, CheckCircle, Smartphone, Lock, ClipboardCheck, ChevronDown, Check } from 'lucide-react';
@@ -71,6 +72,27 @@ export default function App() {
     handleDeleteService
   } = useAppState();
 
+  // The welcome screen is the platform's front door for anonymous visitors.
+  // It is skipped for anyone who already holds a session, and for deep links
+  // (shared ?clinic= booking links, staff panels at ?tab=) so every existing
+  // bookmark and QR code keeps landing exactly where it used to.
+  const [hasEnteredApp, setHasEnteredApp] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') || params.get('clinic')) return true;
+    return Boolean(
+      localStorage.getItem('dstoma_patient_session') ||
+        localStorage.getItem('dstoma_user_session')
+    );
+  });
+  const [welcomeTarget, setWelcomeTarget] = useState<'home' | 'register' | 'login'>('home');
+
+  const enterFromWelcome = (target: 'register' | 'login') => {
+    setWelcomeTarget(target);
+    setActiveTab('bemor');
+    setHasEnteredApp(true);
+  };
+
   // Determine if user has permission to view a protected tab
   const hasAccess = (tab: 'shifokor' | 'boshliq' | 'superadmin') => {
     if (!currentUser) return false;
@@ -93,6 +115,19 @@ export default function App() {
       </div>
     ) : null
   );
+
+  if (!hasEnteredApp && !currentUser) {
+    return (
+      <ErrorBoundary>
+        <WelcomeScreen
+          language={language}
+          setLanguage={setLanguage}
+          onRegister={() => enterFromWelcome('register')}
+          onLogin={() => enterFromWelcome('login')}
+        />
+      </ErrorBoundary>
+    );
+  }
 
   if (activeTab === 'shifokor' && hasAccess('shifokor')) {
     return (
@@ -143,49 +178,11 @@ export default function App() {
             </div>
           </div>
 
-          {/* Role Navigation Tabs */}
-          <nav className="hidden md:flex items-center gap-1 bg-[#090f1d] p-1 rounded-xl border border-white/[0.04]">
-            <button
-              onClick={() => setActiveTab('bemor')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'bemor'
-                  ? 'bg-emerald-500 text-slate-950 shadow-md font-extrabold scale-[1.02]'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {language === 'uz' ? 'Bemor Kabineti' : language === 'ru' ? 'Кабинет Пациента' : 'Patient Cabinet'}
-            </button>
-            <button
-              onClick={() => setActiveTab('shifokor')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'shifokor'
-                  ? 'bg-cyan-500 text-slate-950 shadow-md font-extrabold scale-[1.02]'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {language === 'uz' ? 'Shifokor Paneli' : language === 'ru' ? 'Панель Врача' : 'Doctor Panel'}
-            </button>
-            <button
-              onClick={() => setActiveTab('boshliq')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'boshliq'
-                  ? 'bg-violet-500 text-slate-950 shadow-md font-extrabold scale-[1.02]'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {language === 'uz' ? 'Boshliq Paneli' : language === 'ru' ? 'Панель Директора' : 'Boss Panel'}
-            </button>
-            <button
-              onClick={() => setActiveTab('superadmin')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'superadmin'
-                  ? 'bg-indigo-500 text-slate-950 shadow-md font-extrabold scale-[1.02]'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {language === 'uz' ? 'Superadmin SaaS' : language === 'ru' ? 'Суперадмин SaaS' : 'Superadmin SaaS'}
-            </button>
-          </nav>
+          {/* The public role-tab bar used to live here. It advertised every
+              internal panel (doctor/director/superadmin) to anonymous visitors,
+              so it was removed in favour of the welcome screen's single entry
+              point. Staff still reach their panels via ?tab= deep links and,
+              once signed in, are routed by their session role. */}
 
           {/* Language Switcher & Active Role Badge */}
           <div className="flex items-center gap-3">
@@ -208,45 +205,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Mobile Navigation Bar */}
-        <div className="md:hidden flex items-center justify-around py-2 border-t border-white/[0.03] bg-[#030916]">
-          <button
-            onClick={() => setActiveTab('bemor')}
-            className={`flex flex-col items-center gap-0.5 text-[9px] font-extrabold transition-all uppercase ${
-              activeTab === 'bemor' ? 'text-emerald-400 font-black' : 'text-slate-500'
-            }`}
-          >
-            <span>🦷</span>
-            <span>{language === 'uz' ? 'PATIENT' : 'PATIENT'}</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('shifokor')}
-            className={`flex flex-col items-center gap-0.5 text-[9px] font-extrabold transition-all uppercase ${
-              activeTab === 'shifokor' ? 'text-cyan-400 font-black' : 'text-slate-500'
-            }`}
-          >
-            <span>👨‍⚕️</span>
-            <span>{language === 'uz' ? 'DOCTOR' : 'DOCTOR'}</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('boshliq')}
-            className={`flex flex-col items-center gap-0.5 text-[9px] font-extrabold transition-all uppercase ${
-              activeTab === 'boshliq' ? 'text-violet-400 font-black' : 'text-slate-500'
-            }`}
-          >
-            <span>💼</span>
-            <span>{language === 'uz' ? 'DIRECTOR' : 'DIRECTOR'}</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('superadmin')}
-            className={`flex flex-col items-center gap-0.5 text-[9px] font-extrabold transition-all uppercase ${
-              activeTab === 'superadmin' ? 'text-indigo-400 font-black' : 'text-slate-500'
-            }`}
-          >
-            <span>👑</span>
-            <span>{language === 'uz' ? 'SAAS' : 'SAAS'}</span>
-          </button>
-        </div>
+        {/* The mobile counterpart of the role-tab bar was removed with it. */}
       </header>
 
       {/* DASHBOARD ROUTING MAIN VIEWPORT */}
@@ -275,6 +234,7 @@ export default function App() {
                   setActiveTab={setActiveTab}
                   language={language}
                   userLocationRef={userLocationRef}
+                  initialSubView={welcomeTarget}
                 />
               </ErrorBoundary>
             )}

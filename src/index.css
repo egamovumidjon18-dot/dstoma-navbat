@@ -110,3 +110,83 @@ h1, h2, h3, h4 {
 
 
 
+
+/* ============================================================
+   WELCOME SCREEN
+   Cinematic entry surface — layered ambient lighting plus a
+   small set of slow, non-distracting hologram animations.
+   ============================================================ */
+
+.welcome-root {
+  background:
+    radial-gradient(circle at 75% 45%, rgba(0, 180, 255, 0.16), transparent 32%),
+    radial-gradient(circle at 20% 75%, rgba(0, 255, 180, 0.08), transparent 30%),
+    linear-gradient(135deg, #020712 0%, #06142D 50%, #020712 100%);
+}
+
+/* ---- Hologram motion ---- */
+@keyframes welcome-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-12px); }
+}
+.welcome-float { animation: welcome-float 6s ease-in-out infinite; }
+
+@keyframes welcome-orbit {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.welcome-orbit { animation: welcome-orbit 26s linear infinite; }
+
+@keyframes welcome-pulse {
+  0%, 100% { opacity: 0.72; }
+  50%      { opacity: 1; }
+}
+.welcome-pulse { animation: welcome-pulse 5s ease-in-out infinite; }
+
+@keyframes welcome-particle {
+  0%, 100% { transform: translateY(0); opacity: 0.35; }
+  50%      { transform: translateY(-14px); opacity: 0.95; }
+}
+.welcome-particle { animation: welcome-particle 7s ease-in-out infinite; }
+
+/* ---- Page-load entrance ---- */
+@keyframes welcome-fade-up {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.welcome-fade-up {
+  opacity: 0;
+  animation: welcome-fade-up 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes welcome-fade-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.welcome-fade-in {
+  opacity: 0;
+  animation: welcome-fade-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes welcome-scale-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.welcome-scale-in {
+  opacity: 0;
+  animation: welcome-scale-in 1.1s cubic-bezier(0.22, 1, 0.36, 1) 200ms both;
+}
+
+/* Visitors who ask for less motion get the finished composition, no movement. */
+@media (prefers-reduced-motion: reduce) {
+  .welcome-float,
+  .welcome-orbit,
+  .welcome-pulse,
+  .welcome-particle,
+  .welcome-fade-up,
+  .welcome-fade-in,
+  .welcome-scale-in {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}

@@ -33,7 +33,6 @@ import {
   UserPlus2,
   Play,
   Pause,
-  Activity,
   Zap,
   ShieldCheck,
   Award,
@@ -41,7 +40,7 @@ import {
   QrCode,
   Bot,
   MapPin,
-  ExternalLink,
+  List as ListIcon,
   Navigation,
   Users,
   Building2,
@@ -62,6 +61,10 @@ interface ClientDashboardProps {
   setActiveTab?: (tab: 'bemor' | 'shifokor' | 'boshliq' | 'kod') => void;
   language: Language;
   userLocationRef?: React.MutableRefObject<{ lat: number, lng: number, status: 'idle' | 'detecting' | 'active' | 'denied', initialized: boolean }>;
+  // Which screen to land on when this dashboard first mounts. The welcome
+  // screen uses it to send visitors straight into register/login instead of
+  // dropping them on the logged-out home view.
+  initialSubView?: 'home' | 'register' | 'login';
 }
 
 export default function ClientDashboard({
@@ -76,7 +79,8 @@ export default function ClientDashboard({
   onUpdateDoctorRating,
   setActiveTab,
   language,
-  userLocationRef
+  userLocationRef,
+  initialSubView
 }: ClientDashboardProps) {
 
   // Translation Helper for ClientDashboard
@@ -326,7 +330,8 @@ export default function ClientDashboard({
   // of showing the logged-out landing page to an already-logged-in patient.
   const [activeSubView, setActiveSubView] = useState<'home' | 'register' | 'login' | 'cabinet' | 'booking'>(() => {
     if (typeof window === 'undefined') return 'home';
-    return localStorage.getItem('dstoma_patient_session') ? 'cabinet' : 'home';
+    if (localStorage.getItem('dstoma_patient_session')) return 'cabinet';
+    return initialSubView ?? 'home';
   });
 
   // Form States
@@ -346,6 +351,10 @@ export default function ClientDashboard({
   // clinic first, then one of that clinic's doctors.
   const [bookingClinicId, setBookingClinicId] = useState('');
   const [bookingDoctorId, setBookingDoctorId] = useState('');
+  // Step 1 of the booking wizard defaults to the map: patients pick the clinic
+  // that is actually near them before choosing a doctor. The plain list stays
+  // available for anyone who already knows which branch they want.
+  const [bookingPickerMode, setBookingPickerMode] = useState<'map' | 'list'>('map');
   const [complaint, setComplaint] = useState('');
   const [isLanguageOpen, setIsLanguageOpen] = useState(false);
 
@@ -1193,6 +1202,9 @@ export default function ClientDashboard({
 
   // Filter lists based on active clinic or current user's clinic or default clinic
   const activeClinic = selectedClinic || clinics.find(c => c.id === currentUser?.clinicId) || clinics[0];
+  // The clinic chosen inside the booking wizard, independent of the browsing
+  // selection above — the patient may book at a branch they aren't viewing.
+  const bookingClinic = clinics.find(c => c.id === bookingClinicId) || null;
   const clinicDoctors = doctors.filter(d => d.clinicId === activeClinic?.id);
   const clinicServices = services.filter(s => s.clinicId === activeClinic?.id);
 
@@ -1281,81 +1293,10 @@ export default function ClientDashboard({
 
       <InstallAppBanner dark />
 
-      {/* ----------------- ACTION HUB CONTROL CARD (PREMIUM DARK GLASS DESIGN) ----------------- */}
-      <div className="bg-[#0b1022]/85 rounded-3xl p-6 border border-[#203254]/80 shadow-2xl relative overflow-hidden backdrop-blur-3xl">
-        {/* Decorative corner glows */}
-        <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
-
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 md:gap-5 relative z-10">
-          <div className="text-left space-y-1 min-w-0">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-[#10b981] text-[10px] font-black uppercase tracking-wider">
-              <Activity className="w-3 h-3 text-emerald-400 animate-pulse" /> {t("Faol filial monito'rlari")}
-            </span>
-            <h2 className="text-md font-black text-white tracking-wider flex items-center gap-2 uppercase truncate">
-              {activeClinic?.name}
-            </h2>
-            <span className="text-xs text-slate-400 font-bold leading-normal block">
-              📍 {activeClinic?.address} {activeClinic?.mapLink && (
-                <a
-                  href={activeClinic.mapLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300 ml-1.5 underline underline-offset-2 transition-all"
-                >
-                  ({t("xaritada ochish")}) <ExternalLink className="w-3 h-3 text-cyan-400 inline" />
-                </a>
-              )} | 📞 {activeClinic?.phone}
-            </span>
-          </div>
-
-          {/* Tri-Action CTA Buttons — compact icon-first grid on mobile so this card doesn't
-              dominate the screen above the hero; full labels return from sm: up. */}
-          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-3 shrink-0">
-            {/* 1. View / Switch Clinics Map (Cyan MapPin glass tab) */}
-            <button
-              onClick={() => {
-                onSelectClinic(null);
-              }}
-              className="px-2 py-2.5 sm:px-5 sm:py-3 text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-xl sm:rounded-2xl flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition-all cursor-pointer bg-slate-900 border border-[#203254]/80 text-cyan-400 hover:text-white hover:bg-slate-850 shadow-lg active:scale-95"
-            >
-              <MapPin className="w-4 h-4 text-cyan-400 shrink-0" />
-              <span className="sm:hidden">{t("Xarita")}</span>
-              <span className="hidden sm:inline">{t("FILIALLAR XARITASI")}</span>
-            </button>
-
-            {/* 2. Register new Patient (Emerald dark luxury) */}
-            <button
-              onClick={() => {
-                setActiveSubView('register');
-              }}
-              className="px-2 py-2.5 sm:px-5 sm:py-3 text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-xl sm:rounded-2xl flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition-all cursor-pointer bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-black shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/25 active:scale-95"
-            >
-              <UserPlus2 className="w-4 h-4 text-slate-950 stroke-[2.5] shrink-0" />
-              <span className="sm:hidden">{t("Ro'yxat")}</span>
-              <span className="hidden sm:inline">{t("Yangi bemor Ro'yxatdan o'tish")}</span>
-            </button>
-
-            {/* 3. Patient Cabinet (Indigo luxury glass tab) */}
-            <button
-              onClick={() => {
-                if (currentUser) {
-                  setActiveSubView('cabinet');
-                } else {
-                  setPassport('');
-                  setPassword('');
-                  setActiveSubView('login');
-                }
-              }}
-              className="px-2 py-2.5 sm:px-5 sm:py-3 text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-xl sm:rounded-2xl flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 transition-all cursor-pointer bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/10 hover:shadow-cyan-500/25 active:scale-95"
-            >
-              <LogIn className="w-4 h-4 text-cyan-200 shrink-0" />
-              <span className="sm:hidden">{t("Kirish")}</span>
-              <span className="hidden sm:inline">{t("bemor Shaxsiy kabinetga kirish")}</span>
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* The "active branch" hub card used to sit here, above every sub-view. Its
+          three actions are all reachable elsewhere now — register/login moved to
+          the welcome screen, and clinic choice belongs to the booking wizard,
+          where the patient picks a clinic on the map before taking a queue. */}
 
       {/* ----------------- CLIENT DASHBOARD WORKSPACE ----------------- */}
       {activeSubView === 'home' && (
@@ -1949,30 +1890,81 @@ export default function ClientDashboard({
               </button>
             </div>
 
-            {/* Step 1: Clinic */}
+            {/* Step 1: Clinic — chosen on the map by default, list as a fallback */}
             <div>
-              <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3">1. {t("Klinikani tanlang")} *</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {clinics.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => {
-                      setBookingClinicId(c.id);
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">1. {t("Klinikani tanlang")} *</h4>
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl shrink-0">
+                  {([
+                    { mode: 'map' as const, label: t("Xarita"), Icon: MapPin },
+                    { mode: 'list' as const, label: t("Ro'yxat"), Icon: ListIcon },
+                  ]).map(({ mode, label, Icon }) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setBookingPickerMode(mode)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                        bookingPickerMode === mode
+                          ? 'bg-white text-blue-600 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {bookingPickerMode === 'map' ? (
+                <div className="rounded-2xl overflow-hidden border border-slate-200">
+                  <ClinicMap
+                    clinics={clinics}
+                    selectedClinic={bookingClinic}
+                    onSelectClinic={(c) => {
+                      // ClinicMap also calls this with null to clear the pin.
+                      setBookingClinicId(c ? c.id : '');
                       // A doctor belongs to one clinic — switching clinics invalidates the old pick.
                       setBookingDoctorId('');
                     }}
-                    className={`p-4 rounded-2xl border text-left transition-all ${
-                      bookingClinicId === c.id
-                        ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
-                        : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white'
-                    }`}
-                  >
-                    <p className="font-bold text-sm text-slate-900">🏥 {c.name}</p>
-                    <p className="text-[11px] text-slate-500 mt-1">📍 {c.address || ''}</p>
-                  </button>
-                ))}
-              </div>
+                    language={language}
+                    userLocationRef={userLocationRef}
+                  />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {clinics.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setBookingClinicId(c.id);
+                        setBookingDoctorId('');
+                      }}
+                      className={`p-4 rounded-2xl border text-left transition-all ${
+                        bookingClinicId === c.id
+                          ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
+                          : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white'
+                      }`}
+                    >
+                      <p className="font-bold text-sm text-slate-900">🏥 {c.name}</p>
+                      <p className="text-[11px] text-slate-500 mt-1">📍 {c.address || ''}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {bookingClinic && (
+                <div className="mt-3 flex items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
+                  <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                  <p className="text-xs font-bold text-blue-900 min-w-0 truncate">
+                    {bookingClinic.name}
+                    {bookingClinic.address && (
+                      <span className="font-medium text-blue-700/80"> · {bookingClinic.address}</span>
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Step 2: Doctor (of the chosen clinic) */}
