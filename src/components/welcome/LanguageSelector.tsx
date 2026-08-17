@@ -1,18 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Globe, ChevronDown, Check } from 'lucide-react';
+import { ChevronDown, Check } from 'lucide-react';
 import type { Language } from '../../translations';
+import { FlagIcon, LANGUAGE_META } from '../LanguageSwitcher';
 
 // Every locale the platform ships, labelled in its own script so a speaker can
-// find their language without reading any of the others.
-const OPTIONS: { code: Language; label: string; short: string }[] = [
-  { code: 'uz', label: "O‘zbekcha", short: 'UZ' },
-  { code: 'ru', label: 'Русский', short: 'RU' },
-  { code: 'en', label: 'English', short: 'EN' },
-  { code: 'kk', label: 'Қазақша', short: 'KK' },
-  { code: 'ky', label: 'Кыргызча', short: 'KY' },
-  { code: 'tg', label: 'Тоҷикӣ', short: 'TG' },
-  { code: 'tk', label: 'Türkmençe', short: 'TK' },
-];
+// find their language without reading any of the others. Reuses the same
+// country-code map the dashboards' own LanguageSwitcher uses, so the flags
+// (and which country represents "English") stay consistent everywhere.
+const OPTIONS: { code: Language; label: string; short: string }[] = (
+  Object.keys(LANGUAGE_META) as Language[]
+).map((code) => ({
+  code,
+  label: LANGUAGE_META[code].native,
+  short: code.toUpperCase(),
+}));
 
 interface Props {
   language: Language;
@@ -59,7 +60,7 @@ export default function LanguageSelector({ language, setLanguage, label }: Props
           border: '1px solid rgba(80, 180, 255, 0.25)',
         }}
       >
-        <Globe className="h-4 w-4 text-cyan-300" />
+        <FlagIcon countryCode={LANGUAGE_META[current.code].countryCode} className="w-5 h-[15px]" />
         <span className="tracking-wide">{current.short}</span>
         <ChevronDown
           className={`h-4 w-4 text-slate-400 transition-transform duration-300 ${open ? 'rotate-180' : ''}`}
@@ -89,12 +90,13 @@ export default function LanguageSelector({ language, setLanguage, label }: Props
                     setLanguage(opt.code);
                     setOpen(false);
                   }}
-                  className={`flex w-full items-center justify-between px-4 py-2.5 text-sm font-medium transition-colors focus:outline-none focus-visible:bg-cyan-500/15 ${
+                  className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-colors focus:outline-none focus-visible:bg-cyan-500/15 ${
                     active ? 'text-cyan-300' : 'text-slate-300 hover:text-white hover:bg-white/[0.06]'
                   }`}
                 >
-                  <span>{opt.label}</span>
-                  {active && <Check className="h-4 w-4" />}
+                  <FlagIcon countryCode={LANGUAGE_META[opt.code].countryCode} className="w-5 h-[15px] shrink-0" />
+                  <span className="flex-1 text-left">{opt.label}</span>
+                  {active && <Check className="h-4 w-4 shrink-0" />}
                 </button>
               </li>
             );

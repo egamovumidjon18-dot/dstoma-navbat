@@ -217,6 +217,9 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "yangi bandlash": { ru: "Новая запись", en: "New booking", kk: "Жаңа жазылу", ky: "Жаңы жазылуу", tg: "Сабти нав", tk: "Täze bellik" },
   "bemorni qidirish": { ru: "Поиск пациента", en: "Search patient", kk: "Пациентті іздеу", ky: "Бейтапты издөө", tg: "Ҷустуҷӯи бемор", tk: "Näsagy gözlemek" },
   "ism yoki telefon bo'yicha qidiring...": { ru: "Искать по имени или телефону...", en: "Search by name or phone...", kk: "Аты немесе телефоны бойынша іздеу...", ky: "Аты же телефону боюнча издөө...", tg: "Ҷустуҷӯ бо ном ё телефон...", tk: "Ady ýa-da telefony boýunça gözlemek..." },
+  "muolajani qidiring...": { ru: "Искать процедуру...", en: "Search treatments...", kk: "Емдеу процедурасын іздеу...", ky: "Дарылоо процедурасын издөө...", tg: "Ҷустуҷӯи муолиҷа...", tk: "Bejergini gözlemek..." },
+  "muolaja topilmadi": { ru: "Процедура не найдена", en: "No treatment found", kk: "Процедура табылмады", ky: "Процедура табылган жок", tg: "Муолиҷа ёфт нашуд", tk: "Bejergi tapylmady" },
+  "boshqa muolaja tanlash": { ru: "Выбрать другую процедуру", en: "Choose a different treatment", kk: "Басқа процедураны таңдау", ky: "Башка процедураны тандоо", tg: "Муолиҷаи дигар интихоб кардан", tk: "Başga bejergini saýlamak" },
   "bemorni bandlash": { ru: "Записать пациента", en: "Book patient", kk: "Пациентті жазу", ky: "Бейтапты жазуу", tg: "Сабти бемор", tk: "Näsagy bellemek" },
   "kelgusi sana va vaqtga yozish": { ru: "Записать на будущую дату и время", en: "Book for a future date and time", kk: "Болашақ күн мен уақытқа жазу", ky: "Келечектеги күн жана убакытка жазуу", tg: "Ба санаи оянда сабт кардан", tk: "Geljekki sene we wagta ýazmak" },
   "jadval sozlamalari": { ru: "Настройки расписания", en: "Schedule settings", kk: "Кесте баптаулары", ky: "Кесте жөндөөлөрү", tg: "Танзимоти ҷадвал", tk: "Tertip sazlamalary" },
@@ -1065,6 +1068,7 @@ export default function DoctorDashboard({
   // alone now).
   const [newBookingSelectedPatientId, setNewBookingSelectedPatientId] = useState<string | null>(null);
   const [newBookingServiceId, setNewBookingServiceId] = useState('');
+  const [newBookingServiceQuery, setNewBookingServiceQuery] = useState('');
   const [newBookingDate, setNewBookingDate] = useState(new Date().toISOString().split('T')[0]);
   const [newBookingTime, setNewBookingTime] = useState('09:00');
   const [isSavingNewBooking, setIsSavingNewBooking] = useState(false);
@@ -1170,6 +1174,7 @@ export default function DoctorDashboard({
     setNewBookingPhone('');
     setNewBookingSelectedPatientId(null);
     setNewBookingServiceId('');
+    setNewBookingServiceQuery('');
     setNewBookingDate(date || new Date().toISOString().split('T')[0]);
     setNewBookingTime(time || scheduleSlots.find((s) => !isLunchSlot(s)) || '09:00');
     setShowNewBookingModal(true);
@@ -1189,6 +1194,7 @@ export default function DoctorDashboard({
     setNewBookingName(q.patientName || '');
     setNewBookingPhone(q.patientPhone || '');
     setNewBookingServiceId(q.serviceId || '');
+    setNewBookingServiceQuery('');
     setNewBookingDate(q.appointmentDate || new Date().toISOString().split('T')[0]);
     setNewBookingTime(q.appointmentTime || scheduleSlots.find((s) => !isLunchSlot(s)) || '09:00');
     setShowNewBookingModal(true);
@@ -3930,17 +3936,65 @@ export default function DoctorDashboard({
               </div>
               )}
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("muolaja / xizmat")}</label>
-                <select
-                  value={newBookingServiceId}
-                  onChange={(e) => setNewBookingServiceId(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
-                >
-                  <option value="" className="text-slate-800">{t("— muolajani tanlang —")}</option>
-                  {services.filter((s: any) => !effectiveClinicId || s.clinicId === effectiveClinicId).map((s: any) => (
-                    <option key={s.id} value={s.id} className="text-slate-800">{s.name} — {Number(s.price).toLocaleString()} so'm</option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-slate-500">{t("muolaja / xizmat")}</label>
+                  {newBookingServiceId && (
+                    <button
+                      type="button"
+                      onClick={() => setNewBookingServiceId('')}
+                      className="text-[11px] font-bold text-purple-600 hover:underline"
+                    >
+                      {t("boshqa muolaja tanlash")}
+                    </button>
+                  )}
+                </div>
+                {(() => {
+                  const clinicServices = services.filter((s: any) => !effectiveClinicId || s.clinicId === effectiveClinicId);
+                  const selectedService = clinicServices.find((s: any) => s.id === newBookingServiceId);
+                  if (selectedService) {
+                    return (
+                      <div className="flex items-center justify-between gap-3 border-2 border-purple-500 bg-purple-50 rounded-xl px-3 py-2.5">
+                        <span className="text-sm font-bold text-slate-800 truncate">{selectedService.name}</span>
+                        <span className="text-xs font-black text-purple-700 shrink-0">{Number(selectedService.price).toLocaleString()} so'm</span>
+                      </div>
+                    );
+                  }
+                  const q = newBookingServiceQuery.trim().toLowerCase();
+                  const filteredServices = q
+                    ? clinicServices.filter((s: any) => (s.name || '').toLowerCase().includes(q))
+                    : clinicServices;
+                  return (
+                    <>
+                      <div className="relative mb-2">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={newBookingServiceQuery}
+                          onChange={(e) => setNewBookingServiceQuery(e.target.value)}
+                          placeholder={t("muolajani qidiring...")}
+                          className="w-full border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                        />
+                      </div>
+                      {filteredServices.length === 0 ? (
+                        <p className="text-[11px] text-slate-400 font-medium px-1">{t("muolaja topilmadi")}</p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-0.5">
+                          {filteredServices.map((s: any) => (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() => { setNewBookingServiceId(s.id); setNewBookingServiceQuery(''); }}
+                              className="text-left border border-slate-200 hover:border-purple-400 hover:bg-purple-50 rounded-xl px-3 py-2.5 transition-colors"
+                            >
+                              <p className="text-xs font-bold text-slate-800 leading-snug line-clamp-2">{s.name}</p>
+                              <p className="text-[11px] font-black text-purple-600 mt-1">{Number(s.price).toLocaleString()} so'm</p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
