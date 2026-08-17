@@ -44,8 +44,17 @@ export function useAppState() {
   const [patients, setPatients] = useState<any[]>([]);
   const [doctorClinicLinks, setDoctorClinicLinks] = useState<DoctorClinicLink[]>([]);
 
-  // Navigation
-  const [activeTab, setActiveTab] = useState<'bemor' | 'shifokor' | 'boshliq' | 'superadmin'>('bemor');
+  // Navigation. A restored staff session opens straight on that role's panel:
+  // the public role-tab bar is gone (the welcome screen replaced it), so
+  // defaulting everyone to 'bemor' left a returning doctor/director/superadmin
+  // with no way back to their own panel short of hand-editing the URL.
+  const [activeTab, setActiveTab] = useState<'bemor' | 'shifokor' | 'boshliq' | 'superadmin'>(() => {
+    const parsed = readUserSession();
+    if (parsed?.type === 'doctor') return 'shifokor';
+    if (parsed?.type === 'director') return 'boshliq';
+    if (parsed?.type === 'superadmin') return 'superadmin';
+    return 'bemor';
+  });
   const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null);
   const selectedClinicRef = useRef<Clinic | null>(selectedClinic);
 

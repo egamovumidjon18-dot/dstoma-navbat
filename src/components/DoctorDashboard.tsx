@@ -734,16 +734,16 @@ export default function DoctorDashboard({
   // Strictly this doctor's own patients. Patients with no primaryDoctorId yet
   // (self-registered via the Telegram bot / ClientDashboard, neither of which
   // sets it) are deliberately NOT mixed in here — they'd otherwise appear in
-  // every doctor's list and inflate everyone's counts. They surface instead in
-  // their own "Biriktirilmagan" section below, where any doctor can claim them,
-  // so nobody falls through the cracks either.
+  // every doctor's list and inflate everyone's counts. They become a doctor's
+  // patient the moment that doctor books them ("Yangi bandlash" searches the
+  // full clinic roster and sets primaryDoctorId on save).
+  //
+  // This is also the single source of truth for every patient number shown to
+  // the doctor — the "Bemorlar" list, its stat cards, and the Statistika tab
+  // all read from it, so they can't disagree with each other.
   const myPatients = useMemo(
     () => clinicPatients.filter((p) => p.primaryDoctorId === currentDoctor?.id),
     [clinicPatients, currentDoctor?.id]
-  );
-  const unassignedPatients = useMemo(
-    () => clinicPatients.filter((p) => !p.primaryDoctorId),
-    [clinicPatients]
   );
   const filteredClinicPatients = useMemo(() => {
     const q = patientListSearch.trim().toLowerCase();
@@ -819,6 +819,7 @@ export default function DoctorDashboard({
           onAddQueue({
             id: 'q_' + Math.random().toString(36).substr(2, 9),
             clinicId: effectiveClinicId,
+            patientId: savedPatient.id,
             doctorId: currentDoctor?.id || activeDoctorId,
             serviceId: quickAddPatient.serviceId,
             patientName: savedPatient.fullName || quickAddPatient.fullName.trim(),
@@ -881,6 +882,7 @@ export default function DoctorDashboard({
       const newQueue: QueueItem = {
         id: 'q_' + Math.random().toString(36).substr(2, 9),
         clinicId: effectiveClinicId,
+        patientId: newBookingSelectedPatientId,
         doctorId: currentDoctor?.id || activeDoctorId,
         serviceId: newBookingServiceId,
         patientName: newBookingName.trim(),
@@ -902,28 +904,6 @@ export default function DoctorDashboard({
       setNewBookingTime('09:00');
     } finally {
       setIsSavingNewBooking(false);
-    }
-  };
-
-  // Claims an unassigned patient (nobody's primaryDoctorId) for this doctor.
-  // POST /api/patients is an upsert and savePatient() merges, so sending just
-  // { id, primaryDoctorId } updates that one field without touching the rest of
-  // the record — the same shape the superadmin backfill endpoint uses.
-  const [claimingPatientId, setClaimingPatientId] = useState<string | null>(null);
-  const handleClaimPatient = async (patient: Patient) => {
-    if (!currentDoctor?.id || !patient?.id) return;
-    setClaimingPatientId(patient.id);
-    try {
-      const res = await fetch("/api/patients", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...staffAuthHeaders() },
-        body: JSON.stringify({ id: patient.id, primaryDoctorId: currentDoctor.id }),
-      });
-      if (res.ok) onPatientUpserted?.({ ...patient, primaryDoctorId: currentDoctor.id });
-    } catch (err) {
-      console.warn("[DoctorDashboard] Failed to claim patient:", err);
-    } finally {
-      setClaimingPatientId(null);
     }
   };
 
@@ -3218,46 +3198,12 @@ export default function DoctorDashboard({
               />
             ) : (
               <div className="space-y-6">
-                {/* Patients nobody is treating yet (self-registered via the bot or
-                    the public site, which never set primaryDoctorId). Any doctor
-                    can claim them, which is what moves them into "my patients". */}
-                {unassignedPatients.length > 0 && (
-                  <div className="bg-amber-50/60 border border-amber-100 rounded-2xl p-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-                      <h3 className="text-xs font-black text-slate-700 uppercase tracking-wide">
-                        {t("biriktirilmagan bemorlar")} ({unassignedPatients.length})
-                      </h3>
-                    </div>
-                    <p className="text-[11px] text-slate-500 font-semibold mb-3 ml-6">
-                      {t("bu bemorlar hali hech bir shifokorga biriktirilmagan")}
-                    </p>
-                    <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                      {unassignedPatients.map((p) => (
-                        <div
-                          key={p.id}
-                          className="bg-white border border-amber-100 rounded-xl px-3 py-2 flex items-center justify-between gap-3"
-                        >
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-800 truncate">
-                              {decodeLegacyEntities(p.fullName)}
-                            </p>
-                            <p className="text-[10px] text-slate-400 font-mono truncate">
-                              {decodeLegacyEntities(p.phone)}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => handleClaimPatient(p)}
-                            disabled={claimingPatientId === p.id}
-                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-[11px] rounded-lg transition-colors shrink-0"
-                          >
-                            {claimingPatientId === p.id ? t("saqlanmoqda...") : t("o'zimga biriktirish")}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* A separate "Biriktirilmagan bemorlar" box used to sit here listing
+                    every patient with no primaryDoctorId. It confused more than it
+                    helped: its count (clinic-wide) never matched the doctor's own
+                    patient count right below it. Unassigned patients are still fully
+                    reachable — "Yangi bandlash" searches the whole clinic roster, and
+                    booking a patient assigns them to that doctor automatically. */}
 
                 {/* Top Stats Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -3835,7 +3781,11 @@ export default function DoctorDashboard({
 
           {activeView === "statistika" && (
             <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-              <Statistics queues={queues} services={services} doctors={doctors} patients={clinicPatients} clinicId={effectiveClinicId} staffToken={staffToken} language={language} />
+              {/* Scoped to this doctor, not the clinic: passing the clinic-wide
+                  roster here made "Jami bemorlar" report a different number than
+                  the doctor's own "Barcha bemorlar" card two tabs over. The
+                  director's Statistics stays clinic-wide, which is correct there. */}
+              <Statistics queues={doctorQueues} services={services} doctors={doctors} patients={myPatients} clinicId={effectiveClinicId} staffToken={staffToken} language={language} />
             </div>
           )}
 

@@ -10,9 +10,10 @@ import {
   TrendingUp, Users, Activity, Star,
   Download, FileSpreadsheet, ChevronDown, DollarSign,
   UserCheck, UserPlus, Users2, HeartPulse,
-  CheckCircle2, Clock, XCircle, Receipt, Package, AlertTriangle
+  CheckCircle2, Clock, XCircle, Receipt, Package, AlertTriangle, X, ChevronRight
 } from 'lucide-react';
 import { QueueItem, Doctor, Service, Patient, PaymentReceipt, Reminder } from '../types';
+import { decodeLegacyEntities } from '../utils/textFormat';
 import { TRANSLATIONS, Language } from '../translations';
 
 type StatsDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
@@ -51,6 +52,11 @@ const STATS_TRANSLATIONS: Record<string, StatsDictEntry> = {
   "ombor qiymati": { ru: "Стоимость склада", en: "Warehouse Value", kk: "Қойма құны", ky: "Кампанын баасы", tg: "Арзиши анбор", tk: "Ammaryň bahasy" },
   "kam qolgan materiallar": { ru: "Заканчивающиеся материалы", en: "Low Stock Materials", kk: "Аяқталып қалған материалдар", ky: "Түгөнүп бараткан материалдар", tg: "Маводҳои рӯ ба итмом", tk: "Gutarýan materiallar" },
   "batafsil ma'lumot uchun \"materiallar\" bo'limiga o'ting": { ru: "Подробности смотрите в разделе «Материалы»", en: "See the \"Materials\" section for details", kk: "Толығырақ «Материалдар» бөлімінде", ky: "Толук маалымат үчүн \"Материалдар\" бөлүмүнө өтүңүз", tg: "Барои маълумоти бештар ба бахши \"Маводҳо\" гузаред", tk: "Jikme-jik üçin \"Materiallar\" bölümine geçiň" },
+  yopish: { ru: "Закрыть", en: "Close", kk: "Жабу", ky: "Жабуу", tg: "Пӯшидан", tk: "Ýapmak" },
+  "ta tashrif": { ru: "визитов", en: "visits", kk: "рет келген", ky: "жолу келген", tg: "ташриф", tk: "gezek gelen" },
+  ta: { ru: "шт.", en: "items", kk: "дана", ky: "даана", tg: "адад", tk: "sany" },
+  "so'm": { ru: "сум", en: "UZS", kk: "сом", ky: "сом", tg: "сӯм", tk: "som" },
+  "kartaga bosib batafsil ko'ring": { ru: "Нажмите на карточку для подробностей", en: "Tap a card to see the details behind it", kk: "Толығырақ көру үшін картаны басыңыз", ky: "Кененирээк көрүү үчүн картаны басыңыз", tg: "Барои тафсилот ба корт зер кунед", tk: "Jikme-jik üçin karta basyň" },
 };
 
 interface StatisticsProps {
@@ -125,21 +131,34 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
   // snapshot, not a fabricated "expenses over time" chart, since no historical
   // consumption log exists to build one from).
   const [materialsValue, setMaterialsValue] = useState(0);
-  const [lowStockCount, setLowStockCount] = useState(0);
+  // The running-low items themselves, not just how many — the stat card drills
+  // down into this list so "kam qolgan materiallar: 3" can say *which* three.
+  const [lowStockItems, setLowStockItems] = useState<
+    { id: string; name: string; quantity: number; unit: string; minQuantity: number }[]
+  >([]);
+  const lowStockCount = lowStockItems.length;
   useEffect(() => {
     if (!clinicId) return;
     const unsub = onSnapshot(
       collection(db, `clinics/${clinicId}/materials`),
       (snapshot) => {
         let value = 0;
-        let low = 0;
+        const low: { id: string; name: string; quantity: number; unit: string; minQuantity: number }[] = [];
         snapshot.forEach((d) => {
           const m: any = d.data();
           value += (m.quantity || 0) * (m.price || 0);
-          if ((m.quantity || 0) <= (m.minQuantity || 0)) low++;
+          if ((m.quantity || 0) <= (m.minQuantity || 0)) {
+            low.push({
+              id: d.id,
+              name: m.name || '—',
+              quantity: m.quantity || 0,
+              unit: m.unit || '',
+              minQuantity: m.minQuantity || 0,
+            });
+          }
         });
         setMaterialsValue(value);
-        setLowStockCount(low);
+        setLowStockItems(low);
       },
       (error) => handleFirestoreError(error, OperationType.GET, `clinics/${clinicId}/materials`)
     );
@@ -244,13 +263,18 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
       if (!existing || d < existing) firstVisitByPhone.set(phone, d);
     });
     const phonesInPeriod = new Set(filteredQueues.map(q => normPhone(q.patientPhone)).filter(Boolean));
-    let newPatientsInPeriod = 0;
-    let returningPatientsInPeriod = 0;
+    // The phone lists are kept alongside the counts so each stat card can drill
+    // down into exactly the records it counted, rather than re-deriving them
+    // slightly differently somewhere else and disagreeing with its own number.
+    const newPatientPhones: string[] = [];
+    const returningPatientPhones: string[] = [];
     phonesInPeriod.forEach(phone => {
       const firstVisit = firstVisitByPhone.get(phone);
-      if (firstVisit && firstVisit >= startDate) newPatientsInPeriod++;
-      if ((visitCountByPhone.get(phone) || 0) >= 2) returningPatientsInPeriod++;
+      if (firstVisit && firstVisit >= startDate) newPatientPhones.push(phone);
+      if ((visitCountByPhone.get(phone) || 0) >= 2) returningPatientPhones.push(phone);
     });
+    const newPatientsInPeriod = newPatientPhones.length;
+    const returningPatientsInPeriod = returningPatientPhones.length;
 
     // Real age groups, computed from Patient.birthDate — previously a fully
     // hardcoded chart with invented percentages.
@@ -283,6 +307,12 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
       returningPatientsInPeriod,
       ageGroupData: ageBuckets,
       patientsWithBirthDate,
+      // Backing records for the stat-card drill-downs.
+      filteredQueues,
+      newPatientPhones,
+      returningPatientPhones,
+      visitCountByPhone,
+      getServicePrice,
     };
   }, [queues, services, doctors, patients, timeRange, language]);
 
@@ -306,25 +336,130 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
     return reminders.filter(r => new Date(r.createdAt) >= startDate);
   }, [reminders, timeRange]);
 
-  const StatCard = ({ title, value, trend, icon: Icon, color }: any) => (
-    <div className="bg-white border border-slate-100 rounded-2xl p-5 hover:border-slate-200 transition-colors relative overflow-hidden group shadow-sm hover:shadow-md">
-      <div className={`absolute -right-6 -top-6 w-24 h-24 rounded-full opacity-10 group-hover:scale-150 transition-transform duration-700 ease-out ${color}`}></div>
-      <div className="flex justify-between items-start mb-4">
-        <div className={`p-3 rounded-xl ${color} bg-opacity-10`}>
-          <Icon className={`w-6 h-6 ${color.replace('bg-', 'text-')}`} />
+  // Each stat card can carry the records behind its number. When it does, the
+  // card becomes clickable and opens them in a list — the number alone was a
+  // dead end ("18 patients" told you nothing about *which* 18).
+  type DrillRow = { id: string; primary: string; secondary?: string; meta?: string; badge?: string };
+  const [drill, setDrill] = useState<{ title: string; rows: DrillRow[] } | null>(null);
+
+  const StatCard = ({ title, value, trend, icon: Icon, color, rows }: any) => {
+    const clickable = Array.isArray(rows);
+    return (
+      <div
+        onClick={clickable ? () => setDrill({ title, rows }) : undefined}
+        role={clickable ? 'button' : undefined}
+        tabIndex={clickable ? 0 : undefined}
+        onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDrill({ title, rows }); } } : undefined}
+        className={`bg-white border border-slate-100 rounded-2xl p-5 transition-all relative overflow-hidden group shadow-sm ${
+          clickable
+            ? 'cursor-pointer hover:border-emerald-200 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:scale-[0.99]'
+            : 'hover:border-slate-200 hover:shadow-md'
+        }`}
+      >
+        <div className={`absolute -right-6 -top-6 w-24 h-24 rounded-full opacity-10 group-hover:scale-150 transition-transform duration-700 ease-out ${color}`}></div>
+        <div className="flex justify-between items-start mb-4">
+          <div className={`p-3 rounded-xl ${color} bg-opacity-10`}>
+            <Icon className={`w-6 h-6 ${color.replace('bg-', 'text-')}`} />
+          </div>
+          {typeof trend === 'number' && (
+            <span className={`text-xs font-bold px-2 py-1 rounded-lg ${trend >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+              {trend >= 0 ? '+' : ''}{trend}%
+            </span>
+          )}
         </div>
-        {typeof trend === 'number' && (
-          <span className={`text-xs font-bold px-2 py-1 rounded-lg ${trend >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-            {trend >= 0 ? '+' : ''}{trend}%
-          </span>
-        )}
+        <div>
+          <h4 className="text-2xl font-black text-slate-800 mb-1 font-mono">{value}</h4>
+          <p className="text-sm font-medium text-slate-500 flex items-center gap-1">
+            {title}
+            {clickable && (
+              <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />
+            )}
+          </p>
+        </div>
       </div>
-      <div>
-        <h4 className="text-2xl font-black text-slate-800 mb-1 font-mono">{value}</h4>
-        <p className="text-sm font-medium text-slate-500">{title}</p>
-      </div>
-    </div>
-  );
+    );
+  };
+
+  // ---- Row builders for the drill-downs, all derived from the same numbers
+  // the cards display, so a list can never contradict its own count. ----
+  const money = (n: number) => `${n.toLocaleString()} ${t("so'm")}`;
+  const dateOf = (iso?: string) => (iso ? new Date(iso).toLocaleDateString() : '');
+  const normPhoneOf = (p?: string) => (p || '').replace(/\D/g, '');
+
+  const queueRows = (list: QueueItem[]): DrillRow[] =>
+    [...list]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map((q) => ({
+        id: q.id,
+        primary: decodeLegacyEntities(q.patientName) || '—',
+        secondary: decodeLegacyEntities(q.patientPhone) || '',
+        meta: dateOf(q.createdAt),
+        badge: services.find((s) => s.id === q.serviceId)?.name,
+      }));
+
+  const phoneRows = (phones: string[], withVisitCount = false): DrillRow[] =>
+    phones.map((phone) => {
+      const patient = patients.find((p) => normPhoneOf(p.phone) === phone);
+      const queue = stats.filteredQueues.find((q) => normPhoneOf(q.patientPhone) === phone);
+      return {
+        id: phone,
+        primary: decodeLegacyEntities(patient?.fullName || queue?.patientName || '') || '—',
+        secondary: decodeLegacyEntities(patient?.phone || queue?.patientPhone || '') || '',
+        meta: dateOf(queue?.createdAt),
+        badge: withVisitCount
+          ? `${stats.visitCountByPhone.get(phone) || 0} ${t('ta tashrif')}`
+          : undefined,
+      };
+    });
+
+  const patientRows = (): DrillRow[] =>
+    [...patients]
+      .sort((a, b) => (b.clinicVisits?.length || 0) - (a.clinicVisits?.length || 0))
+      .map((p) => ({
+        id: p.id,
+        primary: decodeLegacyEntities(p.fullName) || '—',
+        secondary: decodeLegacyEntities(p.phone) || '',
+        badge: `${(p.clinicVisits || []).length} ${t('ta tashrif')}`,
+      }));
+
+  const doctorRows = (): DrillRow[] =>
+    doctors
+      .filter((d) => (d.ratingCount || 0) > 0)
+      .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+      .map((d) => ({
+        id: d.id,
+        primary: decodeLegacyEntities(d.name) || '—',
+        secondary: d.specialty || '',
+        badge: `⭐ ${(d.rating || 0).toFixed(1)} (${d.ratingCount})`,
+      }));
+
+  const receiptRows = (list: PaymentReceipt[]): DrillRow[] =>
+    [...list]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map((r) => ({
+        id: r.id,
+        primary: decodeLegacyEntities(r.patientName || '') || '—',
+        secondary: r.amount ? money(r.amount) : '',
+        meta: dateOf(r.createdAt),
+      }));
+
+  const reminderRows = (list: Reminder[]): DrillRow[] =>
+    [...list]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map((r) => ({
+        id: r.id,
+        primary: r.text || '—',
+        secondary: decodeLegacyEntities(patients.find((p) => p.id === r.patientId)?.fullName || '') || '',
+        meta: r.dueDate || dateOf(r.createdAt),
+      }));
+
+  const lowStockRows = (): DrillRow[] =>
+    lowStockItems.map((m) => ({
+      id: m.id,
+      primary: m.name,
+      secondary: `${m.quantity} ${m.unit}`,
+      badge: `min: ${m.minQuantity} ${m.unit}`,
+    }));
 
   const EmptyState = () => (
     <div className="flex flex-col items-center justify-center h-[200px] text-slate-400 text-sm font-semibold gap-2">
@@ -343,6 +478,9 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
             <TrendingUp className="w-6 h-6 text-emerald-500" /> {t("analitika va statistika")}
           </h2>
           <p className="text-sm text-slate-500">{t("klinikaning to'liq moliyaviy va operatsion tahlili")}</p>
+          <p className="text-xs text-emerald-600 font-semibold mt-1 flex items-center gap-1">
+            <ChevronRight className="w-3.5 h-3.5" /> {t("kartaga bosib batafsil ko'ring")}
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -394,10 +532,10 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
           <div className="space-y-6">
             {/* KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard title={t("jami tushum")} value={`${(stats.revenue / 1000000).toFixed(1)}M`} trend={stats.revenueTrend} icon={DollarSign} color="bg-emerald-500" />
-              <StatCard title={t("yangi bemorlar")} value={stats.newPatientsInPeriod} icon={Users} color="bg-blue-500" />
-              <StatCard title={t("muolajalar soni")} value={stats.visits} trend={stats.visitTrend} icon={Activity} color="bg-indigo-500" />
-              <StatCard title={t("shifokorlar reytingi")} value={stats.avgDoctorRating ?? "—"} icon={Star} color="bg-amber-500" />
+              <StatCard title={t("jami tushum")} value={`${(stats.revenue / 1000000).toFixed(1)}M`} trend={stats.revenueTrend} icon={DollarSign} color="bg-emerald-500" rows={queueRows(stats.filteredQueues)} />
+              <StatCard title={t("yangi bemorlar")} value={stats.newPatientsInPeriod} icon={Users} color="bg-blue-500" rows={phoneRows(stats.newPatientPhones)} />
+              <StatCard title={t("muolajalar soni")} value={stats.visits} trend={stats.visitTrend} icon={Activity} color="bg-indigo-500" rows={queueRows(stats.filteredQueues)} />
+              <StatCard title={t("shifokorlar reytingi")} value={stats.avgDoctorRating ?? "—"} icon={Star} color="bg-amber-500" rows={doctorRows()} />
             </div>
 
             {/* Revenue chart */}
@@ -433,9 +571,9 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
         {activeTab === 'patients' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <StatCard title={t("jami bemorlar")} value={patients.length} icon={Users2} color="bg-indigo-500" />
-              <StatCard title={t("yangi bemorlar")} value={stats.newPatientsInPeriod} icon={UserPlus} color="bg-emerald-500" />
-              <StatCard title={t("qayta kelganlar")} value={stats.returningPatientsInPeriod} icon={UserCheck} color="bg-blue-500" />
+              <StatCard title={t("jami bemorlar")} value={patients.length} icon={Users2} color="bg-indigo-500" rows={patientRows()} />
+              <StatCard title={t("yangi bemorlar")} value={stats.newPatientsInPeriod} icon={UserPlus} color="bg-emerald-500" rows={phoneRows(stats.newPatientPhones)} />
+              <StatCard title={t("qayta kelganlar")} value={stats.returningPatientsInPeriod} icon={UserCheck} color="bg-blue-500" rows={phoneRows(stats.returningPatientPhones, true)} />
             </div>
 
             <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-5">
@@ -495,18 +633,19 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
               value={`${(receiptsInPeriod.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + (r.amount || 0), 0) / 1000000).toFixed(1)}M`}
               icon={DollarSign}
               color="bg-emerald-500"
+              rows={receiptRows(receiptsInPeriod.filter(r => r.status === 'confirmed'))}
             />
-            <StatCard title={t("kutilmoqda")} value={receiptsInPeriod.filter(r => r.status === 'pending').length} icon={Clock} color="bg-amber-500" />
-            <StatCard title={t("rad etilgan")} value={receiptsInPeriod.filter(r => r.status === 'rejected').length} icon={XCircle} color="bg-rose-500" />
-            <StatCard title={t("jami kvitansiyalar")} value={receiptsInPeriod.length} icon={Receipt} color="bg-indigo-500" />
+            <StatCard title={t("kutilmoqda")} value={receiptsInPeriod.filter(r => r.status === 'pending').length} icon={Clock} color="bg-amber-500" rows={receiptRows(receiptsInPeriod.filter(r => r.status === 'pending'))} />
+            <StatCard title={t("rad etilgan")} value={receiptsInPeriod.filter(r => r.status === 'rejected').length} icon={XCircle} color="bg-rose-500" rows={receiptRows(receiptsInPeriod.filter(r => r.status === 'rejected'))} />
+            <StatCard title={t("jami kvitansiyalar")} value={receiptsInPeriod.length} icon={Receipt} color="bg-indigo-500" rows={receiptRows(receiptsInPeriod)} />
           </div>
         )}
 
         {activeTab === 'reminders' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <StatCard title={t("kutilmoqda")} value={remindersInPeriod.filter(r => r.status === 'pending').length} icon={Clock} color="bg-amber-500" />
-            <StatCard title={t("yuborildi")} value={remindersInPeriod.filter(r => r.status === 'sent').length} icon={CheckCircle2} color="bg-blue-500" />
-            <StatCard title={t("bajarildi")} value={remindersInPeriod.filter(r => r.status === 'done').length} icon={CheckCircle2} color="bg-emerald-500" />
+            <StatCard title={t("kutilmoqda")} value={remindersInPeriod.filter(r => r.status === 'pending').length} icon={Clock} color="bg-amber-500" rows={reminderRows(remindersInPeriod.filter(r => r.status === 'pending'))} />
+            <StatCard title={t("yuborildi")} value={remindersInPeriod.filter(r => r.status === 'sent').length} icon={CheckCircle2} color="bg-blue-500" rows={reminderRows(remindersInPeriod.filter(r => r.status === 'sent'))} />
+            <StatCard title={t("bajarildi")} value={remindersInPeriod.filter(r => r.status === 'done').length} icon={CheckCircle2} color="bg-emerald-500" rows={reminderRows(remindersInPeriod.filter(r => r.status === 'done'))} />
           </div>
         )}
 
@@ -514,12 +653,73 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <StatCard title={t("ombor qiymati")} value={`${(materialsValue / 1000000).toFixed(1)}M`} icon={Package} color="bg-blue-500" />
-              <StatCard title={t("kam qolgan materiallar")} value={lowStockCount} icon={AlertTriangle} color="bg-rose-500" />
+              <StatCard title={t("kam qolgan materiallar")} value={lowStockCount} icon={AlertTriangle} color="bg-rose-500" rows={lowStockRows()} />
             </div>
             <p className="text-xs text-slate-400 text-center">{t("batafsil ma'lumot uchun \"materiallar\" bo'limiga o'ting")}</p>
           </div>
         )}
       </div>
+
+      {/* Drill-down: the records behind whichever stat card was clicked. */}
+      {drill && (
+        <div
+          className="fixed inset-0 z-[120] bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setDrill(null)}
+        >
+          <div
+            className="bg-white w-full sm:max-w-lg max-h-[85vh] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-slate-100 shrink-0">
+              <div className="min-w-0">
+                <h3 className="font-black text-slate-800 truncate">{drill.title}</h3>
+                <p className="text-xs font-semibold text-slate-400">
+                  {drill.rows.length} {t('ta')}
+                </p>
+              </div>
+              <button
+                onClick={() => setDrill(null)}
+                aria-label={t('yopish')}
+                className="p-2 -mr-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-3">
+              {drill.rows.length === 0 ? (
+                <EmptyState />
+              ) : (
+                <div className="space-y-1.5">
+                  {drill.rows.map((row) => (
+                    <div
+                      key={row.id}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-slate-800 truncate">{row.primary}</p>
+                        {row.secondary && (
+                          <p className="text-[11px] text-slate-500 font-medium truncate">{row.secondary}</p>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        {row.badge && (
+                          <span className="inline-block px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-[10px] font-bold text-slate-600 whitespace-nowrap">
+                            {row.badge}
+                          </span>
+                        )}
+                        {row.meta && (
+                          <p className="text-[10px] text-slate-400 font-mono mt-0.5 whitespace-nowrap">{row.meta}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

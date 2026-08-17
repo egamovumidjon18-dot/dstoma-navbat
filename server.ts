@@ -1004,20 +1004,34 @@ app.get("/api/admin/credentials", requireSuperAdmin, async (req, res) => {
 app.post("/api/admin/backfill-primary-doctor", requireSuperAdmin, async (req, res) => {
   const [allPatients, allQueues] = await Promise.all([getPatients(), getQueues()]);
   const normPhone = (p?: string) => (p || "").replace(/\D/g, "");
+  const normName = (n?: string) => (n || "").trim().toLowerCase();
 
+  // patientId is the reliable link (set on every queue created after that field
+  // existed); phone and, as a last resort, exact full-name are fallbacks for
+  // older queues that predate it — "Yangi bandlash" always copies the selected
+  // patient's own fullName verbatim, so an exact match there is trustworthy,
+  // unlike a fuzzy match. Picks each patient's MOST RECENT matching queue.
+  const latestQueueById = new Map<string, any>();
   const latestQueueByPhone = new Map<string, any>();
+  const latestQueueByName = new Map<string, any>();
   allQueues.forEach((q: any) => {
+    const isNewer = (map: Map<string, any>, key: string) => {
+      const existing = map.get(key);
+      return !existing || new Date(q.createdAt).getTime() > new Date(existing.createdAt).getTime();
+    };
+    if (q.patientId && isNewer(latestQueueById, q.patientId)) latestQueueById.set(q.patientId, q);
     const phone = normPhone(q.patientPhone);
-    if (!phone) return;
-    const existing = latestQueueByPhone.get(phone);
-    if (!existing || new Date(q.createdAt).getTime() > new Date(existing.createdAt).getTime()) {
-      latestQueueByPhone.set(phone, q);
-    }
+    if (phone && isNewer(latestQueueByPhone, phone)) latestQueueByPhone.set(phone, q);
+    const name = normName(q.patientName);
+    if (name && isNewer(latestQueueByName, name)) latestQueueByName.set(name, q);
   });
 
   let updated = 0;
   for (const p of allPatients as any[]) {
-    const latestQueue = latestQueueByPhone.get(normPhone(p.phone));
+    const latestQueue =
+      latestQueueById.get(p.id) ||
+      (p.phone && latestQueueByPhone.get(normPhone(p.phone))) ||
+      latestQueueByName.get(normName(p.fullName));
     if (latestQueue && latestQueue.doctorId && p.primaryDoctorId !== latestQueue.doctorId) {
       await savePatient({ id: p.id, primaryDoctorId: latestQueue.doctorId } as Patient);
       updated++;
@@ -1501,18 +1515,25 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
 
   // A patient's "treating doctor" (primaryDoctorId) tracks whoever they most
   // recently booked a queue with, so it stays accurate as a patient switches
-  // doctors over time — this is also what scopes each doctor's "Bemorlar" list.
-  // Matched by normalized phone within the same clinic; silently a no-op for a
-  // guest/unregistered phone (never creates a patient here, that's not this
-  // endpoint's job). Awaited (not fire-and-forget) — on Vercel, execution can be
-  // frozen the instant the response is sent, and this write must not be lost.
-  if (patientPhone) {
+  // doctors over time — this is also what scopes each doctor's "Bemorlar" list
+  // and patient counts. Prefers patientId (set by "Yangi bandlash", which picks
+  // an existing Patient record, and by the patient's own self-booking) — phone
+  // matching is only a fallback for older callers that don't send it yet. Phone
+  // alone silently missed every patient with no phone on file, which is common
+  // now that registration only collects fullName + password: a doctor could
+  // book someone from "Yangi bandlash" and that patient would never actually
+  // become "theirs" anywhere in the dashboard. Awaited (not fire-and-forget) —
+  // on Vercel, execution can be frozen the instant the response is sent, and
+  // this write must not be lost.
+  if (patientId || patientPhone) {
     try {
-      const normalizedPhone = patientPhone.replace(/\D/g, "");
       const allPatients = await getPatients();
-      const matchedPatient = allPatients.find(
-        (p: any) => p.clinicId === clinicId && (p.phone || "").replace(/\D/g, "") === normalizedPhone
-      );
+      const normalizedPhone = patientPhone.replace(/\D/g, "");
+      const matchedPatient = patientId
+        ? allPatients.find((p: any) => p.id === patientId)
+        : allPatients.find(
+            (p: any) => p.clinicId === clinicId && (p.phone || "").replace(/\D/g, "") === normalizedPhone
+          );
       if (matchedPatient && matchedPatient.primaryDoctorId !== doctorId) {
         await savePatient({ id: matchedPatient.id, primaryDoctorId: doctorId } as Patient);
       }
