@@ -255,6 +255,24 @@ function generateUniqueLoginCode(existingPatients: { loginCode?: string }[]): st
   return code;
 }
 
+// A doctor adding a patient directly hands them their login on the spot, so
+// their own full name (easy to remember, no code to write down) is friendlier
+// than the random digits self-registration uses. Uzbek full names collide
+// often enough (common name + surname pairs) that this can't just trust the
+// name as-is: matched case-insensitively against existing loginCodes, and on
+// a collision, " 2", " 3", ... is appended until unique — same idea as how
+// OS file managers dedupe "Copy" vs "Copy (2)".
+function generateUniqueLoginFromName(fullName: string, existingPatients: { loginCode?: string }[]): string {
+  const base = fullName.trim().replace(/\s+/g, ' ');
+  const taken = new Set(
+    existingPatients.map(p => (p.loginCode || '').trim().toLowerCase()).filter(Boolean)
+  );
+  if (!taken.has(base.toLowerCase())) return base;
+  let n = 2;
+  while (taken.has(`${base.toLowerCase()} ${n}`)) n++;
+  return `${base} ${n}`;
+}
+
 // Firestore's setDoc rejects any field whose value is explicitly `undefined`
 // (e.g. an optional field spread from a partial update object) — every save*
 // function below runs its payload through this before writing.
@@ -956,12 +974,15 @@ app.post("/api/patient-login", rateLimiter(10, 60 * 1000), async (req, res) => {
   if (!loginId || !password) {
     return res.status(400).json({ ok: false, error: "Login va parol talab qilinadi" });
   }
-  const cleanedLoginCode = String(loginId).trim();
+  // Case-insensitive: loginCode used to always be 6 digits (case is a non-issue
+  // there), but a doctor-assigned one can now be the patient's own name, and
+  // nobody should get locked out over how they capitalized it.
+  const cleanedLoginCode = String(loginId).trim().toLowerCase();
   const cleanedPassport = String(loginId).replace(/\s+/g, "").toUpperCase();
   const allPatients = await getPatients();
   const matched = allPatients.find((p: any) => {
     if (!p) return false;
-    const codeMatch = p.loginCode && p.loginCode === cleanedLoginCode;
+    const codeMatch = p.loginCode && p.loginCode.trim().toLowerCase() === cleanedLoginCode;
     const passportMatch = p.passportSerial && p.passportSerial.replace(/\s+/g, "").toUpperCase() === cleanedPassport;
     return (codeMatch || passportMatch) && verifyPassword(password, p.password);
   });
@@ -1420,7 +1441,13 @@ app.post("/api/patients", rateLimiter(30, 60 * 1000), async (req, res) => {
     // needs some other way to log back in later — generated once, at
     // creation, never regenerated on later edits.
     if (!newPatient.loginCode) {
-      newPatient.loginCode = generateUniqueLoginCode(patDb);
+      // "Yangi bemor qo'shish" (doctor quick-add) sends this flag to get a
+      // name-based login instead of the random digits self-registration uses
+      // — the doctor is handing credentials over immediately, so a login the
+      // patient already knows by heart beats a code they'd have to write down.
+      newPatient.loginCode = req.body.useNameAsLogin && newPatient.fullName
+        ? generateUniqueLoginFromName(newPatient.fullName, patDb)
+        : generateUniqueLoginCode(patDb);
     }
     await savePatient(newPatient);
   } else {

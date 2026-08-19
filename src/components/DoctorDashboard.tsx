@@ -142,7 +142,14 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "bemor qo'shildi": { ru: "Пациент добавлен", en: "Patient added", kk: "Пациент қосылды", ky: "Бейтап кошулду", tg: "Бемор илова шуд", tk: "Näsag goşuldy" },
   "bemor topilmadi. yangi bemor uchun \"yangi bemor qo'shish\" tugmasidan foydalaning.": { ru: "Пациент не найден. Для нового пациента используйте кнопку «Добавить пациента».", en: "Patient not found. Use the \"Add patient\" button for a new patient.", kk: "Пациент табылмады. Жаңа пациент үшін «Пациент қосу» түймесін пайдаланыңыз.", ky: "Бейтап табылган жок. Жаңы бейтап үчүн \"Бемор кошуу\" баскычын колдонуңуз.", tg: "Бемор ёфт нашуд. Барои бемори нав тугмаи «Иловаи бемор»-ро истифода баред.", tk: "Näsag tapylmady. Täze näsag üçin \"Näsag goşmak\" düwmesini ulanyň." },
   "boshqa bemorni tanlash": { ru: "Выбрать другого пациента", en: "Choose a different patient", kk: "Басқа пациентті таңдау", ky: "Башка бейтапты тандоо", tg: "Интихоби бемори дигар", tk: "Başga näsagy saýlamak" },
-  "bo'sh qoldirsangiz avtomatik yaratiladi": { ru: "Если оставить пустым, будет создан автоматически", en: "If left blank, one is generated automatically", kk: "Бос қалдырсаңыз, автоматты түрде жасалады", ky: "Бош калтырсаңыз, автоматтык түрдө түзүлөт", tg: "Агар холӣ монед, ба таври худкор эҷод мешавад", tk: "Boş goýsaňyz, awtomatik döredilýär" },
+  "login sifatida bemorning to'liq ismi, parol esa tizim tomonidan avtomatik yaratiladi — saqlagach ko'rsatiladi.": {
+    ru: "Логином будет полное имя пациента, а пароль система создаст автоматически — он появится после сохранения.",
+    en: "The patient's full name will be the login, and the system generates the password automatically — shown after saving.",
+    kk: "Логин ретінде пациенттің толық аты-жөні, ал құпия сөзді жүйе автоматты түрде жасайды — сақтағаннан кейін көрсетіледі.",
+    ky: "Логин катары бейтаптын толук аты-жөнү, ал сыр сөздү система автоматтык түрдө түзөт — сактагандан кийин көрсөтүлөт.",
+    tg: "Ҳамчун логин номи пурраи бемор истифода мешавад, парол бошад аз ҷониби низом ба таври худкор эҷод мешавад — пас аз захира нишон дода мешавад.",
+    tk: "Login hökmünde näsagyň doly ady ulanylar, paroly bolsa ulgam awtomatik döreder — ýatda saklanandan soň görkeziler."
+  },
   "qo'shimcha ma'lumot (ixtiyoriy)": { ru: "Дополнительная информация (необязательно)", en: "Additional information (optional)", kk: "Қосымша ақпарат (міндетті емес)", ky: "Кошумча маалымат (милдеттүү эмес)", tg: "Маълумоти иловагӣ (ихтиёрӣ)", tk: "Goşmaça maglumat (hökman däl)" },
   "bemor o'z kabinetiga kirishi uchun quyidagi login va parolni unga bering": { ru: "Дайте пациенту следующий логин и пароль для входа в его кабинет", en: "Give the patient the following login and password to access their cabinet", kk: "Пациентке кабинетіне кіру үшін мына логин мен парольді беріңіз", ky: "Бейтапка кабинетине кирүү үчүн мына логин жана паролду бериңиз", tg: "Ба бемор логин ва рамзи зерин барои воридшавӣ ба кабинети худ диҳед", tk: "Näsaga öz kabinetine girmek üçin şu login we paroly beriň" },
   "login": { ru: "Логин", en: "Login", kk: "Логин", ky: "Логин", tg: "Логин", tk: "Login" },
@@ -688,7 +695,7 @@ export default function DoctorDashboard({
   const patientSearchInputRef = useRef<HTMLInputElement>(null);
   const [showQuickAddPatient, setShowQuickAddPatient] = useState(false);
   const [quickAddPatient, setQuickAddPatient] = useState({
-    fullName: "", phone: "", passportSerial: "", birthDate: "", password: "",
+    fullName: "", phone: "", passportSerial: "", birthDate: "",
     bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
     bookAppointment: true, serviceId: "",
     appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: "09:00",
@@ -792,9 +799,11 @@ export default function DoctorDashboard({
   const handleQuickAddPatient = async () => {
     if (!quickAddPatient.fullName.trim() || !effectiveClinicId) return;
     setIsSavingQuickAddPatient(true);
-    // Auto-generated when the doctor leaves the password blank — they're the
-    // one who has to relay it to the patient afterward, not compose one.
-    const passwordToUse = quickAddPatient.password.trim() || Math.random().toString(36).slice(2, 8);
+    // Always system-generated — the doctor hands both login and password to
+    // the patient right after creation, so there's nothing for them to type
+    // or remember here. Login is the patient's own name (see useNameAsLogin
+    // below); the password just needs to exist, not be memorable.
+    const passwordToUse = Math.random().toString(36).slice(2, 8);
     try {
       const res = await fetch("/api/patients", {
         method: "POST",
@@ -806,6 +815,7 @@ export default function DoctorDashboard({
           passportSerial: quickAddPatient.passportSerial.trim() || undefined,
           birthDate: quickAddPatient.birthDate || undefined,
           password: passwordToUse,
+          useNameAsLogin: true,
           bloodGroup: quickAddPatient.bloodGroup || undefined,
           allergies: quickAddPatient.allergies.trim() || undefined,
           chronicDiseases: quickAddPatient.chronicDiseases.trim() || undefined,
@@ -836,7 +846,7 @@ export default function DoctorDashboard({
           });
         }
         setQuickAddPatient({
-          fullName: "", phone: "", passportSerial: "", birthDate: "", password: "",
+          fullName: "", phone: "", passportSerial: "", birthDate: "",
           bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
           bookAppointment: true, serviceId: "",
           appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: "09:00",
@@ -2967,7 +2977,7 @@ export default function DoctorDashboard({
                   <button
                     onClick={() => {
                       setQuickAddPatient({
-                        fullName: "", phone: "", passportSerial: "", birthDate: "", password: "",
+                        fullName: "", phone: "", passportSerial: "", birthDate: "",
                         bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
                         bookAppointment: true, serviceId: "",
                         appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: "09:00",
@@ -4337,16 +4347,9 @@ export default function DoctorDashboard({
                   placeholder="+998 90 123 45 67"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("parol")}</label>
-                <input
-                  type="text"
-                  value={quickAddPatient.password}
-                  onChange={(e) => setQuickAddPatient({ ...quickAddPatient, password: e.target.value })}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
-                  placeholder={t("bo'sh qoldirsangiz avtomatik yaratiladi")}
-                />
-              </div>
+              <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+                {t("login sifatida bemorning to'liq ismi, parol esa tizim tomonidan avtomatik yaratiladi — saqlagach ko'rsatiladi.")}
+              </p>
 
               {/* Everything below used to be required up front. Passport,
                   birth date, and medical background are now filled in later
@@ -4508,7 +4511,12 @@ export default function DoctorDashboard({
             <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl py-4 mb-5 space-y-2">
               <div>
                 <p className="text-[10px] text-slate-400 font-bold uppercase">{t("Login")}</p>
-                <p className="text-xl font-black text-slate-900 tracking-[0.2em] font-mono">{justAddedPatientCreds.loginCode}</p>
+                {/* Name-based logins (doctor quick-add) read naturally; the
+                    legacy 6-digit codes (self-registration) still benefit
+                    from the wider spacing, so it only kicks in for those. */}
+                <p className={`text-xl font-black text-slate-900 ${/^\d+$/.test(justAddedPatientCreds.loginCode) ? 'tracking-[0.2em] font-mono' : ''}`}>
+                  {justAddedPatientCreds.loginCode}
+                </p>
               </div>
               <div>
                 <p className="text-[10px] text-slate-400 font-bold uppercase">{t("Parol")}</p>
