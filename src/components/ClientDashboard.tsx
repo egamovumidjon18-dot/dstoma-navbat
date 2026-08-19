@@ -6,6 +6,7 @@ import { TRANSLATIONS, Language, translateMedicalText } from '../translations';
 import PatientPanel from './PatientPanel';
 import ThreeDentalModel from './ThreeDentalModel';
 import ClinicMap from './ClinicMap';
+import DoctorAvailability from './DoctorAvailability';
 import AdBanner from './AdBanner';
 import InstallAppBanner from './InstallAppBanner';
 import { 
@@ -111,6 +112,10 @@ export default function ClientDashboard({
       "shikoyatingiz (ixtiyoriy)": { ru: "Ваша жалоба (необязательно)", en: "Your complaint (optional)", kk: "Шағымыңыз (міндетті емес)", ky: "Арызыңыз (милдеттүү эмес)", tg: "Шикояти шумо (ихтиёрӣ)", tk: "Şikaýatyňyz (hökman däl)" },
       "xarita": { ru: "Карта", en: "Map", kk: "Карта", ky: "Карта", tg: "Харита", tk: "Karta" },
       "yangi navbat olish": { ru: "Взять новую очередь", en: "Book a new appointment", kk: "Жаңа кезек алу", ky: "Жаңы кезек алуу", tg: "Гирифтани навбати нав", tk: "Täze nobat almak" },
+      "shifokorning bandligi": { ru: "Занятость врача", en: "Doctor's availability", kk: "Дәрігердің бос уақыты", ky: "Дарыгердин бош убактысы", tg: "Машғулияти духтур", tk: "Lukmanyň meşgullygy" },
+      "tushlik": { ru: "Обед", en: "Lunch", kk: "Түскі ас", ky: "Түшкү тамак", tg: "Ноништа", tk: "Öýle nahary" },
+      "band": { ru: "Занято", en: "Booked", kk: "Бос емес", ky: "Бош эмес", tg: "Машғул", tk: "Meşgul" },
+      "bo'sh": { ru: "Свободно", en: "Free", kk: "Бос", ky: "Бош", tg: "Холӣ", tk: "Boş" },
 
       "tanlangan filial": { ru: "Выбранный филиал", en: "Selected Branch", kk: "Таңдалған филиал", ky: "Тандалган филиал", tg: "Филиали интихобшуда", tk: "Saýlanan şahamça" },
       "faol filial monito'rlari": { ru: "Мониторинг активного филиала", en: "Active Branch Monitoring", kk: "Белсенді филиал мониторингі", ky: "Активдүү филиал мониторинги", tg: "Мониторинги филиали фаъол", tk: "Işjeň şahamça monitoringi" },
@@ -1572,6 +1577,15 @@ export default function ClientDashboard({
                 );
               })()}
             </div>
+
+            {/* Doctor's weekly free/busy — shown once a doctor is picked, read
+                from the same doctors/queues data (and the same slot math) as
+                the doctor's own "Rejalashtirilgan" grid, so it can't drift
+                out of sync with what the doctor actually sees. */}
+            {bookingDoctorId && (() => {
+              const pickedDoctor = doctors.find((d) => d.id === bookingDoctorId);
+              return pickedDoctor ? <DoctorAvailability doctor={pickedDoctor} queues={queues} t={t} /> : null;
+            })()}
 
             {/* Step 3: Complaint (optional) */}
             <div>
