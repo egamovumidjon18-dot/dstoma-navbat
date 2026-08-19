@@ -1916,7 +1916,8 @@ app.get("/api/doctors", async (req, res) => {
     // password intentionally omitted — see /api/doctor-login and /api/admin/credentials
     clinicId: d.clinicId,
     paymentCardNumber: d.paymentCardNumber,
-    paymentPhone: d.paymentPhone
+    paymentPhone: d.paymentPhone,
+    workingHours: d.workingHours
   }));
   res.json(mapped);
 });
