@@ -441,118 +441,25 @@ export default function DirectorDashboard({
   // Filter queues by status
   const pendingQueues = clinicQueues.filter(q => q.status === 'pending');
   const callingQueues = clinicQueues.filter(q => q.status === 'calling' || q.status === 'in_progress');
-  const completedQueues = clinicQueues.filter(q => q.status === 'completed');
-
-  // Real average rating across a set of queues — only counts queues that were
-  // actually rated; unrated visits are excluded, not silently treated as 5-star.
-  // 0 means "no real feedback yet" (honest empty state, not a fabricated score).
-  const computeAvgRating = (qs: QueueItem[]) => {
-    const rated = qs.filter(q => typeof q.rating === 'number');
-    if (rated.length === 0) return 0;
-    return rated.reduce((sum, q) => sum + (q.rating || 0), 0) / rated.length;
-  };
-
-  // Generating report charts data
-  const getReportStats = (period: 'kunlik' | 'haftalik' | 'oylik' | 'yillik') => {
-    const reportList = [];
-    const today = new Date();
-    const getPrice = (id: string) => services.find(s => s.id === id)?.price || 0;
-
-    if (period === 'kunlik') {
-      // Create hours for today (e.g., last 8 hours or fixed working hours 09:00 - 18:00)
-      for (let i = 11; i <= 18; i++) {
-        const hourQueues = clinicQueues.filter(q => {
-          if (q.status !== 'completed') return false;
-          const qDate = q.createdAt ? new Date(q.createdAt) : new Date();
-          return qDate.getDate() === today.getDate() && qDate.getMonth() === today.getMonth() && qDate.getFullYear() === today.getFullYear() && qDate.getHours() === i;
-        });
-
-        const patientsCount = hourQueues.length;
-        const revenue = hourQueues.reduce((sum, q) => sum + getPrice(q.serviceId), 0);
-        const avgRating = computeAvgRating(hourQueues);
-
-        reportList.push({ dayName: `${i}:00`, dateStr: `Bugun`, patientsCount, revenue, avgRating });
-      }
-    } else if (period === 'haftalik') {
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        const isToday = i === 0;
-        
-        const dayNameUz = ['Yakshanba', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'][d.getDay()];
-        const dayNameRu = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'][d.getDay()];
-        const dayNameEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()];
-        let dayName = language === 'ru' ? dayNameRu : language === 'en' ? dayNameEn : dayNameUz;
-        if (isToday) dayName = language === 'ru' ? 'Сегодня' : language === 'en' ? 'Today' : 'Bugun';
-
-        const dateStr = d.toLocaleDateString('ru-RU');
-        
-        const dayQueues = clinicQueues.filter(q => {
-          if (q.status !== 'completed') return false;
-          const qDate = q.createdAt ? new Date(q.createdAt) : new Date();
-          return qDate.getDate() === d.getDate() && qDate.getMonth() === d.getMonth() && qDate.getFullYear() === d.getFullYear();
-        });
-
-        const patientsCount = dayQueues.length;
-        const revenue = dayQueues.reduce((sum, q) => sum + getPrice(q.serviceId), 0);
-        const avgRating = computeAvgRating(dayQueues);
-
-        reportList.push({ dayName, dateStr, patientsCount, revenue, avgRating });
-      }
-    } else if (period === 'oylik') {
-      // 4 weeks breakdown
-      for (let i = 3; i >= 0; i--) {
-        const wStart = new Date(today);
-        wStart.setDate(today.getDate() - (i * 7 + 7));
-        const wEnd = new Date(today);
-        wEnd.setDate(today.getDate() - (i * 7));
-        
-        const weekQueues = clinicQueues.filter(q => {
-          if (q.status !== 'completed') return false;
-          const qDate = q.createdAt ? new Date(q.createdAt) : new Date();
-          return qDate > wStart && qDate <= wEnd;
-        });
-
-        const patientsCount = weekQueues.length;
-        const revenue = weekQueues.reduce((sum, q) => sum + getPrice(q.serviceId), 0);
-        const avgRating = computeAvgRating(weekQueues);
-
-        reportList.push({ dayName: `${4 - i}-Hafta`, dateStr: `${wStart.getDate()}-${wEnd.getDate()}`, patientsCount, revenue, avgRating });
-      }
-    } else if (period === 'yillik') {
-      for (let i = 6; i >= 0; i--) {
-        const mDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
-        const mQueues = clinicQueues.filter(q => {
-          if (q.status !== 'completed') return false;
-          const qDate = q.createdAt ? new Date(q.createdAt) : new Date();
-          return qDate.getMonth() === mDate.getMonth() && qDate.getFullYear() === mDate.getFullYear();
-        });
-        
-        const patientsCount = mQueues.length;
-        const revenue = mQueues.reduce((sum, q) => sum + getPrice(q.serviceId), 0);
-        const avgRating = computeAvgRating(mQueues);
-
-        const monthNames = ['Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun', 'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr'];
-        reportList.push({ dayName: monthNames[mDate.getMonth()], dateStr: mDate.getFullYear().toString(), patientsCount, revenue, avgRating });
-      }
-    }
-
-    return reportList;
-  };
-
-  const weeklyReportData = getReportStats(reportPeriod);
-  const weeklyTotalRevenue = weeklyReportData.reduce((sum, d) => sum + d.revenue, 0);
-  const weeklyTotalPatients = weeklyReportData.reduce((sum, d) => sum + d.patientsCount, 0);
+  // All-time completed, across every tab. Every "Bugun/Bugungi" (Today) label in
+  // this file used to read straight from this — meaning "today's revenue",
+  // "today's admissions", and each doctor's "today" card were silently showing
+  // the clinic's entire history instead. completedQueuesToday below (filtered by
+  // createdAt, the only timestamp a QueueItem carries — same convention the
+  // server's own daily report snapshot uses) is what those actually need.
+  const completedQueuesAllTime = clinicQueues.filter(q => q.status === 'completed');
+  const todayStr = new Date().toISOString().split('T')[0];
+  const completedQueuesToday = completedQueuesAllTime.filter(q => q.createdAt?.startsWith(todayStr));
 
   // Calculations for KPI Cards
-  const totalCompletedToday = completedQueues.length;
+  const totalCompletedToday = completedQueuesToday.length;
   const currentWaitingCount = pendingQueues.length + callingQueues.length;
-  
+
   const getServicePrice = (id: string) => {
     return services.find(s => s.id === id)?.price || 0;
   };
 
-  const todayRevenue = completedQueues.reduce((sum, q) => sum + getServicePrice(q.serviceId), 0);
+  const todayRevenue = completedQueuesToday.reduce((sum, q) => sum + getServicePrice(q.serviceId), 0);
 
   // Doctor-clinic business relationship for this clinic (rental vs revenue-share); no
   // link record found means "legacy full-visibility relationship", same as before links existed.
@@ -560,12 +467,18 @@ export default function DirectorDashboard({
     doctorClinicLinks.find(l => l.doctorId === docId && l.clinicId === currentClinicId && l.status === 'active') || null;
 
   // Calculations per doctor for today's grid
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
   const getDocTodayStats = (docId: string) => {
-    const docCompleted = completedQueues.filter(q => q.doctorId === docId);
+    const docCompleted = completedQueuesToday.filter(q => q.doctorId === docId);
+    const docCompletedWeek = completedQueuesAllTime.filter(
+      (q) => q.doctorId === docId && q.createdAt && new Date(q.createdAt) >= weekAgo
+    );
     const docActive = pendingQueues.filter(q => q.doctorId === docId).length + callingQueues.filter(q => q.doctorId === docId).length;
     const docRevenue = docCompleted.reduce((sum, q) => sum + getServicePrice(q.serviceId), 0);
     return {
       completedCount: docCompleted.length,
+      completedThisWeek: docCompletedWeek.length,
       activeCount: docActive,
       revenue: docRevenue
     };
@@ -1146,7 +1059,7 @@ export default function DirectorDashboard({
                 {(() => {
                   // Pre-calculate call counts and sort
                   const servicesWithCounts = clinicServices.map(srv => {
-                    const callCount = completedQueues.filter(q => q.serviceId === srv.id).length;
+                    const callCount = completedQueuesToday.filter(q => q.serviceId === srv.id).length;
                     return { ...srv, callCount };
                   }).sort((a,b) => b.callCount - a.callCount); // Most popular first
 
@@ -1445,7 +1358,17 @@ export default function DirectorDashboard({
       {/* -------------------- TAB 2: HISOBOT VIEW -------------------- */}
       {activeSubTab === 'hisobot' && (
         <div className="h-full min-h-[600px] bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-          <Statistics queues={clinicQueues} services={clinicServices} doctors={clinicDoctors} patients={clinicPatientsList} clinicId={currentClinicId} language={language} />
+          <Statistics
+            queues={clinicQueues}
+            services={clinicServices}
+            doctors={clinicDoctors}
+            patients={clinicPatientsList}
+            clinicId={currentClinicId}
+            language={language}
+            initialTimeRange={
+              reportPeriod === 'kunlik' ? 'daily' : reportPeriod === 'oylik' ? 'monthly' : reportPeriod === 'yillik' ? 'yearly' : 'weekly'
+            }
+          />
         </div>
       )}
 
@@ -1573,7 +1496,7 @@ export default function DirectorDashboard({
                       </div>
                       <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                         <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider">Haftalik</span>
-                        <strong className="text-xs font-bold text-slate-750 font-mono">{todayStats.completedCount + 15} kishi</strong>
+                        <strong className="text-xs font-bold text-slate-750 font-mono">{todayStats.completedThisWeek} kishi</strong>
                       </div>
                       <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                         <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider">Erkinligi</span>

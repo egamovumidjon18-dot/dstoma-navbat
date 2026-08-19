@@ -67,9 +67,13 @@ interface StatisticsProps {
   clinicId?: string;
   staffToken?: string | null;
   language?: Language;
+  // Lets a caller land the patient directly on a specific granularity — e.g.
+  // DirectorDashboard's "Bugun joriy daromad" KPI card jumps here wanting the
+  // daily view, not whatever this component's own default happens to be.
+  initialTimeRange?: 'daily' | 'weekly' | 'monthly' | 'yearly';
 }
 
-export default function Statistics({ queues = [], services = [], doctors = [], patients = [], clinicId, staffToken, language }: StatisticsProps) {
+export default function Statistics({ queues = [], services = [], doctors = [], patients = [], clinicId, staffToken, language, initialTimeRange }: StatisticsProps) {
   const localLang: keyof StatsDictEntry | null =
     (language === "ru" || language === "en" || language === "kk" || language === "ky" || language === "tg" || language === "tk")
       ? language
@@ -91,7 +95,7 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
     return text;
   };
 
-  const [timeRange, setTimeRange] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('weekly');
+  const [timeRange, setTimeRange] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>(initialTimeRange || 'weekly');
   const [activeTab, setActiveTab] = useState<'overview' | 'patients' | 'treatments' | 'payments' | 'reminders' | 'materials'>('overview');
 
   // Real payment receipts (bemor -> shifokor to'g'ridan-to'g'ri to'lovi, kvitansiya
