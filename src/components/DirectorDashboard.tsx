@@ -588,43 +588,37 @@ export default function DirectorDashboard({
     setTimeout(() => setSrvFeedbackMsg(''), 3000);
   };
 
-  // Patient database arrays
-  // Merge current day queue tickets with real registered patient records
+  // Patient database arrays — sourced directly from the real Patient
+  // collection (the same one Statistics/patients prop uses below), not
+  // derived from queue tickets. The old version built this list by merging
+  // clinicQueues, deduped by phone: a registered patient who'd never taken a
+  // queue ticket (e.g. Telegram self-registration, or a doctor quick-add with
+  // no booking yet) was invisible here, and patients sharing a blank phone
+  // silently collapsed into one row — so this count could disagree with the
+  // Hisobotlar tab's Statistics component, which already reads real patients.
   const clinicPatientsList = patients.filter(p => p.clinicId === currentClinicId);
-  const dynamicQueuedPatients = clinicQueues.map(q => {
-    const normalizedQueuePhone = (q.patientPhone || '').replace(/\D/g, '');
-    const realPatient = clinicPatientsList.find(p => normalizedQueuePhone && (p.phone || '').replace(/\D/g, '') === normalizedQueuePhone);
+  const directoryPatients = clinicPatientsList.map(p => {
     const age = (() => {
-      if (!realPatient?.birthDate) return null;
-      const dob = new Date(realPatient.birthDate);
+      if (!p.birthDate) return null;
+      const dob = new Date(p.birthDate);
       if (isNaN(dob.getTime())) return null;
       return Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
     })();
+    const sortedVisits = p.clinicVisits?.length
+      ? [...p.clinicVisits].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      : [];
     return {
-      id: realPatient?.id || null,
-      fullName: decodeLegacyEntities(realPatient?.fullName) || q.patientName,
-      phone: q.patientPhone,
-      passport: decodeLegacyEntities(realPatient?.passportSerial) || '—',
+      id: p.id,
+      fullName: decodeLegacyEntities(p.fullName) || "Noma'lum",
+      phone: p.phone || '—',
+      passport: decodeLegacyEntities(p.passportSerial) || '—',
       age,
-      lastVisit: realPatient?.clinicVisits?.length
-        ? new Date([...realPatient.clinicVisits].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date).toLocaleDateString()
-        : 'Bugun',
-      visitsCount: realPatient?.clinicVisits?.length || 1,
-      source: realPatient ? "Bemor bazasi" : 'Tizim Navbati'
+      lastVisit: sortedVisits.length ? new Date(sortedVisits[0].date).toLocaleDateString() : '—',
+      visitsCount: p.clinicVisits?.length || 0,
     };
   });
 
-  const uniquePhones = new Set<string>();
-  const mergedPatients: typeof dynamicQueuedPatients = [];
-
-  dynamicQueuedPatients.forEach(p => {
-    if (!uniquePhones.has(p.phone)) {
-      uniquePhones.add(p.phone);
-      mergedPatients.push(p);
-    }
-  });
-
-  const totalRegisteredPatientsCount = mergedPatients.length; // Dynamically calculated based on real patients
+  const totalRegisteredPatientsCount = directoryPatients.length;
 
   const getServiceCategory = (name: string): string => {
     const n = name.toLowerCase();
@@ -1167,7 +1161,7 @@ export default function DirectorDashboard({
                         : 'text-slate-400 hover:text-slate-700'
                     }`}
                   >
-                    🗄️ Jami Ro'yxatbaza ({mergedPatients.length} kishi)
+                    🗄️ Jami Ro'yxatbaza ({directoryPatients.length} kishi)
                   </button>
                 </div>
                 
@@ -1298,14 +1292,13 @@ export default function DirectorDashboard({
                         <th className="px-4 py-3">Aloqa raqami</th>
                         <th className="px-4 py-3 text-center">Yosh</th>
                         <th className="px-4 py-3 text-center font-mono">Tashriflar</th>
-                        <th className="px-4 py-3">Ro'yxat manbasi</th>
                         <th className="px-4 py-3 text-right font-sans">Oxirgi qabul</th>
                         <th className="px-4 py-3 text-center">Amallar</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                      {mergedPatients.map((pt, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/20 transition-all">
+                      {directoryPatients.map((pt) => (
+                        <tr key={pt.id} className="hover:bg-slate-50/20 transition-all">
                           <td className="px-4 py-3">
                             <span className="text-slate-850 font-extrabold block">{pt.fullName}</span>
                           </td>
@@ -1320,11 +1313,6 @@ export default function DirectorDashboard({
                           </td>
                           <td className="px-4 py-3 text-center text-slate-500 font-mono font-bold">
                             {pt.visitsCount} marta
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-mono border border-slate-200/45">
-                              {pt.source}
-                            </span>
                           </td>
                           <td className="px-4 py-3 text-right font-mono text-blue-600 text-[10.5px]">
                             {pt.lastVisit}
