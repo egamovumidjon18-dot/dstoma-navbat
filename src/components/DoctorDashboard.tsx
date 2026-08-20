@@ -3166,30 +3166,37 @@ export default function DoctorDashboard({
                                             <p className={`text-[11px] font-black ${timeClasses}`}>{q.appointmentTime || '--:--'}</p>
                                             {isDone && <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />}
                                             {isCancelled && <span className="text-[9px] font-black text-slate-400 uppercase shrink-0">{t("bekor qilindi")}</span>}
-                                            {/* Editing/deleting a completed or already-cancelled visit would
-                                                rewrite medical history after the fact — only scheduled slots
-                                                (not yet started) are safe to change here. */}
-                                            {q.status === 'scheduled' && (
-                                              <div className="flex items-center gap-0.5 shrink-0">
+                                            <div className="flex items-center gap-0.5 shrink-0">
+                                              {/* Editing the date/time/service of a completed or already
+                                                  in-progress visit doesn't make sense — only a not-yet-started
+                                                  slot is safe to reschedule here. */}
+                                              {q.status === 'scheduled' && (
                                                 <button
                                                   onClick={(e) => { e.stopPropagation(); openEditQueueModal(q); }}
-                                                  className="p-0.5 text-slate-400 hover:text-blue-600 transition-colors"
+                                                  className="p-0.5 text-slate-500 hover:text-blue-600 transition-colors"
                                                   title={t("tahrirlash")}
                                                 >
-                                                  <Edit2 className="w-3 h-3" />
+                                                  <Edit2 className="w-3.5 h-3.5" />
                                                 </button>
+                                              )}
+                                              {/* Deleting removes only this booking ticket, not the patient's
+                                                  actual visit record (Patient.clinicVisits, written separately
+                                                  on completion) — except a completed one, which stays deletable
+                                                  never, since that ticket is what today's revenue/report totals
+                                                  are counted from. */}
+                                              {!isDone && (
                                                 <button
                                                   onClick={(e) => {
                                                     e.stopPropagation();
                                                     if (window.confirm(t("bu navbatni o'chirmoqchimisiz?"))) onDeleteQueue?.(q.id!);
                                                   }}
-                                                  className="p-0.5 text-slate-400 hover:text-rose-600 transition-colors"
+                                                  className="p-0.5 text-slate-500 hover:text-rose-600 transition-colors"
                                                   title={t("o'chirish")}
                                                 >
-                                                  <Trash2 className="w-3 h-3" />
+                                                  <Trash2 className="w-3.5 h-3.5" />
                                                 </button>
-                                              </div>
-                                            )}
+                                              )}
+                                            </div>
                                           </div>
                                           <p className={`text-xs font-bold truncate ${isCancelled ? 'text-slate-500 line-through' : 'text-slate-800'}`}>{q.patientName}</p>
                                           <p className="text-[10px] text-slate-400 font-mono truncate">{q.patientPhone}</p>
