@@ -155,6 +155,7 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "login": { ru: "Логин", en: "Login", kk: "Логин", ky: "Логин", tg: "Логин", tk: "Login" },
   "tushunarli": { ru: "Понятно", en: "Got it", kk: "Түсінікті", ky: "Түшүнүктүү", tg: "Фаҳмо", tk: "Düşnükli" },
   "bu navbatni o'chirmoqchimisiz?": { ru: "Удалить эту запись?", en: "Delete this appointment?", kk: "Осы жазбаны жоясыз ба?", ky: "Бул жазууну өчүрөсүзбү?", tg: "Ин навбатро нест мекунед?", tk: "Bu ýazgyny pozmakçymy?" },
+  "bu yakunlangan tashrif o'chiriladi va kunlik hisobot/daromaddan ham chiqarib tashlanadi. davom etilsinmi?": { ru: "Этот завершённый визит будет удалён и исключён из дневного отчёта/дохода. Продолжить?", en: "This completed visit will be deleted and removed from the daily report/revenue too. Continue?", kk: "Бұл аяқталған тәшриф жойылады және күнделікті есеп/табыстан да алынып тасталады. Жалғастырасыз ба?", ky: "Бул аяктаган ташриф өчүрүлөт жана күндөлүк отчет/кирешеден да алынып салынат. Улантылсынбы?", tg: "Ин ташрифи анҷомёфта нест карда мешавад ва аз ҳисобот/даромади рӯзона низ хориҷ мешавад. Идома дода шавад?", tk: "Bu tamamlanan ideg pozular we gündelik hasabat/girdejiden hem aýrylar. Dowam etdirilsinmi?" },
 
   "rejalashtirilgan": { ru: "Запланировано", en: "Scheduled", kk: "Жоспарланған", ky: "Пландаштырылган", tg: "Ба нақша гирифташуда", tk: "Meýilleşdirilen" },
   "o'chirish": { ru: "Удалить", en: "Delete", kk: "Жою", ky: "Өчүрүү", tg: "Нест кардан", tk: "Pozmak" },
@@ -3181,21 +3182,22 @@ export default function DoctorDashboard({
                                               )}
                                               {/* Deleting removes only this booking ticket, not the patient's
                                                   actual visit record (Patient.clinicVisits, written separately
-                                                  on completion) — except a completed one, which stays deletable
-                                                  never, since that ticket is what today's revenue/report totals
-                                                  are counted from. */}
-                                              {!isDone && (
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (window.confirm(t("bu navbatni o'chirmoqchimisiz?"))) onDeleteQueue?.(q.id!);
-                                                  }}
-                                                  className="p-0.5 text-slate-500 hover:text-rose-600 transition-colors"
-                                                  title={t("o'chirish")}
-                                                >
-                                                  <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
-                                              )}
+                                                  on completion). A completed ticket is also what that day's
+                                                  revenue/report totals were counted from, so deleting one shrinks
+                                                  those retroactively — allowed, but warned about specifically. */}
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const msg = isDone
+                                                    ? t("bu yakunlangan tashrif o'chiriladi va kunlik hisobot/daromaddan ham chiqarib tashlanadi. davom etilsinmi?")
+                                                    : t("bu navbatni o'chirmoqchimisiz?");
+                                                  if (window.confirm(msg)) onDeleteQueue?.(q.id!);
+                                                }}
+                                                className="p-0.5 text-slate-500 hover:text-rose-600 transition-colors"
+                                                title={t("o'chirish")}
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                              </button>
                                             </div>
                                           </div>
                                           <p className={`text-xs font-bold truncate ${isCancelled ? 'text-slate-500 line-through' : 'text-slate-800'}`}>{q.patientName}</p>
