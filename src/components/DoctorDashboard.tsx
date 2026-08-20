@@ -344,6 +344,7 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "🌐 boshqa klinikadan qidirish": { ru: "🌐 Поиск из другой клиники", en: "🌐 Search from another clinic", kk: "🌐 Басқа клиникадан іздеу", ky: "🌐 Башка клиникадан издөө", tg: "🌐 Ҷустуҷӯ аз клиникаи дигар", tk: "🌐 Başga klinikadan gözlemek" },
   "boshqa klinikadan": { ru: "из другой клиники", en: "from another clinic", kk: "басқа клиникадан", ky: "башка клиникадан", tg: "аз клиникаи дигар", tk: "başga klinikadan" },
   "yangi bemor": { ru: "Новый пациент", en: "New patient", kk: "Жаңа пациент", ky: "Жаңы бейтап", tg: "Бемори нав", tk: "Täze näsag" },
+  "mavjud bemor": { ru: "Существующий пациент", en: "Existing patient", kk: "Қолданыстағы пациент", ky: "Учурдагы бейтап", tg: "Бемори мавҷуда", tk: "Bar bolan näsag" },
   "qidirilmoqda...": { ru: "Идет поиск...", en: "Searching...", kk: "Ізделуде...", ky: "Изделүүдө...", tg: "Ҷустуҷӯ дар ҷараён...", tk: "Gözlenilýär..." },
   qidirish: { ru: "Поиск", en: "Search", kk: "Іздеу", ky: "Издөө", tg: "Ҷустуҷӯ", tk: "Gözlemek" },
   "hech qanday klinikada bunday bemor topilmadi.": { ru: "Такой пациент не найден ни в одной клинике.", en: "No such patient found in any clinic.", kk: "Бұндай пациент ешбір клиникада табылмады.", ky: "Мындай бейтап эч бир клиникада табылган жок.", tg: "Чунин бемор дар ягон клиника ёфт нашуд.", tk: "Şeýle näsag hiç bir klinikada tapylmady." },
@@ -881,21 +882,42 @@ export default function DoctorDashboard({
         return;
       }
 
-      // "Yangi bandlash" books an EXISTING patient only — name/phone are
-      // read-only in the form below and only ever get set by picking a
-      // search result, so newBookingSelectedPatientId being unset here means
-      // nothing was actually picked (the submit button is also disabled in
-      // that case, this is just the belt-and-braces check). No Patient
-      // record gets created from this modal anymore; that upsert-on-booking
-      // behavior was itself the "second way to add a patient" this modal
-      // wasn't supposed to be — "Yangi bemor qo'shish" is the only place
-      // that creates one now.
-      if (!newBookingSelectedPatientId) return;
+      // Two ways to fill in who this slot is for: pick an existing Patient
+      // record (mode 'existing', the only option this modal used to have),
+      // or register one on the spot (mode 'new') — same creation call
+      // "Yangi bemor qo'shish" uses, so there's still only one code path
+      // that actually creates a Patient record.
+      let patientId = newBookingSelectedPatientId;
+      let patientCreds: { loginCode: string; password: string } | null = null;
+      if (newBookingMode === 'new') {
+        if (!effectiveClinicId) return;
+        const passwordToUse = Math.random().toString(36).slice(2, 8);
+        const res = await fetch('/api/patients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...staffAuthHeaders() },
+          body: JSON.stringify({
+            clinicId: effectiveClinicId,
+            fullName: newBookingName.trim(),
+            phone: newBookingPhone.trim() || undefined,
+            password: passwordToUse,
+            useNameAsLogin: true,
+            primaryDoctorId: currentDoctor?.id,
+          }),
+        });
+        if (!res.ok) return;
+        const savedPatient = await res.json();
+        patientId = savedPatient.id;
+        onPatientUpserted?.({ ...savedPatient, primaryDoctorId: savedPatient.primaryDoctorId || currentDoctor?.id });
+        if (savedPatient.loginCode) patientCreds = { loginCode: savedPatient.loginCode, password: passwordToUse };
+      } else if (!newBookingSelectedPatientId) {
+        // Belt-and-braces: the submit button is already disabled in this case.
+        return;
+      }
 
       const newQueue: QueueItem = {
         id: 'q_' + Math.random().toString(36).substr(2, 9),
         clinicId: effectiveClinicId,
-        patientId: newBookingSelectedPatientId,
+        patientId: patientId || undefined,
         doctorId: currentDoctor?.id || activeDoctorId,
         serviceId: newBookingServiceId,
         patientName: newBookingName.trim(),
@@ -908,6 +930,7 @@ export default function DoctorDashboard({
       };
       onAddQueue(newQueue);
       setShowNewBookingModal(false);
+      setNewBookingMode('existing');
       setNewBookingQuery('');
       setNewBookingName('');
       setNewBookingPhone('');
@@ -915,6 +938,7 @@ export default function DoctorDashboard({
       setNewBookingServiceId('');
       setNewBookingDate(new Date().toISOString().split('T')[0]);
       setNewBookingTime('09:00');
+      if (patientCreds) setJustAddedPatientCreds(patientCreds);
     } finally {
       setIsSavingNewBooking(false);
     }
@@ -1077,6 +1101,11 @@ export default function DoctorDashboard({
   // silently upsert a new Patient record (that's "Yangi bemor qo'shish"'s job
   // alone now).
   const [newBookingSelectedPatientId, setNewBookingSelectedPatientId] = useState<string | null>(null);
+  // "existing" searches/picks a real Patient record (the default). "new"
+  // registers one on the spot — added so clicking an empty Rejalashtirilgan
+  // slot for a walk-in/first-time caller doesn't force a detour through
+  // "Yangi bemor qo'shish" and back. Only relevant outside edit mode.
+  const [newBookingMode, setNewBookingMode] = useState<'existing' | 'new'>('existing');
   const [newBookingServiceId, setNewBookingServiceId] = useState('');
   const [newBookingServiceQuery, setNewBookingServiceQuery] = useState('');
   const [newBookingDate, setNewBookingDate] = useState(new Date().toISOString().split('T')[0]);
@@ -1179,6 +1208,7 @@ export default function DoctorDashboard({
   const openNewBookingModal = (locked: boolean, date?: string, time?: string) => {
     setEditingQueueId(null);
     setNewBookingSlotLocked(locked);
+    setNewBookingMode('existing');
     setNewBookingQuery('');
     setNewBookingName('');
     setNewBookingPhone('');
@@ -1200,6 +1230,7 @@ export default function DoctorDashboard({
     // (used for the grid's "book this exact slot" flow) — editing an existing
     // appointment needs date/time to stay changeable, that's the whole point.
     setNewBookingSlotLocked(false);
+    setNewBookingMode('existing');
     setNewBookingQuery('');
     setNewBookingName(q.patientName || '');
     setNewBookingPhone(q.patientPhone || '');
@@ -3106,10 +3137,10 @@ export default function DoctorDashboard({
                                   <button
                                     type="button"
                                     onClick={() => openNewBookingModal(true, day.date, slot)}
-                                    className="w-full min-h-[52px] flex items-center justify-center text-slate-200 hover:text-purple-500 hover:bg-purple-50 rounded-lg transition-colors"
+                                    className="w-full min-h-[52px] flex items-center justify-center border border-dashed border-purple-200 text-purple-400 hover:text-purple-600 hover:border-purple-400 hover:bg-purple-50 rounded-lg transition-colors"
                                     title={t("bandlash")}
                                   >
-                                    <Plus className="w-4 h-4" />
+                                    <Plus className="w-5 h-5" strokeWidth={2.5} />
                                   </button>
                                 ) : (
                                   <div className="space-y-1.5">
@@ -3869,11 +3900,39 @@ export default function DoctorDashboard({
               </button>
             </div>
             <div className="p-5 flex flex-col gap-4 overflow-y-auto">
-              {/* Booking an existing patient is the only thing this modal does —
-                  name/phone are never directly typable, only ever set by picking
-                  a search result below. Creating a new patient lives solely in
-                  "Yangi bemor qo'shish" now. */}
-              {!editingQueueId && !newBookingSelectedPatientId && (
+              {/* Two ways to fill in the patient: pick an existing record
+                  (search-only, name/phone read-only) or register a brand-new
+                  one right here (editable name/phone, same creation call
+                  "Yangi bemor qo'shish" uses). Editing an existing queue entry
+                  skips this — the patient is already fixed. */}
+              {!editingQueueId && (
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl shrink-0">
+                  {([
+                    { mode: 'existing' as const, label: t("mavjud bemor") },
+                    { mode: 'new' as const, label: t("yangi bemor") },
+                  ]).map(({ mode, label }) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => {
+                        setNewBookingMode(mode);
+                        setNewBookingSelectedPatientId(null);
+                        setNewBookingQuery('');
+                        setNewBookingName('');
+                        setNewBookingPhone('');
+                      }}
+                      className={`flex-1 px-3 py-1.5 rounded-lg text-[11px] font-black transition-all ${
+                        newBookingMode === mode
+                          ? 'bg-white text-purple-600 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!editingQueueId && newBookingMode === 'existing' && !newBookingSelectedPatientId && (
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("bemorni qidirish")} *</label>
                 <input
@@ -3905,12 +3964,12 @@ export default function DoctorDashboard({
                 )}
                 {newBookingQuery.trim() && newBookingSearchResults.length === 0 && (
                   <p className="mt-1.5 text-[11px] text-slate-400 font-medium">
-                    {t("bemor topilmadi. yangi bemor uchun \"yangi bemor qo'shish\" tugmasidan foydalaning.")}
+                    {t("bemor topilmadi. \"yangi bemor\" bo'limiga o'ting.")}
                   </p>
                 )}
               </div>
               )}
-              {(editingQueueId || newBookingSelectedPatientId) && (
+              {(editingQueueId || (newBookingMode === 'existing' && newBookingSelectedPatientId)) && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("to'liq ism *")}</label>
@@ -3943,6 +4002,33 @@ export default function DoctorDashboard({
                     {t("boshqa bemorni tanlash")}
                   </button>
                 )}
+              </div>
+              )}
+              {!editingQueueId && newBookingMode === 'new' && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("to'liq ism *")}</label>
+                  <input
+                    type="text"
+                    value={newBookingName}
+                    onChange={(e) => setNewBookingName(e.target.value)}
+                    placeholder={t("ism familiya")}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("telefon")}</label>
+                  <input
+                    type="text"
+                    value={newBookingPhone}
+                    onChange={(e) => setNewBookingPhone(e.target.value)}
+                    placeholder="+998 90 123 45 67"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                  />
+                </div>
+                <p className="col-span-2 text-[11px] text-slate-400 font-medium">
+                  {t("login sifatida bemorning to'liq ismi, parol esa tizim tomonidan avtomatik yaratiladi — saqlagach ko'rsatiladi.")}
+                </p>
               </div>
               )}
               <div>
@@ -4051,7 +4137,7 @@ export default function DoctorDashboard({
               </button>
               <button
                 onClick={handleNewBooking}
-                disabled={!newBookingName.trim() || !newBookingDate || !newBookingTime || isSavingNewBooking || (!editingQueueId && !newBookingSelectedPatientId)}
+                disabled={!newBookingName.trim() || !newBookingDate || !newBookingTime || isSavingNewBooking || (!editingQueueId && newBookingMode === 'existing' && !newBookingSelectedPatientId)}
                 className="px-4 py-2 text-sm font-bold bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-colors shadow-md shadow-purple-500/20"
               >
                 {editingQueueId ? t("saqlash") : t("tasdiqlash")}
