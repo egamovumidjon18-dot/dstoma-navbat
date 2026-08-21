@@ -351,6 +351,7 @@ interface QueueItem {
   passportSerial?: string;
   telegramChatId?: string;
   complaint?: string;
+  reminderSentAt?: string;
 }
 
 const g = globalThis as any;
@@ -477,6 +478,12 @@ async function deductMaterialsForCompletedQueue(q: any) {
   const serviceId = q?.serviceId;
   if (!fDb || !clinicId || !queueId || !serviceId) return;
 
+  // Materials that this deduction pushed at-or-below minQuantity for the
+  // first time (was above it before, now isn't) — collected inside the
+  // transaction, alerted on after it commits, since a Telegram call has no
+  // place inside a Firestore transaction (it isn't retry-safe).
+  const newlyLow: { name: string; quantity: number; unit: string; minQuantity: number }[] = [];
+
   try {
     await runTransaction(fDb, async (tx: any) => {
       const usageRef = doc(fDb, `clinics/${clinicId}/materialUsage`, queueId);
@@ -506,10 +513,15 @@ async function deductMaterialsForCompletedQueue(q: any) {
         if (!snap.exists()) continue;
         const mat = snap.data() || {};
         const current = Number(mat.quantity) || 0;
+        const minQuantity = Number(mat.minQuantity) || 0;
         // Clamped at zero: negative stock would read as the warehouse owing
         // supplies rather than simply being empty.
-        tx.update(ref, { quantity: Math.max(0, current - qty) });
+        const updated = Math.max(0, current - qty);
+        tx.update(ref, { quantity: updated });
         applied.push({ materialId, name: mat.name || materialId, qty, unit: mat.unit || '' });
+        if (current > minQuantity && updated <= minQuantity) {
+          newlyLow.push({ name: mat.name || materialId, quantity: updated, unit: mat.unit || '', minQuantity });
+        }
       }
 
       tx.set(usageRef, {
@@ -520,6 +532,17 @@ async function deductMaterialsForCompletedQueue(q: any) {
         deductedAt: new Date().toISOString(),
       });
     });
+
+    if (newlyLow.length > 0 && q?.doctorId) {
+      const docChatId = await getDoctorTelegramChatId(q.doctorId);
+      if (docChatId) {
+        const lines = newlyLow.map((m) => `• ${m.name}: ${m.quantity} ${m.unit} (min: ${m.minQuantity} ${m.unit})`).join('\n');
+        sendDoctorTelegramMessage(
+          docChatId,
+          `⚠️ *Ombordagi material kamaymoqda!*\n\n${lines}\n\n"Material va Anjomlar" bo'limidan to'ldirishni unutmang.`
+        ).catch((e) => console.error('[Materials] Low-stock alert failed:', e.message));
+      }
+    }
   } catch (e) {
     console.error("[Materials] deduction failed for queue", queueId, e);
   }
@@ -570,6 +593,36 @@ async function saveDoctor(c: any) {
 async function deleteDoctor(id: string) {
   if (fDb) await deleteDoc(doc(fDb, "doctors", id));
   if (g._serverDoctors) g._serverDoctors = g._serverDoctors.filter((x:any) => x.id !== id);
+}
+
+// The doctor Telegram bot used to keep doctorId -> chatId only in
+// g._doctorTelegramChats (in-memory). That's fine on a long-running VPS
+// process, but this app now runs on Vercel's serverless functions, where a
+// cold start wipes it — every doctor notification (queue status changes,
+// reminders, low-stock alerts) would silently stop working until each doctor
+// happened to re-run /start. Doctor.telegramChatId is the persisted source of
+// truth; the in-memory map stays as a same-instance fast path only.
+async function getDoctorTelegramChatId(doctorId: string): Promise<string | null> {
+  const cached = g._doctorTelegramChats?.[doctorId];
+  if (cached) return String(cached);
+  const doctors = await getDoctors();
+  const found: any = doctors.find((d: any) => d.id === doctorId);
+  return found?.telegramChatId ? String(found.telegramChatId) : null;
+}
+async function getDoctorIdByTelegramChatId(chatId: string | number): Promise<string | null> {
+  const cachedKey = Object.keys(g._doctorTelegramChats || {}).find(
+    (key) => String(g._doctorTelegramChats[key]) === String(chatId)
+  );
+  if (cachedKey) return cachedKey;
+  const doctors = await getDoctors();
+  const found: any = doctors.find((d: any) => String(d.telegramChatId) === String(chatId));
+  return found?.id || null;
+}
+async function setDoctorTelegramChatId(doctorId: string, chatId: string | number | null) {
+  if (!g._doctorTelegramChats) g._doctorTelegramChats = {};
+  if (chatId) g._doctorTelegramChats[doctorId] = String(chatId);
+  else delete g._doctorTelegramChats[doctorId];
+  await saveDoctor({ id: doctorId, telegramChatId: chatId ? String(chatId) : null });
 }
 async function getDoctorClinicLinks() {
   if (fDb) {
@@ -1419,9 +1472,10 @@ app.post("/api/patients", rateLimiter(30, 60 * 1000), async (req, res) => {
   // Creating a brand-new record stays open — patients self-register here (public
   // site and Telegram bot) before they have any credentials to present. Editing
   // a record that already exists is what has to be proven.
+  const auth = await getAuthContext(req);
+  const isStaffForNewClinic = !!(auth.staff && auth.staff.clinicId === newPatient.clinicId);
   if (existingIdx !== -1) {
     const existing: any = patDb[existingIdx];
-    const auth = await getAuthContext(req);
     const isStaffForClinic = auth.staff && auth.staff.clinicId === existing.clinicId;
     const selfOrManaged = auth.patient && (
       // their own record
@@ -1434,6 +1488,18 @@ app.post("/api/patients", rateLimiter(30, 60 * 1000), async (req, res) => {
     if (!auth.isSuperAdmin && !isStaffForClinic && !selfOrManaged) {
       return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
     }
+  } else {
+    // The create path itself must stay open (see above), but useNameAsLogin
+    // and primaryDoctorId are only meant to be set by "Yangi bemor qo'shish"
+    // (an authenticated doctor/director action) — an unauthenticated caller
+    // hitting this endpoint directly could otherwise force a guessable
+    // name-based login, or attach a fabricated patient to a real doctor's
+    // roster/stats. Silently drop rather than reject, since a genuine
+    // self-registration request never sends these anyway.
+    if (!auth.isSuperAdmin && !isStaffForNewClinic) {
+      delete newPatient.useNameAsLogin;
+      delete newPatient.primaryDoctorId;
+    }
   }
 
   if (existingIdx === -1) {
@@ -1445,7 +1511,7 @@ app.post("/api/patients", rateLimiter(30, 60 * 1000), async (req, res) => {
       // name-based login instead of the random digits self-registration uses
       // — the doctor is handing credentials over immediately, so a login the
       // patient already knows by heart beats a code they'd have to write down.
-      newPatient.loginCode = req.body.useNameAsLogin && newPatient.fullName
+      newPatient.loginCode = newPatient.useNameAsLogin && newPatient.fullName
         ? generateUniqueLoginFromName(newPatient.fullName, patDb)
         : generateUniqueLoginCode(patDb);
     }
@@ -1593,7 +1659,7 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
   }
 
   // Send active notification to assigned doctor if linked on Telegram
-  const docChatId = g._doctorTelegramChats?.[doctorId];
+  const docChatId = await getDoctorTelegramChatId(doctorId);
   if (docChatId) {
     const textMsg = `🔔 *YANGI BEMOR NAVBATGA YOZILDI!* 🔔\n\n` +
       `🎫 *Chipta raqami:* #${ticketNo}\n` +
@@ -1665,7 +1731,7 @@ app.patch("/api/queues/:id", async (req, res) => {
         if (_idx >= 0) _qDb[_idx] = item;
       }
       // Notify doctor
-      const docChatId = g._doctorTelegramChats?.[item.doctorId];
+      const docChatId = await getDoctorTelegramChatId(item.doctorId);
       if (docChatId) {
         const statusLabel = item.status === 'calling' ? 'qabulxonaga chaqirildi 🟢' : (item.status === 'completed' ? 'tamomlandi ✅' : (item.status === 'cancelled' ? 'bekor qilindi ❌' : 'navbatda turibdi ⏳'));
         sendDoctorTelegramMessage(docChatId, `ℹ️ *Tizim yangilanishi:* #${item.number} - ${item.patientName} navbat holati *${statusLabel}* ga o'zgartirildi.`).catch(e => {
@@ -2152,6 +2218,55 @@ app.delete("/api/reminders/:id", async (req, res) => {
   }
   await deleteReminder(id);
   res.json({ ok: true });
+});
+
+// Runs once a day via Vercel Cron (see vercel.json) — no background-job
+// infrastructure exists otherwise, and the Hobby plan only allows daily-or-
+// coarser schedules anyway, so this is a day-before nudge rather than an
+// exact T-24h one: everything with appointmentDate === tomorrow gets a single
+// reminder the day before, whatever time of day the job actually runs.
+// Vercel signs cron requests with this bearer token (see CRON_SECRET in the
+// project's env vars) — without it this endpoint would be a public trigger
+// anyone could hit repeatedly.
+app.get("/api/cron/appointment-reminders", async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  if (secret && req.headers.authorization !== `Bearer ${secret}`) {
+    return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+  }
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+  const [allQueues, allPatients, allDoctors, allServices] = await Promise.all([
+    getQueues(), getPatients(), getDoctors(), getServices(),
+  ]);
+  const targets = allQueues.filter(
+    (q: any) => q.status === 'scheduled' && q.appointmentDate === tomorrowStr && !q.reminderSentAt
+  );
+
+  let sent = 0;
+  for (const q of targets) {
+    const patient: any = q.patientId ? allPatients.find((p: any) => p.id === q.patientId) : null;
+    const chatId = q.telegramChatId || patient?.telegramChatId;
+    if (!chatId) continue;
+    const doc: any = allDoctors.find((d: any) => d.id === q.doctorId);
+    const srv: any = allServices.find((s: any) => s.id === q.serviceId);
+    const text =
+      `⏰ *Eslatma:* ertaga (${q.appointmentDate}) soat *${q.appointmentTime || '—'}* da navbatingiz bor.\n\n` +
+      `👨‍⚕️ *Shifokor:* ${doc ? doc.name : 'Belgilanmagan'}\n` +
+      (srv ? `💼 *Xizmat:* ${srv.name}\n` : '') +
+      `\nKela olmasangiz, iltimos oldindan bekor qiling.`;
+    try {
+      await sendBgTelegramMessage(chatId, text, q.clinicId);
+      await saveQueue({ ...q, reminderSentAt: new Date().toISOString() });
+      sent++;
+    } catch (e: any) {
+      console.error('[Cron] Reminder send failed for queue', q.id, e.message);
+    }
+  }
+
+  res.json({ ok: true, checked: targets.length, sent });
 });
 
 app.get("/api/services", async (req, res) => {
@@ -3166,7 +3281,7 @@ async function handleTelegramUpdate(token: string, update: any) {
         }
       } else {
         if (isDoctorBot) {
-          const matchedDoctorId = Object.keys(g._doctorTelegramChats || {}).find(key => String(g._doctorTelegramChats[key]) === String(chatId));
+          const matchedDoctorId = await getDoctorIdByTelegramChatId(chatId);
           if (matchedDoctorId) {
             // Logged-in doctor typing free text → treat it as a patient-name lookup
             // for the AI pre-appointment summary feature.
@@ -3202,7 +3317,7 @@ async function handleTelegramUpdate(token: string, update: any) {
 }
 
 async function handleDoctorCabinetCommand(token: string, chatId: number) {
-  const matchedDoctorId = Object.keys(g._doctorTelegramChats || {}).find(key => String(g._doctorTelegramChats[key]) === String(chatId));
+  const matchedDoctorId = await getDoctorIdByTelegramChatId(chatId);
   if (matchedDoctorId) {
     await sendDoctorDashboard(token, chatId, matchedDoctorId, `👨‍⚕️ *Shifokor boshqaruv paneli:*`);
   } else {
@@ -3553,7 +3668,7 @@ async function handleRegistrationStep(token: string, chatId: number, session: an
     const doc = serverDoctors.find((d: any) => d.login.toLowerCase() === loginVal && verifyPassword(pwdVal, d.password));
     
     if (doc) {
-      g._doctorTelegramChats[doc.id] = String(chatId);
+      await setDoctorTelegramChatId(doc.id, chatId);
       delete botSessions[sessionKey(token, chatId)];
       
       const successText = `🎉 *Tizimga muvaffaqiyatli kirdingiz!* 🎉\n\n` +
@@ -3679,7 +3794,7 @@ async function handleRegistrationStep(token: string, chatId: number, session: an
       };
       await savePaymentReceipt(receipt);
 
-      const doctorChatId = g._doctorTelegramChats?.[session.receiptDoctorId || ''];
+      const doctorChatId = session.receiptDoctorId ? await getDoctorTelegramChatId(session.receiptDoctorId) : null;
       if (doctorChatId) {
         const doctorBotToken = activeDoctorBotToken;
         if (doctorBotToken) {
@@ -3775,7 +3890,7 @@ async function proceedQueueBooking(token: string, chatId: number, clinicId: stri
 
     // Notify the assigned doctor's own bot chat, if they're logged in there — same
     // notification the web app's booking flow triggers via POST /api/queues.
-    const docChatId = (globalThis as any)._doctorTelegramChats?.[doctorId];
+    const docChatId = await getDoctorTelegramChatId(doctorId);
     if (docChatId) {
       const doctorMsg = `🔔 *YANGI BEMOR NAVBATGA YOZILDI!* 🔔\n\n` +
         `🎫 *Chipta raqami:* #${ticketNo}\n` +
@@ -4000,7 +4115,7 @@ async function handleDoctorCallbackQuery(token: string, chatId: number, callback
 
   if (callbackData.startsWith('doc_logout_')) {
     const docId = callbackData.replace('doc_logout_', '');
-    delete g._doctorTelegramChats[docId];
+    await setDoctorTelegramChatId(docId, null);
     await tgApi(token, 'sendMessage', {
       chat_id: chatId,
       text: "🚪 Shifokor shaxsiy profilidan chiqdingiz!"

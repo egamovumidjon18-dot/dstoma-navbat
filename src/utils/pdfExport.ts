@@ -137,6 +137,72 @@ export function exportXrayReportPdf(patientName: string | undefined, xray: XRay,
   downloadDoc(doc, `rentgen_hisobot_${xray.id}`);
 }
 
+export function exportClinicReportPdf(params: {
+  clinicName: string;
+  periodLabel: string;
+  revenue: number;
+  visits: number;
+  newPatients: number;
+  returningPatients: number;
+  avgDoctorRating: string | null;
+  treatmentsData: { name: string; value: number }[];
+  doctorBreakdown: { name: string; visits: number; revenue: number; rating: number }[];
+}) {
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text(`${params.clinicName} — Hisobot`, 14, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text(`Davr: ${params.periodLabel}`, 14, 25);
+  doc.text(`Shakllantirilgan sana: ${new Date().toLocaleDateString('uz-UZ')}`, 14, 30);
+  doc.setTextColor(0);
+
+  autoTable(doc, {
+    startY: 36,
+    head: [["Ko'rsatkich", "Qiymat"]],
+    body: [
+      ["Jami tushum", `${params.revenue.toLocaleString('uz-UZ')} so'm`],
+      ["Tashriflar soni", String(params.visits)],
+      ["Yangi bemorlar", String(params.newPatients)],
+      ["Qayta kelgan bemorlar", String(params.returningPatients)],
+      ["O'rtacha shifokor reytingi", params.avgDoctorRating || '-'],
+    ],
+    styles: { fontSize: 10 },
+    theme: 'plain',
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 70 } },
+  });
+
+  const afterSummaryY = (doc as any).lastAutoTable.finalY + 8;
+  doc.setFontSize(12);
+  doc.text("Shifokorlar bo'yicha", 14, afterSummaryY);
+  autoTable(doc, {
+    startY: afterSummaryY + 4,
+    head: [["Shifokor", "Tashriflar", "Daromad (so'm)", "Reyting"]],
+    body: params.doctorBreakdown.map((d) => [
+      d.name,
+      String(d.visits),
+      d.revenue.toLocaleString('uz-UZ'),
+      d.rating.toFixed(1),
+    ]),
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: [16, 185, 129] },
+  });
+
+  const afterDoctorsY = (doc as any).lastAutoTable.finalY + 8;
+  doc.setFontSize(12);
+  doc.text("Eng ko'p bajarilgan muolajalar", 14, afterDoctorsY);
+  autoTable(doc, {
+    startY: afterDoctorsY + 4,
+    head: [["Muolaja", "Soni"]],
+    body: params.treatmentsData.map((t) => [t.name, String(t.value)]),
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: [99, 102, 241] },
+  });
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  doc.save(`hisobot_${stamp}.pdf`);
+}
+
 export function exportTreatmentRecordPdf(patientName: string | undefined, item: TreatmentItem) {
   const doc = newDoc("Muolaja Tafsiloti", patientName);
   autoTable(doc, {

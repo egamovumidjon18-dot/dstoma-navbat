@@ -1352,6 +1352,7 @@ export default function DirectorDashboard({
             doctors={clinicDoctors}
             patients={clinicPatientsList}
             clinicId={currentClinicId}
+            clinicName={clinicNameStr}
             language={language}
             initialTimeRange={
               reportPeriod === 'kunlik' ? 'daily' : reportPeriod === 'oylik' ? 'monthly' : reportPeriod === 'yillik' ? 'yearly' : 'weekly'

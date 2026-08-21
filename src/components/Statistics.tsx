@@ -8,13 +8,14 @@ import {
 } from 'recharts';
 import {
   TrendingUp, Users, Activity, Star,
-  Download, FileSpreadsheet, ChevronDown, DollarSign,
+  Download, ChevronDown, DollarSign,
   UserCheck, UserPlus, Users2, HeartPulse,
   CheckCircle2, Clock, XCircle, Receipt, Package, AlertTriangle, X, ChevronRight
 } from 'lucide-react';
 import { QueueItem, Doctor, Service, Patient, PaymentReceipt, Reminder } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
 import { TRANSLATIONS, Language } from '../translations';
+import { exportClinicReportPdf } from '../utils/pdfExport';
 
 type StatsDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
 const STATS_TRANSLATIONS: Record<string, StatsDictEntry> = {
@@ -65,6 +66,7 @@ interface StatisticsProps {
   doctors?: Doctor[];
   patients?: Patient[];
   clinicId?: string;
+  clinicName?: string;
   staffToken?: string | null;
   language?: Language;
   // Lets a caller land the patient directly on a specific granularity — e.g.
@@ -73,7 +75,7 @@ interface StatisticsProps {
   initialTimeRange?: 'daily' | 'weekly' | 'monthly' | 'yearly';
 }
 
-export default function Statistics({ queues = [], services = [], doctors = [], patients = [], clinicId, staffToken, language, initialTimeRange }: StatisticsProps) {
+export default function Statistics({ queues = [], services = [], doctors = [], patients = [], clinicId, clinicName, staffToken, language, initialTimeRange }: StatisticsProps) {
   const localLang: keyof StatsDictEntry | null =
     (language === "ru" || language === "en" || language === "kk" || language === "ky" || language === "tg" || language === "tk")
       ? language
@@ -252,6 +254,19 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
       ? (ratedDoctors.reduce((sum, d) => sum + (d.rating || 0), 0) / ratedDoctors.length).toFixed(1)
       : null;
 
+    // Per-doctor breakdown for the selected period — feeds the PDF report
+    // export; reuses filteredQueues/getServicePrice so it can't disagree with
+    // the totals above.
+    const doctorBreakdown = doctors.map(d => {
+      const docQueues = filteredQueues.filter(q => q.doctorId === d.id);
+      return {
+        name: d.name,
+        visits: docQueues.length,
+        revenue: docQueues.reduce((sum, q) => sum + getServicePrice(q.serviceId || ''), 0),
+        rating: d.rating || 0,
+      };
+    }).sort((a, b) => b.visits - a.visits);
+
     // Real new-vs-returning patient counts, derived from each patient's full queue
     // history (matched by normalized phone, the only join key QueueItem has) rather
     // than a stored "registered at" field, which doesn't exist on Patient.
@@ -307,6 +322,7 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
       revenueData,
       treatmentsData,
       avgDoctorRating,
+      doctorBreakdown,
       newPatientsInPeriod,
       returningPatientsInPeriod,
       ageGroupData: ageBuckets,
@@ -502,10 +518,20 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
 
           <div className="h-8 w-px bg-slate-200 hidden md:block"></div>
 
-          <button className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-sm font-bold transition-colors shadow-sm">
-            <FileSpreadsheet className="w-4 h-4 text-emerald-500" /> Excel
-          </button>
-          <button className="flex items-center gap-2 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-emerald-500/20">
+          <button
+            onClick={() => exportClinicReportPdf({
+              clinicName: clinicName || clinicId || 'Klinika',
+              periodLabel: t(timeRange === 'daily' ? 'kunlik' : timeRange === 'weekly' ? 'haftalik' : timeRange === 'monthly' ? 'oylik' : 'yillik'),
+              revenue: stats.revenue,
+              visits: stats.visits,
+              newPatients: stats.newPatientsInPeriod,
+              returningPatients: stats.returningPatientsInPeriod,
+              avgDoctorRating: stats.avgDoctorRating,
+              treatmentsData: stats.treatmentsData,
+              doctorBreakdown: stats.doctorBreakdown,
+            })}
+            className="flex items-center gap-2 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-emerald-500/20"
+          >
             <Download className="w-4 h-4" /> PDF
           </button>
         </div>

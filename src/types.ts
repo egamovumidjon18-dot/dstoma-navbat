@@ -48,6 +48,11 @@ export interface Doctor {
   // receipts manually; see PaymentReceipt).
   paymentCardNumber?: string;
   paymentPhone?: string;
+  // Set once the doctor logs into the doctor-facing Telegram bot (server.ts) —
+  // persisted here instead of only in server memory so it survives serverless
+  // cold starts. Never exposed via GET /api/doctors (see the response mapping
+  // there, which whitelists fields the same way password is excluded).
+  telegramChatId?: string;
   // Doctor-configurable weekly schedule used to render the "Rejalashtirilgan"
   // time-slot grid. Falls back to a default (08:00-18:00, 60min, 13:00-14:00
   // lunch) when absent — see DEFAULT_WORKING_HOURS in DoctorDashboard.tsx.
@@ -209,6 +214,10 @@ export interface QueueItem {
   passportSerial?: string; // Django models matching
   telegramChatId?: string; // Telegram Chat ID for automated updates
   complaint?: string; // Patient complaint
+  // Set by the daily reminder cron job (server.ts) once a day-before nudge
+  // has gone out for this appointment — the idempotency guard against the
+  // job running more than once for the same day.
+  reminderSentAt?: string;
 }
 
 export interface SaaSPayment {
