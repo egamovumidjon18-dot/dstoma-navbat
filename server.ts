@@ -4795,12 +4795,34 @@ async function startServer() {
 async function ensureWebhookRegistered(token: string, label: string): Promise<boolean> {
   if (!token) return false;
   try {
-    const domain = (
+    let domain = (
       process.env.APP_URL ||
       (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "") ||
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
       lastActiveDomain
     ).trim().replace(/\/$/, "");
+
+    // Telegram does NOT follow HTTP redirects when delivering webhook updates —
+    // it just logs the redirect status as a delivery error and gives up. If
+    // APP_URL (or Vercel's own production-URL env vars) points at a domain
+    // that itself redirects elsewhere (e.g. the bare apex domain 301/308-ing
+    // to the www subdomain, a very common DNS setup), every update silently
+    // fails to reach the bot even though setWebhook itself reports success.
+    // Resolving the redirect here means this self-heals regardless of which
+    // domain form ends up in the env var.
+    try {
+      const probe = await fetch(domain, { method: 'GET', redirect: 'follow' });
+      const resolvedOrigin = new URL(probe.url).origin;
+      if (resolvedOrigin && resolvedOrigin !== domain) {
+        console.log(`[Telegram Webhook] ${label}: ${domain} redirects to ${resolvedOrigin}, using the resolved domain`);
+        domain = resolvedOrigin;
+      }
+    } catch (probeErr) {
+      // If the probe itself fails, fall back to the configured domain as-is
+      // rather than blocking webhook registration entirely.
+      console.warn(`[Telegram Webhook] ${label}: redirect probe for ${domain} failed:`, probeErr);
+    }
+
     const expectedUrl = `${domain}/api/telegram-webhook?token=${encodeURIComponent(token)}`;
 
     const infoRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
