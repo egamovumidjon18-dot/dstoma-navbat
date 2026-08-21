@@ -159,6 +159,15 @@ export function useAppState() {
   const staffAuthHeaders = (): Record<string, string> =>
     staffToken ? { Authorization: `Bearer ${staffToken}` } : {};
 
+  // Mirrors of the two tokens above for use inside the mount-once polling effect
+  // below (loadServerData) — that effect's closure is captured once on mount, so
+  // reading `staffToken`/`superadminToken` directly there would keep seeing
+  // whatever they were (usually null) at that moment, even after a later login.
+  const superadminTokenRef = useRef<string | null>(superadminToken);
+  const staffTokenRef = useRef<string | null>(staffToken);
+  useEffect(() => { superadminTokenRef.current = superadminToken; }, [superadminToken]);
+  useEffect(() => { staffTokenRef.current = staffToken; }, [staffToken]);
+
   // Stateful SaaS Payments
   const [saasPayments, setSaasPayments] = useState<SaaSPayment[]>([]);
 
@@ -595,7 +604,10 @@ export function useAppState() {
       }
 
       try {
-        const pRes = await fetch('/api/payments');
+        const pAuthHeaders: Record<string, string> = {};
+        if (superadminTokenRef.current) pAuthHeaders.Authorization = `Bearer ${superadminTokenRef.current}`;
+        if (staffTokenRef.current) pAuthHeaders.Authorization = `Bearer ${staffTokenRef.current}`;
+        const pRes = await fetch('/api/payments', { headers: pAuthHeaders });
         if (pRes.ok) {
           const pList = await pRes.json();
           pList.sort((a: any, b: any) => new Date(b.dueDate || 0).getTime() - new Date(a.dueDate || 0).getTime());
@@ -953,7 +965,7 @@ export function useAppState() {
     try {
       await fetch('/api/payments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...staffAuthHeaders() },
         body: JSON.stringify(newPayment)
       });
     } catch (e) {
@@ -976,7 +988,7 @@ export function useAppState() {
     try {
       await fetch('/api/payments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...superAdminAuthHeaders() },
         body: JSON.stringify(updatedPayment)
       });
     } catch (e) {
@@ -1023,7 +1035,7 @@ export function useAppState() {
     try {
       await fetch('/api/payments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...staffAuthHeaders() },
         body: JSON.stringify(request)
       });
     } catch (e) {
@@ -1084,7 +1096,7 @@ export function useAppState() {
     try {
       await fetch('/api/payments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...superAdminAuthHeaders() },
         body: JSON.stringify(trialInvoice)
       });
     } catch (e) {

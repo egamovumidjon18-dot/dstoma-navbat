@@ -1472,22 +1472,42 @@ app.get("/api/patients/search", async (req, res) => {
   res.json(results.map((p: any) => { const { password, ...safe } = p; return safe; }));
 });
 
+// SaaS billing records (clinic -> platform payments). Superadmin sees every clinic;
+// clinic staff (director or doctor) only ever gets their own clinic's rows.
 app.get("/api/payments", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-  res.json(await getPayments());
+  const auth = await getAuthContext(req);
+  if (!auth.isSuperAdmin && !auth.staff) {
+    return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+  }
+  const all = await getPayments();
+  res.json(auth.isSuperAdmin ? all : all.filter((p: any) => p.clinicId === auth.staff!.clinicId));
 });
 app.post("/api/payments", rateLimiter(30, 60 * 1000), async (req, res) => {
   const p = req.body;
+  // allowDoctor: a doctor can also trigger a premium-upgrade request from
+  // Settings (Doctor and Director dashboards share that flow), not just directors.
+  if (!(await isAuthorizedForClinic(req, p.clinicId, true))) {
+    return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+  }
   await savePayment(p);
   res.status(201).json(p);
 });
 
 app.get("/api/reports", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-  res.json(await getReports());
+  const auth = await getAuthContext(req);
+  if (!auth.isSuperAdmin && !auth.staff) {
+    return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+  }
+  const all = await getReports();
+  res.json(auth.isSuperAdmin ? all : all.filter((r: any) => r.clinicId === auth.staff!.clinicId));
 });
 app.post("/api/reports", rateLimiter(30, 60 * 1000), async (req, res) => {
   const r = req.body;
+  if (!(await isAuthorizedForClinic(req, r.clinicId))) {
+    return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+  }
   await saveReport(r);
   res.status(201).json(r);
 });
