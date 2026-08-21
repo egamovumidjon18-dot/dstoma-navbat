@@ -18,10 +18,12 @@ export default function DoctorAvailability({
   doctor,
   queues,
   t,
+  onJoinWaitlist,
 }: {
   doctor: Doctor;
   queues: QueueItem[];
   t: (s: string) => string;
+  onJoinWaitlist?: (doctorId: string) => void;
 }) {
   const [weekOffset, setWeekOffset] = useState(0);
 
@@ -130,6 +132,15 @@ export default function DoctorAvailability({
           <span className="w-2.5 h-2.5 rounded bg-slate-100 border border-slate-200"></span>
           <span className="text-[9px] font-bold text-slate-500">{t('tushlik')}</span>
         </div>
+        {onJoinWaitlist && (
+          <button
+            type="button"
+            onClick={() => onJoinWaitlist(doctor.id)}
+            className="ml-auto text-[10px] font-black text-purple-600 hover:text-purple-700 hover:underline"
+          >
+            🔔 {t("navbat bo'shasa, xabar bering")}
+          </button>
+        )}
       </div>
     </div>
   );

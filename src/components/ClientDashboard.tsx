@@ -116,6 +116,7 @@ export default function ClientDashboard({
       "tushlik": { ru: "Обед", en: "Lunch", kk: "Түскі ас", ky: "Түшкү тамак", tg: "Ноништа", tk: "Öýle nahary" },
       "band": { ru: "Занято", en: "Booked", kk: "Бос емес", ky: "Бош эмес", tg: "Машғул", tk: "Meşgul" },
       "bo'sh": { ru: "Свободно", en: "Free", kk: "Бос", ky: "Бош", tg: "Холӣ", tk: "Boş" },
+      "navbat bo'shasa, xabar bering": { ru: "Сообщите, если освободится место", en: "Notify me if a slot opens", kk: "Орын босаса, хабарлаңыз", ky: "Орун бошосо, кабарлаңыз", tg: "Агар ҷой холӣ шавад, хабар диҳед", tk: "Orun boşasa, habar beriň" },
 
       "tanlangan filial": { ru: "Выбранный филиал", en: "Selected Branch", kk: "Таңдалған филиал", ky: "Тандалган филиал", tg: "Филиали интихобшуда", tk: "Saýlanan şahamça" },
       "faol filial monito'rlari": { ru: "Мониторинг активного филиала", en: "Active Branch Monitoring", kk: "Белсенді филиал мониторингі", ky: "Активдүү филиал мониторинги", tg: "Мониторинги филиали фаъол", tk: "Işjeň şahamça monitoringi" },
@@ -364,6 +365,7 @@ export default function ClientDashboard({
   const [allergies, setAllergies] = useState("Yo'q");
   const [chronicDiseases, setChronicDiseases] = useState("Sog'lom");
   const [hasInfection, setHasInfection] = useState<boolean>(false);
+  const [referredBy, setReferredBy] = useState('');
 
   // Cabinet Specific States
   const [telegramIdInput, setTelegramIdInput] = useState('57896431');
@@ -964,6 +966,7 @@ export default function ClientDashboard({
       fullName,
       password,
       hasInfection,
+      referredBy: referredBy.trim() || undefined,
       // telegramIdInput defaults to a leftover demo placeholder ('57896431')
       // that was never meant to represent a real chat id — every registration
       // used to send it verbatim, so any two patients who both left it
@@ -1140,6 +1143,36 @@ export default function ClientDashboard({
     // Return to the cabinet so the fresh ticket is immediately visible in "Mening navbatlarim".
     setActiveSubView('cabinet');
     showToast(`Navbatingiz olindi! Elektron chipta raqamingiz: #${ticketNo}`);
+  };
+
+  // "Notify me when this doctor next has an opening" — the self-service
+  // booking flow has no date/time picker (see handleBookQueue above), so a
+  // slot-specific waitlist has nothing to attach to; this is per-doctor
+  // instead. Needs a Telegram link to actually deliver the notification.
+  const handleJoinWaitlist = async (doctorId: string) => {
+    const chatId = currentUser?.telegramChatId || telegramIdInput;
+    if (!chatId) {
+      showToast("Xabar olish uchun Sozlamalarda Telegram ID'ingizni ulang.", "error");
+      return;
+    }
+    try {
+      const res = await fetch(`${getApiUrl()}/api/waitlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clinicId: bookingClinicId || selectedClinic?.id,
+          doctorId,
+          patientId: currentUser?.id,
+          patientName: currentUser?.fullName || 'Mehmon',
+          telegramChatId: chatId,
+        }),
+      });
+      if (!res.ok) throw new Error('Waitlist join rejected');
+      showToast("Bo'sh joy chiqsa, sizga Telegram orqali xabar beramiz!");
+    } catch (err) {
+      console.warn('[ClientDashboard] Waitlist join failed', err);
+      showToast("Kutish ro'yxatiga qo'shishda xatolik yuz berdi.", "error");
+    }
   };
 
   const [servicesSearchTerm, setServicesSearchTerm] = useState('');
@@ -1330,6 +1363,20 @@ export default function ClientDashboard({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Xavfsiz parol kiriting"
+                className="w-full bg-slate-50/70 text-xs font-semibold text-slate-800 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 focus:outline-none transition-all placeholder:text-slate-400"
+              />
+            </div>
+
+            {/* Referral tracking */}
+            <div>
+              <label className="text-xs font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
+                Sizni kim tavsiya qildi? (ixtiyoriy)
+              </label>
+              <input
+                type="text"
+                value={referredBy}
+                onChange={(e) => setReferredBy(e.target.value)}
+                placeholder="Masalan: do'stim Aziz, Instagram..."
                 className="w-full bg-slate-50/70 text-xs font-semibold text-slate-800 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 focus:outline-none transition-all placeholder:text-slate-400"
               />
             </div>
@@ -1584,7 +1631,7 @@ export default function ClientDashboard({
                 out of sync with what the doctor actually sees. */}
             {bookingDoctorId && (() => {
               const pickedDoctor = doctors.find((d) => d.id === bookingDoctorId);
-              return pickedDoctor ? <DoctorAvailability doctor={pickedDoctor} queues={queues} t={t} /> : null;
+              return pickedDoctor ? <DoctorAvailability doctor={pickedDoctor} queues={queues} t={t} onJoinWaitlist={handleJoinWaitlist} /> : null;
             })()}
 
             {/* Step 3: Complaint (optional) */}

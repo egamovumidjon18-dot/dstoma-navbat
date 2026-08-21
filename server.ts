@@ -685,6 +685,60 @@ async function deleteReminder(id: string) {
   if (g._serverReminders) g._serverReminders = g._serverReminders.filter((x: any) => x.id !== id);
 }
 
+// Per-doctor (not per-slot) waitlist: the self-service booking flow doesn't
+// let a patient pick a future date/time at all (see ClientDashboard's
+// booking wizard — it's an immediate walk-in ticket), so a slot-specific
+// waitlist has nothing to attach to. "Notify me when this doctor next has an
+// opening" is the version that actually fits how booking works today.
+async function getWaitlist() {
+  if (fDb) {
+    const s = await getDocs(collection(fDb, "waitlist"));
+    return s.docs.map((d: any) => ({ ...d.data(), id: d.id }));
+  }
+  return g._serverWaitlist || [];
+}
+async function saveWaitlistEntry(c: any) {
+  const clean = stripUndefined(c);
+  if (fDb) await setDoc(doc(fDb, "waitlist", clean.id), clean, { merge: true });
+  else {
+    if (!g._serverWaitlist) g._serverWaitlist = [];
+    const idx = g._serverWaitlist.findIndex((x: any) => x.id === clean.id);
+    if (idx >= 0) g._serverWaitlist[idx] = { ...g._serverWaitlist[idx], ...clean };
+    else g._serverWaitlist.push(clean);
+  }
+}
+async function deleteWaitlistEntry(id: string) {
+  if (fDb) await deleteDoc(doc(fDb, "waitlist", id));
+  if (g._serverWaitlist) g._serverWaitlist = g._serverWaitlist.filter((x: any) => x.id !== id);
+}
+
+// Called whenever a queue's status changes to 'cancelled' — notifies the
+// longest-waiting patient on that doctor's waitlist (first-come-first-served,
+// one notification at a time rather than a broadcast, since only one opening
+// actually exists) and removes them from the list either way, so a bad
+// chat id can't wedge everyone behind it forever.
+async function notifyNextWaitlistEntry(doctorId: string, clinicId: string) {
+  const entries = (await getWaitlist()).filter((w: any) => w.doctorId === doctorId);
+  if (entries.length === 0) return;
+  entries.sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  const next: any = entries[0];
+  try {
+    const doctors = await getDoctors();
+    const doc: any = doctors.find((d: any) => d.id === doctorId);
+    if (next.telegramChatId) {
+      await sendBgTelegramMessage(
+        next.telegramChatId,
+        `🔔 *Bo'sh joy chiqdi!*\n\nAssalomu alaykum, ${next.patientName}! Siz kutgan shifokor (${doc?.name || 'shifokor'}) uchun bo'sh joy paydo bo'ldi. Tez orada navbat oling — joy tez to'lib qolishi mumkin.`,
+        clinicId
+      );
+    }
+  } catch (e) {
+    console.error('[Waitlist] Notify failed:', e);
+  } finally {
+    await deleteWaitlistEntry(next.id);
+  }
+}
+
 async function getServices() {
   if (fDb) {
     const s = await getDocs(collection(fDb, "services"));
@@ -1799,10 +1853,14 @@ app.patch("/api/queues/:id", async (req, res) => {
         } else if (item.status === 'calling') {
           sendBgTelegramMessage(finalTgChatId, `🔔 *CHIPTANGIZ KELDI!* 🔔\n\nAssalomu alaykum! Sizni shifokor hozir kabinetda kutmoqda. Kechikmasdan kirishingiz so'raladi. 🦷\n🎫 Chiptangiz: *#${item.number}*`, item.clinicId).catch(e => { console.error(`[Telegram] Patient notification failed:`, e.message); });
         } else if (item.status === 'completed') {
-          sendBgTelegramMessage(finalTgChatId, `✅ *Rahmat!* \n\nShifokor ko'rigi muvaffaqiyatli yakunlandi. Salomat bo'ling! Iltimos, shaxsiy kabinetingizda shifokorga baho bering. ⭐`, item.clinicId).catch(e => { console.error(`[Telegram] Patient notification failed:`, e.message); });
+          sendBgTelegramMessage(finalTgChatId, `✅ *Rahmat!* \n\nShifokor ko'rigi muvaffaqiyatli yakunlandi. Salomat bo'ling! Xizmatimizni qanday baholaysiz?`, item.clinicId, buildRatingKeyboard(item.id!)).catch(e => { console.error(`[Telegram] Patient notification failed:`, e.message); });
         } else if (item.status === 'cancelled') {
           sendBgTelegramMessage(finalTgChatId, `❌ *Diqqat!* \n\nSizning *#${item.number}* sonli navbatingiz bekor qilindi.`, item.clinicId).catch(e => { console.error(`[Telegram] Patient notification failed:`, e.message); });
         }
+      }
+
+      if (item.status === 'cancelled' && itemMatch.status !== 'cancelled') {
+        notifyNextWaitlistEntry(item.doctorId, item.clinicId).catch(e => console.error('[Waitlist] Notify failed:', e));
       }
 
       // Generate daily report snapshot
@@ -2220,6 +2278,28 @@ app.delete("/api/reminders/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
+// Join a doctor's waitlist — public like queue booking itself (a patient
+// waiting for an opening has the same "no credentials yet" problem a
+// first-time booking does), just rate-limited against spam joins.
+app.post("/api/waitlist", rateLimiter(10, 60 * 1000), async (req, res) => {
+  const { clinicId, doctorId, patientId, patientName, telegramChatId } = req.body;
+  if (!clinicId || !doctorId || !patientName || !telegramChatId) {
+    return res.status(400).json({ ok: false, error: "clinicId, doctorId, patientName va telegramChatId talab qilinadi" });
+  }
+  const existing = (await getWaitlist()).find(
+    (w: any) => w.doctorId === doctorId && String(w.telegramChatId) === String(telegramChatId)
+  );
+  if (existing) return res.status(201).json(existing);
+  const entry = {
+    id: 'wl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+    clinicId, doctorId, patientId, patientName: sanitizeString(String(patientName)),
+    telegramChatId: String(telegramChatId),
+    createdAt: new Date().toISOString(),
+  };
+  await saveWaitlistEntry(entry);
+  res.status(201).json(entry);
+});
+
 // Runs once a day via Vercel Cron (see vercel.json) — no background-job
 // infrastructure exists otherwise, and the Hobby plan only allows daily-or-
 // coarser schedules anyway, so this is a day-before nudge rather than an
@@ -2256,9 +2336,15 @@ app.get("/api/cron/appointment-reminders", async (req, res) => {
       `⏰ *Eslatma:* ertaga (${q.appointmentDate}) soat *${q.appointmentTime || '—'}* da navbatingiz bor.\n\n` +
       `👨‍⚕️ *Shifokor:* ${doc ? doc.name : 'Belgilanmagan'}\n` +
       (srv ? `💼 *Xizmat:* ${srv.name}\n` : '') +
-      `\nKela olmasangiz, iltimos oldindan bekor qiling.`;
+      `\nKelishingizni tasdiqlaysizmi?`;
+    const replyMarkup = {
+      inline_keyboard: [[
+        { text: '✅ Kelaman', callback_data: `confirm_queue_${q.id}` },
+        { text: '❌ Bekor qilaman', callback_data: `cancel_queue_${q.id}` },
+      ]],
+    };
     try {
-      await sendBgTelegramMessage(chatId, text, q.clinicId);
+      await sendBgTelegramMessage(chatId, text, q.clinicId, replyMarkup);
       await saveQueue({ ...q, reminderSentAt: new Date().toISOString() });
       sent++;
     } catch (e: any) {
@@ -2266,7 +2352,38 @@ app.get("/api/cron/appointment-reminders", async (req, res) => {
     }
   }
 
-  res.json({ ok: true, checked: targets.length, sent });
+  // Recall nudge: patients whose last completed visit was exactly 180 days
+  // ago today get a single "vaqti keldi" message. Checking for an exact-day
+  // match (rather than "180+ days") is the idempotency guard — each patient
+  // crosses that boundary on only one calendar day, so this can't re-fire
+  // daily without a separate sentAt flag. Skipped if they already have an
+  // upcoming ticket, since nudging someone who's already booked is just noise.
+  let recalled = 0;
+  const activeStatuses = new Set(['pending', 'scheduled', 'calling', 'in_progress']);
+  const patientsWithActiveQueue = new Set(
+    allQueues.filter((q: any) => activeStatuses.has(q.status) && q.patientId).map((q: any) => q.patientId)
+  );
+  for (const p of allPatients as any[]) {
+    if (!p.telegramChatId || patientsWithActiveQueue.has(p.id)) continue;
+    const visits = p.clinicVisits || [];
+    if (visits.length === 0) continue;
+    const lastVisit = visits.reduce((latest: any, v: any) => (!latest || new Date(v.date) > new Date(latest.date) ? v : latest), null);
+    if (!lastVisit?.date) continue;
+    const daysSince = Math.floor((Date.now() - new Date(lastVisit.date).getTime()) / (24 * 60 * 60 * 1000));
+    if (daysSince !== 180) continue;
+    try {
+      await sendBgTelegramMessage(
+        p.telegramChatId,
+        `🦷 *Nazorat vaqti keldi!*\n\nAssalomu alaykum, ${p.fullName}! Oxirgi tashrifingizdan 6 oy o'tdi — muntazam tekshiruv uchun navbat olishni tavsiya qilamiz.`,
+        p.clinicId
+      );
+      recalled++;
+    } catch (e: any) {
+      console.error('[Cron] Recall send failed for patient', p.id, e.message);
+    }
+  }
+
+  res.json({ ok: true, checked: targets.length, sent, recalled });
 });
 
 app.get("/api/services", async (req, res) => {
@@ -3036,7 +3153,7 @@ async function tgApi(token: string, method: string, payload: any) {
   }
 }
 
-async function sendBgTelegramMessage(chatId: string | number, text: string, clinicId?: string) {
+async function sendBgTelegramMessage(chatId: string | number, text: string, clinicId?: string, replyMarkup?: any) {
   const token = activeTelegramToken;
   if (!token) return;
 
@@ -3055,8 +3172,18 @@ async function sendBgTelegramMessage(chatId: string | number, text: string, clin
   await tgApi(token, 'sendMessage', {
     chat_id: chatId,
     text: finalText,
-    parse_mode: 'Markdown'
+    parse_mode: 'Markdown',
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {})
   });
+}
+
+// Reused by every "visit completed" notification (web/API PATCH and the
+// doctor bot's "Complete active" button) so the tap-to-rate survey looks and
+// behaves identically regardless of which side finished the visit.
+function buildRatingKeyboard(queueId: string) {
+  return {
+    inline_keyboard: [[1, 2, 3, 4, 5].map((n) => ({ text: '⭐'.repeat(n), callback_data: `rate_queue_${queueId}_${n}` }))],
+  };
 }
 
 async function sendDoctorTelegramMessage(chatId: string | number, text: string) {
@@ -4075,7 +4202,7 @@ async function handleDoctorCallbackQuery(token: string, chatId: number, callback
       await saveQueue(callingItem);
       await deductMaterialsForCompletedQueue(callingItem);
       if (callingItem.telegramChatId) {
-        await sendBgTelegramMessage(callingItem.telegramChatId, `✅ *Rahmat!* \n\nShifokor ko'rigi muvaffaqiyatli yakunlandi. Salomat bo'ling! Iltimos, shaxsiy kabinetingizda shifokorga baho bering. ⭐`, callingItem.clinicId);
+        await sendBgTelegramMessage(callingItem.telegramChatId, `✅ *Rahmat!* \n\nShifokor ko'rigi muvaffaqiyatli yakunlandi. Salomat bo'ling! Xizmatimizni qanday baholaysiz?`, callingItem.clinicId, buildRatingKeyboard(callingItem.id!));
       }
       await sendDoctorDashboard(token, chatId, docId, `✅ *#${callingItem.number} - ${callingItem.patientName}* qabuli muvaffaqiyatli yakunlandi.`);
     } else {
@@ -4097,6 +4224,7 @@ async function handleDoctorCallbackQuery(token: string, chatId: number, callback
       if (callingItem.telegramChatId) {
         await sendBgTelegramMessage(callingItem.telegramChatId, `❌ *Diqqat!* \n\nSizning *#${callingItem.number}* sonli navbatingiz bekor qilindi.`, callingItem.clinicId);
       }
+      notifyNextWaitlistEntry(callingItem.doctorId, callingItem.clinicId).catch(e => console.error('[Waitlist] Notify failed:', e));
       await sendDoctorDashboard(token, chatId, docId, `❌ *#${callingItem.number} - ${callingItem.patientName}* navbati bekor qilindi.`);
     } else {
       await tgApi(token, 'sendMessage', {
@@ -4201,6 +4329,51 @@ async function handleCallbackQuery(token: string, chatId: number, callbackData: 
         `_(Masalan: Umidjon Egamov)_`,
       parse_mode: 'Markdown'
     });
+    return;
+  }
+
+  if (callbackData.startsWith('rate_queue_')) {
+    const rest = callbackData.replace('rate_queue_', '');
+    const sepIdx = rest.lastIndexOf('_');
+    const queueId = rest.slice(0, sepIdx);
+    const stars = Number(rest.slice(sepIdx + 1));
+    const qDb = await getQueues();
+    const target = qDb.find((q: any) => q.id === queueId);
+    if (target && stars >= 1 && stars <= 5) {
+      await saveQueue({ ...target, rating: stars } as any);
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: `🙏 Rahmat! Bahoyingiz (${'⭐'.repeat(stars)}) qabul qilindi.`,
+      });
+    }
+    return;
+  }
+
+  if (callbackData.startsWith('confirm_queue_')) {
+    const queueId = callbackData.replace('confirm_queue_', '');
+    const qDb = await getQueues();
+    const target = qDb.find((q: any) => q.id === queueId);
+    if (target && target.status === 'scheduled') {
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: `✅ Tasdiqlandi! Sizni ${target.appointmentDate} kuni soat ${target.appointmentTime || '—'} da kutamiz.`,
+      });
+    }
+    return;
+  }
+
+  if (callbackData.startsWith('cancel_queue_')) {
+    const queueId = callbackData.replace('cancel_queue_', '');
+    const qDb = await getQueues();
+    const target = qDb.find((q: any) => q.id === queueId);
+    if (target && target.status === 'scheduled') {
+      await saveQueue({ ...target, status: 'cancelled' } as any);
+      await tgApi(token, 'sendMessage', {
+        chat_id: chatId,
+        text: `❌ Navbatingiz bekor qilindi. Yangi vaqt band qilish uchun "Yangi Navbat Olish" tugmasidan foydalaning.`,
+      });
+      notifyNextWaitlistEntry(target.doctorId, target.clinicId).catch(e => console.error('[Waitlist] Notify failed:', e));
+    }
     return;
   }
 

@@ -188,6 +188,10 @@ export interface Patient {
   // to that queue's doctorId, so it always reflects whoever they most recently
   // booked with — this is the patient's own way of "switching" treating doctors.
   primaryDoctorId?: string;
+  // Free-text: who referred this patient (a name, phone, or "Instagram" etc.) —
+  // collected once at registration, purely informational (no points/discount
+  // ledger — that's a separate, bigger feature this doesn't attempt).
+  referredBy?: string;
 }
 
 export interface QueueItem {

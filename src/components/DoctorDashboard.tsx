@@ -346,6 +346,7 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "boshqa klinikadan": { ru: "из другой клиники", en: "from another clinic", kk: "басқа клиникадан", ky: "башка клиникадан", tg: "аз клиникаи дигар", tk: "başga klinikadan" },
   "yangi bemor": { ru: "Новый пациент", en: "New patient", kk: "Жаңа пациент", ky: "Жаңы бейтап", tg: "Бемори нав", tk: "Täze näsag" },
   "mavjud bemor": { ru: "Существующий пациент", en: "Existing patient", kk: "Қолданыстағы пациент", ky: "Учурдагы бейтап", tg: "Бемори мавҷуда", tk: "Bar bolan näsag" },
+  "kim tavsiya qildi? (ixtiyoriy)": { ru: "Кто порекомендовал? (необязательно)", en: "Who referred them? (optional)", kk: "Кім ұсынды? (міндетті емес)", ky: "Ким сунуш кылды? (милдеттүү эмес)", tg: "Кӣ тавсия дод? (ихтиёрӣ)", tk: "Kim maslahat berdi? (hökman däl)" },
   "qidirilmoqda...": { ru: "Идет поиск...", en: "Searching...", kk: "Ізделуде...", ky: "Изделүүдө...", tg: "Ҷустуҷӯ дар ҷараён...", tk: "Gözlenilýär..." },
   qidirish: { ru: "Поиск", en: "Search", kk: "Іздеу", ky: "Издөө", tg: "Ҷустуҷӯ", tk: "Gözlemek" },
   "hech qanday klinikada bunday bemor topilmadi.": { ru: "Такой пациент не найден ни в одной клинике.", en: "No such patient found in any clinic.", kk: "Бұндай пациент ешбір клиникада табылмады.", ky: "Мындай бейтап эч бир клиникада табылган жок.", tg: "Чунин бемор дар ягон клиника ёфт нашуд.", tk: "Şeýle näsag hiç bir klinikada tapylmady." },
@@ -698,7 +699,7 @@ export default function DoctorDashboard({
   const [showQuickAddPatient, setShowQuickAddPatient] = useState(false);
   const [quickAddPatient, setQuickAddPatient] = useState({
     fullName: "", phone: "", passportSerial: "", birthDate: "",
-    bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
+    bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false, referredBy: "",
     bookAppointment: true, serviceId: "",
     appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: "09:00",
   });
@@ -822,6 +823,7 @@ export default function DoctorDashboard({
           allergies: quickAddPatient.allergies.trim() || undefined,
           chronicDiseases: quickAddPatient.chronicDiseases.trim() || undefined,
           hasInfection: quickAddPatient.hasInfection,
+          referredBy: quickAddPatient.referredBy.trim() || undefined,
           primaryDoctorId: currentDoctor?.id,
         }),
       });
@@ -4515,6 +4517,17 @@ export default function DoctorDashboard({
                   </div>
                 </div>
               </details>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("kim tavsiya qildi? (ixtiyoriy)")}</label>
+                <input
+                  type="text"
+                  value={quickAddPatient.referredBy}
+                  onChange={(e) => setQuickAddPatient({ ...quickAddPatient, referredBy: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 font-medium bg-white text-slate-800"
+                  placeholder={t("masalan: bemor Aziz Karimov")}
+                />
+              </div>
 
               <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl flex items-start gap-2.5">
                 <input

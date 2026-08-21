@@ -615,6 +615,7 @@ export default function DirectorDashboard({
       age,
       lastVisit: sortedVisits.length ? new Date(sortedVisits[0].date).toLocaleDateString() : '—',
       visitsCount: p.clinicVisits?.length || 0,
+      referredBy: decodeLegacyEntities(p.referredBy) || '—',
     };
   });
 
@@ -1292,6 +1293,7 @@ export default function DirectorDashboard({
                         <th className="px-4 py-3">Aloqa raqami</th>
                         <th className="px-4 py-3 text-center">Yosh</th>
                         <th className="px-4 py-3 text-center font-mono">Tashriflar</th>
+                        <th className="px-4 py-3">Kim tavsiya qildi</th>
                         <th className="px-4 py-3 text-right font-sans">Oxirgi qabul</th>
                         <th className="px-4 py-3 text-center">Amallar</th>
                       </tr>
@@ -1313,6 +1315,9 @@ export default function DirectorDashboard({
                           </td>
                           <td className="px-4 py-3 text-center text-slate-500 font-mono font-bold">
                             {pt.visitsCount} marta
+                          </td>
+                          <td className="px-4 py-3 text-slate-500 text-[11px]">
+                            {pt.referredBy}
                           </td>
                           <td className="px-4 py-3 text-right font-mono text-blue-600 text-[10.5px]">
                             {pt.lastVisit}
