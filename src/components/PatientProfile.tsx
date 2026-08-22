@@ -49,6 +49,11 @@ interface PatientProfileProps {
 type PatientProfileDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
 const PATIENT_PROFILE_TRANSLATIONS: Record<string, PatientProfileDictEntry> = {
   "so'rov telegram orqali yuborildi.": { ru: "Запрос отправлен через Telegram.", en: "Request sent via Telegram.", kk: "Сұрау Telegram арқылы жіберілді.", ky: "Суроо Telegram аркылуу жөнөтүлдү.", tg: "Дархост тавассути Telegram фиристода шуд.", tk: "Isleg Telegram arkaly iberildi." },
+  "naqd qabul qildim": { ru: "Принял наличными", en: "Received in cash", kk: "Қолма-қол қабылдадым", ky: "Накталай кабыл алдым", tg: "Нақдина қабул кардам", tk: "Nagt kabul etdim" },
+  "naqd to'lov qabul qilindi.": { ru: "Наличный платёж принят.", en: "Cash payment recorded.", kk: "Қолма-қол төлем қабылданды.", ky: "Накталай төлөм кабыл алынды.", tg: "Пардохти нақдӣ қабул шуд.", tk: "Nagt töleg kabul edildi." },
+  "summa (so'm)": { ru: "Сумма (сум)", en: "Amount (UZS)", kk: "Сома (сом)", ky: "Сумма (сом)", tg: "Маблағ (сӯм)", tk: "Möçber (sim)" },
+  naqd: { ru: "наличные", en: "cash", kk: "қолма-қол", ky: "накталай", tg: "нақдина", tk: "nagt" },
+  karta: { ru: "карта", en: "card", kk: "карта", ky: "карта", tg: "корт", tk: "kart" },
   "noma'lum bemor": { ru: "Неизвестный пациент", en: "Unknown patient", kk: "Белгісіз пациент", ky: "Белгисиз бейтап", tg: "Бемори номаълум", tk: "Näbelli näsag" },
   faol: { ru: "Активен", en: "Active", kk: "Белсенді", ky: "Активдүү", tg: "Фаъол", tk: "Işjeň" },
   yangi: { ru: "Новый", en: "New", kk: "Жаңа", ky: "Жаңы", tg: "Нав", tk: "Täze" },
@@ -138,6 +143,9 @@ export default function PatientProfile({
   const [totalDebt, setTotalDebt] = useState(0);
   const [requestingPayment, setRequestingPayment] = useState(false);
   const [paymentRequestMsg, setPaymentRequestMsg] = useState<string | null>(null);
+  const [cashAmount, setCashAmount] = useState("");
+  const [recordingCash, setRecordingCash] = useState(false);
+  const [cashMsg, setCashMsg] = useState<string | null>(null);
 
   const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
   const [receiptsLoading, setReceiptsLoading] = useState(false);
@@ -213,6 +221,40 @@ export default function PatientProfile({
     } finally {
       setRequestingPayment(false);
       setTimeout(() => setPaymentRequestMsg(null), 5000);
+    }
+  };
+
+  useEffect(() => {
+    if (totalDebt > 0 && !cashAmount) setCashAmount(String(totalDebt));
+  }, [totalDebt]);
+
+  const handleRecordCashPayment = async () => {
+    const amount = Number(cashAmount);
+    if (!doctorId || !patient?.clinicId || !(amount > 0)) return;
+    setRecordingCash(true);
+    setCashMsg(null);
+    try {
+      const res = await fetch(`${getApiUrl()}/api/payment-receipts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({
+          clinicId: patient.clinicId,
+          doctorId,
+          patientId,
+          patientName: patient?.fullName,
+          amount,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "failed");
+      setReceipts((prev) => [data, ...prev]);
+      setCashMsg(`✅ ${t("naqd to'lov qabul qilindi.")}`);
+      setCashAmount("");
+    } catch (err: any) {
+      setCashMsg(`⚠️ ${t("yuborib bo'lmadi.")}`);
+    } finally {
+      setRecordingCash(false);
+      setTimeout(() => setCashMsg(null), 5000);
     }
   };
 
@@ -514,6 +556,26 @@ export default function PatientProfile({
               {paymentRequestMsg && (
                 <p className="text-[10px] font-bold text-rose-600 mt-2">{paymentRequestMsg}</p>
               )}
+              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-rose-100">
+                <input
+                  type="number"
+                  min="1"
+                  value={cashAmount}
+                  onChange={(e) => setCashAmount(e.target.value)}
+                  placeholder={t("summa (so'm)")}
+                  className="w-24 min-w-0 px-2 py-2 bg-white border border-rose-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-rose-400"
+                />
+                <button
+                  onClick={handleRecordCashPayment}
+                  disabled={recordingCash || !doctorId || !(Number(cashAmount) > 0)}
+                  className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-emerald-500/20"
+                >
+                  {recordingCash ? t("yuborilmoqda...") : `💵 ${t("naqd qabul qildim")}`}
+                </button>
+              </div>
+              {cashMsg && (
+                <p className="text-[10px] font-bold text-emerald-600 mt-2">{cashMsg}</p>
+              )}
             </div>
           </div>
         </div>
@@ -690,10 +752,18 @@ export default function PatientProfile({
                     <div className="space-y-3">
                       {receipts.map((r) => (
                         <div key={r.id} className="flex items-center gap-4 bg-slate-50 border border-slate-100 rounded-xl p-3">
-                          <button type="button" onClick={() => setViewerReceipt(r)} className="shrink-0">
-                            <img src={r.imageData} alt="Chek" className="w-14 h-14 rounded-lg object-cover border border-slate-200 hover:opacity-80 transition-opacity" />
-                          </button>
+                          {r.imageData ? (
+                            <button type="button" onClick={() => setViewerReceipt(r)} className="shrink-0">
+                              <img src={r.imageData} alt="Chek" className="w-14 h-14 rounded-lg object-cover border border-slate-200 hover:opacity-80 transition-opacity" />
+                            </button>
+                          ) : (
+                            <div className="w-14 h-14 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-2xl shrink-0">💵</div>
+                          )}
                           <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-slate-700">
+                              {r.paymentMethod === 'cash' ? `💵 ${t("naqd")}` : `💳 ${t("karta")}`}
+                              {typeof r.amount === 'number' ? ` · ${r.amount.toLocaleString()} ${t("so'm")}` : ''}
+                            </p>
                             <p className="text-[10px] text-slate-400">{new Date(r.createdAt).toLocaleString("uz-UZ")}</p>
                           </div>
                           {r.status === "pending" ? (

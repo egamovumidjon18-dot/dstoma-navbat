@@ -2168,6 +2168,35 @@ app.get("/api/payment-receipts", async (req, res) => {
   res.json(matches.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
 });
 
+// Doctor records cash received in person — no receipt photo, no Telegram round-trip
+// needed (unlike the card flow), so it's created already-confirmed and shows up
+// alongside card receipts in the same list and clinic revenue totals.
+app.post("/api/payment-receipts", rateLimiter(30, 60 * 1000), async (req, res) => {
+  const { clinicId, doctorId, patientId, patientName, queueId, amount } = req.body;
+  if (!clinicId || !doctorId || !(Number(amount) > 0)) {
+    return res.status(400).json({ ok: false, error: "clinicId, doctorId va amount (musbat son) talab qilinadi" });
+  }
+  if (!(await isAuthorizedForClinic(req, clinicId, true))) {
+    return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+  }
+  const auth = await getAuthContext(req);
+  if (auth.staff?.role === 'doctor' && auth.staff.doctorId !== doctorId) {
+    return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+  }
+  const now = new Date().toISOString();
+  const receipt = {
+    id: 'receipt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+    clinicId, doctorId, patientId, patientName, queueId,
+    amount: Number(amount),
+    paymentMethod: 'cash' as const,
+    status: 'confirmed' as const,
+    createdAt: now,
+    resolvedAt: now,
+  };
+  await savePaymentReceipt(receipt);
+  res.status(201).json(receipt);
+});
+
 app.patch("/api/payment-receipts/:id", async (req, res) => {
   const id = req.params.id;
   const { status } = req.body;

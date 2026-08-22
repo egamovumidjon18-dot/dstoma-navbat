@@ -10,7 +10,8 @@ import {
   TrendingUp, Users, Activity, Star,
   Download, ChevronDown, DollarSign,
   UserCheck, UserPlus, Users2, HeartPulse,
-  CheckCircle2, Clock, XCircle, Receipt, Package, AlertTriangle, X, ChevronRight
+  CheckCircle2, Clock, XCircle, Receipt, Package, AlertTriangle, X, ChevronRight,
+  Wallet, CreditCard
 } from 'lucide-react';
 import { QueueItem, Doctor, Service, Patient, PaymentReceipt, Reminder } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
@@ -45,6 +46,8 @@ const STATS_TRANSLATIONS: Record<string, StatsDictEntry> = {
   "jami bemorlar": { ru: "Всего пациентов", en: "Total Patients", kk: "Барлық пациенттер", ky: "Бардык бейтаптар", tg: "Ҳамаи беморон", tk: "Ähli näsaglar" },
   "qayta kelganlar": { ru: "Повторные визиты", en: "Returning Patients", kk: "Қайта келгендер", ky: "Кайра келгендер", tg: "Такроран омадагон", tk: "Gaýtadan gelenler" },
   "tasdiqlangan to'lovlar": { ru: "Подтверждённые платежи", en: "Confirmed Payments", kk: "Расталған төлемдер", ky: "Тастыкталган төлөмдөр", tg: "Пардохтҳои тасдиқшуда", tk: "Tassyklanan tölegler" },
+  "naqd to'lovlar": { ru: "Наличные платежи", en: "Cash Payments", kk: "Қолма-қол төлемдер", ky: "Накталай төлөмдөр", tg: "Пардохтҳои нақдӣ", tk: "Nagt tölegler" },
+  "karta orqali to'lovlar": { ru: "Платежи картой", en: "Card Payments", kk: "Карта арқылы төлемдер", ky: "Карта аркылуу төлөмдөр", tg: "Пардохт бо корт", tk: "Kart bilen tölegler" },
   kutilmoqda: { ru: "В ожидании", en: "Pending", kk: "Күтуде", ky: "Күтүүдө", tg: "Дар интизор", tk: "Garaşylýar" },
   "rad etilgan": { ru: "Отклонено", en: "Rejected", kk: "Қабылданбады", ky: "Четке кагылды", tg: "Рад карда шуд", tk: "Ret edildi" },
   "jami kvitansiyalar": { ru: "Всего чеков", en: "Total Receipts", kk: "Барлық чектер", ky: "Бардык чектер", tg: "Ҳамаи чекҳо", tk: "Ähli çekler" },
@@ -637,12 +640,12 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
               {stats.treatmentsData.length === 0 ? (
                 <EmptyState />
               ) : (
-                <div className="h-[300px]">
+                <div style={{ height: Math.max(300, stats.treatmentsData.length * 44) }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={stats.treatmentsData} layout="vertical">
+                    <BarChart data={stats.treatmentsData} layout="vertical" margin={{ left: 8 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
                       <XAxis type="number" stroke="#94a3b8" axisLine={false} tickLine={false} allowDecimals={false} />
-                      <YAxis dataKey="name" type="category" stroke="#94a3b8" axisLine={false} tickLine={false} width={100} />
+                      <YAxis dataKey="name" type="category" stroke="#94a3b8" axisLine={false} tickLine={false} width={180} interval={0} tick={{ fontSize: 12 }} />
                       <Tooltip
                         contentStyle={{ backgroundColor: '#fff', borderColor: '#e2e8f0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                         cursor={{ fill: '#f8fafc', opacity: 0.8 }}
@@ -670,6 +673,32 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
             <StatCard title={t("jami kvitansiyalar")} value={receiptsInPeriod.length} icon={Receipt} color="bg-indigo-500" rows={receiptRows(receiptsInPeriod)} />
           </div>
         )}
+
+        {activeTab === 'payments' && (() => {
+          const confirmed = receiptsInPeriod.filter(r => r.status === 'confirmed');
+          const cash = confirmed.filter(r => r.paymentMethod === 'cash');
+          // No paymentMethod recorded means it predates that field or came through
+          // the Telegram card-receipt flow — treat as card for the breakdown.
+          const card = confirmed.filter(r => r.paymentMethod !== 'cash');
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <StatCard
+                title={t("naqd to'lovlar")}
+                value={`${(cash.reduce((sum, r) => sum + (r.amount || 0), 0) / 1000000).toFixed(1)}M`}
+                icon={Wallet}
+                color="bg-emerald-600"
+                rows={receiptRows(cash)}
+              />
+              <StatCard
+                title={t("karta orqali to'lovlar")}
+                value={`${(card.reduce((sum, r) => sum + (r.amount || 0), 0) / 1000000).toFixed(1)}M`}
+                icon={CreditCard}
+                color="bg-sky-600"
+                rows={receiptRows(card)}
+              />
+            </div>
+          );
+        })()}
 
         {activeTab === 'reminders' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

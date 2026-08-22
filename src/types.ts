@@ -78,8 +78,9 @@ export interface PaymentReceipt {
   patientId?: string;
   patientName?: string;
   queueId?: string;
-  imageData: string; // base64 data URL of the receipt photo
+  imageData?: string; // base64 data URL of the receipt photo — absent for cash (no photo to upload)
   amount?: number;
+  paymentMethod?: 'card' | 'cash'; // absent on older records predating this field; treat as 'card'
   status: 'pending' | 'confirmed' | 'rejected';
   createdAt: string;
   resolvedAt?: string;
