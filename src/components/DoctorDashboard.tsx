@@ -139,6 +139,12 @@ const VIEW_TITLES: Record<string, string> = {
 };
 
 const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
+  "qabul yakunlandi": { ru: "Приём завершён", en: "Visit completed", kk: "Қабылдау аяқталды", ky: "Кабыл алуу аяктады", tg: "Қабул анҷом ёфт", tk: "Kabul tamamlandy" },
+  "bemor to'lovni qanday amalga oshirdi?": { ru: "Как пациент оплатил?", en: "How did the patient pay?", kk: "Пациент қалай төледі?", ky: "Бейтап кантип төлөдү?", tg: "Бемор чи тавр пардохт кард?", tk: "Näsag nähili töledi?" },
+  "summa (so'm)": { ru: "Сумма (сум)", en: "Amount (UZS)", kk: "Сома (сом)", ky: "Сумма (сом)", tg: "Маблағ (сӯм)", tk: "Möçber (sim)" },
+  naqd: { ru: "Наличные", en: "Cash", kk: "Қолма-қол", ky: "Накталай", tg: "Нақдина", tk: "Nagt" },
+  karta: { ru: "Карта", en: "Card", kk: "Карта", ky: "Карта", tg: "Корт", tk: "Kart" },
+  "o'tkazib yuborish": { ru: "Пропустить", en: "Skip", kk: "Өткізіп жіберу", ky: "Өткөрүп жиберүү", tg: "Гузарондан", tk: "Geçirmek" },
   "bemor qo'shildi": { ru: "Пациент добавлен", en: "Patient added", kk: "Пациент қосылды", ky: "Бейтап кошулду", tg: "Бемор илова шуд", tk: "Näsag goşuldy" },
   "bemor topilmadi. yangi bemor uchun \"yangi bemor qo'shish\" tugmasidan foydalaning.": { ru: "Пациент не найден. Для нового пациента используйте кнопку «Добавить пациента».", en: "Patient not found. Use the \"Add patient\" button for a new patient.", kk: "Пациент табылмады. Жаңа пациент үшін «Пациент қосу» түймесін пайдаланыңыз.", ky: "Бейтап табылган жок. Жаңы бейтап үчүн \"Бемор кошуу\" баскычын колдонуңуз.", tg: "Бемор ёфт нашуд. Барои бемори нав тугмаи «Иловаи бемор»-ро истифода баред.", tk: "Näsag tapylmady. Täze näsag üçin \"Näsag goşmak\" düwmesini ulanyň." },
   "boshqa bemorni tanlash": { ru: "Выбрать другого пациента", en: "Choose a different patient", kk: "Басқа пациентті таңдау", ky: "Башка бейтапты тандоо", tg: "Интихоби бемори дигар", tk: "Başga näsagy saýlamak" },
@@ -4684,7 +4690,14 @@ export default function DoctorDashboard({
 
       {visitPaymentQueue && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+            <button
+              onClick={() => { setVisitPaymentQueue(null); setVisitPaymentAmount(""); }}
+              disabled={!!recordingVisitPayment}
+              className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 disabled:opacity-50 p-1"
+            >
+              <X className="w-5 h-5" />
+            </button>
             <div className="w-14 h-14 mx-auto bg-emerald-100 rounded-2xl flex items-center justify-center mb-4 text-2xl">
               💰
             </div>
