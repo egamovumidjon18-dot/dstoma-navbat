@@ -892,6 +892,16 @@ const CREDENTIALS_ENCRYPTION_KEY = crypto.scryptSync(
   "dstoma-creds-salt",
   32
 );
+// Credentials saved before CREDENTIALS_ENCRYPTION_KEY was configured in the
+// environment were encrypted under this hardcoded fallback. Once a real key is
+// set, decrypting with it alone would stop working for every pre-existing
+// director/doctor credential — decryptCredential below tries the current key
+// first, then falls back to this one, so nobody gets locked out.
+const LEGACY_CREDENTIALS_ENCRYPTION_KEY = crypto.scryptSync(
+  "dstoma-default-creds-key-change-in-prod-env",
+  "dstoma-creds-salt",
+  32
+);
 function encryptCredential(plain: string): string {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", CREDENTIALS_ENCRYPTION_KEY, iv);
@@ -902,18 +912,21 @@ function encryptCredential(plain: string): string {
 function isEncryptedCredential(stored: any): boolean {
   return typeof stored === "string" && stored.startsWith("enc:");
 }
-function decryptCredential(stored: string): string | null {
+function decryptCredentialWithKey(stored: string, key: Buffer): string | null {
   try {
     const parts = stored.split(":");
     if (parts.length !== 4) return null;
     const [, ivHex, tagHex, dataHex] = parts;
-    const decipher = crypto.createDecipheriv("aes-256-gcm", CREDENTIALS_ENCRYPTION_KEY, Buffer.from(ivHex, "hex"));
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(ivHex, "hex"));
     decipher.setAuthTag(Buffer.from(tagHex, "hex"));
     const decrypted = Buffer.concat([decipher.update(Buffer.from(dataHex, "hex")), decipher.final()]);
     return decrypted.toString("utf8");
   } catch {
     return null;
   }
+}
+function decryptCredential(stored: string): string | null {
+  return decryptCredentialWithKey(stored, CREDENTIALS_ENCRYPTION_KEY) ?? decryptCredentialWithKey(stored, LEGACY_CREDENTIALS_ENCRYPTION_KEY);
 }
 
 // Returns the RAW stored password value (hashed "scrypt:..." for migrated accounts,
