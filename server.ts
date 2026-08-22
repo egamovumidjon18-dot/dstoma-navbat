@@ -2168,11 +2168,13 @@ app.get("/api/payment-receipts", async (req, res) => {
   res.json(matches.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
 });
 
-// Doctor records cash received in person — no receipt photo, no Telegram round-trip
-// needed (unlike the card flow), so it's created already-confirmed and shows up
-// alongside card receipts in the same list and clinic revenue totals.
+// Doctor directly records a payment they personally witnessed in person (cash,
+// or a card/POS payment at the visit) — no receipt photo, no Telegram round-trip
+// needed (unlike the remote "send a screenshot" flow), so it's created
+// already-confirmed and shows up alongside card receipts in the same list and
+// clinic revenue totals.
 app.post("/api/payment-receipts", rateLimiter(30, 60 * 1000), async (req, res) => {
-  const { clinicId, doctorId, patientId, patientName, queueId, amount } = req.body;
+  const { clinicId, doctorId, patientId, patientName, queueId, amount, paymentMethod } = req.body;
   if (!clinicId || !doctorId || !(Number(amount) > 0)) {
     return res.status(400).json({ ok: false, error: "clinicId, doctorId va amount (musbat son) talab qilinadi" });
   }
@@ -2188,7 +2190,7 @@ app.post("/api/payment-receipts", rateLimiter(30, 60 * 1000), async (req, res) =
     id: 'receipt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
     clinicId, doctorId, patientId, patientName, queueId,
     amount: Number(amount),
-    paymentMethod: 'cash' as const,
+    paymentMethod: paymentMethod === 'card' ? 'card' as const : 'cash' as const,
     status: 'confirmed' as const,
     createdAt: now,
     resolvedAt: now,

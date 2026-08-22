@@ -953,7 +953,48 @@ export default function DoctorDashboard({
   // Telegram bot or any other surface deducts identically. Nothing extra to do
   // here beyond the status change itself.
   const handleCompleteQueue = (q: QueueItem) => {
-    if (q?.id) onUpdateQueueStatus(q.id, "completed");
+    if (!q?.id) return;
+    onUpdateQueueStatus(q.id, "completed");
+    // Right after finishing, ask how the patient paid — this lets a doctor log
+    // an in-person cash or card payment immediately, without the patient needing
+    // to be reachable on Telegram afterwards to upload a photo receipt.
+    const servicePrice = services.find((s) => s.id === q.serviceId)?.price;
+    setVisitPaymentQueue(q);
+    setVisitPaymentAmount(servicePrice ? String(servicePrice) : "");
+  };
+
+  const [visitPaymentQueue, setVisitPaymentQueue] = useState<QueueItem | null>(null);
+  const [visitPaymentAmount, setVisitPaymentAmount] = useState("");
+  const [recordingVisitPayment, setRecordingVisitPayment] = useState<"cash" | "card" | null>(null);
+
+  const handleRecordVisitPayment = async (method: "cash" | "card") => {
+    const amount = Number(visitPaymentAmount);
+    if (!visitPaymentQueue || !currentDoctor?.id || !effectiveClinicId || !(amount > 0)) return;
+    setRecordingVisitPayment(method);
+    try {
+      await fetch("/api/payment-receipts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(staffToken ? { Authorization: `Bearer ${staffToken}` } : {}),
+        },
+        body: JSON.stringify({
+          clinicId: effectiveClinicId,
+          doctorId: currentDoctor.id,
+          patientId: visitPaymentQueue.patientId,
+          patientName: visitPaymentQueue.patientName,
+          queueId: visitPaymentQueue.id,
+          amount,
+          paymentMethod: method,
+        }),
+      });
+    } catch {
+      // best-effort — the visit is already marked completed regardless
+    } finally {
+      setRecordingVisitPayment(null);
+      setVisitPaymentQueue(null);
+      setVisitPaymentAmount("");
+    }
   };
 
   const handleExportPatientsCsv = () => {
@@ -4636,6 +4677,51 @@ export default function DoctorDashboard({
               className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-black uppercase tracking-wider rounded-2xl transition-all"
             >
               {t("Tushunarli")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {visitPaymentQueue && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+            <div className="w-14 h-14 mx-auto bg-emerald-100 rounded-2xl flex items-center justify-center mb-4 text-2xl">
+              💰
+            </div>
+            <h3 className="text-base font-black text-slate-900 mb-1.5">{t("Qabul yakunlandi")}</h3>
+            <p className="text-xs text-slate-500 font-semibold mb-4">
+              {t("Bemor to'lovni qanday amalga oshirdi?")}
+            </p>
+            <input
+              type="number"
+              min="1"
+              value={visitPaymentAmount}
+              onChange={(e) => setVisitPaymentAmount(e.target.value)}
+              placeholder={t("Summa (so'm)")}
+              className="w-full mb-4 px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-center text-lg font-black text-slate-900 focus:outline-none focus:border-emerald-400"
+            />
+            <div className="grid grid-cols-2 gap-2.5 mb-2.5">
+              <button
+                onClick={() => handleRecordVisitPayment("cash")}
+                disabled={!!recordingVisitPayment || !(Number(visitPaymentAmount) > 0)}
+                className="py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider rounded-2xl transition-all"
+              >
+                {recordingVisitPayment === "cash" ? "..." : `💵 ${t("Naqd")}`}
+              </button>
+              <button
+                onClick={() => handleRecordVisitPayment("card")}
+                disabled={!!recordingVisitPayment || !(Number(visitPaymentAmount) > 0)}
+                className="py-3 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider rounded-2xl transition-all"
+              >
+                {recordingVisitPayment === "card" ? "..." : `💳 ${t("Karta")}`}
+              </button>
+            </div>
+            <button
+              onClick={() => { setVisitPaymentQueue(null); setVisitPaymentAmount(""); }}
+              disabled={!!recordingVisitPayment}
+              className="w-full py-2 text-slate-400 hover:text-slate-600 disabled:opacity-50 text-xs font-bold transition-colors"
+            >
+              {t("O'tkazib yuborish")}
             </button>
           </div>
         </div>
