@@ -811,42 +811,44 @@ export default function Settings({ doctor, clinic, clinicPatients = [], clinicQu
   };
 
   return (
-    <div className="flex h-full bg-[#020712] rounded-3xl border border-slate-800 overflow-hidden text-slate-300 font-sans">
-      
-      {/* Sidebar Navigation */}
-      <div className="w-64 bg-[#0a0f1d] border-r border-slate-800 flex flex-col overflow-y-auto custom-scrollbar shrink-0">
-         <div className="p-6 border-b border-slate-800 sticky top-0 bg-[#0a0f1d] z-10">
+    <div className="flex flex-col md:flex-row h-full bg-[#020712] rounded-3xl border border-slate-800 overflow-hidden text-slate-300 font-sans">
+
+      {/* Sidebar Navigation — a horizontal scroll strip on mobile (fixed side-by-side
+          columns overflowed the content pane off-screen below md), a full vertical
+          sidebar from md up. */}
+      <div className="w-full md:w-64 bg-[#0a0f1d] border-b md:border-b-0 md:border-r border-slate-800 flex flex-col md:overflow-y-auto custom-scrollbar shrink-0">
+         <div className="hidden md:block p-6 border-b border-slate-800 sticky top-0 bg-[#0a0f1d] z-10">
            <h2 className="text-xl font-bold text-white flex items-center gap-2">
              <SettingsIcon className="w-6 h-6 text-emerald-500" /> {t('sozlamalar')}
            </h2>
          </div>
-         <div className="p-4 space-y-1">
+         <div className="flex md:block overflow-x-auto md:overflow-x-visible gap-1 md:gap-0 md:space-y-1 p-3 md:p-4 hide-scrollbar">
            {SETTINGS_SECTIONS.map((section) => (
              <button
                key={section.id}
                onClick={() => setActiveSection(section.id)}
-               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
+               className={`shrink-0 md:w-full flex items-center gap-2 md:gap-3 px-3.5 md:px-4 py-2.5 md:py-3 rounded-xl text-xs md:text-sm font-bold transition-all whitespace-nowrap ${
                  activeSection === section.id
                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
                    : 'text-slate-400 hover:text-white hover:bg-[#111827]'
                }`}
              >
-               <section.icon className="w-5 h-5 shrink-0" />
+               <section.icon className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
                <span className="truncate">{t(section.label)}</span>
-               {activeSection === section.id && <ChevronRight className="w-4 h-4 ml-auto shrink-0 opacity-50" />}
+               {activeSection === section.id && <ChevronRight className="hidden md:block w-4 h-4 ml-auto shrink-0 opacity-50" />}
              </button>
            ))}
          </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#020712]">
-         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+      <div className="flex-1 flex flex-col md:h-full overflow-hidden bg-[#020712]">
+         <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
            <div className="max-w-4xl mx-auto">
              {renderSection()}
            </div>
          </div>
-         
+
          {/* Footer Action Bar */}
          {!['branches', 'backup', 'employment', 'ai'].includes(activeSection) && (
          <div className="p-4 border-t border-slate-800 bg-[#0a0f1d] flex justify-end shrink-0">
