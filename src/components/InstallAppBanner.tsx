@@ -78,12 +78,19 @@ export default function InstallAppBanner({ dark = false }: Props) {
 
   return (
     <div
-      className={`rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap border ${
+      className={`relative rounded-2xl p-4 pr-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 border ${
         dark
           ? 'bg-emerald-500/10 border-emerald-500/20'
           : 'bg-emerald-50 border-emerald-100'
       }`}
     >
+      <button
+        onClick={dismiss}
+        className={`absolute top-3 right-3 p-1 ${dark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
+        aria-label="Yopish"
+      >
+        <X className="w-4 h-4" />
+      </button>
       <div className="flex items-center gap-3 min-w-0">
         <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shrink-0">
           <Download className="w-5 h-5 text-white" />
@@ -98,23 +105,14 @@ export default function InstallAppBanner({ dark = false }: Props) {
           </p>
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {!isIOS && deferredPrompt && (
-          <button
-            onClick={install}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors"
-          >
-            O'rnatish
-          </button>
-        )}
+      {!isIOS && deferredPrompt && (
         <button
-          onClick={dismiss}
-          className={`p-2 ${dark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
-          aria-label="Yopish"
+          onClick={install}
+          className="shrink-0 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors self-start sm:self-auto"
         >
-          <X className="w-4 h-4" />
+          O'rnatish
         </button>
-      </div>
+      )}
     </div>
   );
 }
