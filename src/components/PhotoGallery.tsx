@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, doc, getDoc, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
+import { useHistoryLayer } from '../hooks/useHistoryLayer';
 import { compressImage } from '../utils/imageCompressor';
 import {
   PhasePicker, ToothPicker, ImageDropzone, describeUploadError,
@@ -93,6 +94,9 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadTeeth, setUploadTeeth] = useState<string[]>([]);
+
+  useHistoryLayer(showUpload, () => setShowUpload(false), 'photo-upload');
+  useHistoryLayer(activeView !== 'gallery', () => setActiveView('gallery'), 'photo-view');
   const [uploadData, setUploadData] = useState<Partial<Photo>>({
     category: 'General',
     stage: 'Oldin',

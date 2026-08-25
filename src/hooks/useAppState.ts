@@ -75,6 +75,9 @@ export function useAppState() {
   });
   
   const isSyncingRef = useRef(false);
+  // False until the URL has been written once, so the initial correction of the
+  // address bar replaces rather than pushes a history entry.
+  const didWriteUrlRef = useRef(false);
 
   useEffect(() => {
     selectedClinicRef.current = selectedClinic;
@@ -411,6 +414,12 @@ export function useAppState() {
     clearUserSession();
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('dstoma_impersonator_session');
+      // Drop the panel/patient deep-link and REPLACE the entry rather than
+      // pushing, so Back cannot walk into a staff URL after signing out.
+      const url = new URL(window.location.href);
+      url.search = '';
+      window.history.replaceState({}, '', url.toString());
+      didWriteUrlRef.current = false;
     }
   };
 
@@ -480,6 +489,18 @@ export function useAppState() {
     if (tabParam && ['bemor', 'shifokor', 'boshliq', 'superadmin'].includes(tabParam)) {
       setActiveTab(tabParam as any);
     }
+
+    // Back/forward between panels. The URL was written with replaceState, which
+    // creates no history entry at all, and nothing listened for popstate — so
+    // pressing Back from anywhere inside the app left the app entirely.
+    const onPop = () => {
+      const t = new URLSearchParams(window.location.search).get('tab');
+      if (t && ['bemor', 'shifokor', 'boshliq', 'superadmin'].includes(t)) {
+        setActiveTab(t as any);
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
     // Bot tokens are never fetched into the browser — all Telegram sending happens
     // server-side (see server.ts sendBgTelegramMessage / /api/telegram/bulk-message).
   }, []);
@@ -685,7 +706,15 @@ export function useAppState() {
     } else {
       newUrl.searchParams.delete('clinic');
     }
-    window.history.replaceState({}, '', newUrl.toString());
+    // push, so switching panels is something Back can undo. The first run just
+    // corrects the address bar for the tab we already restored from the
+    // session, and must not add an entry (Back would then land on the same
+    // screen and look broken).
+    const url = newUrl.toString();
+    if (url === window.location.href) return;
+    if (didWriteUrlRef.current) window.history.pushState({}, '', url);
+    else window.history.replaceState({}, '', url);
+    didWriteUrlRef.current = true;
   }, [activeTab, selectedClinic]);
 
   // Sync queues removed in favor of loadServerData sync

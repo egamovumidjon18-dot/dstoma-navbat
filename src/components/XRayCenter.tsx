@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
+import { useHistoryLayer } from '../hooks/useHistoryLayer';
 import { compressImage } from '../utils/imageCompressor';
 import {
   PhasePicker, ToothPicker, ImageDropzone, describeUploadError,
@@ -95,6 +96,11 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
   const [uploadNotes, setUploadNotes] = useState('');
   const [uploadTeeth, setUploadTeeth] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Back/Escape close the upload dialog and step out of the viewer, instead
+  // of leaving the app from three levels deep.
+  useHistoryLayer(showUpload, () => setShowUpload(false), 'xray-upload');
+  useHistoryLayer(activeView !== 'gallery', () => setActiveView('gallery'), 'xray-view');
   
   useEffect(() => {
     if (!patientId) return;

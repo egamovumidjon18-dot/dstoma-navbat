@@ -17,6 +17,7 @@ import FinanceCenter from "./FinanceCenter";
 import { Clinic, Doctor, Service, QueueItem, Patient, DoctorClinicLink, Reminder, TreatmentCharge, PaymentReceipt } from "../types";
 import { decodeLegacyEntities } from "../utils/textFormat";
 import { TRANSLATIONS, Language, translateMedicalText } from "../translations";
+import { useHistoryLayer } from "../hooks/useHistoryLayer";
 import { allocatePayments, clinicBillingSummary } from "../utils/treatmentBilling";
 import { fetchTreatmentCharges } from "../utils/treatmentCharges";
 import {
@@ -1315,6 +1316,18 @@ export default function DoctorDashboard({
   const [scheduleSettingsLunchEnd, setScheduleSettingsLunchEnd] = useState(DEFAULT_WORKING_HOURS.lunchEnd);
   const [scheduleSettingsAutoQueue, setScheduleSettingsAutoQueue] = useState(true);
   const [scheduleSettingsWorkDays, setScheduleSettingsWorkDays] = useState<number[]>(DEFAULT_WORKING_HOURS.workDays);
+
+  // Browser Back and Escape close the topmost overlay instead of leaving the app.
+  useHistoryLayer(showNewBookingModal, () => setShowNewBookingModal(false), 'new-booking');
+  useHistoryLayer(showScheduleSettingsModal, () => setShowScheduleSettingsModal(false), 'schedule-settings');
+  useHistoryLayer(showQuickAddPatient, () => setShowQuickAddPatient(false), 'quick-add-patient');
+  useHistoryLayer(!!justAddedPatientCreds, () => setJustAddedPatientCreds(null), 'new-patient-creds');
+  useHistoryLayer(!!visitPaymentQueue, () => {
+    setVisitPaymentQueue(null); setVisitPaymentAmount(''); setVisitPaymentMode('full'); setVisitOutstanding(null);
+  }, 'visit-payment');
+  // A patient card is its own level: Back returns to the list rather than
+  // jumping out of the doctor panel entirely.
+  useHistoryLayer(!!selectedPatientId && activeView === 'bemorlar', () => setSelectedPatientId(null), 'patient-card');
   const [isSavingScheduleSettings, setIsSavingScheduleSettings] = useState(false);
   // Searches the WHOLE clinic roster, not just this doctor's own patients: booking
   // is itself the mechanism that assigns a patient to a doctor (POST /api/queues

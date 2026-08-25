@@ -3,6 +3,7 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../services/firebase";
 import { Patient, PaymentReceipt, Reminder, TreatmentCharge } from "../types";
 import { patientBalance, itemBalance, type PlanItemLike } from "../utils/treatmentBilling";
+import { useHistoryLayer } from "../hooks/useHistoryLayer";
 import { decodeLegacyEntities } from "../utils/textFormat";
 import { getApiUrl } from "../services/api";
 import { TRANSLATIONS, Language } from "../translations";
@@ -345,6 +346,10 @@ export default function PatientProfile({
     : null;
 
   const [showEditModal, setShowEditModal] = useState(false);
+
+  // Back and Escape close these instead of leaving the patient card.
+  useHistoryLayer(showEditModal, () => setShowEditModal(false), 'patient-edit');
+  useHistoryLayer(!!viewerReceipt, () => setViewerReceipt(null), 'receipt-viewer');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editForm, setEditForm] = useState({
     fullName: "", phone: "", birthDate: "", bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
