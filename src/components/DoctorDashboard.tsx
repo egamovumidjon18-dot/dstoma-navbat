@@ -164,12 +164,14 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "to'lov yozilmaydi — qarz sifatida qoladi.": { ru: "Платёж не записывается — останется как долг.", en: "No payment is recorded — it stays as debt.", kk: "Төлем жазылмайды — қарыз болып қалады.", ky: "Төлөм жазылбайт — карыз болуп калат.", tg: "Пардохт сабт намешавад — ҳамчун қарз мемонад.", tk: "Töleg ýazylmaýar — bergi bolup galýar." },
   "bosqichlar": { ru: "Этапы", en: "Stages", kk: "Кезеңдер", ky: "Этаптар", tg: "Марҳилаҳо", tk: "Tapgyrlar" },
   "dam olish": { ru: "Выходной", en: "Day off", kk: "Демалыс", ky: "Эс алуу", tg: "Рӯзи истироҳат", tk: "Dynç güni" },
+  "davom etilsinmi?": { ru: "Продолжить?", en: "Continue?", kk: "Жалғастырасыз ба?", ky: "Улантасызбы?", tg: "Идома дода шавад?", tk: "Dowam edilsinmi?" },
   "ish vaqtidan tashqari": { ru: "Вне рабочего времени", en: "Outside working hours", kk: "Жұмыс уақытынан тыс", ky: "Иш убактысынан тышкары", tg: "Берун аз вақти корӣ", tk: "Iş wagtyndan daşary" },
   "vaqti belgilanmagan": { ru: "Время не назначено", en: "No time set", kk: "Уақыты белгіленбеген", ky: "Убактысы белгиленбеген", tg: "Вақт таъин нашудааст", tk: "Wagty bellenmedik" },
   "vaqt belgilash": { ru: "Назначить время", en: "Set a time", kk: "Уақыт белгілеу", ky: "Убакыт белгилөө", tg: "Таъини вақт", tk: "Wagt bellemek" },
   "tushlik vaqti": { ru: "Время обеда", en: "Lunch time", kk: "Түскі ас уақыты", ky: "Түшкү тамак убактысы", tg: "Вақти хӯрок", tk: "Günortanlyk wagty" },
   "bu vaqt band": { ru: "Это время занято", en: "This time is taken", kk: "Бұл уақыт бос емес", ky: "Бул убакыт бош эмес", tg: "Ин вақт банд аст", tk: "Bu wagt boş däl" },
   "ish kunlari": { ru: "Рабочие дни", en: "Working days", kk: "Жұмыс күндері", ky: "Иш күндөрү", tg: "Рӯзҳои корӣ", tk: "Iş günleri" },
+  "belgilanmagan kunlar dam olish hisoblanadi va bandlab bo'lmaydi": { ru: "Неотмеченные дни считаются выходными и недоступны для записи", en: "Unmarked days count as days off and cannot be booked", kk: "Белгіленбеген күндер демалыс саналады және жазылуға болмайды", ky: "Белгиленбеген күндөр эс алуу болуп эсептелет жана жазылууга болбойт", tg: "Рӯзҳои қайднашуда рӯзи истироҳат ҳисоб мешаванд ва сабт кардан мумкин нест", tk: "Bellenmedik günler dynç güni hasaplanýar we bellemek bolmaýar" },
   "bemor to'lovni qanday amalga oshirdi?": { ru: "Как пациент оплатил?", en: "How did the patient pay?", kk: "Пациент қалай төледі?", ky: "Бейтап кантип төлөдү?", tg: "Бемор чи тавр пардохт кард?", tk: "Näsag nähili töledi?" },
   "summa (so'm)": { ru: "Сумма (сум)", en: "Amount (UZS)", kk: "Сома (сом)", ky: "Сумма (сом)", tg: "Маблағ (сӯм)", tk: "Möçber (sim)" },
   naqd: { ru: "Наличные", en: "Cash", kk: "Қолма-қол", ky: "Накталай", tg: "Нақдина", tk: "Nagt" },
@@ -964,6 +966,12 @@ export default function DoctorDashboard({
   const handleNewBooking = async () => {
     if (!newBookingName.trim() || !newBookingDate || !newBookingTime || !effectiveClinicId || !onAddQueue) return;
 
+    // The date field is a free <input type="date">, so it can still land on a
+    // day the doctor doesn't work even though the grid hides the "+" there.
+    if (!isWorkingDay(newBookingDate, doctorWorkingHours)) {
+      if (!window.confirm(`${t("dam olish")} — ${t("davom etilsinmi?")}`)) return;
+    }
+
     // Nothing used to stop two patients being booked into the same slot — not
     // here, not in the picker, not on the server. The grid then stacked both
     // cards in one cell with no warning.
@@ -1306,6 +1314,7 @@ export default function DoctorDashboard({
   const [scheduleSettingsLunchStart, setScheduleSettingsLunchStart] = useState(DEFAULT_WORKING_HOURS.lunchStart);
   const [scheduleSettingsLunchEnd, setScheduleSettingsLunchEnd] = useState(DEFAULT_WORKING_HOURS.lunchEnd);
   const [scheduleSettingsAutoQueue, setScheduleSettingsAutoQueue] = useState(true);
+  const [scheduleSettingsWorkDays, setScheduleSettingsWorkDays] = useState<number[]>(DEFAULT_WORKING_HOURS.workDays);
   const [isSavingScheduleSettings, setIsSavingScheduleSettings] = useState(false);
   // Searches the WHOLE clinic roster, not just this doctor's own patients: booking
   // is itself the mechanism that assigns a patient to a doctor (POST /api/queues
@@ -1389,6 +1398,7 @@ export default function DoctorDashboard({
     setScheduleSettingsLunchStart(doctorWorkingHours.lunchStart || DEFAULT_WORKING_HOURS.lunchStart);
     setScheduleSettingsLunchEnd(doctorWorkingHours.lunchEnd || DEFAULT_WORKING_HOURS.lunchEnd);
     setScheduleSettingsAutoQueue(doctorWorkingHours.autoQueue !== false);
+    setScheduleSettingsWorkDays(getWorkDays(doctorWorkingHours));
     setShowScheduleSettingsModal(true);
   };
 
@@ -1401,10 +1411,15 @@ export default function DoctorDashboard({
           startTime: scheduleSettingsStart,
           endTime: scheduleSettingsEnd,
           slotMinutes: scheduleSettingsInterval,
-          lunchStart: scheduleSettingsLunchEnabled ? scheduleSettingsLunchStart : undefined,
-          lunchEnd: scheduleSettingsLunchEnabled ? scheduleSettingsLunchEnd : undefined,
+          // null, not undefined: JSON.stringify drops undefined keys, and
+          // saveDoctor writes with setDoc(merge:true), which merges nested maps
+          // field by field — so turning the lunch break off never actually
+          // cleared it and the row reappeared on the next poll.
+          lunchStart: scheduleSettingsLunchEnabled ? scheduleSettingsLunchStart : null,
+          lunchEnd: scheduleSettingsLunchEnabled ? scheduleSettingsLunchEnd : null,
           autoQueue: scheduleSettingsAutoQueue,
-        },
+          workDays: scheduleSettingsWorkDays,
+        } as any,
       });
       if (ok) setShowScheduleSettingsModal(false);
     } finally {
@@ -4474,6 +4489,35 @@ export default function DoctorDashboard({
                   <option value={60}>60 {t("daqiqa")}</option>
                 </select>
               </div>
+              <div className="border-t border-slate-100 pt-4">
+                <span className="text-xs font-bold text-slate-600 block mb-2">{t("ish kunlari")}</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {/* Monday-first for display; values are JS day numbers. */}
+                  {[1, 2, 3, 4, 5, 6, 0].map((dayNum) => {
+                    const on = scheduleSettingsWorkDays.includes(dayNum);
+                    return (
+                      <button
+                        key={dayNum}
+                        type="button"
+                        onClick={() => setScheduleSettingsWorkDays((prev) =>
+                          prev.includes(dayNum) ? prev.filter((d) => d !== dayNum) : [...prev, dayNum].sort()
+                        )}
+                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-black transition-all border ${
+                          on
+                            ? 'bg-purple-600 text-white border-purple-600'
+                            : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        {t(WEEKDAY_NAMES_UZ[dayNum].toLowerCase()).slice(0, 3)}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-slate-400 font-semibold leading-snug mt-2">
+                  {t("belgilanmagan kunlar dam olish hisoblanadi va bandlab bo'lmaydi")}
+                </p>
+              </div>
+
               <div className="border-t border-slate-100 pt-4">
                 <label className="flex items-start gap-2 cursor-pointer">
                   <input

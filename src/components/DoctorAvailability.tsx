@@ -7,23 +7,34 @@ import {
   isLunchSlot,
   isSlotBooked,
   getWeekDays,
+  isWorkingDay,
 } from '../utils/doctorSchedule';
 
-// Read-only weekly free/busy view for a doctor, shown to a patient while
-// booking so they can see which days/times are actually open before
-// confirming. Uses the exact same working-hours/slot/lunch math as
-// DoctorDashboard's "Rejalashtirilgan" grid over the same live doctors/queues
-// data — so it can never disagree with what the doctor sees on their side.
+// Weekly free/busy view for a doctor, shown to a patient while booking. Uses
+// the exact same working-hours/slot/lunch math as DoctorDashboard's
+// "Rejalashtirilgan" grid over the same live doctors/queues data — so it can
+// never disagree with what the doctor sees on their side.
+//
+// When `onPickSlot` is supplied the free cells become selectable, and the
+// booking that results carries a real date and time. Without that, a patient
+// was shown this grid of apparently-bookable slots and then booked with no
+// time at all — so their appointment never appeared on the doctor's calendar.
 export default function DoctorAvailability({
   doctor,
   queues,
   t,
   onJoinWaitlist,
+  onPickSlot,
+  selectedDate,
+  selectedTime,
 }: {
   doctor: Doctor;
   queues: QueueItem[];
   t: (s: string) => string;
   onJoinWaitlist?: (doctorId: string) => void;
+  onPickSlot?: (date: string, time: string) => void;
+  selectedDate?: string;
+  selectedTime?: string;
 }) {
   const [weekOffset, setWeekOffset] = useState(0);
 
@@ -90,24 +101,39 @@ export default function DoctorAvailability({
                     {slot}
                   </td>
                   {weekDays.map((day) => {
+                    const dayOff = !isWorkingDay(day.date, workingHours);
+                    const past = day.date < todayStr;
                     const booked = !lunch && isSlotBooked(queues, doctor.id, day.date, slot, scheduleSlots);
+                    const blocked = lunch || dayOff || past || booked;
+                    const selected = selectedDate === day.date && selectedTime === slot;
                     return (
                       <td key={day.date} className="p-0.5 border-b border-r border-slate-200 last:border-r-0">
-                        {lunch ? (
+                        {lunch || dayOff ? (
                           <div className="h-5 rounded bg-slate-100 flex items-center justify-center">
-                            <span className="text-[7px] font-black text-slate-300 uppercase">{t('tushlik')}</span>
-                          </div>
-                        ) : (
-                          <div
-                            className={`h-5 rounded flex items-center justify-center ${
-                              booked ? 'bg-rose-100' : 'bg-emerald-100'
-                            }`}
-                            title={booked ? t('band') : t("bo'sh")}
-                          >
-                            <span className={`text-[7px] font-black uppercase ${booked ? 'text-rose-500' : 'text-emerald-600'}`}>
-                              {booked ? t('band') : t("bo'sh")}
+                            <span className="text-[7px] font-black text-slate-300 uppercase">
+                              {dayOff ? t('dam olish') : t('tushlik')}
                             </span>
                           </div>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={!onPickSlot || blocked}
+                            onClick={() => onPickSlot?.(day.date, slot)}
+                            className={`w-full h-5 rounded flex items-center justify-center transition-colors ${
+                              selected
+                                ? 'bg-blue-600 ring-1 ring-blue-700'
+                                : booked || past
+                                ? 'bg-rose-100'
+                                : `bg-emerald-100 ${onPickSlot ? 'hover:bg-emerald-200 cursor-pointer' : ''}`
+                            }`}
+                            title={booked ? t('band') : past ? t('band') : t("bo'sh")}
+                          >
+                            <span className={`text-[7px] font-black uppercase ${
+                              selected ? 'text-white' : booked || past ? 'text-rose-500' : 'text-emerald-600'
+                            }`}>
+                              {selected ? '✓' : booked || past ? t('band') : t("bo'sh")}
+                            </span>
+                          </button>
                         )}
                       </td>
                     );

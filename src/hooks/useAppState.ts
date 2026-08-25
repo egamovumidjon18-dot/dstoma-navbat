@@ -764,12 +764,17 @@ export function useAppState() {
           ));
         }
         console.warn("[AppState Hook] Queue creation rejected:", errBody?.error || res.status);
+        isSyncingRef.current = false;
+        // Hand the reason back so the caller can tell the patient why, instead
+        // of showing a success toast for a ticket that was just rolled back.
+        return { ok: false, error: errBody?.error as string | undefined };
       }
     } catch (err) {
       console.warn("[AppState Hook] Backend sync failed, using offline state", err);
     } finally {
       isSyncingRef.current = false;
     }
+    return { ok: true };
 
     // Ticket-created Telegram confirmation is sent server-side by POST /api/queues
     // itself (see server.ts) — the bot token never needs to reach the browser.

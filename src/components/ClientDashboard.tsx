@@ -56,7 +56,7 @@ interface ClientDashboardProps {
   queues: QueueItem[];
   selectedClinic: Clinic | null;
   onSelectClinic: (clinic: Clinic | null) => void;
-  onAddQueue: (newQueue: QueueItem) => void;
+  onAddQueue: (newQueue: QueueItem) => void | Promise<{ ok: boolean; error?: string } | void>;
   onCancelQueue: (id: string) => void;
   onUpdateDoctorRating: (doctorId: string, rating: number) => void;
   setActiveTab?: (tab: 'bemor' | 'shifokor' | 'boshliq' | 'kod') => void;
@@ -100,6 +100,19 @@ export default function ClientDashboard({
 
     type LocalDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
     const dict: Record<string, LocalDictEntry> = {
+      // Weekday headers in the availability grid. DoctorAvailability renders
+      // t(weekday.toLowerCase()); without these the patient saw raw Uzbek names
+      // no matter which language they had chosen.
+      "dushanba": { ru: "Пн", en: "Mon", kk: "Дс", ky: "Дүй", tg: "Дш", tk: "Duş" },
+      "seshanba": { ru: "Вт", en: "Tue", kk: "Сс", ky: "Шей", tg: "Сш", tk: "Siş" },
+      "chorshanba": { ru: "Ср", en: "Wed", kk: "Ср", ky: "Шар", tg: "Чш", tk: "Çar" },
+      "payshanba": { ru: "Чт", en: "Thu", kk: "Бс", ky: "Бей", tg: "Пш", tk: "Pen" },
+      "juma": { ru: "Пт", en: "Fri", kk: "Жм", ky: "Жум", tg: "Ҷм", tk: "Ann" },
+      "shanba": { ru: "Сб", en: "Sat", kk: "Сн", ky: "Ише", tg: "Шн", tk: "Şen" },
+      "yakshanba": { ru: "Вс", en: "Sun", kk: "Жк", ky: "Жек", tg: "Яш", tk: "Ýek" },
+      "dam olish": { ru: "Выходной", en: "Day off", kk: "Демалыс", ky: "Эс алуу", tg: "Истироҳат", tk: "Dynç" },
+      "tanlangan vaqt": { ru: "Выбранное время", en: "Selected time", kk: "Таңдалған уақыт", ky: "Тандалган убакыт", tg: "Вақти интихобшуда", tk: "Saýlanan wagt" },
+      "bo'sh katakni bosib vaqt tanlang (ixtiyoriy)": { ru: "Нажмите на свободную ячейку, чтобы выбрать время (необязательно)", en: "Tap a free cell to pick a time (optional)", kk: "Уақыт таңдау үшін бос ұяшықты басыңыз (міндетті емес)", ky: "Убакыт тандоо үчүн бош уячаны басыңыз (милдеттүү эмес)", tg: "Барои интихоби вақт хонаи холиро пахш кунед (ихтиёрӣ)", tk: "Wagt saýlamak üçin boş öýjügi basyň (hökman däl)" },
       "avval klinikani tanlang": { ru: "Сначала выберите клинику", en: "Select a clinic first", kk: "Алдымен клиниканы таңдаңыз", ky: "Адегенде клиниканы тандаңыз", tg: "Аввал клиникаро интихоб кунед", tk: "Ilki klinikany saýlaň" },
       "avval klinikani, so'ng shifokorni tanlang": { ru: "Сначала выберите клинику, затем врача", en: "Select a clinic first, then a doctor", kk: "Алдымен клиниканы, сосын дәрігерді таңдаңыз", ky: "Адегенде клиниканы, анан дарыгерди тандаңыз", tg: "Аввал клиника, баъд духтурро интихоб кунед", tk: "Ilki klinikany, soňra lukmany saýlaň" },
       "bu klinikada hozircha shifokorlar yo'q": { ru: "В этой клинике пока нет врачей", en: "This clinic has no doctors yet", kk: "Бұл клиникада әзірге дәрігерлер жоқ", ky: "Бул клиникада азырынча дарыгерлер жок", tg: "Дар ин клиника ҳанӯз духтур нест", tk: "Bu klinikada heniz lukmanlar ýok" },
@@ -378,6 +391,8 @@ export default function ClientDashboard({
   // available for anyone who already knows which branch they want.
   const [bookingPickerMode, setBookingPickerMode] = useState<'map' | 'list'>('map');
   const [complaint, setComplaint] = useState('');
+  // The specific slot the patient tapped in the availability grid, if any.
+  const [pickedSlot, setPickedSlot] = useState<{ date: string; time: string } | null>(null);
   const [isLanguageOpen, setIsLanguageOpen] = useState(false);
 
   // --- FUTURISTIC 3D DENTAL SCANNER METRIC STATES ---
@@ -1096,7 +1111,7 @@ export default function ClientDashboard({
     }
   };
 
-  const handleBookQueue = (e?: React.FormEvent) => {
+  const handleBookQueue = async (e?: React.FormEvent) => {
     e?.preventDefault();
 
     // One active ticket per patient — checked here (immediate, no round trip)
@@ -1130,19 +1145,36 @@ export default function ClientDashboard({
       doctorId: doc.id,
       complaint: complaint,
       number: ticketNo,
-      status: 'pending',
+      // Picking a slot books a real appointment, which is what makes it appear
+      // on the doctor's weekly calendar. Without one this stays a walk-in
+      // ticket, and the doctor sees it in the "vaqti belgilanmagan" strip.
+      status: pickedSlot ? 'scheduled' : 'pending',
       createdAt: new Date().toISOString(),
-      passportSerial: currentUser?.passportSerial || ''
+      passportSerial: currentUser?.passportSerial || '',
+      ...(pickedSlot ? { appointmentDate: pickedSlot.date, appointmentTime: pickedSlot.time } : {}),
     };
     if (currentUser?.telegramChatId || telegramIdInput) {
       newQueue.telegramChatId = currentUser?.telegramChatId || telegramIdInput;
     }
 
-    onAddQueue(newQueue);
+    const result = await onAddQueue(newQueue);
+    // The server can reject this (slot already taken, or an active ticket
+    // already exists). Saying "booked!" and then quietly removing the ticket
+    // is worse than saying why.
+    if (result && result.ok === false) {
+      showToast(result.error || "Navbat olishda xatolik yuz berdi.", "error");
+      return;
+    }
+
     setComplaint('');
+    setPickedSlot(null);
     // Return to the cabinet so the fresh ticket is immediately visible in "Mening navbatlarim".
     setActiveSubView('cabinet');
-    showToast(`Navbatingiz olindi! Elektron chipta raqamingiz: #${ticketNo}`);
+    showToast(
+      pickedSlot
+        ? `Navbatingiz olindi! ${pickedSlot.date} ${pickedSlot.time} · #${ticketNo}`
+        : `Navbatingiz olindi! Elektron chipta raqamingiz: #${ticketNo}`
+    );
   };
 
   // "Notify me when this doctor next has an opening" — the self-service
@@ -1631,7 +1663,38 @@ export default function ClientDashboard({
                 out of sync with what the doctor actually sees. */}
             {bookingDoctorId && (() => {
               const pickedDoctor = doctors.find((d) => d.id === bookingDoctorId);
-              return pickedDoctor ? <DoctorAvailability doctor={pickedDoctor} queues={queues} t={t} onJoinWaitlist={handleJoinWaitlist} /> : null;
+              if (!pickedDoctor) return null;
+              return (
+                <div className="space-y-2">
+                  <DoctorAvailability
+                    doctor={pickedDoctor}
+                    queues={queues}
+                    t={t}
+                    onJoinWaitlist={handleJoinWaitlist}
+                    onPickSlot={(date, time) => setPickedSlot({ date, time })}
+                    selectedDate={pickedSlot?.date}
+                    selectedTime={pickedSlot?.time}
+                  />
+                  <div className={`rounded-xl border px-3 py-2 flex items-center justify-between gap-2 ${
+                    pickedSlot ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <p className={`text-[11px] font-bold ${pickedSlot ? 'text-blue-700' : 'text-slate-500'}`}>
+                      {pickedSlot
+                        ? `${t("Tanlangan vaqt")}: ${pickedSlot.date} · ${pickedSlot.time}`
+                        : t("Bo'sh katakni bosib vaqt tanlang (ixtiyoriy)")}
+                    </p>
+                    {pickedSlot && (
+                      <button
+                        type="button"
+                        onClick={() => setPickedSlot(null)}
+                        className="text-[10px] font-black text-slate-400 hover:text-slate-600 shrink-0"
+                      >
+                        {t("Bekor qilish")}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
             })()}
 
             {/* Step 3: Complaint (optional) */}
