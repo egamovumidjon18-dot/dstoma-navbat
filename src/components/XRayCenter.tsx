@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
 import { compressImage } from '../utils/imageCompressor';
+import {
+  PhasePicker, ToothPicker, ImageDropzone, describeUploadError,
+  TREATMENT_PHASES, PHASE_ORDER, type TreatmentPhase,
+} from './ImagingControls';
 import { exportXrayReportPdf } from '../utils/pdfExport';
 import type { ToothData } from './DentalChart';
 import {
@@ -44,11 +48,14 @@ export interface XRay {
   id: string;
   patientId: string;
   type: 'OPG' | 'RVG' | 'CBCT' | 'Other';
-  stage?: 'Oldin' | 'Keyin' | 'Jarayon' | 'Boshqa';
+  stage?: TreatmentPhase;
   date: string;
   url: string;
   status: 'Pending' | 'Analyzed' | 'Approved';
   notes: string;
+  // FDI numbers this image covers. Absent on records from before the field
+  // existed; a panoramic legitimately covers many teeth, hence an array.
+  teeth?: string[];
 }
 
 export interface AIFinding {
@@ -80,11 +87,14 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
 
   // Upload modal
   const [showUpload, setShowUpload] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadType, setUploadType] = useState<XRay['type']>('OPG');
-  const [uploadStage, setUploadStage] = useState<XRay['stage']>('Oldin');
+  const [uploadStage, setUploadStage] = useState<TreatmentPhase>('Oldin');
+  const [uploadNotes, setUploadNotes] = useState('');
+  const [uploadTeeth, setUploadTeeth] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   
   useEffect(() => {
     if (!patientId) return;
@@ -234,28 +244,28 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
     }
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setIsUploading(true);
-      try {
-        const compressed = await compressImage(file, 1024);
-        setPreviewUrl(compressed);
-      } catch (err) {
-        console.error('Image processing failed', err);
-        alert("Rasm formatini o'qib bo'lmadi.");
-      } finally {
-        setIsUploading(false);
-      }
+  const handleFile = async (file: File) => {
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      const compressed = await compressImage(file, 1024);
+      setPreviewUrl(compressed);
+    } catch (err) {
+      // Surfaced in the dialog instead of an alert() the doctor has to dismiss
+      // before they can see the form again.
+      setUploadError(describeUploadError(err, t));
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const handleUpload = async () => {
     if (!previewUrl) {
-      alert("Iltimos, avval rasm tanlang.");
+      setUploadError(t("Iltimos, avval rasm tanlang."));
       return;
     }
-    const id = Date.now().toString();
+    // Date.now() alone collides when two uploads land in the same millisecond.
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const newXRay: XRay = {
       id,
       patientId,
@@ -264,14 +274,21 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
       date: new Date().toISOString(),
       url: previewUrl,
       status: 'Pending',
-      notes: ''
+      notes: uploadNotes,
+      teeth: uploadTeeth,
     };
     try {
       setIsUploading(true);
+      setUploadError(null);
       await setDoc(doc(db, `patients/${patientId}/xrays`, id), newXRay);
       setShowUpload(false);
       setPreviewUrl(null);
+      setUploadNotes('');
+      setUploadTeeth([]);
     } catch (error) {
+      // handleFirestoreError only logs, so without this the dialog just sat
+      // there looking like nothing had happened.
+      setUploadError(describeUploadError(error, t));
       handleFirestoreError(error, OperationType.WRITE, `patients/${patientId}/xrays`);
     } finally {
       setIsUploading(false);
@@ -294,29 +311,43 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
     }
   };
 
+  // The search box existed but was never wired to anything.
+  const filteredXRays = React.useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return xrays;
+    return xrays.filter(x =>
+      (x.notes || '').toLowerCase().includes(q) ||
+      (x.type || '').toLowerCase().includes(q) ||
+      (x.teeth || []).some(n => n.includes(q)) ||
+      new Date(x.date).toLocaleDateString().includes(q)
+    );
+  }, [xrays, searchTerm]);
+
   return (
-    <div className="flex flex-col h-full bg-[#020712] rounded-3xl p-6 text-slate-300 font-sans border border-slate-800">
+    <div className="flex flex-col h-full bg-[#020712] rounded-3xl p-3 sm:p-6 text-slate-300 font-sans border border-slate-800">
       {activeView === 'gallery' && (
         <div className="flex flex-col h-full">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-5">
             <div>
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <ImageIcon className="w-5 h-5 text-emerald-500" /> {t("Rentgenlar galereyasi")}
               </h3>
               <p className="text-sm text-slate-500">{t("Bemorning barcha rentgen va tomografiya tasvirlari")}</p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="relative">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 md:flex-none">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input 
-                  type="text" 
-                  placeholder="Qidirish..." 
-                  className="pl-9 pr-4 py-2 bg-[#0a0f1d] border border-slate-800 rounded-xl text-sm text-white focus:border-emerald-500 outline-none"
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={t("Qidirish...")}
+                  className="w-full md:w-48 pl-9 pr-4 py-2 bg-[#0a0f1d] border border-slate-800 rounded-xl text-sm text-white focus:border-emerald-500 outline-none"
                 />
               </div>
-              <button 
+              <button
                 onClick={() => setShowUpload(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-emerald-500/20"
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-emerald-500/20 shrink-0"
               >
                 <Upload className="w-4 h-4" /> {t("Yuklash")}
               </button>
@@ -324,16 +355,17 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
           </div>
 
           <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-            {["Oldin", "Jarayon", "Keyin", "Boshqa"].map(stageGroup => {
-              const stageXRays = xrays.filter(x => (x.stage || "Boshqa") === stageGroup);
+            {PHASE_ORDER.map(stageGroup => {
+              const phase = TREATMENT_PHASES.find(p => p.id === stageGroup)!;
+              const stageXRays = filteredXRays.filter(x => (x.stage || "Boshqa") === stageGroup);
               if (stageXRays.length === 0) return null;
-              
+
               return (
                 <div key={stageGroup} className="mb-8">
                   <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                    {stageGroup === "Oldin" ? "Muolajadan oldin" : 
-                     stageGroup === "Keyin" ? "Muolajadan keyin" : 
-                     stageGroup === "Jarayon" ? "Davolash jarayoni" : "Boshqa tasvirlar"}
+                    <span className={`w-2.5 h-2.5 rounded-full ${phase.color}`} />
+                    {t(phase.label)}
+                    <span className="text-slate-600 normal-case font-medium">({stageXRays.length})</span>
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {stageXRays.map(xray => (
@@ -348,12 +380,22 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
                         </div>
                         <div className="p-4">
                           <div className="flex justify-between items-start mb-2">
-                            <div>
+                            <div className="min-w-0">
                               <p className="text-white font-bold text-sm">{new Date(xray.date).toLocaleDateString()}</p>
                               <p className="text-xs text-slate-500">{new Date(xray.date).toLocaleTimeString()}</p>
                             </div>
-                            <div className={`w-2 h-2 rounded-full ${xray.status === "Approved" ? "bg-emerald-500" : xray.status === "Analyzed" ? "bg-indigo-500" : "bg-amber-500"}`}></div>
+                            <div className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${xray.status === "Approved" ? "bg-emerald-500" : xray.status === "Analyzed" ? "bg-indigo-500" : "bg-amber-500"}`}></div>
                           </div>
+                          {!!xray.teeth?.length && (
+                            <div className="flex flex-wrap gap-1 mb-1.5">
+                              {xray.teeth.map(n => (
+                                <span key={n} className="px-1.5 py-0.5 bg-slate-800 text-emerald-400 rounded text-[10px] font-bold">{n}</span>
+                              ))}
+                            </div>
+                          )}
+                          {!!xray.notes && (
+                            <p className="text-[11px] text-slate-400 leading-snug line-clamp-2">{xray.notes}</p>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -361,10 +403,10 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
                 </div>
               );
             })}
-            {xrays.length === 0 && (
+            {filteredXRays.length === 0 && (
               <div className="py-12 flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-800 rounded-2xl">
                 <ImageIcon className="w-12 h-12 mb-4 text-slate-700" />
-                <p>{t("Hozircha rentgen tasvirlari mavjud emas")}</p>
+                <p>{searchTerm ? t("Hech narsa topilmadi") : t("Hozircha rentgen tasvirlari mavjud emas")}</p>
               </div>
             )}
           </div>
@@ -373,12 +415,12 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
 
       {activeView === "viewer" && selectedXRay && (
         <div className="flex flex-col h-full">
-          <div className="flex justify-between items-center mb-4 bg-[#0a0f1d] p-3 rounded-xl border border-slate-800">
+          <div className="flex flex-wrap justify-between items-center gap-2 mb-4 bg-[#0a0f1d] p-3 rounded-xl border border-slate-800">
             <button onClick={() => setActiveView("gallery")} className="flex items-center gap-2 text-slate-400 hover:text-white px-3 py-1.5 rounded-lg transition-colors">
-              <ChevronLeft className="w-4 h-4" /> Ortga qaytish
+              <ChevronLeft className="w-4 h-4" /> {t("Ortga qaytish")}
             </button>
-            <div className="text-center">
-              <h4 className="text-white font-bold">{selectedXRay.type} Tasviri</h4>
+            <div className="text-center order-last w-full sm:order-none sm:w-auto">
+              <h4 className="text-white font-bold">{selectedXRay.type} {t("Tasviri")}</h4>
               <p className="text-xs text-slate-500">{new Date(selectedXRay.date).toLocaleString()}</p>
             </div>
             <div className="flex items-center gap-2">
@@ -396,12 +438,14 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
             </div>
           </div>
 
-          <div className="flex-1 flex gap-4 min-h-0">
+          {/* Stacks below lg: a fixed 350px panel beside the image left the image
+              pane at roughly zero width on a phone and forced horizontal overflow. */}
+          <div className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0 overflow-y-auto lg:overflow-visible">
             {/* Image Viewer */}
 
-            <div className="flex-1 bg-[#0a0f1d] rounded-2xl border border-slate-800 overflow-hidden relative flex items-center justify-center">
-              <div 
-                style={{ 
+            <div className="flex-1 min-h-[240px] bg-[#0a0f1d] rounded-2xl border border-slate-800 overflow-hidden relative flex items-center justify-center">
+              <div
+                style={{
                   transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
                   transition: 'transform 0.2s ease-out'
                 }}
@@ -412,7 +456,7 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
             </div>
 
             {/* Right Panel (AI & Tools) */}
-            <div className="w-[350px] bg-[#0a0f1d] rounded-2xl border border-slate-800 p-5 flex flex-col gap-6 overflow-y-auto">
+            <div className="w-full lg:w-[350px] shrink-0 bg-[#0a0f1d] rounded-2xl border border-slate-800 p-5 flex flex-col gap-6 lg:overflow-y-auto">
               <div>
                 <button 
                   onClick={() => loadAnalysis(selectedXRay.id)}
@@ -552,78 +596,69 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
       {/* Upload Modal */}
       {showUpload && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020712]/80 backdrop-blur-sm p-4">
-          <div className="bg-[#0a0f1d] rounded-2xl border border-slate-800 shadow-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-6">
+          {/* max-h + scroll: on a phone this dialog is taller than the viewport,
+              and without it the Yuklash button was simply unreachable. */}
+          <div className="bg-[#0a0f1d] rounded-2xl border border-slate-800 shadow-2xl w-full max-w-md p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-bold text-white">{t("Yangi rentgen yuklash")}</h3>
               <button onClick={() => setShowUpload(false)} className="text-slate-500 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Tasvir turi")}</label>
-                  <select 
-                    value={uploadType}
-                    onChange={(e) => setUploadType(e.target.value as any)}
-                    className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
-                  >
-                    <option value="OPG">{t("Panoramali (OPG)")}</option>
-                    <option value="RVG">{t("Vizual (RVG)")}</option>
-                    <option value="CBCT">{t("Tomografiya (CBCT)")}</option>
-                    <option value="Other">{t("Boshqa")}</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Bosqich")}</label>
-                  <select 
-                    value={uploadStage}
-                    onChange={(e) => setUploadStage(e.target.value as any)}
-                    className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
-                  >
-                    <option value="Oldin">{t("Oldin (Muolajadan oldin)")}</option>
-                    <option value="Jarayon">{t("Jarayon (Davolash jarayoni)")}</option>
-                    <option value="Keyin">{t("Keyin (Muolajadan keyin)")}</option>
-                    <option value="Boshqa">{t("Boshqa")}</option>
-                  </select>
-                </div>
-              </div>
-
-              
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileSelect} 
-                accept="image/*,.dcm" 
-                className="hidden" 
-              />
-              <div 
-                className="border-2 border-dashed border-slate-700 hover:border-emerald-500 rounded-xl p-8 text-center transition-colors cursor-pointer overflow-hidden relative" 
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {previewUrl ? (
-                  <img src={previewUrl} className="max-h-40 mx-auto object-contain" />
-                ) : (
-                  <>
-                    <Upload className="w-8 h-8 text-slate-500 mx-auto mb-3" />
-                    <p className="text-sm text-slate-300 font-bold mb-1">
-                      {isUploading ? "Ishlanmoqda..." : "Faylni tanlang yoki shu yerga tashlang"}
-                    </p>
-                    <p className="text-xs text-slate-500">JPG, PNG, DICOM (Max 10MB)</p>
-                  </>
-                )}
-              </div>
-
-              <div className="pt-4">
-                <button 
-                  onClick={handleUpload}
-                  disabled={isUploading || !previewUrl}
-                  className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors shadow-lg shadow-emerald-500/20"
+              <div>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Tasvir turi")}</label>
+                <select
+                  value={uploadType}
+                  onChange={(e) => setUploadType(e.target.value as any)}
+                  className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
                 >
-                  {isUploading ? t("Yuklanmoqda...") : t("Yuklash")}
-                </button>
+                  <option value="OPG">{t("Panoramali (OPG)")}</option>
+                  <option value="RVG">{t("Vizual (RVG)")}</option>
+                  <option value="CBCT">{t("Tomografiya (CBCT)")}</option>
+                  <option value="Other">{t("Boshqa")}</option>
+                </select>
               </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Muolaja bosqichi")}</label>
+                <PhasePicker value={uploadStage} onChange={setUploadStage} t={t} />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Tishlar")}</label>
+                <ToothPicker value={uploadTeeth} onChange={setUploadTeeth} t={t} />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Holat va kerakli muolaja")}</label>
+                <textarea
+                  value={uploadNotes}
+                  onChange={(e) => setUploadNotes(e.target.value)}
+                  rows={2}
+                  placeholder={t("Masalan: 36-tishda chuqur karies, kanal davolash kerak")}
+                  className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500 transition-colors resize-none"
+                />
+              </div>
+
+              <ImageDropzone
+                previewUrl={previewUrl}
+                isProcessing={isUploading}
+                error={uploadError}
+                maxSizeLabel={t("JPG, PNG")}
+                onFile={handleFile}
+                onClear={() => setPreviewUrl(null)}
+                t={t}
+              />
+
+              <button
+                onClick={handleUpload}
+                disabled={isUploading || !previewUrl}
+                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors shadow-lg shadow-emerald-500/20"
+              >
+                {isUploading ? t("Yuklanmoqda...") : t("Yuklash")}
+              </button>
             </div>
           </div>
         </div>

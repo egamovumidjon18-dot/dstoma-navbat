@@ -3958,7 +3958,7 @@ export default function DoctorDashboard({
           {activeView === "rentgenlar" && (
             selectedPatientId ? (
               <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-                <XRayCenter patientId={selectedPatientId} clinicId={effectiveClinicId} patientName={clinicPatients.find((p) => p.id === selectedPatientId)?.fullName} doctorName={currentDoctor?.name} />
+                <XRayCenter patientId={selectedPatientId} clinicId={effectiveClinicId} patientName={clinicPatients.find((p) => p.id === selectedPatientId)?.fullName} doctorName={currentDoctor?.name} language={language} />
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
@@ -3984,7 +3984,7 @@ export default function DoctorDashboard({
           {activeView === "foto_galereya" && (
             selectedPatientId ? (
               <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-                <PhotoGallery patientId={selectedPatientId} patientName={clinicPatients.find((p) => p.id === selectedPatientId)?.fullName} doctorName={currentDoctor?.name} />
+                <PhotoGallery patientId={selectedPatientId} patientName={clinicPatients.find((p) => p.id === selectedPatientId)?.fullName} doctorName={currentDoctor?.name} language={language} />
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">

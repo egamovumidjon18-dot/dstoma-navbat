@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, doc, getDoc, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
 import { compressImage } from '../utils/imageCompressor';
+import {
+  PhasePicker, ToothPicker, ImageDropzone, describeUploadError,
+  TREATMENT_PHASES, PHASE_ORDER, type TreatmentPhase,
+} from './ImagingControls';
 import { exportPhotoGalleryPdf } from '../utils/pdfExport';
 import type { ToothData } from './DentalChart';
 import {
@@ -54,10 +58,13 @@ export interface Photo {
   patientId: string;
   url: string;
   category: string;
+  // Legacy single-tooth field, kept because handleLinkToChart uses it as a
+  // Firestore document id. New uploads set it to the first entry of `teeth`.
   toothNumber: string;
+  teeth?: string[];
   date: string;
   isPrivate: boolean;
-  stage?: 'Oldin' | 'Keyin' | 'Jarayon' | 'Boshqa';
+  stage?: TreatmentPhase;
   notes: string;
 }
 
@@ -82,9 +89,10 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
   const [filterCategory, setFilterCategory] = useState('All');
 
   const [showUpload, setShowUpload] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadTeeth, setUploadTeeth] = useState<string[]>([]);
   const [uploadData, setUploadData] = useState<Partial<Photo>>({
     category: 'General',
     stage: 'Oldin',
@@ -130,34 +138,34 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
     };
   }, [patientId]);
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setIsUploading(true);
-      try {
-        const compressed = await compressImage(file, 800);
-        setPreviewUrl(compressed);
-      } catch (err) {
-        console.error('Image processing failed', err);
-        alert("Rasm formatini o'qib bo'lmadi.");
-      } finally {
-        setIsUploading(false);
-      }
+  const handleFile = async (file: File) => {
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      const compressed = await compressImage(file, 800);
+      setPreviewUrl(compressed);
+    } catch (err) {
+      setUploadError(describeUploadError(err, t));
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const handleUpload = async () => {
     if (!previewUrl) {
-      alert("Iltimos, avval rasm tanlang.");
+      setUploadError(t("Iltimos, avval rasm tanlang."));
       return;
     }
-    const id = Date.now().toString();
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const newPhoto: Photo = {
       id,
       patientId,
       url: previewUrl,
       category: uploadData.category || 'General',
-      toothNumber: uploadData.toothNumber || '',
+      // Kept as a single string for backwards compatibility with existing
+      // records and with handleLinkToChart, which uses it as a document id.
+      toothNumber: (uploadTeeth[0] || ''),
+      teeth: uploadTeeth,
       date: new Date().toISOString(),
       isPrivate: uploadData.isPrivate || false,
       stage: uploadData.stage || 'Boshqa',
@@ -165,11 +173,14 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
     };
     try {
       setIsUploading(true);
+      setUploadError(null);
       await setDoc(doc(db, `patients/${patientId}/photos`, id), newPhoto);
       setShowUpload(false);
       setPreviewUrl(null);
+      setUploadTeeth([]);
       setUploadData({ category: 'General', stage: 'Oldin', toothNumber: '', isPrivate: false, notes: '' });
     } catch (error) {
+      setUploadError(describeUploadError(error, t));
       handleFirestoreError(error, OperationType.WRITE, `patients/${patientId}/photos`);
     } finally {
       setIsUploading(false);
@@ -177,6 +188,8 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
   };
 
   const handleDelete = async (id: string) => {
+    // One click used to permanently delete a clinical photo with no confirmation.
+    if (!window.confirm(t("Bu fotoni butunlay o'chirasizmi?"))) return;
     try {
       await deleteDoc(doc(db, `patients/${patientId}/photos`, id));
       if (selectedPhoto?.id === id) setSelectedPhoto(null);
@@ -230,7 +243,13 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
   const categories = Array.from(new Set(photos.map(p => p.category)));
 
   const filteredPhotos = photos.filter(p => {
-    const matchesSearch = p.toothNumber.includes(searchTerm) || p.notes.toLowerCase().includes(searchTerm.toLowerCase());
+    // Guarded: a record missing toothNumber or notes used to throw here and
+    // blank the entire component.
+    const q = searchTerm.toLowerCase();
+    const teeth = p.teeth?.length ? p.teeth : (p.toothNumber ? [p.toothNumber] : []);
+    const matchesSearch = !q
+      || teeth.some(n => String(n).includes(searchTerm))
+      || (p.notes || '').toLowerCase().includes(q);
     const matchesCategory = filterCategory === 'All' || p.category === filterCategory;
     return matchesSearch && matchesCategory;
   });
@@ -247,7 +266,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#020712] rounded-3xl p-6 text-slate-300 font-sans border border-slate-800">
+    <div className="flex flex-col h-full bg-[#020712] rounded-3xl p-3 sm:p-6 text-slate-300 font-sans border border-slate-800">
       
       {/* Header Controls */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -371,18 +390,19 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
           )}
           <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
 
-            {["Oldin", "Jarayon", "Keyin", "Boshqa"].map(stageGroup => {
+            {PHASE_ORDER.map(stageGroup => {
+              const phase = TREATMENT_PHASES.find(p => p.id === stageGroup)!;
               const stagePhotos = filteredPhotos.filter(p => (p.stage || "Boshqa") === stageGroup);
               if (stagePhotos.length === 0) return null;
-              
+
               return (
                 <div key={stageGroup} className="mb-8">
                   <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                    {stageGroup === "Oldin" ? "Muolajadan oldin" : 
-                     stageGroup === "Keyin" ? "Muolajadan keyin" : 
-                     stageGroup === "Jarayon" ? "Davolash jarayoni" : "Boshqa tasvirlar"}
+                    <span className={`w-2.5 h-2.5 rounded-full ${phase.color}`} />
+                    {t(phase.label)}
+                    <span className="text-slate-600 normal-case font-medium">({stagePhotos.length})</span>
                   </h4>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {stagePhotos.map(photo => (
                       <div 
                         key={photo.id} 
@@ -413,7 +433,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
                           </div>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleDelete(photo.id); }}
-                            className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                            className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -544,7 +564,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
                       className="absolute inset-0 overflow-hidden"
                       style={{ width: `${sliderPosition}%` }}
                     >
-                      <img src={beforePhoto.url} className="absolute inset-0 w-[100vw] max-w-4xl h-full object-contain pointer-events-none" />
+                      <img src={beforePhoto.url} className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
                     </div>
 
                     <div 
@@ -578,85 +598,63 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
       {/* Upload Modal */}
       {showUpload && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020712]/80 backdrop-blur-sm p-4">
-          <div className="bg-[#0a0f1d] rounded-2xl border border-slate-800 shadow-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-6">
+          {/* This dialog is taller than a phone viewport; without the height cap
+              and scroll, its submit button was completely unreachable. */}
+          <div className="bg-[#0a0f1d] rounded-2xl border border-slate-800 shadow-2xl w-full max-w-md p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-bold text-white">{t("Yangi foto yuklash")}</h3>
               <button onClick={() => setShowUpload(false)} className="text-slate-500 hover:text-white transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="space-y-4">
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileSelect} 
-                accept="image/*" 
-                className="hidden" 
+              <ImageDropzone
+                previewUrl={previewUrl}
+                isProcessing={isUploading}
+                error={uploadError}
+                maxSizeLabel={t("JPG, PNG")}
+                onFile={handleFile}
+                onClear={() => setPreviewUrl(null)}
+                t={t}
               />
-              <div 
-                className="border-2 border-dashed border-slate-700 hover:border-emerald-500 rounded-xl p-8 text-center transition-colors cursor-pointer mb-4 overflow-hidden relative"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {previewUrl ? (
-                  <img src={previewUrl} className="max-h-40 mx-auto object-contain" />
-                ) : (
-                  <>
-                    <Upload className="w-8 h-8 text-slate-500 mx-auto mb-3" />
-                    <p className="text-sm text-slate-300 font-bold mb-1">
-                      {isUploading ? "Ishlanmoqda..." : "Faylni tanlang yoki shu yerga tashlang"}
-                    </p>
-                    <p className="text-xs text-slate-500">JPG, PNG (Max 10MB)</p>
-                  </>
-                )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Toifa")}</label>
+                <select
+                  value={uploadData.category}
+                  onChange={e => setUploadData({...uploadData, category: e.target.value})}
+                  className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
+                >
+                  <option value="General">{t("Umumiy yuz")}</option>
+                  <option value="Intraoral">{t("Intraoral")}</option>
+                  <option value="Smile">{t("Tabassum")}</option>
+                  <option value="Other">{t("Boshqa")}</option>
+                </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Toifa")}</label>
-                  <select 
-                    value={uploadData.category}
-                    onChange={e => setUploadData({...uploadData, category: e.target.value})}
-                    className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
-                  >
-                    <option value="General">{t("Umumiy yuz")}</option>
-                    <option value="Intraoral">{t("Intraoral")}</option>
-                    <option value="Smile">{t("Tabassum")}</option>
-                    <option value="Other">{t("Boshqa")}</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Bosqich")}</label>
-                  <select 
-                    value={uploadData.stage}
-                    onChange={e => setUploadData({...uploadData, stage: e.target.value as any})}
-                    className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
-                  >
-                    <option value="Oldin">{t("Oldin (Muolajadan oldin)")}</option>
-                    <option value="Jarayon">{t("Jarayon (Davolash jarayoni)")}</option>
-                    <option value="Keyin">{t("Keyin (Muolajadan keyin)")}</option>
-                    <option value="Boshqa">{t("Boshqa")}</option>
-                  </select>
-                </div>
-              </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Tish raqami (ixtiyoriy)")}</label>
-                <input 
-                  type="text" 
-                  placeholder="Masalan: 36"
-                  value={uploadData.toothNumber}
-                  onChange={e => setUploadData({...uploadData, toothNumber: e.target.value})}
-                  className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
+                <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Muolaja bosqichi")}</label>
+                <PhasePicker
+                  value={(uploadData.stage || 'Oldin') as TreatmentPhase}
+                  onChange={(stage) => setUploadData({ ...uploadData, stage })}
+                  t={t}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Eslatma")}</label>
-                <textarea 
+                <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Tishlar")}</label>
+                <ToothPicker value={uploadTeeth} onChange={setUploadTeeth} t={t} />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Holat va kerakli muolaja")}</label>
+                <textarea
                   rows={2}
                   value={uploadData.notes}
                   onChange={e => setUploadData({...uploadData, notes: e.target.value})}
-                  className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2 text-sm text-white outline-none focus:border-emerald-500 transition-colors resize-none"
+                  placeholder={t("Masalan: 36-tishda chuqur karies, kanal davolash kerak")}
+                  className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500 transition-colors resize-none"
                 ></textarea>
               </div>
 
@@ -677,7 +675,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
                   disabled={isUploading || !previewUrl}
                   className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors shadow-lg shadow-emerald-500/20"
                 >
-                  {isUploading ? "Yuklanmoqda..." : "Yuklash"}
+                  {isUploading ? t("Yuklanmoqda...") : t("Yuklash")}
                 </button>
               </div>
             </div>
