@@ -163,6 +163,13 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "qoladi": { ru: "Останется", en: "Remaining", kk: "Қалады", ky: "Калат", tg: "Мемонад", tk: "Galýar" },
   "to'lov yozilmaydi — qarz sifatida qoladi.": { ru: "Платёж не записывается — останется как долг.", en: "No payment is recorded — it stays as debt.", kk: "Төлем жазылмайды — қарыз болып қалады.", ky: "Төлөм жазылбайт — карыз болуп калат.", tg: "Пардохт сабт намешавад — ҳамчун қарз мемонад.", tk: "Töleg ýazylmaýar — bergi bolup galýar." },
   "bosqichlar": { ru: "Этапы", en: "Stages", kk: "Кезеңдер", ky: "Этаптар", tg: "Марҳилаҳо", tk: "Tapgyrlar" },
+  "dam olish": { ru: "Выходной", en: "Day off", kk: "Демалыс", ky: "Эс алуу", tg: "Рӯзи истироҳат", tk: "Dynç güni" },
+  "ish vaqtidan tashqari": { ru: "Вне рабочего времени", en: "Outside working hours", kk: "Жұмыс уақытынан тыс", ky: "Иш убактысынан тышкары", tg: "Берун аз вақти корӣ", tk: "Iş wagtyndan daşary" },
+  "vaqti belgilanmagan": { ru: "Время не назначено", en: "No time set", kk: "Уақыты белгіленбеген", ky: "Убактысы белгиленбеген", tg: "Вақт таъин нашудааст", tk: "Wagty bellenmedik" },
+  "vaqt belgilash": { ru: "Назначить время", en: "Set a time", kk: "Уақыт белгілеу", ky: "Убакыт белгилөө", tg: "Таъини вақт", tk: "Wagt bellemek" },
+  "tushlik vaqti": { ru: "Время обеда", en: "Lunch time", kk: "Түскі ас уақыты", ky: "Түшкү тамак убактысы", tg: "Вақти хӯрок", tk: "Günortanlyk wagty" },
+  "bu vaqt band": { ru: "Это время занято", en: "This time is taken", kk: "Бұл уақыт бос емес", ky: "Бул убакыт бош эмес", tg: "Ин вақт банд аст", tk: "Bu wagt boş däl" },
+  "ish kunlari": { ru: "Рабочие дни", en: "Working days", kk: "Жұмыс күндері", ky: "Иш күндөрү", tg: "Рӯзҳои корӣ", tk: "Iş günleri" },
   "bemor to'lovni qanday amalga oshirdi?": { ru: "Как пациент оплатил?", en: "How did the patient pay?", kk: "Пациент қалай төледі?", ky: "Бейтап кантип төлөдү?", tg: "Бемор чи тавр пардохт кард?", tk: "Näsag nähili töledi?" },
   "summa (so'm)": { ru: "Сумма (сум)", en: "Amount (UZS)", kk: "Сома (сом)", ky: "Сумма (сом)", tg: "Маблағ (сӯм)", tk: "Möçber (sim)" },
   naqd: { ru: "Наличные", en: "Cash", kk: "Қолма-қол", ky: "Накталай", tg: "Нақдина", tk: "Nagt" },
@@ -956,6 +963,18 @@ export default function DoctorDashboard({
   // creating the queue as already 'scheduled' rather than 'pending'.
   const handleNewBooking = async () => {
     if (!newBookingName.trim() || !newBookingDate || !newBookingTime || !effectiveClinicId || !onAddQueue) return;
+
+    // Nothing used to stop two patients being booked into the same slot — not
+    // here, not in the picker, not on the server. The grid then stacked both
+    // cards in one cell with no warning.
+    const clash = findConflict(
+      doctorQueues, activeDoctorId, newBookingDate, newBookingTime, doctorWorkingHours, editingQueueId || undefined
+    );
+    if (clash) {
+      window.alert(`${t("bu vaqt band")}: ${decodeLegacyEntities(clash.patientName)} (${clash.appointmentTime})`);
+      return;
+    }
+
     setIsSavingNewBooking(true);
     try {
       if (editingQueueId) {
@@ -3225,6 +3244,53 @@ export default function DoctorDashboard({
                 <span className="text-sm font-black text-slate-700">{scheduleWeekLabel}</span>
               </div>
 
+              {/* Appointments the grid cannot place truthfully. Both of these
+                  used to be invisible: an out-of-hours time was clamped onto
+                  the first/last row (so the row header lied about when it was),
+                  and a walk-in with no date was filtered out entirely — the
+                  doctor saw a free "+" for a slot they were actually working. */}
+              {outOfHoursThisWeek.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3">
+                  <p className="text-[10px] font-black text-amber-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5" /> {t("ish vaqtidan tashqari")} ({outOfHoursThisWeek.length})
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {outOfHoursThisWeek.map((q) => (
+                      <button
+                        key={q.id}
+                        onClick={() => openEditQueueModal(q)}
+                        className="flex items-center gap-2 bg-white border border-amber-200 hover:border-amber-400 rounded-xl px-3 py-2 text-left transition-colors"
+                      >
+                        <span className="text-[11px] font-black text-amber-700">{q.appointmentDate?.slice(5)} · {q.appointmentTime}</span>
+                        <span className="text-[11px] font-bold text-slate-600 truncate max-w-[140px]">{decodeLegacyEntities(q.patientName)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {undatedQueues.length > 0 && (
+                <div className="bg-sky-50 border border-sky-200 rounded-2xl p-3">
+                  <p className="text-[10px] font-black text-sky-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" /> {t("vaqti belgilanmagan")} ({undatedQueues.length})
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {undatedQueues.map((q) => (
+                      <button
+                        key={q.id}
+                        onClick={() => openEditQueueModal(q)}
+                        className="flex items-center gap-2 bg-white border border-sky-200 hover:border-sky-400 rounded-xl px-3 py-2 text-left transition-colors"
+                        title={t("vaqt belgilash")}
+                      >
+                        <span className="text-[10px] font-black text-sky-600 uppercase">#{q.number}</span>
+                        <span className="text-[11px] font-bold text-slate-600 truncate max-w-[140px]">{decodeLegacyEntities(q.patientName)}</span>
+                        <CalendarClock className="w-3 h-3 text-sky-500 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Weekly schedule table: time-slot rows (from the doctor's
                   working hours) x weekday columns. Clicking an empty, non-lunch
                   cell books directly into that exact slot — the grid itself is
@@ -3239,10 +3305,15 @@ export default function DoctorDashboard({
                         return (
                           <th
                             key={day.date}
-                            className={`px-3 py-3 border-b border-r border-slate-100 last:border-r-0 text-center ${isToday ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-700'}`}
+                            className={`px-3 py-3 border-b border-r border-slate-100 last:border-r-0 text-center ${
+                              isToday ? 'bg-blue-600 text-white' : day.isOff ? 'bg-slate-100 text-slate-400' : 'bg-slate-50 text-slate-700'
+                            }`}
                           >
                             <p className="text-[10px] font-black uppercase tracking-wide">{t(day.weekday.toLowerCase())}</p>
                             <p className="text-sm font-black">{formatDdMm(day.dateObj)}</p>
+                            {day.isOff && !isToday && (
+                              <p className="text-[8px] font-bold uppercase tracking-wide text-slate-400">{t("dam olish")}</p>
+                            )}
                           </th>
                         );
                       })}
@@ -3257,28 +3328,54 @@ export default function DoctorDashboard({
                             {slot}
                           </td>
                           {scheduleWeekGrid.map((day) => {
-                            const isWeekend = day.dateObj.getDay() === 0 || day.dateObj.getDay() === 6;
-                            const items = day.items.filter((q) => getQueueSlot(q.appointmentTime) === slot);
+                            // Out-of-hours items are shown in their own strip above the
+                            // grid, so exclude them here rather than letting getQueueSlot
+                            // clamp them into a row that misstates their time.
+                            const items = day.items.filter(
+                              (q) => !isOutOfHoursTime(q.appointmentTime) && getQueueSlot(q.appointmentTime) === slot
+                            );
+                            // A cancelled booking must not keep its slot reserved — the
+                            // patient-facing availability view already treats it as free,
+                            // so the doctor could not rebook a slot patients were being
+                            // offered.
+                            const activeItems = items.filter((q) => q.status !== 'cancelled');
                             return (
                               <td
                                 key={day.date}
-                                className={`p-1.5 border-b border-r border-slate-100 last:border-r-0 align-top ${isWeekend ? 'bg-slate-50/40' : ''}`}
+                                className={`p-1.5 border-b border-r border-slate-100 last:border-r-0 align-top ${day.isOff ? 'bg-slate-100/70' : ''}`}
                               >
-                                {lunch ? (
+                                {/* Bookings are drawn FIRST. This used to branch on lunch
+                                    before looking at items, so any appointment landing in
+                                    the lunch window rendered nowhere at all — and moving
+                                    the lunch break retroactively hid existing bookings. */}
+                                {items.length === 0 && (lunch || day.isOff) ? (
                                   <div className="min-h-[52px] flex items-center justify-center bg-slate-50 rounded-lg">
-                                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-wide">{t("tushlik")}</span>
+                                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-wide">
+                                      {day.isOff ? t("dam olish") : t("tushlik")}
+                                    </span>
                                   </div>
-                                ) : items.length === 0 ? (
+                                ) : activeItems.length === 0 && !day.isOff ? (
                                   <button
                                     type="button"
                                     onClick={() => openNewBookingModal(true, day.date, slot)}
-                                    className="w-full min-h-[52px] flex items-center justify-center border border-dashed border-purple-200 text-purple-400 hover:text-purple-600 hover:border-purple-400 hover:bg-purple-50 rounded-lg transition-colors"
-                                    title={t("bandlash")}
+                                    className={`w-full min-h-[52px] flex flex-col items-center justify-center border border-dashed rounded-lg transition-colors ${
+                                      lunch
+                                        ? 'border-amber-200 text-amber-400 hover:text-amber-600 hover:border-amber-400 hover:bg-amber-50'
+                                        : 'border-purple-200 text-purple-400 hover:text-purple-600 hover:border-purple-400 hover:bg-purple-50'
+                                    }`}
+                                    title={lunch ? t("tushlik vaqti") : t("bandlash")}
                                   >
                                     <Plus className="w-5 h-5" strokeWidth={2.5} />
+                                    {lunch && <span className="text-[8px] font-black uppercase mt-0.5">{t("tushlik")}</span>}
+                                    {items.length > 0 && <span className="text-[8px] font-bold text-slate-400 mt-0.5">{t("bekor qilindi")}</span>}
                                   </button>
                                 ) : (
                                   <div className="space-y-1.5">
+                                    {lunch && activeItems.length > 0 && (
+                                      <p className="text-[8px] font-black text-amber-600 uppercase tracking-wide flex items-center gap-1">
+                                        <AlertCircle className="w-2.5 h-2.5" /> {t("tushlik vaqti")}
+                                      </p>
+                                    )}
                                     {items.map((q) => {
                                       const isDone = q.status === 'completed';
                                       const isCancelled = q.status === 'cancelled';
@@ -4291,9 +4388,20 @@ export default function DoctorDashboard({
                       onChange={(e) => setNewBookingTime(e.target.value)}
                       className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
                     >
-                      {scheduleSlots.filter((s) => !isLunchSlot(s)).map((s) => (
-                        <option key={s} value={s} className="text-slate-800">{s}</option>
-                      ))}
+                      {/* Taken slots are shown but disabled, so the doctor sees
+                          why a time is unavailable instead of the option simply
+                          not being there. */}
+                      {scheduleSlots.map((s) => {
+                        const lunch = isLunchSlot(s);
+                        const taken = !!findConflict(
+                          doctorQueues, activeDoctorId, newBookingDate, s, doctorWorkingHours, editingQueueId || undefined
+                        );
+                        return (
+                          <option key={s} value={s} disabled={taken} className="text-slate-800">
+                            {s}{taken ? ` — ${t("bu vaqt band")}` : lunch ? ` — ${t("tushlik")}` : ''}
+                          </option>
+                        );
+                      })}
                     </select>
                   )}
                 </div>

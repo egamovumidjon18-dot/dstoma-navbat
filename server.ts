@@ -1789,6 +1789,26 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
     }
   }
 
+  // Slot uniqueness. Bookings arrive from four surfaces (the weekly grid, the
+  // Navbatlar tab, the patient's own booking flow, and quick-add), so the only
+  // place that can reliably prevent two patients landing in one slot is here.
+  if (appointmentDate && appointmentTime && doctorId) {
+    const clash = qDb.find((item: any) =>
+      item.doctorId === doctorId &&
+      item.appointmentDate === appointmentDate &&
+      item.appointmentTime === appointmentTime &&
+      item.status !== 'cancelled' &&
+      item.id !== q.id
+    );
+    if (clash) {
+      return res.status(409).json({
+        ok: false,
+        error: "Bu vaqt allaqachon band qilingan. Iltimos, boshqa vaqtni tanlang.",
+        conflict: { id: clash.id, patientName: clash.patientName, appointmentTime: clash.appointmentTime },
+      });
+    }
+  }
+
   const ticketNo = qDb.filter(item => item.clinicId === clinicId).length + 104;
 
   const newQueueItem: any = {
