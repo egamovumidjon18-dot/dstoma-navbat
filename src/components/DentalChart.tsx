@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, doc, onSnapshot, setDoc, writeBatch } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
 import { STANDARD_SERVICES_CATALOG } from './DirectorDashboard';
+import { Language } from '../translations';
+import { createTranslator, Dict } from '../utils/translate';
+import { saveTreatmentCharge } from '../utils/treatmentCharges';
 import { 
   Stethoscope, Plus, History, Activity, Info, AlertTriangle, 
   Check, X, FileText, Pill, Syringe, Brain, User, Calendar, Phone,
@@ -34,13 +37,133 @@ export interface ToothData {
     date: string;
     treatment: string;
     condition: string;
-    cost: number;
+    cost: number; // list price — the discount is recorded separately, not folded in
+    discountPercent?: number;
     dentist: string;
     notes?: string;
     material?: string;
     shade?: string;
   }>;
 }
+
+// Keyed by the Uzbek label so CONDITIONS[].label doubles as the translation key
+// — the palette, the drawer chips, the surface list, the history and both
+// dialogs all render the same strings through t().
+const DENTAL_CHART_TRANSLATIONS: Dict = {
+  "sog'lom": { ru: "Здоровый", en: "Healthy", kk: "Сау", ky: "Дени сак", tg: "Солим", tk: "Sagdyn" },
+  "boshlang'ich kariyes": { ru: "Начальный кариес", en: "Initial caries", kk: "Бастапқы кариес", ky: "Баштапкы кариес", tg: "Кариеси ибтидоӣ", tk: "Başlangyç karies" },
+  "chuqur kariyes": { ru: "Глубокий кариес", en: "Deep caries", kk: "Терең кариес", ky: "Терең кариес", tg: "Кариеси чуқур", tk: "Çuň karies" },
+  "pulpit": { ru: "Пульпит", en: "Pulpitis", kk: "Пульпит", ky: "Пульпит", tg: "Пулпит", tk: "Pulpit" },
+  "periodontit": { ru: "Периодонтит", en: "Periodontitis", kk: "Периодонтит", ky: "Периодонтит", tg: "Периодонтит", tk: "Periodontit" },
+  "apikal zararlanish": { ru: "Апикальное поражение", en: "Apical lesion", kk: "Апикалды зақымдану", ky: "Апикалдык зыян", tg: "Осеби апикалӣ", tk: "Apikal zeper" },
+  "kanal davolash boshlandi": { ru: "Лечение канала начато", en: "Root canal started", kk: "Арнаны емдеу басталды", ky: "Канал дарылоо башталды", tg: "Табобати канал оғоз шуд", tk: "Kanal bejergisi başlandy" },
+  "kanal davolandi": { ru: "Канал вылечен", en: "Root canal completed", kk: "Арна емделді", ky: "Канал дарыланды", tg: "Канал табобат шуд", tk: "Kanal bejerildi" },
+  "vaqtinchalik plomba": { ru: "Временная пломба", en: "Temporary filling", kk: "Уақытша пломба", ky: "Убактылуу пломба", tg: "Пломбаи муваққатӣ", tk: "Wagtlaýyn plomba" },
+  "kompozit plomba": { ru: "Композитная пломба", en: "Composite filling", kk: "Композиттік пломба", ky: "Композиттик пломба", tg: "Пломбаи композитӣ", tk: "Kompozit plomba" },
+  "shisha ionomer plomba": { ru: "Стеклоиономерная пломба", en: "Glass ionomer filling", kk: "Шыны иономер пломба", ky: "Айнек иономер пломба", tg: "Пломбаи шишагӣ-иономерӣ", tk: "Aýna ionomer plomba" },
+  "silant": { ru: "Силант", en: "Sealant", kk: "Силант", ky: "Силант", tg: "Силант", tk: "Silant" },
+  "koronka": { ru: "Коронка", en: "Crown", kk: "Коронка", ky: "Коронка", tg: "Тоҷ", tk: "Koronka" },
+  "ko'prik": { ru: "Мост", en: "Bridge", kk: "Көпір", ky: "Көпүрө", tg: "Пул", tk: "Köpri" },
+  "implant": { ru: "Имплант", en: "Implant", kk: "Имплант", ky: "Имплант", tg: "Имплант", tk: "Implant" },
+  "briket": { ru: "Брекет", en: "Bracket", kk: "Брекет", ky: "Брекет", tg: "Брекет", tk: "Breket" },
+  "harakatlanuvchi": { ru: "Подвижный", en: "Mobile", kk: "Қозғалмалы", ky: "Кыймылдуу", tg: "Ҳаракатнок", tk: "Hereketli" },
+  "sinish": { ru: "Перелом", en: "Fracture", kk: "Сынық", ky: "Сынык", tg: "Шикастагӣ", tk: "Döwük" },
+  "olish rejalashtirilgan": { ru: "Планируется удаление", en: "Extraction planned", kk: "Жұлу жоспарланған", ky: "Сууруу пландаштырылган", tg: "Кашидан ба нақша гирифта шуд", tk: "Aýyrmak meýilleşdirilen" },
+  "olingan": { ru: "Удалён", en: "Extracted", kk: "Жұлынған", ky: "Сууруп алынган", tg: "Кашида шуд", tk: "Aýrylan" },
+  "yo'q (missing)": { ru: "Отсутствует", en: "Missing", kk: "Жоқ", ky: "Жок", tg: "Мавҷуд нест", tk: "Ýok" },
+  "retensiya (impacted)": { ru: "Ретенция", en: "Impacted", kk: "Ретенция", ky: "Ретенция", tg: "Ретенсия", tk: "Retensiýa" },
+  "kuzatuv": { ru: "Наблюдение", en: "Observation", kk: "Бақылау", ky: "Байкоо", tg: "Мушоҳида", tk: "Gözegçilik" },
+  "qayta ko'rik zarur": { ru: "Требуется повторный осмотр", en: "Needs review", kk: "Қайта тексеру қажет", ky: "Кайра текшерүү керек", tg: "Аз нав муоина лозим аст", tk: "Gaýtadan barlag gerek" },
+
+  "tezkor bo'yash:": { ru: "Быстрая разметка:", en: "Quick paint:", kk: "Жылдам белгілеу:", ky: "Ыкчам белгилөө:", tg: "Ранги зуд:", tk: "Çalt boýag:" },
+  "barchasi": { ru: "Всего", en: "All", kk: "Барлығы", ky: "Бардыгы", tg: "Ҳама", tk: "Ählisi" },
+  "karies": { ru: "Кариес", en: "Caries", kk: "Кариес", ky: "Кариес", tg: "Кариес", tk: "Karies" },
+  "plomba": { ru: "Пломба", en: "Filling", kk: "Пломба", ky: "Пломба", tg: "Пломба", tk: "Plomba" },
+  "kanal": { ru: "Канал", en: "Canal", kk: "Арна", ky: "Канал", tg: "Канал", tk: "Kanal" },
+  "yo'q": { ru: "Нет", en: "Missing", kk: "Жоқ", ky: "Жок", tg: "Нест", tk: "Ýok" },
+  "belgilangan": { ru: "Отмечено", en: "Marked", kk: "Белгіленген", ky: "Белгиленген", tg: "Қайдшуда", tk: "Bellenen" },
+  "bajarildi": { ru: "Выполнено", en: "Done", kk: "Орындалды", ky: "Аткарылды", tg: "Иҷро шуд", tk: "Ýerine ýetirildi" },
+  "yuqori jag'": { ru: "Верхняя челюсть", en: "Upper jaw", kk: "Жоғарғы жақ", ky: "Жогорку жаак", tg: "Ҷоғи боло", tk: "Ýokarky äň" },
+  "pastki jag'": { ru: "Нижняя челюсть", en: "Lower jaw", kk: "Төменгі жақ", ky: "Ылдыйкы жаак", tg: "Ҷоғи поён", tk: "Aşaky äň" },
+  "saqlanmagan o'zgarishlar bor. saqlamasdan chiqilsinmi?": { ru: "Есть несохранённые изменения. Выйти без сохранения?", en: "There are unsaved changes. Leave without saving?", kk: "Сақталмаған өзгерістер бар. Сақтамай шығасыз ба?", ky: "Сакталбаган өзгөрүүлөр бар. Сактабай чыгасызбы?", tg: "Тағйироти захиранашуда мавҷуданд. Бе захира баромадан?", tk: "Ýatda saklanmadyk üýtgeşmeler bar. Ýatda saklaman çykmalymy?" },
+};
+
+export type ToothCategory =
+  | 'missing' | 'implants' | 'crowns' | 'endo' | 'filled' | 'decayed' | 'marked' | 'healthy';
+
+const DECAY_IDS = ['Deep Caries', 'Initial Caries', 'Pulpitis', 'Periodontitis', 'Apical Lesion'];
+const FILLING_IDS = ['Composite Filling', 'Temporary Filling', 'Glass Ionomer Filling', 'Sealant'];
+const ENDO_IDS = ['Root Canal Started', 'Root Canal Completed'];
+const CROWN_IDS = ['Crown', 'Bridge'];
+// Diagnoses that are neither restorative nor decay but still mean "this tooth has
+// been flagged". Without this bucket they fell through to `healthy`, so a tooth
+// painted black for a fracture was reported as healthy.
+const MARKED_IDS = [
+  'Orthodontic Bracket', 'Mobility', 'Fracture', 'Extraction Planned', 'Impacted',
+  'Observation', 'Needs Review',
+];
+
+/**
+ * Every category a tooth belongs to. A tooth genuinely can be several things at
+ * once (root-canalled AND crowned AND newly carious), and the previous code
+ * assigned only the first match, which made KARIES read systematically low.
+ *
+ * This is the single definition — both the counters and the click-to-highlight
+ * filter call it, so a counter can no longer disagree with what it highlights.
+ */
+export function categorizeTooth(tooth?: {
+  condition?: string;
+  conditions?: string[];
+  surfaces?: ToothSurfaceData | Record<string, string | undefined>;
+}): Set<ToothCategory> {
+  const out = new Set<ToothCategory>();
+  if (!tooth) { out.add('healthy'); return out; }
+
+  const conditions = tooth.conditions?.length
+    ? tooth.conditions
+    : (tooth.condition ? [tooth.condition] : []);
+  const surfaceValues = Object.values(tooth.surfaces || {}).filter(Boolean) as string[];
+
+  const isDecay = (c: string) => DECAY_IDS.includes(c) || String(c).includes('Caries');
+  const isFilling = (c: string) => FILLING_IDS.includes(c) || String(c).includes('Filling');
+
+  if (conditions.includes('Extracted') || conditions.includes('Missing')) out.add('missing');
+  if (conditions.includes('Implant')) out.add('implants');
+  if (conditions.some(c => CROWN_IDS.includes(c))) out.add('crowns');
+  if (conditions.some(c => ENDO_IDS.includes(c))) out.add('endo');
+  // Surfaces are checked independently of the crown-level state, so caries under
+  // an existing crown or beside an existing filling is no longer invisible.
+  if (conditions.some(isFilling) || surfaceValues.some(isFilling)) out.add('filled');
+  if (conditions.some(isDecay) || surfaceValues.some(isDecay)) out.add('decayed');
+  if (conditions.some(c => MARKED_IDS.includes(c))) out.add('marked');
+
+  if (out.size === 0) out.add('healthy');
+  return out;
+}
+
+interface StatSnapshot {
+  healthy: number; decayed: number; filled: number; endo: number;
+  crowns: number; implants: number; missing: number; marked: number; total: number;
+}
+
+// Declared once so the counter row and its highlight filter can never drift apart.
+const STAT_BUCKETS: Array<{
+  key: ToothCategory | null;
+  label: string;
+  value: (s: StatSnapshot) => number;
+  text: string;
+  border: string;
+}> = [
+  { key: null, label: 'Barchasi', value: s => s.total, text: 'text-slate-800', border: 'border-slate-800 ring-slate-800' },
+  { key: 'healthy', label: "Sog'lom", value: s => s.healthy, text: 'text-emerald-500', border: 'border-emerald-500 ring-emerald-500' },
+  { key: 'decayed', label: 'Karies', value: s => s.decayed, text: 'text-rose-500', border: 'border-rose-500 ring-rose-500' },
+  { key: 'filled', label: 'Plomba', value: s => s.filled, text: 'text-blue-500', border: 'border-blue-500 ring-blue-500' },
+  { key: 'endo', label: 'Kanal', value: s => s.endo, text: 'text-amber-500', border: 'border-amber-500 ring-amber-500' },
+  { key: 'crowns', label: 'Koronka', value: s => s.crowns, text: 'text-purple-500', border: 'border-purple-500 ring-purple-500' },
+  { key: 'implants', label: 'Implant', value: s => s.implants, text: 'text-cyan-500', border: 'border-cyan-500 ring-cyan-500' },
+  { key: 'marked', label: 'Belgilangan', value: s => s.marked, text: 'text-orange-500', border: 'border-orange-500 ring-orange-500' },
+  { key: 'missing', label: "Yo'q", value: s => s.missing, text: 'text-gray-500', border: 'border-gray-500 ring-gray-500' },
+];
 
 const CONDITIONS = [
   { id: 'Healthy', color: '#10b981', label: "Sog'lom" },
@@ -161,29 +284,11 @@ const InteractiveTooth = ({
   const isExtracted = hasCond('Extracted');
   const isImplant = hasCond('Implant');
   
-  const hasCondition = (category: string) => {
-    const isDecay = (c: string) => ['Deep Caries', 'Initial Caries', 'Pulpitis', 'Periodontitis', 'Apical Lesion'].includes(c) || String(c).includes('Caries');
-    const isFilled = (c: string) => ['Composite Filling', 'Temporary Filling', 'Glass Ionomer Filling', 'Filling'].includes(c);
-    const isEndo = (c: string) => ['Root Canal Started', 'Root Canal Completed'].includes(c);
-    const isCrown = (c: string) => ['Crown', 'Bridge'].includes(c);
-    
-    const isToothDecayed = conditions.some(isDecay) || Object.values(surfaces).some(c => isDecay(c as string));
-    const isToothFilled = conditions.some(isFilled) || Object.values(surfaces).some(c => isFilled(c as string));
-    const isToothEndo = conditions.some(isEndo);
-    const isToothCrown = conditions.some(isCrown);
-    const isToothImplant = hasCond('Implant');
-    const isToothMissing = hasCond('Extracted') || hasCond('Missing');
-    
-    if (category === 'missing') return isToothMissing;
-    if (category === 'implants') return isToothImplant;
-    if (category === 'crowns') return isToothCrown;
-    if (category === 'endo') return isToothEndo;
-    if (category === 'filled') return isToothFilled;
-    if (category === 'decayed') return isToothDecayed;
-    if (category === 'healthy') return !isToothMissing && !isToothImplant && !isToothCrown && !isToothEndo && !isToothFilled && !isToothDecayed;
-    
-    return false;
-  };
+  // Same categorizer the counters use, so clicking "PLOMBA 1" highlights exactly
+  // one tooth rather than every tooth that loosely matched a second, divergent
+  // copy of this logic.
+  const hasCondition = (category: string) =>
+    categorizeTooth({ conditions, surfaces }).has(category as ToothCategory);
 
   const isFaded = highlightCondition && !hasCondition(highlightCondition);
 
@@ -351,7 +456,21 @@ const InteractiveTooth = ({
   );
 };
 
-export default function DentalChart({ patientId, doctorName, readOnly = false }: { patientId: string; doctorName?: string; readOnly?: boolean }) {
+interface DentalChartProps {
+  patientId: string;
+  doctorName?: string;
+  readOnly?: boolean;
+  language?: Language;
+  clinicId?: string;
+  doctorId?: string;
+  patientName?: string;
+  staffToken?: string | null;
+}
+
+export default function DentalChart({
+  patientId, doctorName, readOnly = false, language, clinicId, doctorId, patientName, staffToken,
+}: DentalChartProps) {
+  const t = createTranslator(language, DENTAL_CHART_TRANSLATIONS);
   const [teeth, setTeeth] = useState<Record<string, ToothData>>({});
   const [selectedTooth, setSelectedTooth] = useState<string | null>(null);
   const [selectedSurface, setSelectedSurface] = useState<string | null>(null);
@@ -381,7 +500,7 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
 
   const [selectedCatalogCategory, setSelectedCatalogCategory] = useState(0);
   const [catalogSearchQuery, setCatalogSearchQuery] = useState('');
-  const [zoom, setZoom] = useState(1.2);
+  const [zoom, setZoom] = useState(1);
   const [showGrid, setShowGrid] = useState(false);
   const [paintCondition, setPaintCondition] = useState<string | null>(null);
   const [pendingPaintChanges, setPendingPaintChanges] = useState<Record<string, ToothData>>({});
@@ -407,10 +526,37 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
     return () => unsub();
   }, [patientId]);
 
+  // Unsaved paint belongs to the patient it was drawn on. Without this, switching
+  // patients carried the previous patient's pending teeth over — they rendered on
+  // the new chart and pressing "Saqlash" wrote them into the WRONG patient's
+  // record. Clearing on id change is the only safe behaviour.
+  useEffect(() => {
+    setPendingPaintChanges({});
+    setSelectedTooth(null);
+    setSelectedSurface(null);
+  }, [patientId]);
+
+  // Painting is only persisted when "Saqlash" is pressed, so leaving the page
+  // with pending changes silently discards them.
+  useEffect(() => {
+    if (Object.keys(pendingPaintChanges).length === 0) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [pendingPaintChanges]);
+
   const applyPaintToTooth = (id: number, surface?: string) => {
-    if (!paintCondition) return;
+    if (readOnly || !paintCondition) return;
     const toothIdStr = id.toString();
-    const existingTooth = pendingPaintChanges[toothIdStr] || teeth[toothIdStr] || {
+    // Read the pending state through the functional updater below rather than
+    // from this closure: two clicks on the same tooth inside one render batch
+    // both used to start from the same stale snapshot, so the first was lost.
+    applyPaintInternal(toothIdStr, surface);
+  };
+
+  const applyPaintInternal = (toothIdStr: string, surface?: string) => {
+    setPendingPaintChanges(prev => {
+    const existingTooth = prev[toothIdStr] || teeth[toothIdStr] || {
       id: toothIdStr,
       condition: 'Healthy',
       conditions: ['Healthy'],
@@ -489,18 +635,19 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
       surfaces: updatedSurfaces,
     };
 
-    setPendingPaintChanges(prev => ({
-      ...prev,
-      [toothIdStr]: updatedTooth
-    }));
+    return { ...prev, [toothIdStr]: updatedTooth };
+    });
   };
 
   const handleSavePaintChanges = async () => {
-    if (Object.keys(pendingPaintChanges).length === 0) return;
+    if (readOnly || Object.keys(pendingPaintChanges).length === 0) return;
     setIsSavingPaint(true);
     try {
-      const promises = Object.entries(pendingPaintChanges).map(([id, data]) => 
-        setDoc(doc(db, `patients/${patientId}/dentalChart`, id), data)
+      // merge:true, because XRayCenter and PhotoGallery write history entries
+      // into these same documents — a full overwrite here would erase whatever
+      // they added between the doctor painting and pressing Saqlash.
+      const promises = Object.entries(pendingPaintChanges).map(([id, data]) =>
+        setDoc(doc(db, `patients/${patientId}/dentalChart`, id), data, { merge: true })
       );
       await Promise.all(promises);
       setPendingPaintChanges({});
@@ -513,8 +660,8 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
   };
 
   const handleResetChart = async () => {
-    if (!patientId) return;
-    
+    if (readOnly || !patientId) return;
+
     if (!window.confirm("Barcha tishlardagi belgilanishlarni va tarixni o'chirib, dastlabki sog'lom holatiga qaytarmoqchimisiz? Bu amalni ortga qaytarib bo'lmaydi.")) {
       return;
     }
@@ -530,6 +677,10 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
 
       await batch.commit();
       alert("Barcha tishlar tarixi tozalandi va sog'lom holatga keltirildi!");
+      // Also drop unsaved paint — otherwise the canvas still showed the painted
+      // teeth right after "everything cleared", and saving resurrected them.
+      setPendingPaintChanges({});
+      setPaintCondition(null);
       setSelectedTooth(null);
       setSelectedSurface(null);
     } catch (error) {
@@ -610,35 +761,47 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
   };
 
   const handleSaveEditTooth = async () => {
-    if (!selectedTooth) return;
+    if (readOnly || !selectedTooth) return;
     try {
       const toothRef = doc(db, `patients/${patientId}/dentalChart`, selectedTooth);
-      const dataToSave = {
-        ...teeth[selectedTooth],
-        ...editToothData,
-        id: selectedTooth,
-      };
-      
-      if (editToothData.condition && editToothData.condition !== teeth[selectedTooth]?.condition) {
-        dataToSave.conditions = [editToothData.condition];
+      // Start from what the dialog was actually seeded with (pending paint wins
+      // over the persisted doc), not from the persisted doc alone — otherwise
+      // unsaved paint on this tooth was silently dropped by this write.
+      const base = pendingPaintChanges[selectedTooth] || teeth[selectedTooth];
+      const dataToSave: any = { ...base, ...editToothData, id: selectedTooth };
+
+      // Editing the primary condition must not discard the tooth's other
+      // conditions. This previously collapsed e.g. ['Crown','Root Canal
+      // Completed'] down to ['Crown'].
+      if (editToothData.condition) {
+        const existing = base?.conditions || (base?.condition ? [base.condition] : []);
+        const rest = existing.filter(c => c !== base?.condition && c !== editToothData.condition);
+        dataToSave.conditions = [editToothData.condition, ...rest];
       }
-      
+
       // Make sure we have a minimum viable object if the tooth was previously completely empty
       if (!dataToSave.condition) dataToSave.condition = 'Healthy';
       if (!dataToSave.history) dataToSave.history = [];
       if (!dataToSave.surfaces) dataToSave.surfaces = {};
 
-      await setDoc(toothRef, dataToSave);
+      await setDoc(toothRef, dataToSave, { merge: true });
       setShowEditTooth(false);
-      setTeeth(prev => ({ ...prev, [selectedTooth]: dataToSave as ToothData }));
+      // This tooth is now persisted, so its pending entry is stale — leaving it
+      // meant a later "Saqlash" would overwrite what was just saved here.
+      setPendingPaintChanges(prev => {
+        if (!prev[selectedTooth]) return prev;
+        const next = { ...prev };
+        delete next[selectedTooth];
+        return next;
+      });
     } catch (error) {
       console.error("Error saving tooth edit:", error);
     }
   };
 
   const handleSaveTreatment = async () => {
-    if (!selectedTooth) return;
-    
+    if (readOnly || !selectedTooth) return;
+
     const toothData = pendingPaintChanges[selectedTooth] || teeth[selectedTooth] || {
       id: selectedTooth,
       condition: 'Healthy',
@@ -679,6 +842,13 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
        }
     }
 
+    // The discount is now recorded rather than silently folded into the price.
+    // `cost` stays the list price and the percentage travels with the charge, so
+    // the treatment history and reports can show what was actually given away.
+    const listPrice = Number(newTreatment.cost) || 0;
+    const discountPercent = Number(newTreatment.discount) || 0;
+    const treatmentLabel = newTreatment.treatment + (selectedSurface && newTreatment.surfaceOnly ? ` (Yuzasi: ${selectedSurface})` : '');
+
     const updatedTooth: ToothData = {
       ...toothData,
       condition: currentConditions[0] || 'Healthy',
@@ -689,9 +859,10 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
         {
           id: Date.now().toString(),
           date: new Date(newTreatment.date).toISOString(),
-          treatment: newTreatment.treatment + (selectedSurface && newTreatment.surfaceOnly ? ` (Yuzasi: ${selectedSurface})` : ''),
+          treatment: treatmentLabel,
           condition: newTreatment.condition,
-          cost: Number(newTreatment.cost) * (1 - (Number(newTreatment.discount) || 0) / 100),
+          cost: listPrice,
+          discountPercent: discountPercent || undefined,
           dentist: doctorName || 'Dr. Shifokor',
           notes: newTreatment.notes + (newTreatment.assistant ? ` | Assistent: ${newTreatment.assistant}` : ''),
           material: newTreatment.material,
@@ -702,21 +873,36 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
     };
 
     try {
-      await setDoc(doc(db, `patients/${patientId}/dentalChart`, selectedTooth), updatedTooth);
-      
-      // Mualaja tizimi bilan sinxronlash (TreatmentPlans kolleksiyasiga qo'shish)
-      if (newTreatment.treatment) {
-        const newPlanId = Date.now().toString() + "_" + Math.random().toString(36).substring(2, 9);
-        const planItem = {
+      const newPlanId = newTreatment.treatment
+        ? Date.now().toString() + "_" + Math.random().toString(36).substring(2, 9)
+        : null;
+
+      // Both writes go in one batch — previously a failure on the second left the
+      // chart already changed with no matching plan entry.
+      const batch = writeBatch(db);
+      batch.set(doc(db, `patients/${patientId}/dentalChart`, selectedTooth), updatedTooth, { merge: true });
+      if (newPlanId) {
+        batch.set(doc(db, `patients/${patientId}/treatmentPlans`, newPlanId), {
           id: newPlanId,
           toothId: selectedTooth,
-          treatment: newTreatment.treatment + (selectedSurface && newTreatment.surfaceOnly ? ` (Yuzasi: ${selectedSurface})` : ''),
-          price: Number(newTreatment.cost) * (1 - (Number(newTreatment.discount) || 0) / 100),
+          treatment: treatmentLabel,
+          price: listPrice,
           status: 'Completed',
           doctorName: doctorName || 'Dr. Shifokor',
           createdAt: new Date(newTreatment.date).toISOString()
-        };
-        await setDoc(doc(db, `patients/${patientId}/treatmentPlans`, newPlanId), planItem);
+        });
+      }
+      await batch.commit();
+
+      if (newPlanId && clinicId && doctorId && staffToken) {
+        await saveTreatmentCharge({
+          id: newPlanId,
+          clinicId, patientId, doctorId, patientName,
+          treatmentName: treatmentLabel,
+          toothId: selectedTooth,
+          listPrice,
+          discountPercent,
+        }, staffToken);
       }
 
       setShowAddTreatment(false);
@@ -761,43 +947,44 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
   );
   
   const stats = {
-    healthy: 0, decayed: 0, filled: 0, endo: 0, crowns: 0, implants: 0, missing: 0, total: totalTeeth
+    healthy: 0, decayed: 0, filled: 0, endo: 0, crowns: 0, implants: 0, missing: 0,
+    marked: 0, total: totalTeeth
   };
 
   const processedIds = new Set();
   const mergedTeethData = { ...teeth, ...pendingPaintChanges };
 
+  // A tooth counts in EVERY category that applies to it, not just the first one
+  // that matched. A root-canalled tooth that has since decayed used to show up
+  // only under KANAL, which is why KARIES always read low.
   Object.entries(mergedTeethData).forEach(([toothId, tRaw]) => {
-    if (!currentTeethSet.has(toothId)) return; // Only calculate stats for the currently visible teeth
+    if (!currentTeethSet.has(toothId)) return; // Only count the currently visible dentition
     const t = tRaw as ToothData;
     processedIds.add(toothId);
 
-    const conditions = t.conditions || (t.condition ? [t.condition] : ['Healthy']);
-    const hasCond = (list: string[]) => conditions.some(c => list.includes(c));
-
-    if (hasCond(['Extracted', 'Missing'])) { stats.missing++; return; }
-    if (hasCond(['Implant'])) { stats.implants++; return; }
-    if (hasCond(['Crown', 'Bridge'])) { stats.crowns++; return; }
-    if (hasCond(['Root Canal Completed', 'Root Canal Started'])) { stats.endo++; return; }
-    if (hasCond(['Composite Filling', 'Temporary Filling', 'Glass Ionomer Filling', 'Filling'])) { stats.filled++; return; }
-    if (hasCond(['Deep Caries', 'Initial Caries', 'Pulpitis', 'Periodontitis', 'Apical Lesion'])) { stats.decayed++; return; }
-
-    // Check surfaces if no main condition matches
-    const surfaceVals = Object.values(t.surfaces || {});
-    const hasDecay = surfaceVals.some(c => c && (String(c).includes('Caries') || c === 'Pulpitis' || c === 'Periodontitis' || c === 'Apical Lesion'));
-    const hasFilling = surfaceVals.some(c => c && String(c).includes('Filling'));
-    if (hasDecay) { stats.decayed++; return; }
-    if (hasFilling) { stats.filled++; return; }
-
-    stats.healthy++;
+    const categories = categorizeTooth(t);
+    if (categories.has('missing')) stats.missing++;
+    if (categories.has('implants')) stats.implants++;
+    if (categories.has('crowns')) stats.crowns++;
+    if (categories.has('endo')) stats.endo++;
+    if (categories.has('filled')) stats.filled++;
+    if (categories.has('decayed')) stats.decayed++;
+    if (categories.has('marked')) stats.marked++;
+    if (categories.has('healthy')) stats.healthy++;
   });
 
-  // Teeth not in Firebase are healthy
+  // Teeth with no record yet are healthy
   stats.healthy += (totalTeeth - processedIds.size);
   stats.healthy = Math.max(0, stats.healthy);
 
+  // "Done" means work finished versus work still outstanding — not the fraction
+  // of the mouth carrying restorations, which is what dividing by all 32 teeth
+  // measured (a perfectly healthy patient read 0%).
   const completedCount = stats.filled + stats.endo + stats.crowns + stats.implants;
-  const completedPercent = Math.round((completedCount / totalTeeth) * 100);
+  const outstandingCount = stats.decayed + stats.marked;
+  const completedPercent = (completedCount + outstandingCount) > 0
+    ? Math.round((completedCount / (completedCount + outstandingCount)) * 100)
+    : 100;
 
   const getConditionColor = (id?: string) => CONDITIONS.find(c => c.id === id)?.color || '#10b981';
 
@@ -888,7 +1075,7 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
                       <Grid className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => { setZoom(1.2); setToothSearch(''); setSelectedTooth(null); }}
+                      onClick={() => { setZoom(1); setToothSearch(''); setSelectedTooth(null); }}
                       title="Ko'rinishni asliga qaytarish"
                       className="p-1 hover:bg-gray-100 rounded-md text-gray-500"
                     >
@@ -898,75 +1085,29 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
                 </div>
 
                 {/* Bottom Row: Stats & Filters */}
-                <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-gray-100">
-                  <div className="flex flex-wrap items-center gap-2 flex-1">
-                    <button 
-                      onClick={() => setHighlightCondition(null)}
-                      className={`flex flex-col px-2.5 py-1 rounded-lg min-w-[60px] transition-all border text-left ${highlightCondition === null ? 'bg-slate-800 text-white border-slate-800 shadow-sm ring-1 ring-slate-800 ring-offset-1' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`}
-                    >
-                      <span className="text-sm font-black leading-none">{stats.total}</span>
-                      <span className="text-[8px] font-bold uppercase mt-1 opacity-70">Barchasi</span>
-                    </button>
-                    
-                    <button 
-                      onClick={() => setHighlightCondition('healthy')}
-                      className={`flex flex-col px-2.5 py-1 rounded-lg min-w-[60px] transition-all border text-left ${highlightCondition === 'healthy' ? 'bg-white border-emerald-500 shadow-sm ring-1 ring-emerald-500 ring-offset-1' : 'bg-gray-50 border-gray-200 hover:bg-white hover:border-gray-300'}`}
-                    >
-                      <span className="text-sm font-black text-emerald-500 leading-none">{stats.healthy}</span>
-                      <span className="text-[8px] text-gray-500 font-bold uppercase mt-1">Sog'lom</span>
-                    </button>
-
-                    <button 
-                      onClick={() => setHighlightCondition('decayed')}
-                      className={`flex flex-col px-2.5 py-1 rounded-lg min-w-[60px] transition-all border text-left ${highlightCondition === 'decayed' ? 'bg-white border-rose-500 shadow-sm ring-1 ring-rose-500 ring-offset-1' : 'bg-gray-50 border-gray-200 hover:bg-white hover:border-gray-300'}`}
-                    >
-                      <span className="text-sm font-black text-rose-500 leading-none">{stats.decayed}</span>
-                      <span className="text-[8px] text-gray-500 font-bold uppercase mt-1">Karies</span>
-                    </button>
-
-                    <button 
-                      onClick={() => setHighlightCondition('filled')}
-                      className={`flex flex-col px-2.5 py-1 rounded-lg min-w-[60px] transition-all border text-left ${highlightCondition === 'filled' ? 'bg-white border-blue-500 shadow-sm ring-1 ring-blue-500 ring-offset-1' : 'bg-gray-50 border-gray-200 hover:bg-white hover:border-gray-300'}`}
-                    >
-                      <span className="text-sm font-black text-blue-500 leading-none">{stats.filled}</span>
-                      <span className="text-[8px] text-gray-500 font-bold uppercase mt-1">Plomba</span>
-                    </button>
-
-                    <button 
-                      onClick={() => setHighlightCondition('endo')}
-                      className={`flex flex-col px-2.5 py-1 rounded-lg min-w-[60px] transition-all border text-left ${highlightCondition === 'endo' ? 'bg-white border-amber-500 shadow-sm ring-1 ring-amber-500 ring-offset-1' : 'bg-amber-50 border-amber-200 hover:bg-white hover:border-amber-300'}`}
-                    >
-                      <span className="text-sm font-black text-amber-500 leading-none">{stats.endo}</span>
-                      <span className="text-[8px] text-amber-700 font-bold uppercase mt-1">Kanal</span>
-                    </button>
-
-                    <button 
-                      onClick={() => setHighlightCondition('crowns')}
-                      className={`flex flex-col px-2.5 py-1 rounded-lg min-w-[60px] transition-all border text-left ${highlightCondition === 'crowns' ? 'bg-white border-purple-500 shadow-sm ring-1 ring-purple-500 ring-offset-1' : 'bg-gray-50 border-gray-200 hover:bg-white hover:border-gray-300'}`}
-                    >
-                      <span className="text-sm font-black text-purple-500 leading-none">{stats.crowns}</span>
-                      <span className="text-[8px] text-gray-500 font-bold uppercase mt-1">Koronka</span>
-                    </button>
-
-                    <button 
-                      onClick={() => setHighlightCondition('implants')}
-                      className={`flex flex-col px-2.5 py-1 rounded-lg min-w-[60px] transition-all border text-left ${highlightCondition === 'implants' ? 'bg-white border-cyan-500 shadow-sm ring-1 ring-cyan-500 ring-offset-1' : 'bg-gray-50 border-gray-200 hover:bg-white hover:border-gray-300'}`}
-                    >
-                      <span className="text-sm font-black text-cyan-500 leading-none">{stats.implants}</span>
-                      <span className="text-[8px] text-gray-500 font-bold uppercase mt-1">Implant</span>
-                    </button>
-
-                    <button 
-                      onClick={() => setHighlightCondition('missing')}
-                      className={`flex flex-col px-2.5 py-1 rounded-lg min-w-[60px] transition-all border text-left ${highlightCondition === 'missing' ? 'bg-white border-gray-500 shadow-sm ring-1 ring-gray-500 ring-offset-1' : 'bg-gray-50 border-gray-200 hover:bg-white hover:border-gray-300'}`}
-                    >
-                      <span className="text-sm font-black text-gray-500 leading-none">{stats.missing}</span>
-                      <span className="text-[8px] text-gray-500 font-bold uppercase mt-1">Yo'q</span>
-                    </button>
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100">
+                  <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
+                    {STAT_BUCKETS.map(({ key, label, value, text, border }) => {
+                      const active = highlightCondition === key;
+                      return (
+                        <button
+                          key={String(key)}
+                          onClick={() => setHighlightCondition(key)}
+                          className={`flex flex-col px-2.5 py-1 rounded-lg min-w-[56px] transition-all border text-left ${
+                            active
+                              ? `bg-white shadow-sm ring-1 ring-offset-1 ${border}`
+                              : 'bg-gray-50 border-gray-200 hover:bg-white hover:border-gray-300'
+                          }`}
+                        >
+                          <span className={`text-sm font-black leading-none ${text}`}>{value(stats)}</span>
+                          <span className="text-[10px] text-gray-500 font-bold uppercase mt-1 leading-none">{t(label)}</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                  
+
                   {/* Progress Mini */}
-                  <div className="flex items-center gap-2 pl-4 border-l border-gray-100">
+                  <div className="flex items-center gap-2 sm:pl-4 sm:border-l border-gray-100">
                     <div className="relative w-8 h-8 flex items-center justify-center">
                       <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
                         <path className="text-gray-100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="4" />
@@ -975,7 +1116,7 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
                     </div>
                     <div className="flex flex-col">
                       <span className="text-[10px] font-black text-gray-800 leading-none">{completedPercent}%</span>
-                      <span className="text-[8px] font-bold text-gray-500 uppercase mt-0.5">Bajarildi</span>
+                      <span className="text-[10px] font-bold text-gray-500 uppercase mt-0.5 leading-none">{t("Bajarildi")}</span>
                     </div>
                   </div>
                 </div>
@@ -1014,27 +1155,31 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
                          )}
                        </div>
 
-                       <div className="flex flex-wrap items-center gap-4 w-full">
+                       {/* A compact grid rather than 24 oversized pills on a
+                           flex-wrap row, which used to eat ~400px of vertical
+                           space above the chart and looked untidy at every width. */}
+                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-1.5 w-full">
                          {CONDITIONS.map(c => {
                            const isSelected = paintCondition === c.id;
                            return (
                              <button
                                key={c.id}
                                onClick={() => setPaintCondition(isSelected ? null : c.id)}
-                               className={`flex items-center gap-3 px-6 py-4 rounded-full transition-all whitespace-nowrap group shrink-0
+                               title={t(c.label)}
+                               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all min-w-0
                                  ${isSelected ? 'bg-emerald-50 border border-emerald-500 text-emerald-700 shadow-sm' : 'bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 hover:border-gray-300'}`}
                              >
-                               <span className={`w-5 h-5 rounded-full shadow-sm shrink-0 border border-black/5 ${isSelected ? 'scale-110' : ''} transition-transform`} style={{ backgroundColor: c.color }}></span>
-                               <span className={`text-base font-bold leading-none`}>{c.label}</span>
+                               <span className={`w-3 h-3 rounded-full shadow-sm shrink-0 border border-black/5 ${isSelected ? 'scale-125' : ''} transition-transform`} style={{ backgroundColor: c.color }}></span>
+                               <span className="text-xs font-bold leading-tight text-left truncate">{t(c.label)}</span>
                              </button>
                            );
                          })}
-                         {paintCondition && (
-                           <button onClick={() => setPaintCondition(null)} className="text-base font-bold text-red-500 hover:text-white px-6 py-4 rounded-full bg-red-50 border border-red-200 hover:bg-red-500 hover:border-red-500 transition-colors shrink-0">
-                             Bekor qilish
-                           </button>
-                         )}
                        </div>
+                       {paintCondition && (
+                         <button onClick={() => setPaintCondition(null)} className="mt-2 text-xs font-bold text-red-500 hover:text-white px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 hover:bg-red-500 hover:border-red-500 transition-colors self-start">
+                           Bekor qilish
+                         </button>
+                       )}
                     </div>
                  </div>
                  )}
@@ -1048,9 +1193,13 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
                      backgroundSize: '24px 24px',
                    } : undefined}
                  >
-                    <div className="relative transition-transform duration-300 w-full mx-auto flex flex-col items-center min-w-max pb-8" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
-                       <div className="bg-white rounded-3xl p-6 flex flex-col items-center shadow-sm border border-gray-200">
-                          <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-4">YUQORI JAG'</div>
+                    {/* transformOrigin is top-LEFT: with `top center` the scaled
+                        overflow split evenly on both sides, and the left half is
+                        unreachable in an LTR scroll container — so at the default
+                        zoom the outer molars on that side were simply lost. */}
+                    <div className="relative transition-transform duration-300 mx-auto flex flex-col items-center min-w-max pb-8" style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100 / zoom}%` }}>
+                       <div className="bg-white rounded-3xl p-3 sm:p-6 flex flex-col items-center shadow-sm border border-gray-200">
+                          <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-4">{t("YUQORI JAG'")}</div>
                       
                       {/* Upper row: Q1 right | midline | Q2 left */}
                       <div className="flex items-end justify-center gap-1 w-full relative">
@@ -1129,7 +1278,7 @@ export default function DentalChart({ patientId, doctorName, readOnly = false }:
                         </div>
                       </div>
 
-                      <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-2">PASTKI JAG'</div>
+                      <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-2">{t("PASTKI JAG'")}</div>
                     </div>
                  </div>
               </div>

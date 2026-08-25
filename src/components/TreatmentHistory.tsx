@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
 import { TreatmentItem } from './TreatmentPlan';
+import { getApiUrl } from '../services/api';
+import type { PaymentReceipt, TreatmentCharge } from '../types';
+import { patientBalance, itemBalance } from '../utils/treatmentBilling';
 import { exportTreatmentListPdf, exportTreatmentRecordPdf } from '../utils/pdfExport';
 import {
   History, Calendar, User, FileText, Download, Filter,
@@ -38,13 +41,17 @@ const HISTORY_TRANSLATIONS: Dict = {
   "materiallar": { ru: "Материалы", en: "Materials", kk: "Материалдар", ky: "Материалдар", tg: "Маводҳо", tk: "Materiallar" },
   "chegirma": { ru: "Скидка", en: "Discount", kk: "Жеңілдік", ky: "Арзандатуу", tg: "Тахфиф", tk: "Arzanladyş" },
   "jami to'langan:": { ru: "Всего оплачено:", en: "Total paid:", kk: "Барлығы төленді:", ky: "Жалпы төлөндү:", tg: "Ҳамагӣ пардохта шуд:", tk: "Jemi tölendi:" },
+  "to'lash uchun": { ru: "К оплате", en: "Payable", kk: "Төлеуге", ky: "Төлөөгө", tg: "Барои пардохт", tk: "Tölemek üçin" },
+  "qarz": { ru: "Долг", en: "Debt", kk: "Қарыз", ky: "Карыз", tg: "Қарз", tk: "Bergi" },
 };
 
 
 
-export default function TreatmentHistory({ patientId, patientName, language }: { patientId: string; patientName?: string; language?: Language }) {
+export default function TreatmentHistory({ patientId, patientName, language, staffToken }: { patientId: string; patientName?: string; language?: Language; staffToken?: string | null }) {
   const t = createTranslator(language, HISTORY_TRANSLATIONS);
   const [items, setItems] = useState<TreatmentItem[]>([]);
+  const [charges, setCharges] = useState<TreatmentCharge[]>([]);
+  const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
   const [viewMode, setViewMode] = useState<'timeline' | 'table'>('timeline');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDoctor, setFilterDoctor] = useState('All');
@@ -69,6 +76,30 @@ export default function TreatmentHistory({ patientId, patientName, language }: {
     );
     return () => unsub();
   }, [patientId]);
+
+  // Charges and payments so the receipt panel can show the real discount and the
+  // real amount paid, instead of the hardcoded zeros it used to print.
+  useEffect(() => {
+    if (!patientId || !staffToken) return;
+    let active = true;
+    const headers = { Authorization: `Bearer ${staffToken}` };
+    const q = encodeURIComponent(patientId);
+    fetch(`${getApiUrl()}/api/treatment-charges?patientId=${q}`, { headers })
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => { if (active) setCharges(Array.isArray(d) ? d : []); })
+      .catch(() => { if (active) setCharges([]); });
+    fetch(`${getApiUrl()}/api/payment-receipts?patientId=${q}`, { headers })
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => { if (active) setReceipts(Array.isArray(d) ? d : []); })
+      .catch(() => { if (active) setReceipts([]); });
+    return () => { active = false; };
+  }, [patientId, staffToken]);
+
+  const billing = useMemo(
+    () => patientBalance(items, charges, receipts, { patientId }),
+    [items, charges, receipts, patientId]
+  );
+  const selectedBalance = selectedRecord ? itemBalance(selectedRecord.id, billing.ledger) : null;
 
   const doctors = Array.from(new Set(items.map(i => i.doctorName)));
 
@@ -354,23 +385,31 @@ export default function TreatmentHistory({ patientId, patientName, language }: {
                  <div className="space-y-4 mb-6">
                    <div className="flex justify-between text-sm">
                      <span className="text-slate-400">{t("Xizmat narxi")}</span>
-                     <span className="text-white font-mono">{selectedRecord.price.toLocaleString()}</span>
+                     <span className="text-white font-mono">{(selectedBalance?.listPrice || selectedRecord.price).toLocaleString()}</span>
                    </div>
+                   {!!selectedBalance?.discount && (
+                     <div className="flex justify-between text-sm">
+                       <span className="text-slate-400">{t("Chegirma")}</span>
+                       <span className="text-violet-400 font-mono">−{selectedBalance.discount.toLocaleString()}</span>
+                     </div>
+                   )}
                    <div className="flex justify-between text-sm">
-                     <span className="text-slate-400">{t("Materiallar")}</span>
-                     <span className="text-white font-mono">0</span>
-                   </div>
-                   <div className="flex justify-between text-sm">
-                     <span className="text-slate-400">{t("Chegirma")}</span>
-                     <span className="text-white font-mono">0</span>
+                     <span className="text-slate-400">{t("To'lash uchun")}</span>
+                     <span className="text-white font-mono">{(selectedBalance?.total ?? selectedRecord.price).toLocaleString()}</span>
                    </div>
                  </div>
 
-                 <div className="border-t border-slate-800 pt-4 mb-8">
+                 <div className="border-t border-slate-800 pt-4 mb-8 space-y-2">
                    <div className="flex justify-between items-center">
                      <span className="font-bold text-slate-300">{t("Jami to'langan:")}</span>
-                     <span className="font-black text-xl text-emerald-400 font-mono">{selectedRecord.price.toLocaleString()} so'm</span>
+                     <span className="font-black text-xl text-emerald-400 font-mono">{(selectedBalance?.paid ?? 0).toLocaleString()} so'm</span>
                    </div>
+                   {!!selectedBalance?.debt && (
+                     <div className="flex justify-between items-center">
+                       <span className="font-bold text-slate-300">{t("Qarz")}</span>
+                       <span className="font-black text-lg text-amber-400 font-mono">{selectedBalance.debt.toLocaleString()} so'm</span>
+                     </div>
+                   )}
                  </div>
 
                  <button

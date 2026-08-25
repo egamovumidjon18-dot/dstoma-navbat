@@ -9,7 +9,8 @@ import { Language } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';
 import { getApiUrl } from '../services/api';
 import type { PaymentReceipt, TreatmentCharge } from '../types';
-import { patientBalance, itemBalance } from '../utils/treatmentBilling';
+import { patientBalance, itemBalance, effectivePrice } from '../utils/treatmentBilling';
+import { saveTreatmentCharge as saveTreatmentChargeApi, voidTreatmentCharge } from '../utils/treatmentCharges';
 
 const PLAN_TRANSLATIONS: Dict = {
   "bemor tarixiga asoslanib, avval muammoli tishlardagi kariesni davolash, so'ngra implant o'rnatish bosqichiga o'tish tavsiya etiladi. davolash davomiyligi taxminan 3-4 hafta.": { ru: "На основе истории пациента рекомендуется сначала вылечить кариес в проблемных зубах, затем перейти к этапу установки имплантов. Продолжительность лечения примерно 3-4 недели.", en: "Based on the patient's history, it is recommended to first treat caries in the problem teeth, then move on to implant placement. Treatment duration is approximately 3-4 weeks.", kk: "Пациенттің тарихына сүйене отырып, алдымен проблемалы тістердегі кариесті емдеу, содан кейін имплант орнату кезеңіне өту ұсынылады. Емдеу ұзақтығы шамамен 3-4 апта.", ky: "Бейтаптын тарыхына таянып, адегенде көйгөйлүү тиштердеги кариести дарылоо, андан кийин имплант орнотуу этабына өтүү сунушталат. Дарылоо узактыгы болжол менен 3-4 жума.", tg: "Дар асоси таърихи бемор тавсия дода мешавад, ки аввал кариесро дар дандонҳои мушкилдор табобат кунед, сипас ба марҳилаи гузоштани имплант гузаред. Давомнокии табобат тахминан 3-4 ҳафта.", tk: "Näsagyň taryhyna esaslanyp, ilki kynçylykly dişlerdäki kariesi bejermek, soňra implant oturtmak tapgyryna geçmek maslahat berilýär. Bejergi dowamlylygy takmynan 3-4 hepde." },
@@ -53,6 +54,13 @@ const PLAN_TRANSLATIONS: Dict = {
   "muolaja nomi (maxsus)": { ru: "Название процедуры (особое)", en: "Procedure name (custom)", kk: "Процедура атауы (арнайы)", ky: "Процедура аты (өзгөчө)", tg: "Номи муолиҷа (махсус)", tk: "Prosedura ady (ýörite)" },
   "kanal tozalash va plomba": { ru: "Чистка канала и пломба", en: "Root canal cleaning and filling", kk: "Арнаны тазалау және пломба", ky: "Каналды тазалоо жана пломба", tg: "Тозакунии канал ва пломба", tk: "Kanal arassalamak we plomba" },
   "narxi (so'm)": { ru: "Цена (сум)", en: "Price (UZS)", kk: "Бағасы (сум)", ky: "Баасы (сум)", tg: "Нарх (сӯм)", tk: "Bahasy (som)" },
+  "chegirma": { ru: "Скидка", en: "Discount", kk: "Жеңілдік", ky: "Арзандатуу", tg: "Тахфиф", tk: "Arzanlaşyk" },
+  "yakuniy narx": { ru: "Итоговая цена", en: "Final price", kk: "Соңғы баға", ky: "Акыркы баа", tg: "Нархи ниҳоӣ", tk: "Jemleýji baha" },
+  "foiz (%)": { ru: "Процент (%)", en: "Percent (%)", kk: "Пайыз (%)", ky: "Пайыз (%)", tg: "Фоиз (%)", tk: "Göterim (%)" },
+  "summa (so'm)": { ru: "Сумма (сум)", en: "Amount (UZS)", kk: "Сома (сом)", ky: "Сумма (сом)", tg: "Маблағ (сӯм)", tk: "Möçber (som)" },
+  "chegirma sababi": { ru: "Причина скидки", en: "Discount reason", kk: "Жеңілдік себебі", ky: "Арзандатуу себеби", tg: "Сабаби тахфиф", tk: "Arzanlaşyk sebäbi" },
+  "to'langan · qarz": { ru: "Оплачено · Долг", en: "Paid · Debt", kk: "Төленген · Қарыз", ky: "Төлөнгөн · Карыз", tg: "Пардохт · Қарз", tk: "Tölenen · Bergi" },
+  "hisob-kitob sinxronlanmagan": { ru: "Расчёт не синхронизирован", en: "Billing not synced", kk: "Есеп синхрондалмаған", ky: "Эсеп синхрондалган эмес", tg: "Ҳисоб ҳамоҳанг нашуд", tk: "Hasap sinhronlaşdyrylmady" },
 };
 
 
@@ -82,6 +90,10 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
   const [items, setItems] = useState<TreatmentItem[]>([]);
   const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
   const [charges, setCharges] = useState<TreatmentCharge[]>([]);
+  const [unsyncedIds, setUnsyncedIds] = useState<Set<string>>(new Set());
+  const [newDiscountPercent, setNewDiscountPercent] = useState(0);
+  const [newDiscountAmount, setNewDiscountAmount] = useState(0);
+  const [newDiscountReason, setNewDiscountReason] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [selectedCatalogCategory, setSelectedCatalogCategory] = useState(0);
   const [catalogSearchQuery, setCatalogSearchQuery] = useState('');
@@ -117,26 +129,71 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
     if (!newItem.treatment) return;
     try {
       const id = Date.now().toString();
+      const listPrice = Number(newItem.price) || 0;
       const item: TreatmentItem = {
         id,
         toothId: newItem.toothId || '-',
         treatment: newItem.treatment,
-        price: Number(newItem.price) || 0,
+        // The plan doc stores the LIST price; the discount lives on the charge,
+        // which is authoritative for money once it exists.
+        price: listPrice,
         status: newItem.status as any || 'Planned',
         doctorName: newItem.doctorName || "Dr. Noma'lum",
         createdAt: new Date().toISOString()
       };
       await setDoc(doc(db, `patients/${patientId}/treatmentPlans`, id), item);
+
+      if (clinicId && doctorId && staffToken) {
+        const saved = await saveTreatmentChargeApi({
+          id,
+          clinicId, patientId, doctorId, patientName,
+          treatmentName: item.treatment,
+          toothId: item.toothId,
+          listPrice,
+          discountPercent: Number(newDiscountPercent) || 0,
+          discountAmount: Number(newDiscountAmount) || 0,
+          discountReason: newDiscountReason || undefined,
+        }, staffToken);
+        if (saved) setCharges(prev => [...prev.filter(c => c.id !== saved.id), saved]);
+        // A failed charge write leaves the treatment recorded but unbilled, so
+        // flag it rather than letting it disappear silently.
+        else setUnsyncedIds(prev => new Set(prev).add(id));
+      }
+
       setShowAdd(false);
       setNewItem({ toothId: '', treatment: '', price: 0, status: 'Planned', doctorName: 'Dr. Karimov' });
+      setNewDiscountPercent(0);
+      setNewDiscountAmount(0);
+      setNewDiscountReason('');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `patients/${patientId}/treatmentPlans`);
+    }
+  };
+
+  /** Retry a charge that failed to save when its treatment was created. */
+  const retryChargeSync = async (item: TreatmentItem) => {
+    if (!clinicId || !doctorId || !staffToken) return;
+    const saved = await saveTreatmentChargeApi({
+      id: item.id,
+      clinicId, patientId, doctorId, patientName,
+      treatmentName: item.treatment,
+      toothId: item.toothId,
+      listPrice: Number(item.price) || 0,
+    }, staffToken);
+    if (saved) {
+      setCharges(prev => [...prev.filter(c => c.id !== saved.id), saved]);
+      setUnsyncedIds(prev => { const next = new Set(prev); next.delete(item.id); return next; });
     }
   };
 
   const handleUpdateStatus = async (id: string, status: TreatmentItem['status']) => {
     try {
       await updateDoc(doc(db, `patients/${patientId}/treatmentPlans`, id), { status });
+      // A cancelled treatment stops being owed.
+      if (status === 'Cancelled' && staffToken) {
+        await voidTreatmentCharge(id, staffToken);
+        setCharges(prev => prev.map(c => c.id === id ? { ...c, status: 'void' } : c));
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `patients/${patientId}/treatmentPlans`);
     }
@@ -145,6 +202,11 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
   const handleDelete = async (id: string) => {
     try {
       await deleteDoc(doc(db, `patients/${patientId}/treatmentPlans`, id));
+      // Without this the deleted work keeps counting toward the patient's debt.
+      if (staffToken) {
+        await voidTreatmentCharge(id, staffToken);
+        setCharges(prev => prev.map(c => c.id === id ? { ...c, status: 'void' } : c));
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `patients/${patientId}/treatmentPlans`);
     }
@@ -309,6 +371,8 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
                 <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">{t("Tish")}</th>
                 <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">{t("Muolaja")}</th>
                 <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">{t("Narx")}</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">{t("Chegirma")}</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">{t("To'langan · Qarz")}</th>
                 <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">{t("Shifokor")}</th>
                 <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">{t("Sana")}</th>
                 <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-center">{t("Holat")}</th>
@@ -316,15 +380,37 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
-              {items.length > 0 ? items.map((item) => (
+              {items.length > 0 ? items.map((item) => {
+                const b = itemBalance(item.id, balance.ledger);
+                const unsynced = unsyncedIds.has(item.id);
+                return (
                 <tr key={item.id} className="hover:bg-[#111827]/50 transition-colors">
                   <td className="px-6 py-4">
                     <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800 text-emerald-400 font-bold text-xs">
                       {item.toothId}
                     </span>
                   </td>
-                  <td className="px-6 py-4 font-medium text-white">{item.treatment}</td>
-                  <td className="px-6 py-4 font-mono text-slate-300">{item.price.toLocaleString()}</td>
+                  <td className="px-6 py-4 font-medium text-white">
+                    {item.treatment}
+                    {unsynced && (
+                      <button
+                        onClick={() => retryChargeSync(item)}
+                        title={t("Hisob-kitob sinxronlanmagan")}
+                        className="ml-2 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold"
+                      >
+                        ⚠ {t("Hisob-kitob sinxronlanmagan")}
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 font-mono text-slate-300">{(b.listPrice || item.price).toLocaleString()}</td>
+                  <td className="px-6 py-4 font-mono text-violet-400">
+                    {b.discount > 0 ? `−${b.discount.toLocaleString()}` : '—'}
+                  </td>
+                  <td className="px-6 py-4 font-mono text-xs">
+                    <span className="text-emerald-400">{b.paid.toLocaleString()}</span>
+                    <span className="text-slate-600"> · </span>
+                    <span className={b.debt > 0 ? 'text-amber-400' : 'text-slate-500'}>{b.debt.toLocaleString()}</span>
+                  </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 text-slate-400">
                       <User className="w-4 h-4" /> {item.doctorName}
@@ -360,9 +446,10 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
                     </button>
                   </td>
                 </tr>
-              )) : (
+                );
+              }) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={9} className="px-6 py-12 text-center text-slate-500">
                     Muolaja rejasi hozircha bo'sh.
                   </td>
                 </tr>
@@ -497,13 +584,58 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
               
               <div>
                 <label className="block text-xs font-bold text-slate-400 mb-1.5">{t("Narxi (so'm)")}</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   placeholder="0"
                   value={newItem.price || ''}
                   onChange={e => setNewItem({...newItem, price: Number(e.target.value)})}
                   className="w-full bg-[#111827] border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-emerald-500 transition-colors"
                 />
+              </div>
+
+              {/* Both discount kinds: a percentage, and a flat sum applied after
+                  it. Previously the percentage was multiplied into the price and
+                  then thrown away, so nothing could report on it later. */}
+              <div className="bg-[#111827] border border-slate-800 rounded-xl p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-violet-300">{t("Chegirma")}</span>
+                  <span className="text-xs font-black text-emerald-400">
+                    {t("Yakuniy narx")}: {effectivePrice({
+                      listPrice: Number(newItem.price) || 0,
+                      discountPercent: Number(newDiscountPercent) || 0,
+                      discountAmount: Number(newDiscountAmount) || 0,
+                    }).toLocaleString()} {t("so'm")}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">{t("Foiz (%)")}</label>
+                    <input
+                      type="number" min="0" max="100" placeholder="0"
+                      value={newDiscountPercent || ''}
+                      onChange={e => setNewDiscountPercent(Number(e.target.value))}
+                      className="w-full bg-[#0a0f1d] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">{t("Summa (so'm)")}</label>
+                    <input
+                      type="number" min="0" placeholder="0"
+                      value={newDiscountAmount || ''}
+                      onChange={e => setNewDiscountAmount(Number(e.target.value))}
+                      className="w-full bg-[#0a0f1d] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+                    />
+                  </div>
+                </div>
+                {(newDiscountPercent > 0 || newDiscountAmount > 0) && (
+                  <input
+                    type="text"
+                    placeholder={t("Chegirma sababi")}
+                    value={newDiscountReason}
+                    onChange={e => setNewDiscountReason(e.target.value)}
+                    className="w-full bg-[#0a0f1d] border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-violet-500"
+                  />
+                )}
               </div>
 
               <div>

@@ -742,7 +742,14 @@ export default function PatientProfile({
 
             {activeTab === "chart" && (
               <div className="flex-1 flex flex-col h-full w-full">
-                <DentalChart patientId={patientId.toString()} />
+                <DentalChart
+                  patientId={patientId.toString()}
+                  language={language}
+                  clinicId={patient?.clinicId}
+                  doctorId={doctorId}
+                  patientName={patient?.fullName}
+                  staffToken={staffToken}
+                />
               </div>
             )}
 
@@ -770,6 +777,7 @@ export default function PatientProfile({
               <div className="h-full">
                 <TreatmentHistory patientId={patientId.toString()} patientName={patient?.fullName}
                   language={language}
+                  staffToken={staffToken}
                 />
               </div>
             )}

@@ -3820,7 +3820,15 @@ export default function DoctorDashboard({
           {activeView === "dental_chart" && (
             selectedPatientId ? (
               <div className="bg-white rounded-3xl border border-slate-100 shadow-sm flex flex-col h-full overflow-hidden">
-                <DentalChart patientId={selectedPatientId} doctorName={currentDoctor?.name} />
+                <DentalChart
+                  patientId={selectedPatientId}
+                  doctorName={currentDoctor?.name}
+                  language={language}
+                  clinicId={effectiveClinicId}
+                  doctorId={currentDoctor?.id}
+                  patientName={clinicPatients.find((p) => p.id === selectedPatientId)?.fullName}
+                  staffToken={staffToken}
+                />
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
@@ -3865,7 +3873,7 @@ export default function DoctorDashboard({
           {activeView === "muolaja_tarixi" && (
             selectedPatientId ? (
               <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-                <TreatmentHistory patientId={selectedPatientId} patientName={clinicPatients.find((p) => p.id === selectedPatientId)?.fullName} />
+                <TreatmentHistory patientId={selectedPatientId} patientName={clinicPatients.find((p) => p.id === selectedPatientId)?.fullName} language={language} staffToken={staffToken} />
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">

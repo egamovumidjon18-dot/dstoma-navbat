@@ -909,7 +909,7 @@ export default function PatientPanel({
 
           {activeTab === 'tish_sxemasi' && (
             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden" style={{ height: '75vh' }}>
-              <DentalChart patientId={viewingPatient.id} readOnly />
+              <DentalChart patientId={viewingPatient.id} readOnly language={language} />
             </div>
           )}
 
