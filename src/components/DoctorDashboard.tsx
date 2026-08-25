@@ -740,6 +740,8 @@ export default function DoctorDashboard({
     fullName: "", phone: "", passportSerial: "", birthDate: "",
     bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false, referredBy: "",
     bookAppointment: true, serviceId: "",
+    // Seeded properly by openQuickAddPatient below, which knows the doctor's
+    // working hours; this initial value is only ever a placeholder.
     appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: "09:00",
   });
   const [isSavingQuickAddPatient, setIsSavingQuickAddPatient] = useState(false);
@@ -946,7 +948,7 @@ export default function DoctorDashboard({
           fullName: "", phone: "", passportSerial: "", birthDate: "",
           bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
           bookAppointment: true, serviceId: "",
-          appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: "09:00",
+          appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: firstOpenSlot,
         });
         setShowQuickAddPatient(false);
         if (savedPatient.loginCode) {
@@ -1051,7 +1053,7 @@ export default function DoctorDashboard({
       setNewBookingSelectedPatientId(null);
       setNewBookingServiceId('');
       setNewBookingDate(new Date().toISOString().split('T')[0]);
-      setNewBookingTime('09:00');
+      setNewBookingTime(firstOpenSlot);
       if (patientCreds) setJustAddedPatientCreds(patientCreds);
     } finally {
       setIsSavingNewBooking(false);
@@ -1364,6 +1366,25 @@ export default function DoctorDashboard({
   const getQueueSlot = (appointmentTime?: string) => getQueueSlotUtil(appointmentTime, scheduleSlots);
   const isOutOfHoursTime = (appointmentTime?: string) => isOutOfHours(appointmentTime, doctorWorkingHours);
 
+  // The doctor's first bookable slot. Everything that needs a default time uses
+  // this — a hardcoded '09:00' seeded an out-of-hours time for any doctor whose
+  // day doesn't start at nine, which is exactly how appointments ended up
+  // outside the grid in the first place.
+  const firstOpenSlot = scheduleSlots.find((s) => !isLunchSlot(s)) || scheduleSlots[0] || '09:00';
+
+  // All three "yangi bemor" buttons go through this, so the form is always
+  // reset and the appointment time starts at a slot the doctor actually works.
+  const openQuickAddPatient = () => {
+    setQuickAddPatient({
+      fullName: "", phone: "", passportSerial: "", birthDate: "",
+      bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false, referredBy: "",
+      bookAppointment: true, serviceId: "",
+      appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: firstOpenSlot,
+    });
+    setShowQuickAddPatient(true);
+  };
+
+
   // Opens the booking modal either "locked" to a specific grid slot (date/time
   // pre-set and shown read-only) or "unlocked" for the standalone header
   // button (date still pickable, time restricted to a dropdown of real slots).
@@ -1378,7 +1399,7 @@ export default function DoctorDashboard({
     setNewBookingServiceId('');
     setNewBookingServiceQuery('');
     setNewBookingDate(date || new Date().toISOString().split('T')[0]);
-    setNewBookingTime(time || scheduleSlots.find((s) => !isLunchSlot(s)) || '09:00');
+    setNewBookingTime(time || firstOpenSlot);
     setShowNewBookingModal(true);
   };
 
@@ -1399,7 +1420,7 @@ export default function DoctorDashboard({
     setNewBookingServiceId(q.serviceId || '');
     setNewBookingServiceQuery('');
     setNewBookingDate(q.appointmentDate || new Date().toISOString().split('T')[0]);
-    setNewBookingTime(q.appointmentTime || scheduleSlots.find((s) => !isLunchSlot(s)) || '09:00');
+    setNewBookingTime(q.appointmentTime || firstOpenSlot);
     setShowNewBookingModal(true);
   };
 
@@ -2247,7 +2268,7 @@ export default function DoctorDashboard({
                                         onClick={() => {
                                           setScheduleServiceId(q.serviceId || '');
                                           setScheduleDate(q.appointmentDate || new Date().toISOString().split('T')[0]);
-                                          setScheduleTime(q.appointmentTime || '09:00');
+                                          setScheduleTime(q.appointmentTime || firstOpenSlot);
                                           setScheduleModal({ isOpen: true, queueId: q.id! });
                                         }}
                                         className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-lg transition-colors tooltip"
@@ -3045,7 +3066,7 @@ export default function DoctorDashboard({
                                       onClick={() => {
                                         setScheduleServiceId(q.serviceId || '');
                                         setScheduleDate(q.appointmentDate || new Date().toISOString().split('T')[0]);
-                                        setScheduleTime(q.appointmentTime || '09:00');
+                                        setScheduleTime(q.appointmentTime || firstOpenSlot);
                                         setScheduleModal({ isOpen: true, queueId: q.id! });
                                       }}
                                       className="px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-600 font-bold rounded-lg transition-colors"
@@ -3188,15 +3209,7 @@ export default function DoctorDashboard({
                 <h2 className="text-sm font-black text-slate-700 uppercase tracking-wide">{t("rejalashtirilgan")}</h2>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => {
-                      setQuickAddPatient({
-                        fullName: "", phone: "", passportSerial: "", birthDate: "",
-                        bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
-                        bookAppointment: true, serviceId: "",
-                        appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: "09:00",
-                      });
-                      setShowQuickAddPatient(true);
-                    }}
+                    onClick={openQuickAddPatient}
                     className="flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-xs rounded-xl transition-colors"
                   >
                     <UserPlus className="w-3.5 h-3.5" /> {t("yangi bemor qo'shish")}
@@ -3430,7 +3443,11 @@ export default function DoctorDashboard({
                                               {/* Editing the date/time/service of a completed or already
                                                   in-progress visit doesn't make sense — only a not-yet-started
                                                   slot is safe to reschedule here. */}
-                                              {q.status === 'scheduled' && (
+                                              {/* A visit that has been called or
+                                                  started can still legitimately be
+                                                  moved — only a finished or
+                                                  cancelled one is fixed. */}
+                                              {['scheduled', 'calling', 'in_progress'].includes(q.status) && (
                                                 <button
                                                   onClick={(e) => { e.stopPropagation(); openEditQueueModal(q); }}
                                                   className="p-0.5 text-slate-500 hover:text-blue-600 transition-colors"
@@ -3637,7 +3654,7 @@ export default function DoctorDashboard({
                           {t("🌐 boshqa klinikadan qidirish")}
                         </button>
                         <button
-                          onClick={() => setShowQuickAddPatient(true)}
+                          onClick={openQuickAddPatient}
                           className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors shadow-md shadow-emerald-500/20"
                         >
                           <Plus className="w-4 h-4" /> {t("yangi bemor")}
@@ -3914,7 +3931,7 @@ export default function DoctorDashboard({
                         {t("tezkor amallar")}
                       </h3>
                       <div className="space-y-2">
-                        <button onClick={() => setShowQuickAddPatient(true)} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-colors text-left group">
+                        <button onClick={openQuickAddPatient} className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-colors text-left group">
                           <div className="p-2 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-100 transition-colors">
                             <UserPlus className="w-4 h-4" />
                           </div>
@@ -4641,12 +4658,30 @@ export default function DoctorDashboard({
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("qabul vaqti")}</label>
-                <input
-                  type="time"
+                {/* A slot picker, not a free-text time. Typing an arbitrary time
+                    here is how appointments ended up inside the lunch window or
+                    outside working hours, where the grid could not place them. */}
+                <select
                   value={scheduleTime}
                   onChange={(e) => setScheduleTime(e.target.value)}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
-                />
+                >
+                  {/* Keep an out-of-range existing value selectable so opening
+                      the dialog never silently rewrites the booking's time. */}
+                  {!scheduleSlots.includes(scheduleTime) && (
+                    <option value={scheduleTime}>{scheduleTime} — {t("ish vaqtidan tashqari")}</option>
+                  )}
+                  {scheduleSlots.map((s) => {
+                    const taken = !!findConflict(
+                      doctorQueues, activeDoctorId, scheduleDate, s, doctorWorkingHours, scheduleModal.queueId || undefined
+                    );
+                    return (
+                      <option key={s} value={s} disabled={taken}>
+                        {s}{taken ? ` — ${t("bu vaqt band")}` : isLunchSlot(s) ? ` — ${t("tushlik")}` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
             </div>
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
@@ -4898,12 +4933,22 @@ export default function DoctorDashboard({
                         onChange={(e) => setQuickAddPatient({ ...quickAddPatient, appointmentDate: e.target.value })}
                         className="w-full border border-purple-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
                       />
-                      <input
-                        type="time"
+                      <select
                         value={quickAddPatient.appointmentTime}
                         onChange={(e) => setQuickAddPatient({ ...quickAddPatient, appointmentTime: e.target.value })}
                         className="w-full border border-purple-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
-                      />
+                      >
+                        {scheduleSlots.map((s) => {
+                          const taken = !!findConflict(
+                            doctorQueues, activeDoctorId, quickAddPatient.appointmentDate, s, doctorWorkingHours
+                          );
+                          return (
+                            <option key={s} value={s} disabled={taken}>
+                              {s}{taken ? ` — ${t("bu vaqt band")}` : isLunchSlot(s) ? ` — ${t("tushlik")}` : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
                     </div>
                   </div>
                 )}
