@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../services/firebase";
-import { Patient, PaymentReceipt, Reminder } from "../types";
+import { Patient, PaymentReceipt, Reminder, TreatmentCharge } from "../types";
+import { patientBalance, type PlanItemLike } from "../utils/treatmentBilling";
 import { decodeLegacyEntities } from "../utils/textFormat";
 import { getApiUrl } from "../services/api";
 import { TRANSLATIONS, Language } from "../translations";
@@ -54,6 +55,12 @@ const PATIENT_PROFILE_TRANSLATIONS: Record<string, PatientProfileDictEntry> = {
   "summa (so'm)": { ru: "Сумма (сум)", en: "Amount (UZS)", kk: "Сома (сом)", ky: "Сумма (сом)", tg: "Маблағ (сӯм)", tk: "Möçber (sim)" },
   naqd: { ru: "наличные", en: "cash", kk: "қолма-қол", ky: "накталай", tg: "нақдина", tk: "nagt" },
   karta: { ru: "карта", en: "card", kk: "карта", ky: "карта", tg: "корт", tk: "kart" },
+  jami: { ru: "Всего", en: "Total", kk: "Барлығы", ky: "Бардыгы", tg: "Ҳамагӣ", tk: "Jemi" },
+  chegirma: { ru: "Скидка", en: "Discount", kk: "Жеңілдік", ky: "Арзандатуу", tg: "Тахфиф", tk: "Arzanlaşyk" },
+  "to'langan": { ru: "Оплачено", en: "Paid", kk: "Төленген", ky: "Төлөнгөн", tg: "Пардохтшуда", tk: "Tölenen" },
+  tasdiqlanmagan: { ru: "Не подтверждено", en: "Unconfirmed", kk: "Расталмаған", ky: "Тастыкталбаган", tg: "Тасдиқнашуда", tk: "Tassyklanmadyk" },
+  "ortiqcha to'lov": { ru: "Переплата", en: "Overpaid", kk: "Артық төлем", ky: "Ашык төлөм", tg: "Пардохти изофа", tk: "Artykmaç töleg" },
+  "qarzdorlik yo'q": { ru: "Задолженности нет", en: "No debt", kk: "Қарыз жоқ", ky: "Карыз жок", tg: "Қарз нест", tk: "Bergi ýok" },
   "noma'lum bemor": { ru: "Неизвестный пациент", en: "Unknown patient", kk: "Белгісіз пациент", ky: "Белгисиз бейтап", tg: "Бемори номаълум", tk: "Näbelli näsag" },
   faol: { ru: "Активен", en: "Active", kk: "Белсенді", ky: "Активдүү", tg: "Фаъол", tk: "Işjeň" },
   yangi: { ru: "Новый", en: "New", kk: "Жаңа", ky: "Жаңы", tg: "Нав", tk: "Täze" },
@@ -140,7 +147,8 @@ export default function PatientProfile({
     return text;
   };
   const [activeTab, setActiveTab] = useState("general");
-  const [totalDebt, setTotalDebt] = useState(0);
+  const [planItems, setPlanItems] = useState<PlanItemLike[]>([]);
+  const [charges, setCharges] = useState<TreatmentCharge[]>([]);
   const [requestingPayment, setRequestingPayment] = useState(false);
   const [paymentRequestMsg, setPaymentRequestMsg] = useState<string | null>(null);
   const [cashAmount, setCashAmount] = useState("");
@@ -223,10 +231,6 @@ export default function PatientProfile({
       setTimeout(() => setPaymentRequestMsg(null), 5000);
     }
   };
-
-  useEffect(() => {
-    if (totalDebt > 0 && !cashAmount) setCashAmount(String(totalDebt));
-  }, [totalDebt]);
 
   const handleRecordCashPayment = async () => {
     const amount = Number(cashAmount);
@@ -406,19 +410,16 @@ export default function PatientProfile({
     }
   };
 
+  // Live treatment plan for this patient. Kept as raw items (rather than a
+  // pre-summed number) so the billing util can reconcile them against payments.
   useEffect(() => {
     if (!patientId) return;
     const unsub = onSnapshot(
       collection(db, `patients/${patientId}/treatmentPlans`),
       (snapshot) => {
-        let cost = 0;
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          if (data.status !== 'Cancelled') {
-            cost += Number(data.price) || 0;
-          }
-        });
-        setTotalDebt(cost);
+        const items: PlanItemLike[] = [];
+        snapshot.forEach(d => items.push({ id: d.id, ...(d.data() as any) }));
+        setPlanItems(items);
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, `patients/${patientId}/treatmentPlans`);
@@ -426,6 +427,26 @@ export default function PatientProfile({
     );
     return () => unsub();
   }, [patientId]);
+
+  // Every money figure on this screen comes from one place. Crucially this nets
+  // confirmed payments off the plan total — the old code summed plan prices only,
+  // so a patient who had paid in full still showed their whole plan as debt.
+  const balance = useMemo(
+    () => patientBalance(planItems, charges, receipts, {
+      clinicId: patient?.clinicId,
+      patientId: String(patientId),
+      doctorId,
+      patientName: patient?.fullName,
+    }),
+    [planItems, charges, receipts, patientId, patient?.clinicId, patient?.fullName, doctorId]
+  );
+  const totalDebt = balance.debt;
+
+  // Prefill the cash box with what's actually outstanding, so the common case
+  // (patient settles their balance) is one click.
+  useEffect(() => {
+    if (totalDebt > 0 && !cashAmount) setCashAmount(String(totalDebt));
+  }, [totalDebt]);
 
   const tabs = [
     { id: "general", label: t("umumiy ma'lumot"), icon: User },
@@ -538,13 +559,44 @@ export default function PatientProfile({
             <h4 className="font-bold text-slate-800 text-sm mb-4">
               {t("moliyaviy holat")}
             </h4>
-            <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 text-center">
-              <p className="text-[10px] font-bold text-rose-500 uppercase tracking-wider mb-1">
-                {t("joriy qarzdorlik")}
+            {/* Breakdown first, then the headline. A patient who owes nothing gets
+                a green card, not a red "0" — the old version framed every patient
+                as a debtor regardless of what they had paid. */}
+            <div className="space-y-1.5 mb-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-semibold">{t("jami")}</span>
+                <span className="font-bold text-slate-700">{balance.total.toLocaleString()}</span>
+              </div>
+              {balance.discount > 0 && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-semibold">{t("chegirma")}</span>
+                  <span className="font-bold text-violet-600">−{balance.discount.toLocaleString()}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-semibold">{t("to'langan")}</span>
+                <span className="font-bold text-emerald-600">{balance.paid.toLocaleString()}</span>
+              </div>
+              {balance.pending > 0 && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-semibold">{t("tasdiqlanmagan")}</span>
+                  <span className="font-bold text-amber-600">{balance.pending.toLocaleString()}</span>
+                </div>
+              )}
+              {balance.credit > 0 && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-semibold">{t("ortiqcha to'lov")}</span>
+                  <span className="font-bold text-sky-600">+{balance.credit.toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+            <div className={`border rounded-2xl p-4 text-center ${totalDebt > 0 ? 'bg-rose-50 border-rose-100' : 'bg-emerald-50 border-emerald-100'}`}>
+              <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${totalDebt > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
+                {totalDebt > 0 ? t("joriy qarzdorlik") : t("qarzdorlik yo'q")}
               </p>
-              <p className="text-2xl font-black text-rose-600">
+              <p className={`text-2xl font-black ${totalDebt > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
                 {totalDebt > 0 ? totalDebt.toLocaleString() : "0"}{" "}
-                <span className="text-xs font-bold text-rose-400">{t("so'm")}</span>
+                <span className={`text-xs font-bold ${totalDebt > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{t("so'm")}</span>
               </p>
               <button
                 onClick={handleRequestPayment}
@@ -556,14 +608,14 @@ export default function PatientProfile({
               {paymentRequestMsg && (
                 <p className="text-[10px] font-bold text-rose-600 mt-2">{paymentRequestMsg}</p>
               )}
-              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-rose-100">
+              <div className={`flex items-center gap-2 mt-3 pt-3 border-t ${totalDebt > 0 ? 'border-rose-100' : 'border-emerald-100'}`}>
                 <input
                   type="number"
                   min="1"
                   value={cashAmount}
                   onChange={(e) => setCashAmount(e.target.value)}
                   placeholder={t("summa (so'm)")}
-                  className="w-24 min-w-0 px-2 py-2 bg-white border border-rose-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-rose-400"
+                  className="w-24 min-w-0 px-2 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-emerald-400"
                 />
                 <button
                   onClick={handleRecordCashPayment}
@@ -698,6 +750,10 @@ export default function PatientProfile({
               <div className="h-full">
                 <TreatmentPlan patientId={patientId.toString()}
                   language={language}
+                  clinicId={patient?.clinicId}
+                  doctorId={doctorId}
+                  patientName={patient?.fullName}
+                  staffToken={staffToken}
                 />
               </div>
             )}

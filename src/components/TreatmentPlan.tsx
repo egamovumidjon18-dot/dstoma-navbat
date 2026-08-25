@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
-import { 
-  FileText, Plus, Check, Clock, XCircle, PlayCircle, 
+import {
+  FileText, Plus, Check, Clock, XCircle, PlayCircle,
   Download, Send, Sparkles, User, Calendar, Trash2, Search
 } from 'lucide-react';
 import { Language } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';
+import { getApiUrl } from '../services/api';
+import type { PaymentReceipt, TreatmentCharge } from '../types';
+import { patientBalance, itemBalance } from '../utils/treatmentBilling';
 
 const PLAN_TRANSLATIONS: Dict = {
   "bemor tarixiga asoslanib, avval muammoli tishlardagi kariesni davolash, so'ngra implant o'rnatish bosqichiga o'tish tavsiya etiladi. davolash davomiyligi taxminan 3-4 hafta.": { ru: "На основе истории пациента рекомендуется сначала вылечить кариес в проблемных зубах, затем перейти к этапу установки имплантов. Продолжительность лечения примерно 3-4 недели.", en: "Based on the patient's history, it is recommended to first treat caries in the problem teeth, then move on to implant placement. Treatment duration is approximately 3-4 weeks.", kk: "Пациенттің тарихына сүйене отырып, алдымен проблемалы тістердегі кариесті емдеу, содан кейін имплант орнату кезеңіне өту ұсынылады. Емдеу ұзақтығы шамамен 3-4 апта.", ky: "Бейтаптын тарыхына таянып, адегенде көйгөйлүү тиштердеги кариести дарылоо, андан кийин имплант орнотуу этабына өтүү сунушталат. Дарылоо узактыгы болжол менен 3-4 жума.", tg: "Дар асоси таърихи бемор тавсия дода мешавад, ки аввал кариесро дар дандонҳои мушкилдор табобат кунед, сипас ба марҳилаи гузоштани имплант гузаред. Давомнокии табобат тахминан 3-4 ҳафта.", tk: "Näsagyň taryhyna esaslanyp, ilki kynçylykly dişlerdäki kariesi bejermek, soňra implant oturtmak tapgyryna geçmek maslahat berilýär. Bejergi dowamlylygy takmynan 3-4 hepde." },
@@ -14,6 +17,10 @@ const PLAN_TRANSLATIONS: Dict = {
   "davolash rejasi": { ru: "План лечения", en: "Treatment plan", kk: "Емдеу жоспары", ky: "Дарылоо планы", tg: "Нақшаи муолиҷа", tk: "Bejergi meýilnamasy" },
   "yangi muolaja": { ru: "Новая процедура", en: "New procedure", kk: "Жаңа процедура", ky: "Жаңы процедура", tg: "Муолиҷаи нав", tk: "Täze prosedura" },
   "so'm": { ru: "сум", en: "UZS", kk: "сом", ky: "сом", tg: "сӯм", tk: "som" },
+  "chegirma:": { ru: "Скидка:", en: "Discount:", kk: "Жеңілдік:", ky: "Арзандатуу:", tg: "Тахфиф:", tk: "Arzanlaşyk:" },
+  "to'langan:": { ru: "Оплачено:", en: "Paid:", kk: "Төленген:", ky: "Төлөнгөн:", tg: "Пардохтшуда:", tk: "Tölenen:" },
+  "tasdiqlanmagan:": { ru: "Не подтверждено:", en: "Unconfirmed:", kk: "Расталмаған:", ky: "Тастыкталбаган:", tg: "Тасдиқнашуда:", tk: "Tassyklanmadyk:" },
+  "qarz:": { ru: "Долг:", en: "Debt:", kk: "Қарыз:", ky: "Карыз:", tg: "Қарз:", tk: "Bergi:" },
 
   "bemorning kompleks davolash bosqichlari": { ru: "Этапы комплексного лечения пациента", en: "Stages of the patient's comprehensive treatment", kk: "Пациентті кешенді емдеу кезеңдері", ky: "Бейтапты комплекстүү дарылоо этаптары", tg: "Марҳилаҳои табобати комплексии бемор", tk: "Näsagyň toplumlaýyn bejergi tapgyrlary" },
   "telegram orqali yuborish": { ru: "Отправить через Telegram", en: "Send via Telegram", kk: "Telegram арқылы жіберу", ky: "Telegram аркылуу жөнөтүү", tg: "Фиристодан тавассути Telegram", tk: "Telegram arkaly ibermek" },
@@ -61,9 +68,20 @@ export interface TreatmentItem {
   createdAt: string;
 }
 
-export default function TreatmentPlan({ patientId, language }: { patientId: string; language?: Language }) {
+interface TreatmentPlanProps {
+  patientId: string;
+  language?: Language;
+  clinicId?: string;
+  doctorId?: string;
+  patientName?: string;
+  staffToken?: string | null;
+}
+
+export default function TreatmentPlan({ patientId, language, clinicId, doctorId, patientName, staffToken }: TreatmentPlanProps) {
   const t = createTranslator(language, PLAN_TRANSLATIONS);
   const [items, setItems] = useState<TreatmentItem[]>([]);
+  const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
+  const [charges, setCharges] = useState<TreatmentCharge[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedCatalogCategory, setSelectedCatalogCategory] = useState(0);
   const [catalogSearchQuery, setCatalogSearchQuery] = useState('');
@@ -132,11 +150,36 @@ export default function TreatmentPlan({ patientId, language }: { patientId: stri
     }
   };
 
+  // Payments and charges for this patient. Both degrade gracefully: without a
+  // staff token (or before the ledger exists) these stay empty and every
+  // treatment simply reads as fully outstanding at its plan price.
+  useEffect(() => {
+    if (!patientId || !staffToken) return;
+    let active = true;
+    const headers = { Authorization: `Bearer ${staffToken}` };
+    const q = encodeURIComponent(String(patientId));
+    fetch(`${getApiUrl()}/api/payment-receipts?patientId=${q}`, { headers })
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => { if (active) setReceipts(Array.isArray(d) ? d : []); })
+      .catch(() => { if (active) setReceipts([]); });
+    fetch(`${getApiUrl()}/api/treatment-charges?patientId=${q}`, { headers })
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => { if (active) setCharges(Array.isArray(d) ? d : []); })
+      .catch(() => { if (active) setCharges([]); });
+    return () => { active = false; };
+  }, [patientId, staffToken]);
+
   const activeItems = items.filter(i => i.status !== 'Cancelled');
-  const totalCost = activeItems.reduce((acc, curr) => acc + curr.price, 0);
-  const completedCost = activeItems.filter(i => i.status === 'Completed').reduce((acc, curr) => acc + curr.price, 0);
-  const progressPercent = activeItems.length > 0 
-    ? Math.round((activeItems.filter(i => i.status === 'Completed').length / activeItems.length) * 100) 
+  // All money comes from the shared billing util — the old code treated
+  // "procedure completed" as "money received", which is a different thing.
+  const balance = useMemo(
+    () => patientBalance(items, charges, receipts, { clinicId, patientId, doctorId, patientName }),
+    [items, charges, receipts, clinicId, patientId, doctorId, patientName]
+  );
+  const totalCost = balance.total;
+  const paidCost = balance.paid;
+  const progressPercent = activeItems.length > 0
+    ? Math.round((activeItems.filter(i => i.status === 'Completed').length / activeItems.length) * 100)
     : 0;
 
   const getStatusColor = (status: string) => {
@@ -150,7 +193,14 @@ export default function TreatmentPlan({ patientId, language }: { patientId: stri
   };
 
   const handleTelegramShare = () => {
-    const text = `*Davolash Rejasi*\n\n${items.map(i => `🦷 Tish ${i.toothId}: ${i.treatment} - ${i.price.toLocaleString()} so'm [${i.status}]`).join('\n')}\n\n💰 *Umumiy summa:* ${totalCost.toLocaleString()} so'm\n✅ *Bajarilgan:* ${completedCost.toLocaleString()} so'm\n⏳ *Qolgan summa:* ${(totalCost - completedCost).toLocaleString()} so'm`;
+    const lines = items.map(i => {
+      const b = itemBalance(i.id, balance.ledger);
+      const price = (b.total || i.price).toLocaleString();
+      const owed = b.debt > 0 ? ` — qarz ${b.debt.toLocaleString()} so'm` : ' — to\'langan';
+      return `🦷 Tish ${i.toothId}: ${i.treatment} - ${price} so'm [${i.status}]${owed}`;
+    });
+    const discountLine = balance.discount > 0 ? `\n🏷 *Chegirma:* ${balance.discount.toLocaleString()} so'm` : '';
+    const text = `*Davolash Rejasi*\n\n${lines.join('\n')}\n\n💰 *Umumiy summa:* ${totalCost.toLocaleString()} so'm${discountLine}\n✅ *To'langan:* ${paidCost.toLocaleString()} so'm\n⏳ *Qarz:* ${balance.debt.toLocaleString()} so'm`;
     window.open(`https://t.me/share/url?url=${encodeURIComponent('DStoma Klinikasi')}&text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -212,15 +262,27 @@ export default function TreatmentPlan({ patientId, language }: { patientId: stri
                 <span className="text-sm text-slate-400">{t("Umumiy summa:")}</span>
                 <span className="text-lg font-bold text-white">{totalCost.toLocaleString()} {t("so'm")}</span>
               </div>
+              {balance.discount > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-400">{t("Chegirma:")}</span>
+                  <span className="text-lg font-bold text-violet-400">−{balance.discount.toLocaleString()} {t("so'm")}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center">
-                <span className="text-sm text-slate-400">{t("Bajarilgan muolajalar:")}</span>
-                <span className="text-lg font-bold text-emerald-400">{completedCost.toLocaleString()} {t("so'm")}</span>
+                <span className="text-sm text-slate-400">{t("To'langan:")}</span>
+                <span className="text-lg font-bold text-emerald-400">{paidCost.toLocaleString()} {t("so'm")}</span>
               </div>
+              {balance.pending > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-400">{t("Tasdiqlanmagan:")}</span>
+                  <span className="text-lg font-bold text-amber-300">{balance.pending.toLocaleString()} {t("so'm")}</span>
+                </div>
+              )}
             </div>
           </div>
           <div className="mt-6 pt-4 border-t border-slate-800 flex justify-between items-center">
-            <span className="text-sm text-slate-400">{t("Qolgan summa:")}</span>
-            <span className="text-xl font-black text-amber-400">{(totalCost - completedCost).toLocaleString()} {t("so'm")}</span>
+            <span className="text-sm text-slate-400">{t("Qarz:")}</span>
+            <span className={`text-xl font-black ${balance.debt > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>{balance.debt.toLocaleString()} {t("so'm")}</span>
           </div>
         </div>
       </div>

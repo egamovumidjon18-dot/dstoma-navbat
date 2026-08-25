@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../services/firebase';
+import { patientBalance } from '../utils/treatmentBilling';
 import {
   Home, Calendar, FileText, CreditCard,
   Smile, Clock, Bell, Users, Folder, Settings,
   HelpCircle, ChevronDown, BellRing,
   User, Star, Check, Phone, MessageCircle, Plus, Search, UserPlus, X, Trash2, Menu, Bot, Send, ImagePlus, Stethoscope
 } from 'lucide-react';
-import { Patient, QueueItem, Clinic, Doctor } from '../types';
+import { Patient, QueueItem, Clinic, Doctor, PaymentReceipt } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
 import { TreatmentItem } from './TreatmentPlan';
 import AdBanner from './AdBanner';
@@ -262,6 +263,7 @@ export default function PatientPanel({
     return () => mq.removeEventListener('change', handler);
   }, []);
   const [planItems, setPlanItems] = useState<TreatmentItem[]>([]);
+  const [myReceipts, setMyReceipts] = useState<PaymentReceipt[]>([]);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [familySearchQuery, setFamilySearchQuery] = useState('');
   const [familySearchResults, setFamilySearchResults] = useState<Patient[] | null>(null);
@@ -373,6 +375,21 @@ export default function PatientPanel({
     return () => unsub();
   }, [viewingPatient?.id]);
 
+  // The patient's own confirmed payments, so their "remaining" figure nets off
+  // what they have already paid instead of showing the whole plan as owed.
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('dstoma_patient_token') : null;
+    if (!viewingPatient?.id || !token) { setMyReceipts([]); return; }
+    let active = true;
+    fetch(`${getApiUrl()}/api/payment-receipts?patientId=${encodeURIComponent(viewingPatient.id)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => { if (active) setMyReceipts(Array.isArray(d) ? d : []); })
+      .catch(() => { if (active) setMyReceipts([]); });
+    return () => { active = false; };
+  }, [viewingPatient?.id]);
+
   // patientId is the reliable link; normalized phone is only a fallback for
   // queues created before that field existed (or by a legacy client). Phone-only
   // matching used to be the sole check, which silently showed no queue at all
@@ -391,9 +408,20 @@ export default function PatientPanel({
   const visits = [...(viewingPatient?.clinicVisits || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const activePlanItems = planItems.filter((i) => i.status !== 'Cancelled');
-  const totalCost = activePlanItems.reduce((sum, i) => sum + (i.price || 0), 0);
-  const completedCost = activePlanItems.filter((i) => i.status === 'Completed').reduce((sum, i) => sum + (i.price || 0), 0);
-  const remainingCost = totalCost - completedCost;
+  // Money via the shared billing util so the patient sees the same figures the
+  // doctor does. Without a patient session token the payment list stays empty,
+  // in which case this reads as fully outstanding — never as wrongly paid.
+  const patientBilling = useMemo(
+    () => patientBalance(planItems, [], myReceipts, {
+      clinicId: viewingPatient?.clinicId,
+      patientId: viewingPatient?.id,
+      patientName: viewingPatient?.fullName,
+    }),
+    [planItems, myReceipts, viewingPatient?.id, viewingPatient?.clinicId, viewingPatient?.fullName]
+  );
+  const totalCost = patientBilling.total;
+  const completedCost = patientBilling.paid;
+  const remainingCost = patientBilling.debt;
   const planProgress = activePlanItems.length > 0
     ? Math.round((activePlanItems.filter((i) => i.status === 'Completed').length / activePlanItems.length) * 100)
     : 0;

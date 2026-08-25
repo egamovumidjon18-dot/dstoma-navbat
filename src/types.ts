@@ -84,6 +84,74 @@ export interface PaymentReceipt {
   status: 'pending' | 'confirmed' | 'rejected';
   createdAt: string;
   resolvedAt?: string;
+  // Which treatments/stages this payment settles. Absent on every record created
+  // before this field existed, AND on any payment taken without picking a specific
+  // treatment — such a payment is patient-level credit, spread FIFO across
+  // outstanding balances by treatmentBilling.allocatePayments.
+  // Invariant: sum of allocation amounts <= amount.
+  allocations?: PaymentAllocation[];
+}
+
+export interface PaymentAllocation {
+  treatmentItemId: string;
+  stageId?: string;
+  amount: number;
+}
+
+// The money side of a treatment. Lives server-side (flat `treatmentCharges`
+// collection, doc id === TreatmentItem.id) rather than on the Firestore plan doc,
+// because firestore.rules is currently `allow read, write: if true` — anything
+// money-bearing written from the browser is forgeable. The plan doc keeps the
+// clinical fields; this keeps the money; neither duplicates the other.
+//
+// AUTHORITY RULE: when a charge exists it is the single source of truth for all
+// money on that treatment. TreatmentItem.price then means "list price" only and
+// is not read for billing.
+export interface TreatmentCharge {
+  id: string; // === TreatmentItem.id (the Firestore plan doc id)
+  clinicId: string;
+  patientId: string;
+  doctorId: string;
+  // Denormalized display copies so clinic-wide finance views never need a
+  // per-patient Firestore read. Not authoritative — the plan doc is.
+  patientName?: string;
+  treatmentName?: string;
+  toothId?: string;
+  serviceId?: string; // only set when picked from a real Service, not the hardcoded catalog
+  listPrice: number; // STORED, pre-discount, whole UZS
+  discountPercent?: number; // STORED, 0..100. Absent = 0.
+  discountAmount?: number; // STORED, fixed UZS, applied AFTER the percentage. Absent = 0.
+  discountReason?: string;
+  stages?: TreatmentStage[]; // STORED. Absent/empty = one implicit stage for the whole price.
+  status: 'open' | 'void'; // 'void' mirrors a cancelled/deleted plan item; excluded from all math
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string; // doctorId that wrote it, for audit
+}
+
+// One visit/session of a multi-appointment treatment. Payments are applied
+// stage by stage, deducting from the treatment total.
+export interface TreatmentStage {
+  id: string;
+  name: string;
+  order: number;
+  amount: number; // STORED, whole UZS. Sum across stages === effectivePrice (server-enforced).
+  status: 'planned' | 'in_progress' | 'completed' | 'skipped';
+  plannedDate?: string; // ISO date
+  completedAt?: string;
+  queueId?: string; // set when a visit is completed against this stage
+}
+
+// A clinic's reusable stage breakdown for a kind of procedure, keyed by
+// normalizeProcedureKey(name). Stored client-side in Firestore under
+// clinics/{clinicId}/stageTemplates — a forged template cannot move money, it
+// only pre-fills a split whose amounts the server re-validates against listPrice.
+export interface StageTemplate {
+  procedureKey: string;
+  label: string; // human-readable name, as first seen
+  serviceId?: string;
+  stages: { name: string; sharePercent: number }[]; // shares sum to ~100
+  updatedAt: string;
 }
 
 // A doctor-authored note/reminder about a specific patient. "Yuborish" sends it to

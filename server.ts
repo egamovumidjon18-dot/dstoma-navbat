@@ -6,6 +6,10 @@ import path from "path";
 import dotenv from "dotenv";
 import crypto from "crypto";
 import { Type } from "@google/genai";
+// The single money authority, shared verbatim with the frontend so the two can
+// never disagree about a balance. It is a pure module (types only, no firebase,
+// no react), so esbuild bundles it into dist/server.cjs cleanly.
+import { effectivePrice, round0 } from "./src/utils/treatmentBilling";
 
 dotenv.config();
 
@@ -663,6 +667,42 @@ async function savePaymentReceipt(c: any) {
   }
 }
 
+// Stages must add up to exactly what's owed, or the per-stage balances would
+// silently disagree with the treatment total. Uses the shared util's
+// effectivePrice so this can never drift from what the UI shows.
+function validateStageSums(charge: any): string | null {
+  const stages = charge?.stages;
+  if (!Array.isArray(stages) || stages.length === 0) return null;
+  const sum = stages.reduce((s: number, st: any) => s + round0(st?.amount), 0);
+  const effective = effectivePrice(charge);
+  if (sum !== effective) {
+    return `Bosqichlar summasi (${sum}) muolaja narxiga (${effective}) teng bo'lishi kerak`;
+  }
+  return null;
+}
+
+// The money side of a treatment. Flat (not a per-patient subcollection) so the
+// clinic-wide finance views answer in one read, and server-side because
+// firestore.rules is open — a browser-written balance would be forgeable.
+// Doc id is always the TreatmentItem.id it bills.
+async function getTreatmentCharges() {
+  if (fDb) {
+    const s = await getDocs(collection(fDb, "treatmentCharges"));
+    return s.docs.map((d: any) => ({ ...d.data(), id: d.id }));
+  }
+  return g._serverTreatmentCharges || [];
+}
+async function saveTreatmentCharge(c: any) {
+  const clean = stripUndefined(c);
+  if (fDb) await setDoc(doc(fDb, "treatmentCharges", clean.id), clean, { merge: true });
+  else {
+    if (!g._serverTreatmentCharges) g._serverTreatmentCharges = [];
+    const idx = g._serverTreatmentCharges.findIndex((x: any) => x.id === clean.id);
+    if (idx >= 0) g._serverTreatmentCharges[idx] = { ...g._serverTreatmentCharges[idx], ...clean };
+    else g._serverTreatmentCharges.push(clean);
+  }
+}
+
 async function getReminders() {
   if (fDb) {
     const s = await getDocs(collection(fDb, "reminders"));
@@ -1135,6 +1175,91 @@ app.get("/api/admin/credentials", requireSuperAdmin, async (req, res) => {
     return item;
   });
   res.json({ clinics: revealed(allClinics), doctors: revealed(allDoctors) });
+});
+
+// Materializes a charge for every pre-existing treatment plan item, so
+// clinic-wide finance views (the Moliya section, the Bemorlar debt column) can
+// see legacy debtors. NOT required for correctness: per-patient screens read the
+// Firestore plan directly and fall back to a virtual charge, so they are right
+// with or without this having run. Idempotent — safe to re-run.
+app.post("/api/admin/backfill-treatment-charges", requireSuperAdmin, async (req, res) => {
+  if (!fDb) return res.status(503).json({ ok: false, error: "Firestore ulanmagan" });
+  const onlyClinic = String(req.query.clinicId || "");
+  const dryRun = String(req.query.dryRun || "") === "1";
+
+  const [allPatients, existingCharges] = await Promise.all([getPatients(), getTreatmentCharges()]);
+  const known = new Set(existingCharges.map((c: any) => String(c.id)));
+  const targets = onlyClinic ? allPatients.filter((p: any) => p.clinicId === onlyClinic) : allPatients;
+
+  let created = 0, skipped = 0, scanned = 0;
+  const now = new Date().toISOString();
+
+  for (const patient of targets) {
+    let snap;
+    try {
+      snap = await getDocs(collection(fDb, `patients/${patient.id}/treatmentPlans`));
+    } catch (err) {
+      console.warn(`[backfill-charges] could not read plans for ${patient.id}`, err);
+      continue;
+    }
+    for (const d of snap.docs) {
+      const item: any = d.data();
+      scanned++;
+      if (known.has(String(d.id))) { skipped++; continue; }
+      if (item.status === 'Cancelled') { skipped++; continue; }
+      if (!dryRun) {
+        await saveTreatmentCharge({
+          id: String(d.id),
+          clinicId: patient.clinicId || '',
+          patientId: String(patient.id),
+          doctorId: item.doctorId || patient.primaryDoctorId || '',
+          patientName: patient.fullName,
+          treatmentName: item.treatment,
+          toothId: item.toothId,
+          listPrice: round0(item.price),
+          status: 'open',
+          createdAt: item.createdAt || now,
+          updatedAt: now,
+          createdBy: 'backfill',
+        });
+      }
+      created++;
+    }
+  }
+  res.json({ ok: true, dryRun, scannedPatients: targets.length, scannedItems: scanned, created, skipped });
+});
+
+// Read-only consistency check — the first thing to reach for when a balance
+// looks wrong in production.
+app.get("/api/admin/billing-audit", requireSuperAdmin, async (req, res) => {
+  const clinicId = String(req.query.clinicId || "");
+  const [charges, receipts] = await Promise.all([getTreatmentCharges(), getPaymentReceipts()]);
+  const scopedCharges = clinicId ? charges.filter((c: any) => c.clinicId === clinicId) : charges;
+  const scopedReceipts = clinicId ? receipts.filter((r: any) => r.clinicId === clinicId) : receipts;
+
+  const badStages = scopedCharges
+    .map((c: any) => ({ id: c.id, error: validateStageSums(c) }))
+    .filter((x: any) => x.error);
+  const overAllocated = scopedReceipts
+    .filter((r: any) => Array.isArray(r.allocations))
+    .map((r: any) => ({
+      id: r.id,
+      amount: round0(r.amount),
+      allocated: r.allocations.reduce((s: number, a: any) => s + round0(a.amount), 0),
+    }))
+    .filter((x: any) => x.allocated > x.amount);
+  const orphanAllocations = scopedReceipts
+    .filter((r: any) => Array.isArray(r.allocations))
+    .flatMap((r: any) => r.allocations
+      .filter((a: any) => !charges.some((c: any) => c.id === String(a.treatmentItemId)))
+      .map((a: any) => ({ receiptId: r.id, treatmentItemId: a.treatmentItemId })));
+
+  res.json({
+    ok: badStages.length === 0 && overAllocated.length === 0 && orphanAllocations.length === 0,
+    charges: scopedCharges.length,
+    receipts: scopedReceipts.length,
+    badStages, overAllocated, orphanAllocations,
+  });
 });
 
 // One-time migration: primaryDoctorId is now kept in sync automatically on every
@@ -2174,7 +2299,7 @@ app.get("/api/payment-receipts", async (req, res) => {
 // already-confirmed and shows up alongside card receipts in the same list and
 // clinic revenue totals.
 app.post("/api/payment-receipts", rateLimiter(30, 60 * 1000), async (req, res) => {
-  const { clinicId, doctorId, patientId, patientName, queueId, amount, paymentMethod } = req.body;
+  const { clinicId, doctorId, patientId, patientName, queueId, amount, paymentMethod, allocations } = req.body;
   if (!clinicId || !doctorId || !(Number(amount) > 0)) {
     return res.status(400).json({ ok: false, error: "clinicId, doctorId va amount (musbat son) talab qilinadi" });
   }
@@ -2185,6 +2310,26 @@ app.post("/api/payment-receipts", rateLimiter(30, 60 * 1000), async (req, res) =
   if (auth.staff?.role === 'doctor' && auth.staff.doctorId !== doctorId) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
+  // Optional per-treatment breakdown. A payment may settle less than the full
+  // amount across specific treatments; the remainder becomes patient-level
+  // credit, spread FIFO by the billing util. Over-allocating is rejected rather
+  // than silently truncated, since that would mean the doctor's intent and the
+  // recorded money disagree.
+  let cleanAllocations: any[] | undefined;
+  if (Array.isArray(allocations) && allocations.length > 0) {
+    cleanAllocations = allocations
+      .filter((a: any) => a && a.treatmentItemId && Number(a.amount) > 0)
+      .map((a: any) => ({
+        treatmentItemId: String(a.treatmentItemId),
+        stageId: a.stageId ? String(a.stageId) : undefined,
+        amount: round0(a.amount),
+      }));
+    const allocated = cleanAllocations.reduce((s: number, a: any) => s + a.amount, 0);
+    if (allocated > round0(amount)) {
+      return res.status(400).json({ ok: false, error: "Taqsimlangan summa to'lov summasidan katta bo'lishi mumkin emas" });
+    }
+    if (cleanAllocations.length === 0) cleanAllocations = undefined;
+  }
   const now = new Date().toISOString();
   const receipt = {
     id: 'receipt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
@@ -2194,9 +2339,141 @@ app.post("/api/payment-receipts", rateLimiter(30, 60 * 1000), async (req, res) =
     status: 'confirmed' as const,
     createdAt: now,
     resolvedAt: now,
+    ...(cleanAllocations ? { allocations: cleanAllocations } : {}),
   };
   await savePaymentReceipt(receipt);
+
+  // Self-healing: if a payment names a treatment that has no charge yet (a
+  // pre-ledger record, or a clinic that never ran the backfill), materialize one
+  // from the price the authenticated staff member supplied. The threat model is
+  // the anonymous Firestore writer, not the logged-in doctor who legitimately
+  // sets prices, so trusting listPrice here is correct.
+  if (cleanAllocations) {
+    try {
+      const existing: any[] = await getTreatmentCharges();
+      const known = new Set(existing.map((c: any) => String(c.id)));
+      for (const a of cleanAllocations) {
+        if (known.has(a.treatmentItemId)) continue;
+        const listPrice = round0(req.body.listPriceById?.[a.treatmentItemId] ?? a.amount);
+        await saveTreatmentCharge({
+          id: a.treatmentItemId,
+          clinicId, patientId, doctorId, patientName,
+          listPrice,
+          status: 'open',
+          createdAt: now,
+          updatedAt: now,
+          createdBy: 'auto_from_payment',
+        });
+      }
+    } catch (err) {
+      // Never fail the payment over ledger bookkeeping — the receipt is the
+      // money record and it is already saved.
+      console.warn("[treatment-charges] auto-materialize failed", err);
+    }
+  }
+
   res.status(201).json(receipt);
+});
+
+// ---------------------------------------------------------------------------
+// Treatment charges (the money ledger)
+// ---------------------------------------------------------------------------
+
+app.get("/api/treatment-charges", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  const clinicId = String(req.query.clinicId || "");
+  const patientId = String(req.query.patientId || "");
+  const doctorId = String(req.query.doctorId || "");
+  const auth = await getAuthContext(req);
+
+  // A patient may read their own charges (their cabinet shows their balance);
+  // everything else goes through the same clinic check the receipts use.
+  const isOwnPatient = !!auth.patient && !!patientId && auth.patient.patientId === patientId;
+  if (!isOwnPatient) {
+    const scopeClinic = clinicId || undefined;
+    if (scopeClinic) {
+      if (!(await isAuthorizedForClinic(req, scopeClinic, true))) {
+        return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+      }
+    } else if (!auth.isSuperAdmin && !auth.staff) {
+      return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+    }
+  }
+
+  const all: any[] = await getTreatmentCharges();
+  let matches = all;
+  if (clinicId) matches = matches.filter((c) => c.clinicId === clinicId);
+  if (patientId) matches = matches.filter((c) => c.patientId === patientId);
+  if (doctorId) matches = matches.filter((c) => c.doctorId === doctorId);
+  // Staff without an explicit clinicId filter still only ever see their own clinic.
+  if (!isOwnPatient && !auth.isSuperAdmin && auth.staff) {
+    matches = matches.filter((c) => c.clinicId === auth.staff!.clinicId);
+  }
+  res.json(matches.sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''))));
+});
+
+app.post("/api/treatment-charges", rateLimiter(60, 60 * 1000), async (req, res) => {
+  const { id, clinicId, doctorId, patientId } = req.body;
+  if (!id || !clinicId || !doctorId || !patientId) {
+    return res.status(400).json({ ok: false, error: "id, clinicId, doctorId va patientId talab qilinadi" });
+  }
+  if (!(await isAuthorizedForClinic(req, clinicId, true))) {
+    return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+  }
+  const auth = await getAuthContext(req);
+  if (auth.staff?.role === 'doctor' && auth.staff.doctorId !== doctorId) {
+    return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+  }
+  const now = new Date().toISOString();
+  const existing: any = (await getTreatmentCharges()).find((c: any) => c.id === String(id));
+  const charge = {
+    id: String(id),
+    clinicId, doctorId, patientId,
+    patientName: req.body.patientName,
+    treatmentName: req.body.treatmentName,
+    toothId: req.body.toothId,
+    serviceId: req.body.serviceId,
+    listPrice: round0(req.body.listPrice),
+    discountPercent: req.body.discountPercent !== undefined ? Number(req.body.discountPercent) || 0 : undefined,
+    discountAmount: req.body.discountAmount !== undefined ? round0(req.body.discountAmount) : undefined,
+    discountReason: req.body.discountReason,
+    stages: Array.isArray(req.body.stages) ? req.body.stages : undefined,
+    status: req.body.status === 'void' ? 'void' : 'open',
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    createdBy: existing?.createdBy || (auth.staff?.doctorId || doctorId),
+  };
+  const stageError = validateStageSums(charge);
+  if (stageError) return res.status(400).json({ ok: false, error: stageError });
+  await saveTreatmentCharge(charge);
+  res.status(201).json(charge);
+});
+
+app.patch("/api/treatment-charges/:id", async (req, res) => {
+  const id = String(req.params.id);
+  const existing: any = (await getTreatmentCharges()).find((c: any) => c.id === id);
+  if (!existing) return res.status(404).json({ ok: false, error: "Topilmadi" });
+  if (!(await isAuthorizedForClinic(req, existing.clinicId, true))) {
+    return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+  }
+  const auth = await getAuthContext(req);
+  if (auth.staff?.role === 'doctor' && auth.staff.doctorId !== existing.doctorId) {
+    return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+  }
+  const patch: any = { id, updatedAt: new Date().toISOString() };
+  for (const field of ['treatmentName', 'toothId', 'serviceId', 'discountReason'] as const) {
+    if (req.body[field] !== undefined) patch[field] = req.body[field];
+  }
+  if (req.body.listPrice !== undefined) patch.listPrice = round0(req.body.listPrice);
+  if (req.body.discountPercent !== undefined) patch.discountPercent = Number(req.body.discountPercent) || 0;
+  if (req.body.discountAmount !== undefined) patch.discountAmount = round0(req.body.discountAmount);
+  if (req.body.stages !== undefined) patch.stages = Array.isArray(req.body.stages) ? req.body.stages : [];
+  if (req.body.status !== undefined) patch.status = req.body.status === 'void' ? 'void' : 'open';
+
+  const stageError = validateStageSums({ ...existing, ...patch });
+  if (stageError) return res.status(400).json({ ok: false, error: stageError });
+  await saveTreatmentCharge(patch);
+  res.json({ ...existing, ...patch });
 });
 
 app.patch("/api/payment-receipts/:id", async (req, res) => {
