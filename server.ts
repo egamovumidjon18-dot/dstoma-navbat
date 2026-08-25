@@ -667,6 +667,11 @@ async function savePaymentReceipt(c: any) {
   }
 }
 
+const DEFAULT_DOCTOR_AVATAR =
+  "https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=200&auto=format&fit=crop";
+const isDataUri = (v: any): v is string => typeof v === "string" && v.startsWith("data:");
+const avatarUrl = (id: string) => `/api/doctors/${encodeURIComponent(id)}/avatar`;
+
 // Stages must add up to exactly what's owed, or the per-stage balances would
 // silently disagree with the treatment total. Uses the shared util's
 // effectivePrice so this can never drift from what the UI shows.
@@ -2192,7 +2197,12 @@ app.get("/api/doctors", async (req, res) => {
     specialty: d.specialty || d.specialization || "Stomatolog",
     rating: Number(d.rating) || 5.0,
     ratingCount: Number(d.ratingCount) || 1,
-    image: d.image || "https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=200&auto=format&fit=crop",
+    // Profile photos are stored as base64 data URIs. Inlining them here made
+    // this endpoint ~90KB for three doctors (98% of it images) and the client
+    // re-downloads it every 4s, so it was the single largest source of the
+    // app feeling slow. Hand back a stable URL instead: the browser fetches
+    // each avatar once and caches it, and the polled payload drops to a few KB.
+    image: isDataUri(d.image) ? avatarUrl(d.id) : (d.image || DEFAULT_DOCTOR_AVATAR),
     status: d.status || "idle",
     login: d.login,
     // password intentionally omitted — see /api/doctor-login and /api/admin/credentials
@@ -2204,8 +2214,37 @@ app.get("/api/doctors", async (req, res) => {
   res.json(mapped);
 });
 
+// Serves a doctor's stored base64 profile photo as a real cacheable image, so
+// it lives outside the 4-second polling payload. ETag'd on content, so a
+// changed photo invalidates immediately while an unchanged one costs a 304.
+app.get("/api/doctors/:id/avatar", async (req, res) => {
+  const doc: any = (await getDoctors()).find((d: any) => d.id === req.params.id);
+  if (!doc || !isDataUri(doc.image)) {
+    return res.redirect(302, DEFAULT_DOCTOR_AVATAR);
+  }
+  const match = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(doc.image);
+  if (!match) return res.redirect(302, DEFAULT_DOCTOR_AVATAR);
+  const [, mime = "image/jpeg", isB64, payload] = match;
+  const buf = isB64 ? Buffer.from(payload, "base64") : Buffer.from(decodeURIComponent(payload), "utf8");
+  const etag = `"${crypto.createHash("sha1").update(buf).digest("hex").slice(0, 16)}"`;
+
+  if (req.headers["if-none-match"] === etag) return res.status(304).end();
+  res.setHeader("ETag", etag);
+  res.setHeader("Content-Type", mime);
+  // Revalidate every time but transfer nothing when unchanged.
+  res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+  res.send(buf);
+});
+
 app.post("/api/doctors", async (req, res) => {
   const doc = req.body;
+  // GET /api/doctors hands out a proxy URL in place of the stored base64, and
+  // the client's edit path spreads that whole object back here. Writing the
+  // proxy URL through would permanently destroy the photo, so treat it as
+  // "unchanged" and keep whatever is already stored.
+  if (typeof doc.image === "string" && /\/api\/doctors\/[^/]+\/avatar$/.test(doc.image)) {
+    delete doc.image;
+  }
   const auth = await getAuthContext(req);
   // Superadmin: any doctor. Director: any doctor at their own clinic (adding/editing
   // staff). Doctor: only their own record (self-editing profile/password in Settings).

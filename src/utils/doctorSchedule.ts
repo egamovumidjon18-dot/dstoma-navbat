@@ -1,8 +1,11 @@
-// Shared weekly-schedule math for a doctor's working hours — used by both
-// DoctorDashboard's "Rejalashtirilgan" grid and the patient-facing
-// availability view, so the two can never show a different picture of the
-// same doctor's week. Algorithm mirrors DoctorDashboard.tsx's local
-// scheduleSlots/isLunchSlot/getQueueSlot logic exactly.
+// Shared weekly-schedule math for a doctor's working hours.
+//
+// This is the ONLY definition. DoctorDashboard's "Rejalashtirilgan" grid and the
+// patient-facing availability view both import from here, so the two can never
+// show a different picture of the same doctor's week. (They previously kept
+// byte-identical copies of eight of these helpers, which had already drifted:
+// the doctor's grid treated a cancelled appointment as still occupying its slot
+// while the patient was told the same slot was free.)
 import type { Doctor, QueueItem } from '../types';
 
 export const DEFAULT_WORKING_HOURS = {
@@ -12,7 +15,13 @@ export const DEFAULT_WORKING_HOURS = {
   lunchStart: '13:00',
   lunchEnd: '14:00',
   autoQueue: true,
+  // Mon–Sat. Sunday off by default; a clinic can change this per doctor.
+  workDays: [1, 2, 3, 4, 5, 6],
 };
+
+// A queue still occupies its slot unless it was cancelled. Used everywhere so
+// "is this slot taken" has exactly one answer.
+export const OCCUPIES_SLOT = (q: QueueItem) => q.status !== 'cancelled';
 
 export type WorkingHours = NonNullable<Doctor['workingHours']>;
 
@@ -86,7 +95,78 @@ export function isSlotBooked(
     (q) =>
       q.doctorId === doctorId &&
       q.appointmentDate === date &&
-      q.status !== 'cancelled' &&
+      OCCUPIES_SLOT(q) &&
       getQueueSlot(q.appointmentTime, scheduleSlots) === slot
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Working days
+// ---------------------------------------------------------------------------
+
+/** Day numbers the doctor works, JS convention (0=Sunday). */
+export function getWorkDays(workingHours: WorkingHours): number[] {
+  const days = (workingHours as any).workDays;
+  if (!Array.isArray(days) || days.length === 0) return DEFAULT_WORKING_HOURS.workDays;
+  return days;
+}
+
+/** `date` is "YYYY-MM-DD" or a Date. Days off are not bookable. */
+export function isWorkingDay(date: string | Date, workingHours: WorkingHours): boolean {
+  const d = typeof date === 'string' ? new Date(`${date}T00:00:00`) : date;
+  if (isNaN(d.getTime())) return true; // never block on an unparseable date
+  return getWorkDays(workingHours).includes(d.getDay());
+}
+
+// ---------------------------------------------------------------------------
+// Out-of-hours detection
+// ---------------------------------------------------------------------------
+
+/**
+ * True when an appointment time falls outside the doctor's configured day.
+ *
+ * getQueueSlot deliberately CLAMPS such times onto the first/last slot so they
+ * still render somewhere; without this check a 19:00 appointment silently
+ * appears under the 17:00 row and the row header lies about when it is.
+ */
+export function isOutOfHours(appointmentTime: string | undefined, workingHours: WorkingHours): boolean {
+  if (!appointmentTime) return false;
+  const m = timeToMinutes(appointmentTime);
+  if (isNaN(m)) return false;
+  return m < timeToMinutes(workingHours.startTime) || m >= timeToMinutes(workingHours.endTime);
+}
+
+// ---------------------------------------------------------------------------
+// Conflicts
+// ---------------------------------------------------------------------------
+
+/**
+ * The appointment already occupying this doctor's date+slot, if any.
+ *
+ * `excludeQueueId` lets an edit re-save into its own slot without colliding
+ * with itself. Returns the clashing item so the caller can name it in the
+ * message rather than just refusing.
+ */
+export function findConflict(
+  queues: QueueItem[],
+  doctorId: string,
+  date: string,
+  time: string,
+  workingHours: WorkingHours,
+  excludeQueueId?: string,
+): QueueItem | null {
+  if (!doctorId || !date || !time) return null;
+  const slots = getScheduleSlots(workingHours);
+  const targetSlot = getQueueSlot(time, slots);
+  if (!targetSlot) return null;
+  return (
+    queues.find(
+      (q) =>
+        q.id !== excludeQueueId &&
+        q.doctorId === doctorId &&
+        q.appointmentDate === date &&
+        OCCUPIES_SLOT(q) &&
+        getQueueSlot(q.appointmentTime, slots) === targetSlot,
+    ) || null
   );
 }

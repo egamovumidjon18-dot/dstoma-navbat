@@ -66,6 +66,11 @@ export interface Doctor {
     // scheduled appointments to 'calling' once their slot time arrives, so the
     // queue advances without the doctor starting each one by hand.
     autoQueue?: boolean;
+    // Days the doctor works, JS convention (0=Sunday). Absent on records that
+    // predate this field — treated as Mon–Sat by getWorkDays(). A day not
+    // listed here is closed: not bookable, and shown as such on both the
+    // doctor's grid and the patient's availability view.
+    workDays?: number[];
   };
 }
 

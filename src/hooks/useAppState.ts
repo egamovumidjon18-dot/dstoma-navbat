@@ -490,7 +490,13 @@ export function useAppState() {
   useEffect(() => {
     let active = true;
     let isInitialLoad = true;
-    const loadServerData = async () => {
+    // Split by how often the data actually changes. Queues move constantly;
+    // clinics, doctors, services, patients and links barely move at all, but
+    // used to be re-fetched every 4 seconds along with them — roughly 165KB of
+    // repeat traffic every cycle, parsed and diffed on the main thread. Only
+    // the queue poll stays fast now.
+    const loadServerData = async (includeSlow = true) => {
+      if (includeSlow) {
       try {
         const clRes = await fetch('/api/clinics');
         if (clRes.ok) {
@@ -553,6 +559,7 @@ export function useAppState() {
       } catch (err) {
         console.warn("[AppState Hook] Error loading services from server:", err);
       }
+      } // end includeSlow (clinics / doctors / services)
 
       try {
         const qRes = await fetch('/api/queues');
@@ -571,6 +578,9 @@ export function useAppState() {
       } catch (err) {
         console.warn("[AppState Hook] Error loading queues from server:", err);
       }
+
+      if (!includeSlow) { if (active) setIsAppLoading(false); return; }
+
       try {
         const patRes = await fetch('/api/patients');
         if (patRes.ok) {
@@ -625,11 +635,15 @@ export function useAppState() {
       isInitialLoad = false;
       if (active) setIsAppLoading(false);
     };
-    loadServerData();
-    const clInt = setInterval(loadServerData, 4000);
+    loadServerData(true);
+    // Queues only — the thing that actually changes minute to minute.
+    const fastInt = setInterval(() => loadServerData(false), 4000);
+    // Everything else, at a rate that matches how often it really changes.
+    const slowInt = setInterval(() => loadServerData(true), 60000);
     return () => {
       active = false;
-      clearInterval(clInt);
+      clearInterval(fastInt);
+      clearInterval(slowInt);
     };
   }, []);
 

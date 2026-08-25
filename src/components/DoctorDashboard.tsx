@@ -20,6 +20,19 @@ import { TRANSLATIONS, Language, translateMedicalText } from "../translations";
 import { allocatePayments, clinicBillingSummary } from "../utils/treatmentBilling";
 import { fetchTreatmentCharges } from "../utils/treatmentCharges";
 import {
+  DEFAULT_WORKING_HOURS,
+  WEEKDAY_NAMES_UZ,
+  getScheduleSlots,
+  isLunchSlot as isLunchSlotUtil,
+  getQueueSlot as getQueueSlotUtil,
+  getWeekDays,
+  isOutOfHours,
+  isWorkingDay,
+  getWorkDays,
+  findConflict,
+  timeToMinutes,
+} from "../utils/doctorSchedule";
+import {
   Check,
   ChevronLeft,
   ChevronRight,
@@ -1266,7 +1279,6 @@ export default function DoctorDashboard({
   // Doctor-editable weekly working-hours used to generate the Rejalashtirilgan
   // time-slot grid. Falls back to a clinic-typical default when the doctor
   // hasn't customized it yet.
-  const DEFAULT_WORKING_HOURS = { startTime: '08:00', endTime: '18:00', slotMinutes: 60, lunchStart: '13:00', lunchEnd: '14:00', autoQueue: true };
   const [showScheduleSettingsModal, setShowScheduleSettingsModal] = useState(false);
   const [scheduleSettingsStart, setScheduleSettingsStart] = useState(DEFAULT_WORKING_HOURS.startTime);
   const [scheduleSettingsEnd, setScheduleSettingsEnd] = useState(DEFAULT_WORKING_HOURS.endTime);
@@ -1301,47 +1313,15 @@ export default function DoctorDashboard({
   // "Yangi bandlash" button's slot picker.
   const doctorWorkingHours = currentDoctor?.workingHours || DEFAULT_WORKING_HOURS;
 
-  const timeToMinutes = (t: string) => {
-    const [h, m] = t.split(':').map(Number);
-    return h * 60 + m;
-  };
-  const minutesToTime = (mins: number) => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
-
-  // Fixed list of "HH:MM" slots from startTime up to (not including) endTime,
-  // stepped by slotMinutes — e.g. 08:00,09:00,...,17:00 for the default hours.
-  const scheduleSlots = useMemo(() => {
-    const startMin = timeToMinutes(doctorWorkingHours.startTime);
-    const endMin = timeToMinutes(doctorWorkingHours.endTime);
-    const step = doctorWorkingHours.slotMinutes || 60;
-    const slots: string[] = [];
-    for (let m = startMin; m < endMin; m += step) slots.push(minutesToTime(m));
-    return slots;
-  }, [doctorWorkingHours.startTime, doctorWorkingHours.endTime, doctorWorkingHours.slotMinutes]);
-
-  const isLunchSlot = (slotTime: string) => {
-    if (!doctorWorkingHours.lunchStart || !doctorWorkingHours.lunchEnd) return false;
-    const m = timeToMinutes(slotTime);
-    return m >= timeToMinutes(doctorWorkingHours.lunchStart) && m < timeToMinutes(doctorWorkingHours.lunchEnd);
-  };
-
-  // A queue item belongs to a slot if its appointmentTime falls anywhere within
-  // [slot, nextSlot) — a range match, not exact equality, so appointments
-  // booked before this feature existed (arbitrary times) still land in the
-  // right cell instead of disappearing from the grid.
-  const getQueueSlot = (appointmentTime?: string) => {
-    if (!appointmentTime || scheduleSlots.length === 0) return null;
-    const m = timeToMinutes(appointmentTime);
-    // Clamp to the first slot instead of returning null for times before the
-    // working day starts — otherwise a legacy appointment booked outside the
-    // doctor's current hours would silently vanish from the grid entirely.
-    if (m < timeToMinutes(scheduleSlots[0])) return scheduleSlots[0];
-    let match: string = scheduleSlots[0];
-    for (const slot of scheduleSlots) {
-      if (m >= timeToMinutes(slot)) match = slot;
-      else break;
-    }
-    return match;
-  };
+  // All slot maths comes from src/utils/doctorSchedule.ts — the same module the
+  // patient-facing availability view uses, so the two views cannot disagree.
+  const scheduleSlots = useMemo(
+    () => getScheduleSlots(doctorWorkingHours),
+    [doctorWorkingHours.startTime, doctorWorkingHours.endTime, doctorWorkingHours.slotMinutes]
+  );
+  const isLunchSlot = (slotTime: string) => isLunchSlotUtil(slotTime, doctorWorkingHours);
+  const getQueueSlot = (appointmentTime?: string) => getQueueSlotUtil(appointmentTime, scheduleSlots);
+  const isOutOfHoursTime = (appointmentTime?: string) => isOutOfHours(appointmentTime, doctorWorkingHours);
 
   // Opens the booking modal either "locked" to a specific grid slot (date/time
   // pre-set and shown read-only) or "unlocked" for the standalone header
@@ -1663,27 +1643,40 @@ export default function DoctorDashboard({
   // a chronological agenda) — every scheduled appointment is placed under its
   // actual weekday column for the currently-viewed week, sorted by time within
   // the day. Navigable via scheduleWeekOffset (0 = this week).
-  const WEEKDAY_NAMES_UZ = ["Yakshanba", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba"];
-  const scheduleWeekDays = (() => {
-    const now = new Date();
-    const jsDay = now.getDay(); // 0=Sun..6=Sat
-    const mondayOffset = jsDay === 0 ? -6 : 1 - jsDay;
-    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset + scheduleWeekOffset * 7);
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
-      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      return { date: dateStr, dateObj: d, weekday: WEEKDAY_NAMES_UZ[d.getDay()] };
-    });
-  })();
+  // Memoised: this used to rebuild seven Date objects and call new Date() on
+  // every render of a ~4900-line component that re-renders every 4s.
+  const scheduleWeekDays = useMemo(() => getWeekDays(scheduleWeekOffset), [scheduleWeekOffset]);
+
   // Everything with an appointmentDate stays on the weekly table regardless of
   // status — a completed or cancelled visit is still part of that day's real
   // history, not something that should vanish once the doctor finishes it.
-  const scheduleWeekGrid = scheduleWeekDays.map((day) => ({
+  const scheduleWeekGrid = useMemo(() => scheduleWeekDays.map((day) => ({
     ...day,
+    isOff: !isWorkingDay(day.date, doctorWorkingHours),
     items: doctorQueues
       .filter((q) => q.appointmentDate === day.date)
       .sort((a, b) => (a.appointmentTime || "").localeCompare(b.appointmentTime || "")),
-  }));
+  })), [scheduleWeekDays, doctorQueues, doctorWorkingHours]);
+
+  // Appointments this week that the grid cannot place honestly: their time
+  // falls outside the doctor's configured day, so getQueueSlot would clamp them
+  // onto the first/last row and the row header would misstate when they are.
+  // Surfaced in their own strip instead of quietly lying.
+  const outOfHoursThisWeek = useMemo(() => {
+    const weekDates = new Set(scheduleWeekDays.map((d) => d.date));
+    return doctorQueues
+      .filter((q) => q.appointmentDate && weekDates.has(q.appointmentDate)
+        && q.status !== 'cancelled' && isOutOfHoursTime(q.appointmentTime))
+      .sort((a, b) => `${a.appointmentDate}${a.appointmentTime}`.localeCompare(`${b.appointmentDate}${b.appointmentTime}`));
+  }, [doctorQueues, scheduleWeekDays, doctorWorkingHours]);
+
+  // Walk-ins and anything else with no date yet. The grid is date-keyed, so
+  // these were invisible — the doctor saw a free "+" for a slot in which they
+  // were actually treating someone.
+  const undatedQueues = useMemo(
+    () => doctorQueues.filter((q) => !q.appointmentDate && ['pending', 'calling', 'in_progress'].includes(q.status)),
+    [doctorQueues]
+  );
   const formatDdMm = (d: Date) => `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`;
   const scheduleWeekLabel = `${formatDdMm(scheduleWeekDays[0].dateObj)} — ${formatDdMm(scheduleWeekDays[6].dateObj)}.${scheduleWeekDays[6].dateObj.getFullYear()}`;
 
