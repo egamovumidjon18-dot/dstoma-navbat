@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../services/firebase";
 import { Patient, PaymentReceipt, Reminder, TreatmentCharge } from "../types";
-import { patientBalance, type PlanItemLike } from "../utils/treatmentBilling";
+import { patientBalance, itemBalance, type PlanItemLike } from "../utils/treatmentBilling";
 import { decodeLegacyEntities } from "../utils/textFormat";
 import { getApiUrl } from "../services/api";
 import { TRANSLATIONS, Language } from "../translations";
@@ -36,6 +36,7 @@ import {
   Plus,
   History,
   X,
+  Wallet,
 } from "lucide-react";
 
 interface PatientProfileProps {
@@ -61,6 +62,10 @@ const PATIENT_PROFILE_TRANSLATIONS: Record<string, PatientProfileDictEntry> = {
   tasdiqlanmagan: { ru: "Не подтверждено", en: "Unconfirmed", kk: "Расталмаған", ky: "Тастыкталбаган", tg: "Тасдиқнашуда", tk: "Tassyklanmadyk" },
   "ortiqcha to'lov": { ru: "Переплата", en: "Overpaid", kk: "Артық төлем", ky: "Ашык төлөм", tg: "Пардохти изофа", tk: "Artykmaç töleg" },
   "qarzdorlik yo'q": { ru: "Задолженности нет", en: "No debt", kk: "Қарыз жоқ", ky: "Карыз жок", tg: "Қарз нест", tk: "Bergi ýok" },
+  qarz: { ru: "Долг", en: "Debt", kk: "Қарыз", ky: "Карыз", tg: "Қарз", tk: "Bergi" },
+  "muolajalar bo'yicha": { ru: "По процедурам", en: "By treatment", kk: "Емдеу бойынша", ky: "Дарылоо боюнча", tg: "Аз рӯи муолиҷа", tk: "Bejergi boýunça" },
+  "qarz uchun eslatma": { ru: "Напоминание о долге", en: "Debt reminder", kk: "Қарыз туралы еске салу", ky: "Карыз жөнүндө эскертүү", tg: "Ёдоварӣ дар бораи қарз", tk: "Bergi barada duýduryş" },
+  "to'lash uchun qoldi": { ru: "Осталось оплатить", en: "Remaining to pay", kk: "Төлеуге қалды", ky: "Төлөөгө калды", tg: "Барои пардохт монд", tk: "Tölemäge galdy" },
   "noma'lum bemor": { ru: "Неизвестный пациент", en: "Unknown patient", kk: "Белгісіз пациент", ky: "Белгисиз бейтап", tg: "Бемори номаълум", tk: "Näbelli näsag" },
   faol: { ru: "Активен", en: "Active", kk: "Белсенді", ky: "Активдүү", tg: "Фаъол", tk: "Işjeň" },
   yangi: { ru: "Новый", en: "New", kk: "Жаңа", ky: "Жаңы", tg: "Нав", tk: "Täze" },
@@ -633,7 +638,11 @@ export default function PatientProfile({
         </div>
 
         {/* Right Content */}
-        <div className="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[500px] lg:h-[700px]">
+        {/* Scales with the viewport instead of a fixed 500/700px, which either
+            cramped tall content or left a wide band of empty page below the
+            card on a larger monitor. min-h keeps it usable on short mobile
+            viewports; max-h keeps it from growing absurdly tall on 4K screens. */}
+        <div className="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[70vh] min-h-[520px] max-h-[880px]">
           <div className="flex overflow-x-auto border-b border-slate-100 hide-scrollbar">
             {tabs.map((tab) => (
               <button
@@ -803,6 +812,62 @@ export default function PatientProfile({
             
             {activeTab === "payments" && (
               <div className="space-y-4">
+                {/* Same numbers as the sidebar card and Davolash rejasi tab —
+                    one balance, shown everywhere, never a second computation. */}
+                <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+                  <h4 className="font-bold text-slate-800 text-base mb-3 flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-emerald-500" /> {t("moliyaviy holat")}
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t("jami")}</p>
+                      <p className="text-sm font-black text-slate-800 mt-0.5">{balance.total.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-violet-50 border border-violet-100 rounded-xl p-3">
+                      <p className="text-[9px] font-bold text-violet-400 uppercase tracking-wider">{t("chegirma")}</p>
+                      <p className="text-sm font-black text-violet-700 mt-0.5">{balance.discount.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+                      <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider">{t("to'langan")}</p>
+                      <p className="text-sm font-black text-emerald-700 mt-0.5">{balance.paid.toLocaleString()}</p>
+                    </div>
+                    <div className={`rounded-xl p-3 border ${totalDebt > 0 ? 'bg-rose-50 border-rose-100' : 'bg-emerald-50 border-emerald-100'}`}>
+                      <p className={`text-[9px] font-bold uppercase tracking-wider ${totalDebt > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>{t("qarz")}</p>
+                      <p className={`text-sm font-black mt-0.5 ${totalDebt > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>{totalDebt.toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Per-treatment breakdown, so "why do they owe X" is answerable
+                    from this same tab instead of hopping to Davolash rejasi. */}
+                {planItems.filter((i) => i.status !== 'Cancelled').length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+                    <h4 className="font-bold text-slate-800 text-base mb-3 flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-emerald-500" /> {t("muolajalar bo'yicha")}
+                    </h4>
+                    <div className="space-y-2">
+                      {planItems.filter((i) => i.status !== 'Cancelled').map((item) => {
+                        const b = itemBalance(item.id, balance.ledger);
+                        return (
+                          <div key={item.id} className="flex items-center gap-3 bg-slate-50 border border-slate-100 rounded-xl p-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-slate-700 truncate">{item.treatment}</p>
+                              <p className="text-[10px] text-slate-400">
+                                {(b.listPrice || item.price).toLocaleString()} {t("so'm")}
+                                {b.discount > 0 && <span className="text-violet-500"> · −{b.discount.toLocaleString()}</span>}
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-[10px] font-bold text-emerald-600">{b.paid.toLocaleString()}</p>
+                              <p className={`text-[10px] font-bold ${b.debt > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{b.debt.toLocaleString()}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
                   <h4 className="font-bold text-slate-800 text-base mb-1 flex items-center gap-2">
                     <CreditCard className="w-4 h-4 text-emerald-500" /> {t("to'lov cheklari")}
@@ -895,6 +960,31 @@ export default function PatientProfile({
 
             {activeTab === "reminders" && (
               <div className="space-y-4">
+                {/* So a doctor following up on reminders sees the debt without
+                    switching tabs, and can turn it into a reminder in one click. */}
+                <div className={`rounded-2xl border p-4 flex items-center justify-between gap-3 flex-wrap ${totalDebt > 0 ? 'bg-rose-50 border-rose-100' : 'bg-emerald-50 border-emerald-100'}`}>
+                  <div className="flex items-center gap-2.5">
+                    <Wallet className={`w-4 h-4 shrink-0 ${totalDebt > 0 ? 'text-rose-500' : 'text-emerald-500'}`} />
+                    <div>
+                      <p className={`text-[10px] font-bold uppercase tracking-wider ${totalDebt > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
+                        {totalDebt > 0 ? t("joriy qarzdorlik") : t("qarzdorlik yo'q")}
+                      </p>
+                      {totalDebt > 0 && (
+                        <p className="text-sm font-black text-rose-700">{totalDebt.toLocaleString()} {t("so'm")}</p>
+                      )}
+                    </div>
+                  </div>
+                  {totalDebt > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setReminderText(`${t("to'lash uchun qoldi")}: ${totalDebt.toLocaleString()} ${t("so'm")}`)}
+                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold transition-colors flex items-center gap-1.5"
+                    >
+                      <Bell className="w-3.5 h-3.5" /> {t("qarz uchun eslatma")}
+                    </button>
+                  )}
+                </div>
+
                 <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
                   <h4 className="font-bold text-slate-800 text-base mb-4 flex items-center gap-2">
                     <Bell className="w-4 h-4 text-emerald-500" /> {t("yangi eslatma qo'shish")}
