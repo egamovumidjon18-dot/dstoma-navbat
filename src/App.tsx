@@ -318,6 +318,7 @@ export default function App() {
                 saasPayments={saasPayments}
                 language={language}
                 setLanguage={setLanguage}
+                staffToken={staffToken}
               />
             </ErrorBoundary>
           ) : (

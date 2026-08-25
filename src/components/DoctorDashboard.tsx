@@ -13,9 +13,12 @@ import SettingsView from "./Settings";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import InstallAppBanner from "./InstallAppBanner";
 import ProcedureCatalog from "./ProcedureCatalog";
-import { Clinic, Doctor, Service, QueueItem, Patient, DoctorClinicLink, Reminder } from "../types";
+import FinanceCenter from "./FinanceCenter";
+import { Clinic, Doctor, Service, QueueItem, Patient, DoctorClinicLink, Reminder, TreatmentCharge, PaymentReceipt } from "../types";
 import { decodeLegacyEntities } from "../utils/textFormat";
 import { TRANSLATIONS, Language, translateMedicalText } from "../translations";
+import { allocatePayments, clinicBillingSummary } from "../utils/treatmentBilling";
+import { fetchTreatmentCharges } from "../utils/treatmentCharges";
 import {
   Check,
   ChevronLeft,
@@ -134,12 +137,19 @@ const VIEW_TITLES: Record<string, string> = {
   eslatmalar: "Eslatmalar",
   muolajalar: "Muolajalar",
   materiallar: "Material va Anjomlar",
+  moliya: "Moliya",
   statistika: "Statistika",
   sozlamalar: "Sozlamalar",
 };
 
 const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "qabul yakunlandi": { ru: "Приём завершён", en: "Visit completed", kk: "Қабылдау аяқталды", ky: "Кабыл алуу аяктады", tg: "Қабул анҷом ёфт", tk: "Kabul tamamlandy" },
+  "to'liq": { ru: "Полностью", en: "Full", kk: "Толық", ky: "Толук", tg: "Пурра", tk: "Doly" },
+  "qisman": { ru: "Частично", en: "Partial", kk: "Ішінара", ky: "Жарым-жартылай", tg: "Қисман", tk: "Bölekleýin" },
+  "keyin to'laydi": { ru: "Оплатит позже", en: "Pays later", kk: "Кейін төлейді", ky: "Кийин төлөйт", tg: "Баъдтар пардохт мекунад", tk: "Soňra töleýär" },
+  "qoladi": { ru: "Останется", en: "Remaining", kk: "Қалады", ky: "Калат", tg: "Мемонад", tk: "Galýar" },
+  "to'lov yozilmaydi — qarz sifatida qoladi.": { ru: "Платёж не записывается — останется как долг.", en: "No payment is recorded — it stays as debt.", kk: "Төлем жазылмайды — қарыз болып қалады.", ky: "Төлөм жазылбайт — карыз болуп калат.", tg: "Пардохт сабт намешавад — ҳамчун қарз мемонад.", tk: "Töleg ýazylmaýar — bergi bolup galýar." },
+  "bosqichlar": { ru: "Этапы", en: "Stages", kk: "Кезеңдер", ky: "Этаптар", tg: "Марҳилаҳо", tk: "Tapgyrlar" },
   "bemor to'lovni qanday amalga oshirdi?": { ru: "Как пациент оплатил?", en: "How did the patient pay?", kk: "Пациент қалай төледі?", ky: "Бейтап кантип төлөдү?", tg: "Бемор чи тавр пардохт кард?", tk: "Näsag nähili töledi?" },
   "summa (so'm)": { ru: "Сумма (сум)", en: "Amount (UZS)", kk: "Сома (сом)", ky: "Сумма (сом)", tg: "Маблағ (сӯм)", tk: "Möçber (sim)" },
   naqd: { ru: "Наличные", en: "Cash", kk: "Қолма-қол", ky: "Накталай", tg: "Нақдина", tk: "Nagt" },
@@ -764,16 +774,70 @@ export default function DoctorDashboard({
     () => clinicPatients.filter((p) => p.primaryDoctorId === currentDoctor?.id),
     [clinicPatients, currentDoctor?.id]
   );
+
+  // Clinic-wide billing: feeds the Bemorlar debt column, the debt filters and
+  // the Moliya view. One flat read of the ledger answers all of them — which is
+  // exactly why charges carry clinicId rather than living per-patient.
+  const [clinicCharges, setClinicCharges] = useState<TreatmentCharge[]>([]);
+  const [clinicReceipts, setClinicReceipts] = useState<PaymentReceipt[]>([]);
+  const [patientStatusFilter, setPatientStatusFilter] = useState<'barchasi' | 'faol' | 'yangi' | 'qarzdor'>('barchasi');
+  const [debtFilter, setDebtFilter] = useState<'barchasi' | 'qarzdorlar' | "qarzi yo'qlar">('barchasi');
+
+  useEffect(() => {
+    if (!effectiveClinicId || !staffToken) return;
+    let active = true;
+    const load = async () => {
+      const [charges, receipts] = await Promise.all([
+        fetchTreatmentCharges({ clinicId: effectiveClinicId }, staffToken),
+        fetch(`/api/payment-receipts?clinicId=${encodeURIComponent(effectiveClinicId)}`, {
+          headers: { Authorization: `Bearer ${staffToken}` },
+        }).then(r => (r.ok ? r.json() : [])).catch(() => []),
+      ]);
+      if (!active) return;
+      setClinicCharges(charges);
+      setClinicReceipts(Array.isArray(receipts) ? receipts : []);
+    };
+    load();
+    // Periodic refresh so a payment taken elsewhere appears without a reload.
+    const interval = setInterval(load, 30000);
+    return () => { active = false; clearInterval(interval); };
+  }, [effectiveClinicId, staffToken]);
+
+  const clinicBilling = useMemo(
+    () => clinicBillingSummary(clinicCharges, clinicReceipts),
+    [clinicCharges, clinicReceipts]
+  );
+
   const filteredClinicPatients = useMemo(() => {
     const q = patientListSearch.trim().toLowerCase();
-    if (!q) return myPatients;
-    return myPatients.filter(
-      (p) =>
-        (p.fullName || "").toLowerCase().includes(q) ||
-        (p.phone || "").includes(q) ||
-        (p.id || "").toLowerCase().includes(q)
-    );
-  }, [myPatients, patientListSearch]);
+    let list = myPatients;
+    if (q) {
+      list = list.filter(
+        (p) =>
+          (p.fullName || "").toLowerCase().includes(q) ||
+          (p.phone || "").includes(q) ||
+          (p.id || "").toLowerCase().includes(q)
+      );
+    }
+    // These two dropdowns existed but had no value/onChange — pure dead markup.
+    if (patientStatusFilter !== 'barchasi') {
+      list = list.filter((p) => {
+        const visits = p.clinicVisits?.length || 0;
+        const debt = clinicBilling.byPatient.get(p.id)?.debt || 0;
+        if (patientStatusFilter === 'faol') return visits > 0;
+        if (patientStatusFilter === 'yangi') return visits === 0;
+        if (patientStatusFilter === 'qarzdor') return debt > 0;
+        return true;
+      });
+    }
+    if (debtFilter !== 'barchasi') {
+      list = list.filter((p) => {
+        const debt = clinicBilling.byPatient.get(p.id)?.debt || 0;
+        return debtFilter === 'qarzdorlar' ? debt > 0 : debt <= 0;
+      });
+    }
+    return list;
+  }, [myPatients, patientListSearch, patientStatusFilter, debtFilter, clinicBilling]);
   const patientStats = useMemo(() => {
     const total = myPatients.length;
     const active = myPatients.filter((p) => (p.clinicVisits?.length || 0) > 0).length;
@@ -958,19 +1022,44 @@ export default function DoctorDashboard({
   // deductMaterialsForCompletedQueue in server.ts), so that completing from the
   // Telegram bot or any other surface deducts identically. Nothing extra to do
   // here beyond the status change itself.
-  const handleCompleteQueue = (q: QueueItem) => {
+  const handleCompleteQueue = async (q: QueueItem) => {
     if (!q?.id) return;
     onUpdateQueueStatus(q.id, "completed");
     // Right after finishing, ask how the patient paid — this lets a doctor log
     // an in-person cash or card payment immediately, without the patient needing
     // to be reachable on Telegram afterwards to upload a photo receipt.
-    const servicePrice = services.find((s) => s.id === q.serviceId)?.price;
     setVisitPaymentQueue(q);
+    setVisitPaymentMode("full");
+    setVisitOutstanding(null);
+
+    // Prefer what this patient actually still owes over the service list price:
+    // for a staged treatment the visit settles one stage, not the whole course.
+    const servicePrice = services.find((s) => s.id === q.serviceId)?.price;
     setVisitPaymentAmount(servicePrice ? String(servicePrice) : "");
+    if (q.patientId && staffToken) {
+      const [charges, receipts] = await Promise.all([
+        fetchTreatmentCharges({ patientId: q.patientId }, staffToken),
+        fetch(`/api/payment-receipts?patientId=${encodeURIComponent(q.patientId)}`, {
+          headers: { Authorization: `Bearer ${staffToken}` },
+        }).then(r => (r.ok ? r.json() : [])).catch(() => []),
+      ]);
+      const ledger = allocatePayments(charges, Array.isArray(receipts) ? receipts : []);
+      // The next unpaid stage is what this visit most likely settles.
+      let nextDue = 0;
+      for (const item of ledger.items.values()) {
+        const stage = item.stages.find(s => s.debt > 0);
+        if (stage) { nextDue = stage.debt; break; }
+      }
+      const due = nextDue || ledger.debt;
+      setVisitOutstanding(ledger.debt);
+      if (due > 0) setVisitPaymentAmount(String(due));
+    }
   };
 
   const [visitPaymentQueue, setVisitPaymentQueue] = useState<QueueItem | null>(null);
   const [visitPaymentAmount, setVisitPaymentAmount] = useState("");
+  const [visitPaymentMode, setVisitPaymentMode] = useState<"full" | "partial" | "later">("full");
+  const [visitOutstanding, setVisitOutstanding] = useState<number | null>(null);
   const [recordingVisitPayment, setRecordingVisitPayment] = useState<"cash" | "card" | null>(null);
 
   const handleRecordVisitPayment = async (method: "cash" | "card") => {
@@ -1000,6 +1089,8 @@ export default function DoctorDashboard({
       setRecordingVisitPayment(null);
       setVisitPaymentQueue(null);
       setVisitPaymentAmount("");
+      setVisitPaymentMode("full");
+      setVisitOutstanding(null);
     }
   };
 
@@ -1810,6 +1901,7 @@ export default function DoctorDashboard({
           <SidebarItem icon={Bell} label={t("Eslatmalar")} id="eslatmalar" />
           <SidebarItem icon={ClipboardCheck} label={t("Muolajalar")} id="muolajalar" />
           <SidebarItem icon={Package} label={t("Material va Anjomlar")} id="materiallar" />
+          <SidebarItem icon={Wallet} label={t("Moliya")} id="moliya" />
           <SidebarItem icon={BarChart2} label={t("Statistika")} id="statistika" />
           <SidebarItem icon={Settings} label={t("sozlamalar")} id="sozlamalar" />
         </div>
@@ -3573,7 +3665,12 @@ export default function DoctorDashboard({
                                     {visits.length}
                                   </td>
                                   <td className="py-3 px-3 text-right">
-                                    <span className="font-bold text-slate-400">—</span>
+                                    {(() => {
+                                      const debt = clinicBilling.byPatient.get(patient.id)?.debt || 0;
+                                      return debt > 0
+                                        ? <span className="font-bold text-rose-600">{debt.toLocaleString()}</span>
+                                        : <span className="font-bold text-slate-400">—</span>;
+                                    })()}
                                   </td>
                                   <td className="py-3 px-3 text-center">
                                     <span
@@ -3626,7 +3723,10 @@ export default function DoctorDashboard({
                         <h3 className="font-bold text-slate-800 text-base">
                           {t("filterlar")}
                         </h3>
-                        <button className="text-[11px] font-bold text-slate-400 hover:text-slate-600">
+                        <button
+                          onClick={() => { setPatientStatusFilter('barchasi'); setDebtFilter('barchasi'); setPatientListSearch(''); }}
+                          className="text-[11px] font-bold text-slate-400 hover:text-slate-600"
+                        >
                           {t("tozalash")}
                         </button>
                       </div>
@@ -3635,31 +3735,29 @@ export default function DoctorDashboard({
                           <label className="block text-[11px] font-bold text-slate-800 mb-1.5">
                             {t("holati")}
                           </label>
-                          <select className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:border-emerald-500/50 transition-colors font-medium">
-                            <option>{t("barchasi")}</option>
-                            <option>{t("faol")}</option>
-                            <option>{t("qarzdor")}</option>
-                            <option>{t("arxiv")}</option>
+                          <select
+                            value={patientStatusFilter}
+                            onChange={(e) => setPatientStatusFilter(e.target.value as typeof patientStatusFilter)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:border-emerald-500/50 transition-colors font-medium"
+                          >
+                            <option value="barchasi">{t("barchasi")}</option>
+                            <option value="faol">{t("faol")}</option>
+                            <option value="yangi">{t("yangi")}</option>
+                            <option value="qarzdor">{t("qarzdor")}</option>
                           </select>
                         </div>
                         <div>
                           <label className="block text-[11px] font-bold text-slate-800 mb-1.5">
                             {t("qarzdorlik")}
                           </label>
-                          <select className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:border-emerald-500/50 transition-colors font-medium">
-                            <option>{t("barchasi")}</option>
-                            <option>{t("qarzdorlar")}</option>
-                            <option>{t("qarzi yo'qlar")}</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-800 mb-1.5">
-                            {t("shifokor")}
-                          </label>
-                          <select className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:border-emerald-500/50 transition-colors font-medium">
-                            <option>{t("barchasi")}</option>
-                            <option>Dr. Asilbek Xolmirzayev</option>
-                            <option>Dr. Shohrux Rahmonov</option>
+                          <select
+                            value={debtFilter}
+                            onChange={(e) => setDebtFilter(e.target.value as typeof debtFilter)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:border-emerald-500/50 transition-colors font-medium"
+                          >
+                            <option value="barchasi">{t("barchasi")}</option>
+                            <option value="qarzdorlar">{t("qarzdorlar")}</option>
+                            <option value="qarzi yo'qlar">{t("qarzi yo'qlar")}</option>
                           </select>
                         </div>
                         <div>
@@ -3950,6 +4048,16 @@ export default function DoctorDashboard({
             <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
               <MaterialsInventory clinicId={effectiveClinicId || undefined} language={language} />
             </div>
+          )}
+
+          {activeView === "moliya" && (
+            <FinanceCenter
+              charges={clinicCharges}
+              receipts={clinicReceipts}
+              patientNameById={(id) => decodeLegacyEntities(clinicPatients.find((p) => p.id === id)?.fullName)}
+              onSelectPatient={(id) => { setSelectedPatientId(id); setActiveView("bemorlar"); }}
+              language={language}
+            />
           )}
         </div>
       </div>
@@ -4717,14 +4825,66 @@ export default function DoctorDashboard({
             <p className="text-xs text-slate-500 font-semibold mb-4">
               {t("Bemor to'lovni qanday amalga oshirdi?")}
             </p>
-            <input
-              type="number"
-              min="1"
-              value={visitPaymentAmount}
-              onChange={(e) => setVisitPaymentAmount(e.target.value)}
-              placeholder={t("Summa (so'm)")}
-              className="w-full mb-4 px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-center text-lg font-black text-slate-900 focus:outline-none focus:border-emerald-400"
-            />
+            {/* Full / partial / pay-later. Previously the only option was the
+                full service price, so a patient paying half had nothing to
+                record and their debt was never tracked. */}
+            <div className="grid grid-cols-3 gap-1.5 mb-3">
+              {([
+                { id: 'full', label: t("To'liq") },
+                { id: 'partial', label: t("Qisman") },
+                { id: 'later', label: t("Keyin to'laydi") },
+              ] as const).map(opt => (
+                <button
+                  key={opt.id}
+                  onClick={() => {
+                    setVisitPaymentMode(opt.id);
+                    if (opt.id === 'full' && visitOutstanding) setVisitPaymentAmount(String(visitOutstanding));
+                  }}
+                  className={`py-2 px-1 rounded-xl text-[11px] font-black transition-all border ${
+                    visitPaymentMode === opt.id
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {visitPaymentMode !== 'later' && (
+              <>
+                <input
+                  type="number"
+                  min="1"
+                  value={visitPaymentAmount}
+                  onChange={(e) => setVisitPaymentAmount(e.target.value)}
+                  readOnly={visitPaymentMode === 'full' && !!visitOutstanding}
+                  placeholder={t("Summa (so'm)")}
+                  className="w-full mb-2 px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-center text-lg font-black text-slate-900 focus:outline-none focus:border-emerald-400"
+                />
+                {visitOutstanding !== null && (
+                  <p className="text-[11px] font-bold text-slate-500 mb-3">
+                    {t("Qoladi")}: <span className={Math.max(0, visitOutstanding - (Number(visitPaymentAmount) || 0)) > 0 ? 'text-amber-600' : 'text-emerald-600'}>
+                      {Math.max(0, visitOutstanding - (Number(visitPaymentAmount) || 0)).toLocaleString()} {t("so'm")}
+                    </span>
+                  </p>
+                )}
+              </>
+            )}
+            {visitPaymentMode === 'later' && (
+              <p className="text-xs font-semibold text-slate-500 mb-4">
+                {t("To'lov yozilmaydi — qarz sifatida qoladi.")}
+              </p>
+            )}
+
+            {visitPaymentMode === 'later' ? (
+              <button
+                onClick={() => { setVisitPaymentQueue(null); setVisitPaymentAmount(""); setVisitPaymentMode("full"); setVisitOutstanding(null); }}
+                className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider rounded-2xl transition-all mb-2.5"
+              >
+                {t("Tushunarli")}
+              </button>
+            ) : (
             <div className="grid grid-cols-2 gap-2.5 mb-2.5">
               <button
                 onClick={() => handleRecordVisitPayment("cash")}
@@ -4741,8 +4901,9 @@ export default function DoctorDashboard({
                 {recordingVisitPayment === "card" ? "..." : `💳 ${t("Karta")}`}
               </button>
             </div>
+            )}
             <button
-              onClick={() => { setVisitPaymentQueue(null); setVisitPaymentAmount(""); }}
+              onClick={() => { setVisitPaymentQueue(null); setVisitPaymentAmount(""); setVisitPaymentMode("full"); setVisitOutstanding(null); }}
               disabled={!!recordingVisitPayment}
               className="w-full py-2 text-slate-400 hover:text-slate-600 disabled:opacity-50 text-xs font-bold transition-colors"
             >

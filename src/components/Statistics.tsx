@@ -2,6 +2,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../services/firebase';
 import { getApiUrl } from '../services/api';
+import type { TreatmentCharge } from '../types';
+import { clinicBillingSummary, discountValue, type ClinicPatientBalance } from '../utils/treatmentBilling';
+import { fetchTreatmentCharges } from '../utils/treatmentCharges';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area
@@ -11,7 +14,7 @@ import {
   Download, ChevronDown, DollarSign,
   UserCheck, UserPlus, Users2, HeartPulse,
   CheckCircle2, Clock, XCircle, Receipt, Package, AlertTriangle, X, ChevronRight,
-  Wallet, CreditCard
+  Wallet, CreditCard, Tag, TrendingDown
 } from 'lucide-react';
 import { QueueItem, Doctor, Service, Patient, PaymentReceipt, Reminder } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
@@ -47,6 +50,11 @@ const STATS_TRANSLATIONS: Record<string, StatsDictEntry> = {
   "qayta kelganlar": { ru: "Повторные визиты", en: "Returning Patients", kk: "Қайта келгендер", ky: "Кайра келгендер", tg: "Такроран омадагон", tk: "Gaýtadan gelenler" },
   "tasdiqlangan to'lovlar": { ru: "Подтверждённые платежи", en: "Confirmed Payments", kk: "Расталған төлемдер", ky: "Тастыкталган төлөмдөр", tg: "Пардохтҳои тасдиқшуда", tk: "Tassyklanan tölegler" },
   "naqd to'lovlar": { ru: "Наличные платежи", en: "Cash Payments", kk: "Қолма-қол төлемдер", ky: "Накталай төлөмдөр", tg: "Пардохтҳои нақдӣ", tk: "Nagt tölegler" },
+  "yig'ilgan": { ru: "Собрано", en: "Collected", kk: "Жиналған", ky: "Чогултулган", tg: "Ҷамъоварда", tk: "Ýygnanan" },
+  "qarzdorlik": { ru: "Задолженность", en: "Outstanding", kk: "Қарыз", ky: "Карыз", tg: "Қарз", tk: "Bergi" },
+  "hisoblangan": { ru: "Начислено", en: "Charged", kk: "Есептелген", ky: "Эсептелген", tg: "Ҳисобшуда", tk: "Hasaplanan" },
+  "chegirmalar": { ru: "Скидки", en: "Discounts", kk: "Жеңілдіктер", ky: "Арзандатуулар", tg: "Тахфифҳо", tk: "Arzanlaşyklar" },
+  "potentsial tushum (narxnoma bo'yicha)": { ru: "Потенциальный доход (по прейскуранту)", en: "Potential revenue (list price)", kk: "Әлеуетті кіріс (прейскурант бойынша)", ky: "Потенциалдуу киреше (баа тизмеси боюнча)", tg: "Даромади эҳтимолӣ (аз рӯи нархнома)", tk: "Mümkin girdeji (baha sanawy boýunça)" },
   "karta orqali to'lovlar": { ru: "Платежи картой", en: "Card Payments", kk: "Карта арқылы төлемдер", ky: "Карта аркылуу төлөмдөр", tg: "Пардохт бо корт", tk: "Kart bilen tölegler" },
   kutilmoqda: { ru: "В ожидании", en: "Pending", kk: "Күтуде", ky: "Күтүүдө", tg: "Дар интизор", tk: "Garaşylýar" },
   "rad etilgan": { ru: "Отклонено", en: "Rejected", kk: "Қабылданбады", ky: "Четке кагылды", tg: "Рад карда шуд", tk: "Ret edildi" },
@@ -119,6 +127,19 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
       .catch(() => { if (active) setReceipts([]); });
     return () => { active = false; };
   }, [clinicId, staffToken]);
+
+  // The billing ledger, so this page can report money actually owed and
+  // collected rather than only list-price-times-completed-visits.
+  const [charges, setCharges] = useState<TreatmentCharge[]>([]);
+  useEffect(() => {
+    if (!clinicId || !staffToken) return;
+    let active = true;
+    fetchTreatmentCharges({ clinicId }, staffToken)
+      .then((data) => { if (active) setCharges(data); });
+    return () => { active = false; };
+  }, [clinicId, staffToken]);
+
+  const billing = useMemo(() => clinicBillingSummary(charges, receipts), [charges, receipts]);
 
   // Real reminders (only 3 real states exist: pending/sent/done — Telegram exposes
   // no delivery or read-receipt data, so a "delivered/read" funnel can't be built).
@@ -466,6 +487,29 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
         meta: dateOf(r.createdAt),
       }));
 
+  const chargeRows = (list: TreatmentCharge[]): DrillRow[] =>
+    [...list]
+      .sort((a, b) => discountValue(b) - discountValue(a))
+      .map((c) => ({
+        id: c.id,
+        primary: decodeLegacyEntities(c.patientName || '') || c.patientId || '—',
+        secondary: `${c.treatmentName || '—'} · −${money(discountValue(c))}`,
+        meta: c.discountPercent ? `${c.discountPercent}%` : dateOf(c.createdAt),
+      }));
+
+  const debtorRows = (): DrillRow[] =>
+    (Array.from(billing.byPatient.values()) as ClinicPatientBalance[])
+      .filter((entry) => entry.debt > 0)
+      .sort((a, b) => b.debt - a.debt)
+      .map((entry) => ({
+        id: entry.patientId,
+        primary: decodeLegacyEntities(
+          patients.find((p) => p.id === entry.patientId)?.fullName || entry.patientName || ''
+        ) || entry.patientId,
+        secondary: money(entry.debt),
+        meta: `${money(entry.paid)} / ${money(entry.total)}`,
+      }));
+
   const reminderRows = (list: Reminder[]): DrillRow[] =>
     [...list]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -565,9 +609,16 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
           <div className="space-y-6">
             {/* KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard title={t("jami tushum")} value={`${(stats.revenue / 1000000).toFixed(1)}M`} trend={stats.revenueTrend} icon={DollarSign} color="bg-emerald-500" rows={queueRows(stats.filteredQueues)} />
+              {/* Money actually collected, and money still owed — these come from
+                  the billing ledger. The old single "jami tushum" was list price
+                  times completed visits, which is a forecast, not takings. */}
+              <StatCard title={t("yig'ilgan")} value={money(billing.paid)} icon={DollarSign} color="bg-emerald-500" rows={receiptRows(receipts.filter(r => r.status === 'confirmed'))} />
+              <StatCard title={t("qarzdorlik")} value={money(billing.debt)} icon={TrendingDown} color="bg-rose-500" rows={debtorRows()} />
               <StatCard title={t("yangi bemorlar")} value={stats.newPatientsInPeriod} icon={Users} color="bg-blue-500" rows={phoneRows(stats.newPatientPhones)} />
               <StatCard title={t("muolajalar soni")} value={stats.visits} trend={stats.visitTrend} icon={Activity} color="bg-indigo-500" rows={queueRows(stats.filteredQueues)} />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <StatCard title={t("potentsial tushum (narxnoma bo'yicha)")} value={money(stats.revenue)} trend={stats.revenueTrend} icon={Receipt} color="bg-slate-600" rows={queueRows(stats.filteredQueues)} />
               <StatCard title={t("shifokorlar reytingi")} value={stats.avgDoctorRating ?? "—"} icon={Star} color="bg-amber-500" rows={doctorRows()} />
             </div>
 
@@ -680,23 +731,48 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
           // No paymentMethod recorded means it predates that field or came through
           // the Telegram card-receipt flow — treat as card for the breakdown.
           const card = confirmed.filter(r => r.paymentMethod !== 'cash');
+          const discountedCharges = charges.filter(c => c.status !== 'void' && discountValue(c) > 0);
           return (
+            <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <StatCard
                 title={t("naqd to'lovlar")}
-                value={`${(cash.reduce((sum, r) => sum + (r.amount || 0), 0) / 1000000).toFixed(1)}M`}
+                value={money(cash.reduce((sum, r) => sum + (r.amount || 0), 0))}
                 icon={Wallet}
                 color="bg-emerald-600"
                 rows={receiptRows(cash)}
               />
               <StatCard
                 title={t("karta orqali to'lovlar")}
-                value={`${(card.reduce((sum, r) => sum + (r.amount || 0), 0) / 1000000).toFixed(1)}M`}
+                value={money(card.reduce((sum, r) => sum + (r.amount || 0), 0))}
                 icon={CreditCard}
                 color="bg-sky-600"
                 rows={receiptRows(card)}
               />
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              <StatCard
+                title={t("hisoblangan")}
+                value={money(billing.total)}
+                icon={Receipt}
+                color="bg-slate-700"
+              />
+              <StatCard
+                title={t("chegirmalar")}
+                value={money(billing.discount)}
+                icon={Tag}
+                color="bg-violet-600"
+                rows={chargeRows(discountedCharges)}
+              />
+              <StatCard
+                title={t("qarzdorlik")}
+                value={money(billing.debt)}
+                icon={TrendingDown}
+                color="bg-rose-600"
+                rows={debtorRows()}
+              />
+            </div>
+            </>
           );
         })()}
 

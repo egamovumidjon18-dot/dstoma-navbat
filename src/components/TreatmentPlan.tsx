@@ -3,14 +3,16 @@ import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc } from 'fireb
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
 import {
   FileText, Plus, Check, Clock, XCircle, PlayCircle,
-  Download, Send, Sparkles, User, Calendar, Trash2, Search
+  Download, Send, Sparkles, User, Calendar, Trash2, Search, Layers
 } from 'lucide-react';
 import { Language } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';
 import { getApiUrl } from '../services/api';
 import type { PaymentReceipt, TreatmentCharge } from '../types';
-import { patientBalance, itemBalance, effectivePrice } from '../utils/treatmentBilling';
-import { saveTreatmentCharge as saveTreatmentChargeApi, voidTreatmentCharge } from '../utils/treatmentCharges';
+import { patientBalance, itemBalance, effectivePrice, stagesFromTemplate } from '../utils/treatmentBilling';
+import { saveTreatmentCharge as saveTreatmentChargeApi, voidTreatmentCharge, patchTreatmentCharge } from '../utils/treatmentCharges';
+import { stageTemplatesPath, findTemplate } from '../utils/stageTemplates';
+import type { StageTemplate, TreatmentStage } from '../types';
 
 const PLAN_TRANSLATIONS: Dict = {
   "bemor tarixiga asoslanib, avval muammoli tishlardagi kariesni davolash, so'ngra implant o'rnatish bosqichiga o'tish tavsiya etiladi. davolash davomiyligi taxminan 3-4 hafta.": { ru: "На основе истории пациента рекомендуется сначала вылечить кариес в проблемных зубах, затем перейти к этапу установки имплантов. Продолжительность лечения примерно 3-4 недели.", en: "Based on the patient's history, it is recommended to first treat caries in the problem teeth, then move on to implant placement. Treatment duration is approximately 3-4 weeks.", kk: "Пациенттің тарихына сүйене отырып, алдымен проблемалы тістердегі кариесті емдеу, содан кейін имплант орнату кезеңіне өту ұсынылады. Емдеу ұзақтығы шамамен 3-4 апта.", ky: "Бейтаптын тарыхына таянып, адегенде көйгөйлүү тиштердеги кариести дарылоо, андан кийин имплант орнотуу этабына өтүү сунушталат. Дарылоо узактыгы болжол менен 3-4 жума.", tg: "Дар асоси таърихи бемор тавсия дода мешавад, ки аввал кариесро дар дандонҳои мушкилдор табобат кунед, сипас ба марҳилаи гузоштани имплант гузаред. Давомнокии табобат тахминан 3-4 ҳафта.", tk: "Näsagyň taryhyna esaslanyp, ilki kynçylykly dişlerdäki kariesi bejermek, soňra implant oturtmak tapgyryna geçmek maslahat berilýär. Bejergi dowamlylygy takmynan 3-4 hepde." },
@@ -91,6 +93,10 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
   const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
   const [charges, setCharges] = useState<TreatmentCharge[]>([]);
   const [unsyncedIds, setUnsyncedIds] = useState<Set<string>>(new Set());
+  const [templates, setTemplates] = useState<StageTemplate[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [stageDraft, setStageDraft] = useState<TreatmentStage[] | null>(null);
+  const [savingStages, setSavingStages] = useState(false);
   const [newDiscountPercent, setNewDiscountPercent] = useState(0);
   const [newDiscountAmount, setNewDiscountAmount] = useState(0);
   const [newDiscountReason, setNewDiscountReason] = useState('');
@@ -231,6 +237,57 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
     return () => { active = false; };
   }, [patientId, staffToken]);
 
+  // The clinic's reusable stage splits, so "Kanal davolash" doesn't need its
+  // three visits retyped for every patient.
+  useEffect(() => {
+    if (!clinicId) return;
+    const unsub = onSnapshot(
+      collection(db, stageTemplatesPath(clinicId)),
+      (snap) => {
+        const list: StageTemplate[] = [];
+        snap.forEach(d => list.push(d.data() as StageTemplate));
+        setTemplates(list);
+      },
+      (error) => handleFirestoreError(error, OperationType.GET, stageTemplatesPath(clinicId))
+    );
+    return () => unsub();
+  }, [clinicId]);
+
+  const openStages = (item: TreatmentItem) => {
+    if (expandedId === item.id) { setExpandedId(null); setStageDraft(null); return; }
+    const charge = charges.find(c => c.id === item.id);
+    const existing = charge?.stages;
+    if (existing && existing.length > 0) {
+      setStageDraft(existing.map(s => ({ ...s })));
+    } else {
+      // Seed from the clinic template when there is one, otherwise a single
+      // stage covering the whole price that the doctor can split by hand.
+      const effective = charge ? effectivePrice(charge) : (Number(item.price) || 0);
+      const template = findTemplate(templates, item.treatment);
+      setStageDraft(
+        template
+          ? stagesFromTemplate(template, effective)
+          : stagesFromTemplate({ procedureKey: '', label: '', stages: [{ name: '1-bosqich', sharePercent: 100 }], updatedAt: '' }, effective)
+      );
+    }
+    setExpandedId(item.id);
+  };
+
+  const saveStages = async (itemId: string) => {
+    if (!stageDraft || !staffToken) return;
+    setSavingStages(true);
+    try {
+      const updated = await patchTreatmentCharge(itemId, { stages: stageDraft }, staffToken);
+      if (updated) {
+        setCharges(prev => [...prev.filter(c => c.id !== updated.id), updated]);
+        setExpandedId(null);
+        setStageDraft(null);
+      }
+    } finally {
+      setSavingStages(false);
+    }
+  };
+
   const activeItems = items.filter(i => i.status !== 'Cancelled');
   // All money comes from the shared billing util — the old code treated
   // "procedure completed" as "money received", which is a different thing.
@@ -240,6 +297,8 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
   );
   const totalCost = balance.total;
   const paidCost = balance.paid;
+  const stageDraftTotal = (stageDraft || []).reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  const stageTargetTotal = expandedId ? itemBalance(expandedId, balance.ledger).total : 0;
   const progressPercent = activeItems.length > 0
     ? Math.round((activeItems.filter(i => i.status === 'Completed').length / activeItems.length) * 100)
     : 0;
@@ -384,7 +443,8 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
                 const b = itemBalance(item.id, balance.ledger);
                 const unsynced = unsyncedIds.has(item.id);
                 return (
-                <tr key={item.id} className="hover:bg-[#111827]/50 transition-colors">
+                <React.Fragment key={item.id}>
+                <tr className="hover:bg-[#111827]/50 transition-colors">
                   <td className="px-6 py-4">
                     <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800 text-emerald-400 font-bold text-xs">
                       {item.toothId}
@@ -437,15 +497,118 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => handleDelete(item.id)}
-                      className="p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
-                      title={t("O'chirish")}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => openStages(item)}
+                        className={`p-2 rounded-lg transition-colors ${expandedId === item.id ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10'}`}
+                        title={t("Bosqichlar")}
+                      >
+                        <Layers className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        className="p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+                        title={t("O'chirish")}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
+                {expandedId === item.id && stageDraft && (
+                  <tr key={`${item.id}-stages`} className="bg-[#060b16]">
+                    <td colSpan={9} className="px-6 py-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                          <Layers className="w-4 h-4" /> {t("Bosqichlar")}
+                        </span>
+                        {/* Live check, so the server's stage-sum rejection is
+                            never actually reached. */}
+                        <span className={`text-xs font-mono font-bold ${stageDraftTotal === stageTargetTotal ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {stageDraftTotal.toLocaleString()} / {stageTargetTotal.toLocaleString()} {t("so'm")}
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {stageDraft.map((stage, idx) => {
+                          const sb = b.stages.find(s => s.stageId === stage.id);
+                          return (
+                            <div key={stage.id} className="flex flex-wrap items-center gap-2 bg-[#0a0f1d] border border-slate-800 rounded-xl p-2">
+                              <input
+                                type="text"
+                                value={stage.name}
+                                onChange={e => setStageDraft(d => d!.map((s, i) => i === idx ? { ...s, name: e.target.value } : s))}
+                                placeholder={`${idx + 1}-bosqich`}
+                                className="flex-1 min-w-[120px] bg-[#111827] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-emerald-500"
+                              />
+                              <input
+                                type="date"
+                                value={stage.plannedDate || ''}
+                                onChange={e => setStageDraft(d => d!.map((s, i) => i === idx ? { ...s, plannedDate: e.target.value } : s))}
+                                className="bg-[#111827] border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 outline-none focus:border-emerald-500"
+                              />
+                              <input
+                                type="number"
+                                min="0"
+                                value={stage.amount || ''}
+                                onChange={e => setStageDraft(d => d!.map((s, i) => i === idx ? { ...s, amount: Number(e.target.value) } : s))}
+                                className="w-28 bg-[#111827] border border-slate-700 rounded-lg px-2 py-1.5 text-xs font-mono text-white outline-none focus:border-emerald-500"
+                              />
+                              <select
+                                value={stage.status}
+                                onChange={e => setStageDraft(d => d!.map((s, i) => i === idx ? { ...s, status: e.target.value as TreatmentStage['status'] } : s))}
+                                className="bg-[#111827] border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 outline-none focus:border-emerald-500"
+                              >
+                                <option value="planned">{t("Rejalashtirilgan")}</option>
+                                <option value="in_progress">{t("Jarayonda")}</option>
+                                <option value="completed">{t("Bajarildi")}</option>
+                                <option value="skipped">{t("O'tkazib yuborildi")}</option>
+                              </select>
+                              {sb && (
+                                <span className="text-[10px] font-mono">
+                                  <span className="text-emerald-400">{sb.paid.toLocaleString()}</span>
+                                  <span className="text-slate-600"> · </span>
+                                  <span className={sb.debt > 0 ? 'text-amber-400' : 'text-slate-500'}>{sb.debt.toLocaleString()}</span>
+                                </span>
+                              )}
+                              <button
+                                onClick={() => setStageDraft(d => d!.filter((_, i) => i !== idx))}
+                                className="p-1.5 text-slate-600 hover:text-rose-500 rounded-lg"
+                                title={t("O'chirish")}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 mt-3">
+                        <button
+                          onClick={() => setStageDraft(d => [...d!, {
+                            id: `stage_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                            name: `${d!.length + 1}-bosqich`, order: d!.length, amount: 0, status: 'planned' as const,
+                          }])}
+                          className="px-3 py-1.5 bg-[#111827] border border-slate-700 hover:border-emerald-500 text-slate-300 text-xs font-bold rounded-lg transition-colors flex items-center gap-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> {t("Bosqich qo'shish")}
+                        </button>
+                        <button
+                          onClick={() => saveStages(item.id)}
+                          disabled={savingStages || stageDraftTotal !== stageTargetTotal}
+                          className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg transition-colors"
+                        >
+                          {savingStages ? '...' : t("Saqlash")}
+                        </button>
+                        <button
+                          onClick={() => { setExpandedId(null); setStageDraft(null); }}
+                          className="px-3 py-1.5 text-slate-500 hover:text-white text-xs font-bold"
+                        >
+                          {t("Bekor qilish")}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
                 );
               }) : (
                 <tr>

@@ -53,6 +53,9 @@ interface DirectorDashboardProps {
   saasPayments?: SaaSPayment[];
   language: Language;
   setLanguage?: (l: Language) => void;
+  // Required by the authenticated report/billing endpoints. Without it the
+  // Statistics payments tab silently returns empty for directors.
+  staffToken?: string | null;
 }
 
 interface CatalogItem {
@@ -238,7 +241,8 @@ export default function DirectorDashboard({
   onSimulatePayment,
   saasPayments = [],
   language,
-  setLanguage
+  setLanguage,
+  staffToken
 }: DirectorDashboardProps) {
   
   // Translation Helper
@@ -1359,6 +1363,7 @@ export default function DirectorDashboard({
             clinicId={currentClinicId}
             clinicName={clinicNameStr}
             language={language}
+            staffToken={staffToken}
             initialTimeRange={
               reportPeriod === 'kunlik' ? 'daily' : reportPeriod === 'oylik' ? 'monthly' : reportPeriod === 'yillik' ? 'yearly' : 'weekly'
             }
