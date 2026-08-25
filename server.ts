@@ -1767,6 +1767,20 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
   const appointmentDate = sanitizeString(q.appointment_date ?? q.appointmentDate ?? '');
   const appointmentTime = sanitizeString(q.appointment_time ?? q.appointmentTime ?? '');
 
+  // The clinic and doctor must actually exist. This endpoint stays open on
+  // purpose (a patient books before having any session), but the defaults above
+  // meant an empty POST created a real "Mehmon" ticket against a clinic and
+  // doctor that don't exist — invisible to every panel, permanently in the
+  // database, and trivial to spam. Rejecting unknown ids costs nothing and
+  // keeps the queue table meaningful.
+  const [clinicsForCheck, doctorsForCheck] = await Promise.all([getClinics(), getDoctors()]);
+  if (!clinicsForCheck.some((c: any) => c.id === clinicId)) {
+    return res.status(400).json({ ok: false, error: "Klinika topilmadi." });
+  }
+  if (!doctorsForCheck.some((d: any) => d.id === doctorId)) {
+    return res.status(400).json({ ok: false, error: "Shifokor topilmadi." });
+  }
+
   const qDb = await getQueues();
 
   // A patient may only hold one active self-booked ticket at a time — a
