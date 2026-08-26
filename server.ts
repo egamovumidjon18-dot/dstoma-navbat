@@ -2323,19 +2323,36 @@ app.delete("/api/queues/:id", async (req, res) => {
 app.post("/api/queues/:id/rate", async (req, res) => {
   try {
     const { id } = req.params;
-    const { rating } = req.body;
-    let updatedItem: QueueItem | null = null;
+    const rating = Number(req.body?.rating);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: "rating 1 dan 5 gacha butun son bo'lishi kerak" });
+    }
 
     const qDb = await getQueues();
     const itemMatch = qDb.find(q => q.id === id);
-
-    if (itemMatch) {
-      updatedItem = { ...itemMatch, rating: Number(rating) };
-      await saveQueue(updatedItem);
-      res.json(updatedItem);
-    } else {
-      res.status(404).json({ error: "Queue not found" });
+    if (!itemMatch) {
+      return res.status(404).json({ error: "Queue not found" });
     }
+
+    // This was reachable by anyone who guessed a queue id, with no validation on
+    // the rating value — this is what feeds live doctor/clinic rating averages
+    // (GET /api/doctors, GET /api/clinics), so an unauthenticated caller could
+    // freely inflate or tank any doctor's public rating. Only the patient who
+    // actually had that visit (or clinic staff correcting an error) may rate it,
+    // and only once the visit is actually completed.
+    const auth = await getAuthContext(req);
+    const isOwnPatient = !!auth.patient && !!itemMatch.patientId && auth.patient.patientId === itemMatch.patientId;
+    const isClinicStaff = !!auth.staff && auth.staff.clinicId === itemMatch.clinicId;
+    if (!auth.isSuperAdmin && !isClinicStaff && !isOwnPatient) {
+      return res.status(401).json({ error: "Ruxsat yo'q" });
+    }
+    if (itemMatch.status !== 'completed') {
+      return res.status(400).json({ error: "Faqat yakunlangan tashrifni baholash mumkin" });
+    }
+
+    const updatedItem: QueueItem = { ...itemMatch, rating };
+    await saveQueue(updatedItem);
+    res.json(updatedItem);
   } catch (error: any) {
     console.error("[API Rate Queue] Error:", error.message);
     res.status(500).json({ error: "Internal Server Error" });
@@ -2425,15 +2442,26 @@ app.get("/api/doctors", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
-  const docs = await getDoctors();
-  const mapped = docs.map((d: any) => ({
+  const [docs, allQueues] = await Promise.all([getDoctors(), getQueues()]);
+  const mapped = docs.map((d: any) => {
+    // rating is derived live from real patient feedback (QueueItem.rating), the
+    // same way GET /api/clinics already computes Clinic.rating — never a stored/
+    // editable value. Every doctor used to be created with a frozen rating: 5.0,
+    // ratingCount: 0/1, which never changed no matter how many real 1-5-star
+    // ratings patients submitted via the Telegram "rate this visit" buttons.
+    const ratedQueues = allQueues.filter((q: any) => q.doctorId === d.id && typeof q.rating === 'number');
+    const rating = ratedQueues.length > 0
+      ? Number((ratedQueues.reduce((sum: number, q: any) => sum + q.rating, 0) / ratedQueues.length).toFixed(2))
+      : 5.0;
+    const ratingCount = ratedQueues.length;
+    return {
     id: d.id,
     full_name: d.name || d.fullName || d.full_name || "Unknown Doctor",
     name: d.name || d.fullName || d.full_name || "Unknown Doctor",
     specialization: d.specialty || d.specialization || "Stomatolog",
     specialty: d.specialty || d.specialization || "Stomatolog",
-    rating: Number(d.rating) || 5.0,
-    ratingCount: Number(d.ratingCount) || 1,
+    rating,
+    ratingCount,
     // Profile photos are stored as base64 data URIs. Inlining them here made
     // this endpoint ~90KB for three doctors (98% of it images) and the client
     // re-downloads it every 4s, so it was the single largest source of the
@@ -2447,7 +2475,8 @@ app.get("/api/doctors", async (req, res) => {
     paymentCardNumber: d.paymentCardNumber,
     paymentPhone: d.paymentPhone,
     workingHours: d.workingHours
-  }));
+    };
+  });
   res.json(mapped);
 });
 

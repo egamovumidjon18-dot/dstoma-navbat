@@ -25,7 +25,8 @@ import {
   Bot,
   Send,
   ImagePlus,
-  Stethoscope
+  Stethoscope,
+  Star
 } from 'lucide-react';
 import { Patient, QueueItem, Clinic, Doctor, PaymentReceipt, TreatmentCharge } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
@@ -59,6 +60,9 @@ const PATIENT_PANEL_TRANSLATIONS: Record<string, PatientPanelDictEntry> = {
   "(taxminiy javob — ai hozircha band, birozdan so'ng qayta urinib ko'ring)": { ru: "(Примерный ответ — AI сейчас занят, попробуйте чуть позже)", en: "(Approximate answer — the AI is busy right now, try again shortly)", kk: "(Болжамды жауап — AI қазір бос емес, сәлден соң қайталап көріңіз)", ky: "(Болжолдуу жооп — AI азыр бош эмес, бир аздан кийин кайра аракет кылыңыз)", tg: "(Ҷавоби тахминӣ — AI ҳоло банд аст, пас аз чанде такрор кунед)", tk: "(Takmyny jogap — AI häzir meşgul, biraz soň gaýtadan synanyşyň)" },
   "a'zoni qo'shishda xatolik yuz berdi.": { ru: "Произошла ошибка при добавлении члена семьи.", en: "An error occurred while adding the family member.", kk: "Мүшені қосу кезінде қате шықты.", ky: "Мүчөнү кошууда ката кетти.", tg: "Ҳангоми илова кардани аъзо хатогӣ рух дод.", tk: "Agzany goşmakda ýalňyşlyk ýüze çykdy." },
   "bekor qilingan": { ru: "Отменено", en: "Cancelled", kk: "Болдырылмады", ky: "Жокко чыгарылган", tg: "Бекор карда шуда", tk: "Ýatyrylan" },
+  "tashrifni baholang:": { ru: "Оцените визит:", en: "Rate your visit:", kk: "Сапарды бағалаңыз:", ky: "Сапарды бааланыз:", tg: "Ташрифро баҳо диҳед:", tk: "Saparymyzy baha beriň:" },
+  "tashrifingiz baholandi": { ru: "Ваш визит оценен", en: "Your visit has been rated", kk: "Сапарыңыз бағаланды", ky: "Сапарыңыз бааланды", tg: "Ташрифи шумо баҳо дода шуд", tk: "Saparyňyz baha berildi" },
+  "yulduzcha": { ru: "звезда", en: "star", kk: "жұлдызша", ky: "жылдызча", tg: "ситора", tk: "ýyldyzça" },
   "oldingizda": { ru: "Перед вами", en: "Ahead of you", kk: "Алдыңызда", ky: "Алдыңызда", tg: "Пеш аз шумо", tk: "Öňüňizde" },
   "kishi": { ru: "чел.", en: "people", kk: "адам", ky: "адам", tg: "нафар", tk: "adam" },
   "navbat sizda": { ru: "Ваша очередь", en: "It's your turn", kk: "Кезек сізде", ky: "Кезек сизде", tg: "Навбати шумо", tk: "Sizin nobatyňyz" },
@@ -177,6 +181,7 @@ export default function PatientPanel({
   clinic,
   onGoToBooking,
   onCancelQueue,
+  onRateQueue,
   familyMembers = [],
   onUnlinkFamilyMember,
   onRegisterFamilyMember,
@@ -191,6 +196,11 @@ export default function PatientPanel({
   clinic?: Clinic | null;
   onGoToBooking?: () => void;
   onCancelQueue?: (queueId: string) => void;
+  // Only reachable path for a patient with no linked Telegram chat — everyone
+  // else already rates a visit via the "★1-5" buttons the bot sends on
+  // completion (server.ts buildRatingKeyboard). Same POST /api/queues/:id/rate
+  // either way, so both paths feed the same live doctor/clinic rating average.
+  onRateQueue?: (queueId: string, rating: number) => void;
   familyMembers?: Patient[];
   onUnlinkFamilyMember?: (member: Patient) => Promise<void>;
   onRegisterFamilyMember?: (info: NewFamilyMemberInfo) => Promise<Patient>;
@@ -844,28 +854,33 @@ export default function PatientPanel({
                     };
                     const isActive = ['pending', 'scheduled', 'calling', 'in_progress'].includes(q.status);
                     return (
-                      <div key={q.id} className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                        <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex flex-col items-center justify-center shrink-0 leading-none">
-                          <span className="text-[15px] font-black">{d.getDate()}</span>
-                          <span className="text-[9px] font-bold uppercase">{d.toLocaleDateString('uz-UZ', { month: 'short' })}</span>
+                      <div key={q.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex flex-col items-center justify-center shrink-0 leading-none">
+                            <span className="text-[15px] font-black">{d.getDate()}</span>
+                            <span className="text-[9px] font-bold uppercase">{d.toLocaleDateString('uz-UZ', { month: 'short' })}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-slate-900 text-sm">{t("navbat #")}{q.number}</p>
+                            <p className="text-xs text-slate-500 truncate">{q.appointmentTime || d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
+                          <span className={`px-3 py-1 text-[10px] font-bold rounded-lg uppercase border shrink-0 ${statusStyle[q.status] || 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                            {statusLabel[q.status] || q.status}
+                          </span>
+                          {isActive && onCancelQueue && (
+                            <button
+                              onClick={() => {
+                                if (window.confirm(t("navbatni bekor qilmoqchimisiz?"))) onCancelQueue(q.id);
+                              }}
+                              className="shrink-0 p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title={t("bekor qilish")}
+                            >
+                              <X size={16} />
+                            </button>
+                          )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-slate-900 text-sm">{t("navbat #")}{q.number}</p>
-                          <p className="text-xs text-slate-500 truncate">{q.appointmentTime || d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                        </div>
-                        <span className={`px-3 py-1 text-[10px] font-bold rounded-lg uppercase border shrink-0 ${statusStyle[q.status] || 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                          {statusLabel[q.status] || q.status}
-                        </span>
-                        {isActive && onCancelQueue && (
-                          <button
-                            onClick={() => {
-                              if (window.confirm(t("navbatni bekor qilmoqchimisiz?"))) onCancelQueue(q.id);
-                            }}
-                            className="shrink-0 p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                            title={t("bekor qilish")}
-                          >
-                            <X size={16} />
-                          </button>
+                        {q.status === 'completed' && (
+                          <QueueRatingRow queue={q} onRateQueue={onRateQueue} t={t} />
                         )}
                       </div>
                     );
@@ -1549,4 +1564,52 @@ function QuickAction({ icon, title, desc, bg, border, onClick }: { icon: React.R
     return <button type="button" onClick={onClick} className={`${className} w-full`}>{content}</button>;
   }
   return <div className={className}>{content}</div>;
+}
+
+// Shows a completed visit's rating, or lets the patient tap 1-5 stars to submit
+// one — the in-app fallback for patients with no linked Telegram chat, who
+// otherwise have no way to rate a visit at all (everyone else already does
+// this via the bot's "★1-5" buttons sent on completion).
+function QueueRatingRow({ queue, onRateQueue, t }: { queue: QueueItem; onRateQueue?: (queueId: string, rating: number) => void; t: (s: string) => string }) {
+  const [isSaving, setIsSaving] = useState(false);
+  const [justRated, setJustRated] = useState<number | null>(null);
+
+  const rated = justRated ?? queue.rating ?? null;
+
+  if (rated) {
+    return (
+      <div className="flex items-center gap-1 pl-1">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <Star key={n} size={14} className={n <= rated ? 'fill-amber-400 text-amber-400' : 'text-slate-200'} />
+        ))}
+        <span className="text-[10px] text-slate-400 ml-1">{t("tashrifingiz baholandi")}</span>
+      </div>
+    );
+  }
+
+  if (!onRateQueue) return null;
+
+  return (
+    <div className="flex items-center gap-2 pl-1">
+      <span className="text-[11px] font-bold text-slate-500">{t("tashrifni baholang:")}</span>
+      <div className="flex items-center gap-0.5">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            disabled={isSaving}
+            onClick={() => {
+              setIsSaving(true);
+              setJustRated(n);
+              onRateQueue(queue.id, n);
+            }}
+            className="p-0.5 disabled:opacity-60"
+            aria-label={`${n} ${t("yulduzcha")}`}
+          >
+            <Star size={16} className="text-amber-400 hover:fill-amber-400 transition-colors" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }

@@ -19,6 +19,11 @@ export interface Clinic {
   nextPaymentDate?: string;
   subscriptionStatus?: 'active' | 'suspended' | 'trial';
   ownerName?: string;
+  // Free-typed by SuperAdmin to link multiple branches under one real owner —
+  // two clinics with the same groupId feed the same row in the "Guruh
+  // hisoboti" (group report) view. Purely additive: undefined for every
+  // clinic until a SuperAdmin manually sets it, no other code reads it.
+  groupId?: string;
   // System owner-provided credentials
   login?: string;
   password?: string;

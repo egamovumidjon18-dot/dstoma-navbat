@@ -941,26 +941,6 @@ export function useAppState() {
     }
   };
 
-  const handleUpdateDoctorRating = async (id: string, rating: number) => {
-    setQueues(prev => prev.map(q => q.id === id ? { ...q, rating } : q));
-
-    const queueObj = queues.find(q => q.id === id);
-    if (!queueObj) return;
-
-    setDoctors(prev => prev.map(d => {
-      if (d.id === queueObj.doctorId) {
-        const totalRatingPoints = (d.rating * d.ratingCount) + rating;
-        const newCount = d.ratingCount + 1;
-        return {
-          ...d,
-          ratingCount: newCount,
-          rating: parseFloat((totalRatingPoints / newCount).toFixed(2))
-        };
-      }
-      return d;
-    }));
-  };
-
   const handleUpdateClinicSubscription = async (clinicId: string, status: 'active' | 'suspended' | 'trial', nextDueDate: string) => {
     setClinics(prev => prev.map(c => {
       if (c.id !== clinicId) return c;
@@ -1332,7 +1312,6 @@ export function useAppState() {
     handleCancelQueue,
     handleDeleteQueue,
     handleUpdateQueueStatus,
-    handleUpdateDoctorRating,
     handleUpdateClinicSubscription,
     handleToggleClinicStatus,
     handleUpdateClinicDetails,

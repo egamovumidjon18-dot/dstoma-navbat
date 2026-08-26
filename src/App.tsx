@@ -55,7 +55,6 @@ export default function App() {
     handleCancelQueue,
     handleDeleteQueue,
     handleUpdateQueueStatus,
-    handleUpdateDoctorRating,
     handleToggleClinicStatus,
     handleUpdateClinicDetails,
     handlePaySubscriptionSimulate,
@@ -274,7 +273,6 @@ export default function App() {
                   onSelectClinic={setSelectedClinic}
                   onAddQueue={handleAddQueue}
                   onCancelQueue={handleCancelQueue}
-                  onUpdateDoctorRating={handleUpdateDoctorRating}
                   setActiveTab={setActiveTab}
                   language={language}
                   userLocationRef={userLocationRef}

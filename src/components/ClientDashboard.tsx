@@ -26,7 +26,6 @@ interface ClientDashboardProps {
   onSelectClinic: (clinic: Clinic | null) => void;
   onAddQueue: (newQueue: QueueItem) => void | Promise<{ ok: boolean; error?: string; number?: number } | void>;
   onCancelQueue: (id: string) => void;
-  onUpdateDoctorRating: (doctorId: string, rating: number) => void;
   setActiveTab?: (tab: 'bemor' | 'shifokor' | 'boshliq' | 'kod') => void;
   language: Language;
   userLocationRef?: React.MutableRefObject<{ lat: number, lng: number, status: 'idle' | 'detecting' | 'active' | 'denied', initialized: boolean }>;
@@ -1149,6 +1148,25 @@ export default function ClientDashboard({
           onCancelQueue={(id) => {
             onCancelQueue(id);
             showToast(t("Navbat bekor qilindi"), "error");
+          }}
+          onRateQueue={async (queueId, rating) => {
+            // Same-shape patient-authenticated write as onChangeDoctor/onUpdateProfile
+            // above — POST /api/queues/:id/rate now requires the caller to actually be
+            // that queue's own patient (see server.ts), so the token has to go along.
+            // Not threaded through the app-wide queues state: the star widget already
+            // shows its own optimistic result locally, and the next queue poll (4s)
+            // catches the server's real value regardless.
+            try {
+              const res = await fetch(`${getApiUrl()}/api/queues/${queueId}/rate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...patientAuthHeaders() },
+                body: JSON.stringify({ rating }),
+              });
+              if (!res.ok) throw new Error(`Rating rejected (${res.status})`);
+            } catch (err) {
+              console.warn('[ClientDashboard] Failed to submit rating', err);
+              showToast(t("Baholashda xatolik yuz berdi. Qayta urinib ko'ring."), "error");
+            }
           }}
           onGoToBooking={() => {
             // One active ticket per patient — send them to their existing

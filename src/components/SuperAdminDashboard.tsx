@@ -30,6 +30,7 @@ import {
   Send,
   Bot,
   LayoutDashboard,
+  Layers,
   ChevronRight
 } from 'lucide-react';
 
@@ -71,6 +72,7 @@ const SUPERADMIN_SECTIONS = [
   { id: 'overview', label: "Umumiy ko'rinish", icon: LayoutDashboard },
   { id: 'onboarding', label: 'Yangi klinika', icon: Plus },
   { id: 'clinics', label: 'Klinikalar', icon: Building },
+  { id: 'group-report', label: 'Guruh hisoboti', icon: Layers },
   { id: 'doctors', label: 'Shifokorlar', icon: Users },
   { id: 'ads', label: 'Reklama', icon: Megaphone },
   { id: 'telegram', label: 'Telegram bot', icon: Bot },
@@ -563,6 +565,34 @@ export default function SuperAdminDashboard({
   const currentMRR = clinics
     .filter(c => c.subscriptionStatus === 'active')
     .reduce((sum, c) => sum + (c.rentalPrice || 1500000), 0);
+
+  // "Guruh hisoboti" — one real owner running several branches, linked by a
+  // SuperAdmin-typed groupId (see Clinic.groupId in types.ts). Same reduce
+  // shape as currentMRR above, just bucketed by group instead of subscription
+  // status. Clinics with no groupId (the default for every existing clinic)
+  // simply never appear here — nothing else in the app reads this field.
+  const clinicGroups = useMemo(() => {
+    const byGroup = new Map<string, Clinic[]>();
+    for (const c of clinics) {
+      if (!c.groupId) continue;
+      const list = byGroup.get(c.groupId);
+      if (list) list.push(c);
+      else byGroup.set(c.groupId, [c]);
+    }
+    return Array.from(byGroup.entries()).map(([groupId, groupClinics]) => {
+      const clinicIds = new Set(groupClinics.map(c => c.id));
+      const groupQueues = queues.filter(q => clinicIds.has(q.clinicId));
+      const completedQueues = groupQueues.filter(q => q.status === 'completed');
+      return {
+        groupId,
+        clinics: groupClinics,
+        totalRentalPrice: groupClinics.reduce((sum, c) => sum + (c.rentalPrice || 1500000), 0),
+        totalActivePatients: groupClinics.reduce((sum, c) => sum + (c.activePatients || 0), 0),
+        totalDoctors: doctors.filter(d => clinicIds.has(d.clinicId)).length,
+        totalCompletedVisits: completedQueues.length,
+      };
+    });
+  }, [clinics, queues, doctors]);
 
   const [patientsCount, setPatientsCount] = React.useState(0);
   
@@ -2398,6 +2428,60 @@ export default function SuperAdminDashboard({
         </div>
       )}
 
+      {activeSection === 'group-report' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-3xl p-5 border border-slate-100/80 shadow-xs">
+            <h3 className="text-sm font-black text-slate-800 mb-1">Guruh hisoboti</h3>
+            <p className="text-xs text-slate-400 mb-4">
+              Bir egaga tegishli bir nechta filial "Klinikalar" bo'limida bir xil "Guruh nomi" bilan belgilansa, shu yerda jamlangan holda ko'rinadi.
+            </p>
+            {clinicGroups.length === 0 ? (
+              <p className="text-sm text-slate-400 py-8 text-center">
+                Hozircha hech qanday klinika guruhga biriktirilmagan. "Klinikalar" bo'limida bir klinikani tahrirlab, "Guruh nomi" maydonini to'ldiring.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {clinicGroups.map((g) => (
+                  <div key={g.groupId} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-cyan-600" /> {g.groupId}
+                      </h4>
+                      <span className="text-[10px] font-bold text-slate-400">{g.clinics.length} ta filial</span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                      <div className="bg-white p-3 rounded-xl border border-slate-100">
+                        <span className="text-[9px] text-slate-400 font-black uppercase block">Oylik to'lov (jami)</span>
+                        <strong className="text-sm font-black text-slate-800 font-mono">{g.totalRentalPrice.toLocaleString('uz-UZ')} so'm</strong>
+                      </div>
+                      <div className="bg-white p-3 rounded-xl border border-slate-100">
+                        <span className="text-[9px] text-slate-400 font-black uppercase block">Faol bemorlar</span>
+                        <strong className="text-sm font-black text-slate-800 font-mono">{g.totalActivePatients}</strong>
+                      </div>
+                      <div className="bg-white p-3 rounded-xl border border-slate-100">
+                        <span className="text-[9px] text-slate-400 font-black uppercase block">Shifokorlar</span>
+                        <strong className="text-sm font-black text-slate-800 font-mono">{g.totalDoctors}</strong>
+                      </div>
+                      <div className="bg-white p-3 rounded-xl border border-slate-100">
+                        <span className="text-[9px] text-slate-400 font-black uppercase block">Bajarilgan qabullar</span>
+                        <strong className="text-sm font-black text-slate-800 font-mono">{g.totalCompletedVisits}</strong>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {g.clinics.map((c) => (
+                        <span key={c.id} className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600">
+                          {c.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {activeSection === 'doctors' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-12 space-y-6">
@@ -2775,6 +2859,22 @@ export default function SuperAdminDashboard({
                   onChange={(e) => setClinicToEdit({ ...clinicToEdit, mapLink: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] text-slate-800 font-bold focus:outline-none focus:border-cyan-500"
                 />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
+                  Guruh nomi (ixtiyoriy)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Masalan: Ismoilov filiallari"
+                  value={clinicToEdit.groupId || ""}
+                  onChange={(e) => setClinicToEdit({ ...clinicToEdit, groupId: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold focus:outline-none focus:border-cyan-500"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Bir egaga tegishli bir nechta filialga BIR XIL nom bering — "Guruh hisoboti" bo'limida jamlanib ko'rsatiladi.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
