@@ -208,7 +208,18 @@ async function isAuthorizedForClinic(req: any, clinicId: string | undefined, all
   if (auth.isSuperAdmin) return true;
   if (!auth.staff || !clinicId) return false;
   if (auth.staff.role === 'director') return auth.staff.clinicId === clinicId;
-  if (allowDoctor && auth.staff.role === 'doctor') return auth.staff.clinicId === clinicId;
+  if (allowDoctor && auth.staff.role === 'doctor') {
+    if (auth.staff.clinicId === clinicId) return true;
+    // A doctor's session token is only ever scoped to their login (home) clinic
+    // — switching the "active clinic" dropdown in DoctorDashboard is purely
+    // client-side state, nothing re-issues the token. Without this, every
+    // clinic-scoped call the doctor makes while working in a secondary linked
+    // clinic (payment receipts, reminders, ...) 401'd, even though they
+    // genuinely belong there. Same root cause as the /api/patients and
+    // /api/queues fix above, just reached through the shared auth helper.
+    const links = await getDoctorClinicLinks();
+    return (links as any[]).some((l) => l.doctorId === auth.staff!.doctorId && l.clinicId === clinicId && l.status === 'active');
+  }
   return false;
 }
 
@@ -2944,9 +2955,22 @@ app.get("/api/treatment-charges", async (req, res) => {
   if (clinicId) matches = matches.filter((c) => c.clinicId === clinicId);
   if (patientId) matches = matches.filter((c) => c.patientId === patientId);
   if (doctorId) matches = matches.filter((c) => c.doctorId === doctorId);
-  // Staff without an explicit clinicId filter still only ever see their own clinic.
+  // Staff without an explicit clinicId filter still only ever see clinics they
+  // actually belong to. A plain single-clinicId check here broke a doctor
+  // fetching charges by patientId/doctorId for a patient at a secondary linked
+  // clinic — the record matched the requested patientId/doctorId perfectly but
+  // still got filtered out because its clinicId wasn't the doctor's home
+  // clinic. Same fix shape as isAuthorizedForClinic above.
   if (!isOwnPatient && !auth.isSuperAdmin && auth.staff) {
-    matches = matches.filter((c) => c.clinicId === auth.staff!.clinicId);
+    let allowedClinicIds = new Set<string>([auth.staff.clinicId]);
+    if (auth.staff.role === 'doctor' && auth.staff.doctorId) {
+      const links = await getDoctorClinicLinks();
+      for (const l of links as any[]) {
+        if (l.doctorId === auth.staff!.doctorId && l.status === 'active') allowedClinicIds.add(l.clinicId);
+      }
+    }
+    const staffDoctorId = auth.staff.doctorId;
+    matches = matches.filter((c) => allowedClinicIds.has(c.clinicId) || (staffDoctorId && c.doctorId === staffDoctorId));
   }
   res.json(matches.sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''))));
 });
