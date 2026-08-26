@@ -56,7 +56,7 @@ interface ClientDashboardProps {
   queues: QueueItem[];
   selectedClinic: Clinic | null;
   onSelectClinic: (clinic: Clinic | null) => void;
-  onAddQueue: (newQueue: QueueItem) => void | Promise<{ ok: boolean; error?: string } | void>;
+  onAddQueue: (newQueue: QueueItem) => void | Promise<{ ok: boolean; error?: string; number?: number } | void>;
   onCancelQueue: (id: string) => void;
   onUpdateDoctorRating: (doctorId: string, rating: number) => void;
   setActiveTab?: (tab: 'bemor' | 'shifokor' | 'boshliq' | 'kod') => void;
@@ -71,6 +71,8 @@ interface ClientDashboardProps {
   // them back to the welcome screen, this dashboard's actual front door.
   onExitToWelcome?: () => void;
 }
+
+const PATIENT_TOKEN_KEY = 'dstoma_patient_token';
 
 export default function ClientDashboard({
   clinics,
@@ -255,46 +257,11 @@ export default function ClientDashboard({
     return text;
   };
   
-  // Local list of patients to allow lookup during login
-  const [patients, setPatients] = useState<Patient[]>([
-    {
-      id: 'pat_test_2',
-      clinicId: 'samarqand',
-      fullName: 'Test Bemor 2',
-      passportSerial: 'AA1234567',
-      phone: '+998 (90) 123-45-67',
-      birthDate: '1998-05-12',
-      password: '123456',
-      bloodGroup: 'II+',
-      allergies: "Yo'q",
-      chronicDiseases: "Mavjud emas (Sog'lom)",
-      hasInfection: false,
-      telegramChatId: '57896431'
-    }
-  ]);
+  // Only ever holds this patient and the family members they manage; filled by
+  // the scoped /api/patients fetch below. It used to be seeded with a fake
+  // patient carrying a password and a Telegram chat id, shipped to production.
+  const [patients, setPatients] = useState<Patient[]>([]);
 
-  // Load patients and keep in-sync in real-time with our Central Express storage
-  useEffect(() => {
-    let active = true;
-    const fetchPatients = async () => {
-      try {
-        const res = await fetch(`${getApiUrl()}/api/patients`);
-        if (!res.ok) throw new Error("Status down");
-        const data = await res.json();
-        if (active && Array.isArray(data) && data.length > 0) {
-          setPatients(data);
-        }
-      } catch (err) {
-        console.warn("[ClientDashboard] Failed to fetch synced patients:", err);
-      }
-    };
-    fetchPatients();
-    const interval = setInterval(fetchPatients, 4000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, []);
 
   // Persisted to localStorage so a device stays logged in across restarts instead
   // of asking for passport+password every visit; a useEffect below keeps this in
@@ -305,12 +272,12 @@ export default function ClientDashboard({
   // an already-existing record — self-service writes (changing treating doctor,
   // managing family members) have to prove they come from that patient rather
   // than from anyone who happens to know a patient id.
-  const PATIENT_TOKEN_KEY = 'dstoma_patient_token';
   const [patientToken, setPatientToken] = useState<string | null>(() =>
     typeof window === 'undefined' ? null : localStorage.getItem(PATIENT_TOKEN_KEY)
   );
   const patientAuthHeaders = (): Record<string, string> =>
     patientToken ? { Authorization: `Bearer ${patientToken}` } : {};
+
   // Shown once, right after registration — the loginCode only ever appears in
   // that one server response, never again, so this is the patient's only
   // chance to see and save it before it scrolls off into their cabinet.
@@ -327,6 +294,40 @@ export default function ClientDashboard({
     if (currentUser) localStorage.setItem(PATIENT_SESSION_KEY, JSON.stringify(currentUser));
     else localStorage.removeItem(PATIENT_SESSION_KEY);
   }, [currentUser]);
+
+  // The patient's own record plus any family members they manage.
+  //
+  // This used to poll the whole platform's patient roster every 4 seconds —
+  // names, phones, passports, blood groups, allergies and infection flags for
+  // every patient of every clinic — to satisfy a single `managedBy` filter.
+  // /api/patients is now scoped server-side by the caller's token, so this
+  // returns only what this patient is entitled to, and only when logged in.
+  useEffect(() => {
+    if (!currentUser?.id) { setPatients([]); return; }
+    let active = true;
+    const fetchMyPeople = async () => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem(PATIENT_TOKEN_KEY) : null;
+      if (!token) return;
+      try {
+        const res = await fetch(`${getApiUrl()}/api/patients`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (active && Array.isArray(data)) setPatients(data);
+      } catch (err) {
+        console.warn("[ClientDashboard] Failed to fetch family members:", err);
+      }
+    };
+    fetchMyPeople();
+    // Family membership changes only when this patient adds someone, so a slow
+    // refresh is plenty — the add path updates state directly.
+    const interval = setInterval(fetchMyPeople, 60000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [currentUser?.id]);
 
   // Patients who logged in before session tokens existed have a remembered
   // cabinet but nothing to authenticate their writes with, so every self-service
@@ -370,7 +371,10 @@ export default function ClientDashboard({
 
   // Form States
   const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('+998901234567');
+  // Blank, not a demo number: this is sent as patientPhone when the patient
+  // hasn't filled one in, so a placeholder here meant the clinic called a
+  // stranger to confirm the appointment.
+  const [phone, setPhone] = useState('');
   const [passport, setPassport] = useState('');
   const [password, setPassword] = useState('');
   const [birthDate, setBirthDate] = useState('1998-05-12');
@@ -381,7 +385,10 @@ export default function ClientDashboard({
   const [referredBy, setReferredBy] = useState('');
 
   // Cabinet Specific States
-  const [telegramIdInput, setTelegramIdInput] = useState('57896431');
+  // Blank, not a demo chat id. handleBookQueue sends this as the queue's
+  // telegramChatId, and the server messages that chat — so a leftover
+  // placeholder delivered real patients' booking details to a stranger.
+  const [telegramIdInput, setTelegramIdInput] = useState('');
   // Booking wizard: both start empty so the patient makes an explicit choice —
   // clinic first, then one of that clinic's doctors.
   const [bookingClinicId, setBookingClinicId] = useState('');
@@ -562,37 +569,42 @@ export default function ClientDashboard({
         tg.ready();
         tg.expand();
         
-        const tgUser = tg.initDataUnsafe?.user;
-        if (tgUser) {
-          console.log("[DStoma Mini App Dev] Detected Telegram User context:", tgUser);
-          
-          const tgChatId = String(tgUser.id);
-          setTelegramIdInput(tgChatId);
-          
-          // Auto-login if patient already registered with this Telegram ID
-          const registeredMatch = patients.find(p => String(p.telegramChatId) === tgChatId);
-          if (registeredMatch) {
-            setCurrentUser(registeredMatch);
-            setActiveSubView('cabinet');
-            if (tg.showConfirm) {
-              tg.showConfirm(`Xush kelibsiz, ${registeredMatch.fullName}! Tizim sizni Telegram profilingiz orqali shaxsiy kabinetga avtomatik kiritdi.`);
-            } else {
-              showToast(`Xush kelibsiz, ${registeredMatch.fullName}!`, "success");
+        // Sign-in is decided by the SERVER, from Telegram's signed initData.
+        //
+        // This used to read initDataUnsafe (unverified by definition), look the
+        // chat id up in the public patient list, and log that person in with no
+        // password — so anyone who knew a chat id could open that patient's
+        // cabinet. The signature is now checked server-side against the bot
+        // token, and only the server can issue a session.
+        const initData: string = tg.initData || '';
+        if (!initData) return;
+
+        fetch(`${getApiUrl()}/api/telegram-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData }),
+        })
+          .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+          .then(({ ok, d }) => {
+            if (ok && d?.patient && d?.token) {
+              localStorage.setItem(PATIENT_TOKEN_KEY, d.token);
+              setPatientToken(d.token);
+              setCurrentUser(d.patient);
+              setActiveSubView('cabinet');
+              showToast(`${t("Xush kelibsiz")}, ${d.patient.fullName}!`, "success");
+            } else if (d?.suggestedName) {
+              // Verified Telegram user with no account yet — prefill and register.
+              setFullName(d.suggestedName);
+              showToast(t("Telegram orqali yangi bemor aniqlandi. Ro'yxatdan o'tishni yakunlang."), "success");
+              setActiveSubView('register');
             }
-          } else {
-            // New patient - Prefill registration details and redirect
-            const nameSuggested = `${tgUser.first_name || ''} ${tgUser.last_name || ''}`.trim() || 'Telegram Bemor';
-            setFullName(nameSuggested);
-            
-            showToast("Telegram orqali yangi bemor aniqlandi! Iltimos, hisobingizni ro'yxatdan o'tkazishni yakunlang.", "success");
-            setActiveSubView('register');
-          }
-        }
+          })
+          .catch((err) => console.warn("[Telegram login]", err));
       } catch (err) {
         console.warn("[Telegram SDK Load Notice]", err);
       }
     }
-  }, [patients]);
+  }, []);
 
   React.useEffect(() => {
     // Keep it synchronized, but clear AI result on manual tooth changes
@@ -1083,34 +1095,6 @@ export default function ClientDashboard({
     }
   };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setPatientToken(null);
-    localStorage.removeItem(PATIENT_TOKEN_KEY);
-    showToast("Kabinetdan chiqdingiz");
-    setActiveSubView('home');
-  };
-
-  const handleSaveTelegram = async () => {
-    if (currentUser) {
-      const updated = { ...currentUser, telegramChatId: telegramIdInput };
-      setCurrentUser(updated);
-      setPatients(prev => prev.map(p => p.id === currentUser.id ? updated : p));
-      showToast("Telegram ID muvaffaqiyatli saqlandi! t.me/dstoma_bot muloqotga tayyor.");
-
-      // Post in background to be fully accessible for Telegram Bot
-      try {
-        await fetch(`${getApiUrl()}/api/patients`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...patientAuthHeaders() },
-          body: JSON.stringify(updated)
-        });
-      } catch (err) {
-        console.warn("[ClientDashboard] Failed to save Telegram ID to backend", err);
-      }
-    }
-  };
-
   const handleBookQueue = async (e?: React.FormEvent) => {
     e?.preventDefault();
 
@@ -1134,8 +1118,6 @@ export default function ClientDashboard({
       return;
     }
 
-    const ticketNo = queues.length + 107;
-
     const newQueue: QueueItem = {
       id: 'q_' + Math.random().toString(36).substr(2, 9),
       clinicId: clinic.id,
@@ -1144,13 +1126,17 @@ export default function ClientDashboard({
       patientPhone: currentUser?.phone || phone,
       doctorId: doc.id,
       complaint: complaint,
-      number: ticketNo,
       // Picking a slot books a real appointment, which is what makes it appear
       // on the doctor's weekly calendar. Without one this stays a walk-in
       // ticket, and the doctor sees it in the "vaqti belgilanmagan" strip.
       status: pickedSlot ? 'scheduled' : 'pending',
       createdAt: new Date().toISOString(),
       passportSerial: currentUser?.passportSerial || '',
+      // Placeholder only. The real ticket number is assigned by the server (per
+      // clinic, per day) and comes back in the response below; the number this
+      // used to compute from the local queue list was never the one the clinic
+      // board showed, so patients arrived quoting a ticket nobody could find.
+      number: 0,
       ...(pickedSlot ? { appointmentDate: pickedSlot.date, appointmentTime: pickedSlot.time } : {}),
     };
     if (currentUser?.telegramChatId || telegramIdInput) {
@@ -1166,14 +1152,17 @@ export default function ClientDashboard({
       return;
     }
 
+    const ticketNo = (result && 'number' in result && result.number) || null;
     setComplaint('');
     setPickedSlot(null);
     // Return to the cabinet so the fresh ticket is immediately visible in "Mening navbatlarim".
     setActiveSubView('cabinet');
     showToast(
       pickedSlot
-        ? `Navbatingiz olindi! ${pickedSlot.date} ${pickedSlot.time} · #${ticketNo}`
-        : `Navbatingiz olindi! Elektron chipta raqamingiz: #${ticketNo}`
+        ? `Navbatingiz olindi! ${pickedSlot.date} ${pickedSlot.time}${ticketNo ? ` · #${ticketNo}` : ''}`
+        : ticketNo
+          ? `Navbatingiz olindi! Elektron chipta raqamingiz: #${ticketNo}`
+          : 'Navbatingiz olindi!'
     );
   };
 
@@ -1390,7 +1379,7 @@ export default function ClientDashboard({
                 Parol *
               </label>
               <input
-                type="text"
+                type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -1509,7 +1498,14 @@ export default function ClientDashboard({
                 Klinikada shaxsiy kartangiz yo'qmi?{" "}
                 <button
                   type="button"
-                  onClick={() => setActiveSubView('register')}
+                  onClick={() => {
+                    // Login and register share the same `password` state — without
+                    // clearing it, whatever the patient typed while trying to log in
+                    // (maybe someone else's password, mistyped) silently reappears
+                    // pre-filled in the new account's password field.
+                    setPassword('');
+                    setActiveSubView('register');
+                  }}
                   className="text-cyan-600 font-extrabold hover:underline"
                 >
                   Yangi bemor ro'yxatdan o'tish
@@ -1724,7 +1720,17 @@ export default function ClientDashboard({
       {activeSubView === 'cabinet' && currentUser && (
         <PatientPanel
           patient={currentUser}
-          onLogout={() => { setActiveSubView('home'); setCurrentUser(null); }}
+          onLogout={() => {
+            // This used to leave the session token in localStorage — the next
+            // person on this device (or a page reload) would auto-resume this
+            // patient's cabinet, since the token is what identity-scoped fetches
+            // key off. handleLogout below already does this correctly but was
+            // never actually wired to a button; this is the real logout path.
+            setActiveSubView('home');
+            setCurrentUser(null);
+            setPatientToken(null);
+            localStorage.removeItem(PATIENT_TOKEN_KEY);
+          }}
           queues={queues}
           clinic={selectedClinic}
           onCancelQueue={(id) => {
@@ -1748,10 +1754,16 @@ export default function ClientDashboard({
           }}
           language={language}
           doctors={doctors}
-          onChangeDoctor={async (doctorId) => {
+          onChangeDoctor={async (doctorId, forPatientId) => {
             // Same merge-upsert the doctor-side "claim patient" action uses:
             // savePatient() merges, so sending only these two fields rewrites
             // the treating doctor without disturbing the rest of the record.
+            // forPatientId is whichever record the cabinet is actually showing
+            // (the logged-in account, or a managed family member) — this used
+            // to always write currentUser.id, so changing a child's doctor
+            // while viewing their cabinet silently changed the parent's instead.
+            // The server allows editing a family member's record with the
+            // parent's own token (POST /api/patients' selfOrManaged check).
             //
             // Only applied locally once the server confirms it. currentUser is
             // persisted to localStorage and is never re-hydrated from
@@ -1762,42 +1774,35 @@ export default function ClientDashboard({
             const res = await fetch(`${getApiUrl()}/api/patients`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', ...patientAuthHeaders() },
-              body: JSON.stringify({ id: currentUser.id, primaryDoctorId: doctorId }),
+              body: JSON.stringify({ id: forPatientId, primaryDoctorId: doctorId }),
             });
             if (!res.ok) throw new Error(`Doctor change rejected (${res.status})`);
-            const updated = { ...currentUser, primaryDoctorId: doctorId };
-            setPatients(prev => prev.map(p => p.id === currentUser.id ? updated : p));
-            setCurrentUser(updated);
+            setPatients(prev => prev.map(p => p.id === forPatientId ? { ...p, primaryDoctorId: doctorId } : p));
+            if (forPatientId === currentUser.id) {
+              setCurrentUser({ ...currentUser, primaryDoctorId: doctorId });
+            }
           }}
           onUpdateProfile={async (updates) => {
             // Same merge-upsert pattern as onChangeDoctor above: savePatient()
             // merges by id, so sending just the changed fields rewrites only
             // those — this is how the deferred registration fields (phone,
-            // passport, birth date, ...) actually get filled in.
+            // passport, birth date, ...) actually get filled in. `updates.id`
+            // picks the record (self or a managed family member) — see the
+            // comment on onChangeDoctor above for why that can no longer be
+            // assumed to always be currentUser.
+            const { id: forPatientId, ...fields } = updates;
             const res = await fetch(`${getApiUrl()}/api/patients`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', ...patientAuthHeaders() },
-              body: JSON.stringify({ id: currentUser.id, ...updates }),
+              body: JSON.stringify({ id: forPatientId, ...fields }),
             });
             if (!res.ok) throw new Error(`Profile update rejected (${res.status})`);
-            const updated = { ...currentUser, ...updates };
-            setPatients(prev => prev.map(p => p.id === currentUser.id ? updated : p));
-            setCurrentUser(updated);
-          }}
-          familyMembers={patients.filter(p => p.managedBy === currentUser.id)}
-          onLinkFamilyMember={async (member) => {
-            const updated = { ...member, managedBy: currentUser.id };
-            setPatients(prev => prev.map(p => p.id === member.id ? updated : p));
-            try {
-              await fetch(`${getApiUrl()}/api/patients`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...patientAuthHeaders() },
-                body: JSON.stringify(updated),
-              });
-            } catch (err) {
-              console.warn('[ClientDashboard] Failed to link family member', err);
+            setPatients(prev => prev.map(p => p.id === forPatientId ? { ...p, ...fields } : p));
+            if (forPatientId === currentUser.id) {
+              setCurrentUser({ ...currentUser, ...fields });
             }
           }}
+          familyMembers={patients.filter(p => p.managedBy === currentUser.id)}
           onUnlinkFamilyMember={async (member) => {
             const { managedBy, ...rest } = member;
             setPatients(prev => prev.map(p => p.id === member.id ? rest as Patient : p));
@@ -1809,17 +1814,6 @@ export default function ClientDashboard({
               });
             } catch (err) {
               console.warn('[ClientDashboard] Failed to unlink family member', err);
-            }
-          }}
-          onSearchFamilyMember={async (query) => {
-            const isPhone = /^[\d+\s()-]+$/.test(query);
-            const param = isPhone ? `phone=${encodeURIComponent(query)}` : `passport=${encodeURIComponent(query)}`;
-            try {
-              const res = await fetch(`${getApiUrl()}/api/patients/search?${param}`);
-              if (!res.ok) return [];
-              return await res.json();
-            } catch {
-              return [];
             }
           }}
           onRegisterFamilyMember={async (info) => {

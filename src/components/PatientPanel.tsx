@@ -8,7 +8,7 @@ import {
   HelpCircle, ChevronDown, BellRing,
   User, Star, Check, Phone, MessageCircle, Plus, Search, UserPlus, X, Trash2, Menu, Bot, Send, ImagePlus, Stethoscope
 } from 'lucide-react';
-import { Patient, QueueItem, Clinic, Doctor, PaymentReceipt } from '../types';
+import { Patient, QueueItem, Clinic, Doctor, PaymentReceipt, TreatmentCharge } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
 import { TreatmentItem } from './TreatmentPlan';
 import AdBanner from './AdBanner';
@@ -37,6 +37,9 @@ const PATIENT_PANEL_TRANSLATIONS: Record<string, PatientPanelDictEntry> = {
   "(taxminiy javob — ai hozircha band, birozdan so'ng qayta urinib ko'ring)": { ru: "(Примерный ответ — AI сейчас занят, попробуйте чуть позже)", en: "(Approximate answer — the AI is busy right now, try again shortly)", kk: "(Болжамды жауап — AI қазір бос емес, сәлден соң қайталап көріңіз)", ky: "(Болжолдуу жооп — AI азыр бош эмес, бир аздан кийин кайра аракет кылыңыз)", tg: "(Ҷавоби тахминӣ — AI ҳоло банд аст, пас аз чанде такрор кунед)", tk: "(Takmyny jogap — AI häzir meşgul, biraz soň gaýtadan synanyşyň)" },
   "a'zoni qo'shishda xatolik yuz berdi.": { ru: "Произошла ошибка при добавлении члена семьи.", en: "An error occurred while adding the family member.", kk: "Мүшені қосу кезінде қате шықты.", ky: "Мүчөнү кошууда ката кетти.", tg: "Ҳангоми илова кардани аъзо хатогӣ рух дод.", tk: "Agzany goşmakda ýalňyşlyk ýüze çykdy." },
   "bekor qilingan": { ru: "Отменено", en: "Cancelled", kk: "Болдырылмады", ky: "Жокко чыгарылган", tg: "Бекор карда шуда", tk: "Ýatyrylan" },
+  "oldingizda": { ru: "Перед вами", en: "Ahead of you", kk: "Алдыңызда", ky: "Алдыңызда", tg: "Пеш аз шумо", tk: "Öňüňizde" },
+  "kishi": { ru: "чел.", en: "people", kk: "адам", ky: "адам", tg: "нафар", tk: "adam" },
+  "navbat sizda": { ru: "Ваша очередь", en: "It's your turn", kk: "Кезек сізде", ky: "Кезек сизде", tg: "Навбати шумо", tk: "Sizin nobatyňyz" },
   "javob olishda xatolik yuz berdi. internet aloqasini tekshiring.": { ru: "Ошибка при получении ответа. Проверьте подключение к интернету.", en: "Failed to get a response. Check your internet connection.", kk: "Жауап алу кезінде қате. Интернет байланысын тексеріңіз.", ky: "Жооп алууда ката. Интернет байланышын текшериңиз.", tg: "Ҳангоми гирифтани ҷавоб хатогӣ. Пайвасти интернетро тафтиш кунед.", tk: "Jogap almakda ýalňyşlyk. Internet birikmesini barlaň." },
   "menyu": { ru: "Меню", en: "Menu", kk: "Мәзір", ky: "Меню", tg: "Меню", tk: "Menýu" },
   "rasm biriktirildi": { ru: "Изображение прикреплено", en: "Image attached", kk: "Сурет тіркелді", ky: "Сүрөт тиркелди", tg: "Тасвир замима шуд", tk: "Surat birikdirildi" },
@@ -151,9 +154,7 @@ export default function PatientPanel({
   onGoToBooking,
   onCancelQueue,
   familyMembers = [],
-  onLinkFamilyMember,
   onUnlinkFamilyMember,
-  onSearchFamilyMember,
   onRegisterFamilyMember,
   language,
   doctors = [],
@@ -167,14 +168,17 @@ export default function PatientPanel({
   onGoToBooking?: () => void;
   onCancelQueue?: (queueId: string) => void;
   familyMembers?: Patient[];
-  onLinkFamilyMember?: (member: Patient) => Promise<void>;
   onUnlinkFamilyMember?: (member: Patient) => Promise<void>;
-  onSearchFamilyMember?: (query: string) => Promise<Patient[]>;
   onRegisterFamilyMember?: (info: NewFamilyMemberInfo) => Promise<Patient>;
   language?: Language;
   doctors?: Doctor[];
-  onChangeDoctor?: (doctorId: string) => Promise<void>;
-  onUpdateProfile?: (updates: Partial<Patient>) => Promise<void>;
+  // Second arg says which patient record to update — see TreatingDoctorCard.
+  onChangeDoctor?: (doctorId: string, forPatientId: string) => Promise<void>;
+  // `updates.id` says which patient record to write — the logged-in account, or
+  // a family member being viewed. Omitting it used to mean "always the logged-in
+  // account", which is what let editing a child's cabinet silently overwrite
+  // the parent's own phone/passport/medical fields.
+  onUpdateProfile?: (updates: Partial<Patient> & { id: string }) => Promise<void>;
 }) {
   const localLang: keyof PatientPanelDictEntry | null =
     (language === "ru" || language === "en" || language === "kk" || language === "ky" || language === "tg" || language === "tk")
@@ -202,36 +206,48 @@ export default function PatientPanel({
   // register form) — phone, passport, birth date, and the medical fields below
   // are deliberately deferred to here, so this is the one place they actually
   // get filled in.
+  // Which patient record the cabinet is currently showing: the logged-in
+  // account itself, or a family member they manage (picked below). Hoisted
+  // above the profile-form state so Sozlamalar edits the patient actually on
+  // screen — this used to always read/write `patient` (the parent), so filling
+  // in a child's own phone/passport/medical fields while viewing their cabinet
+  // silently overwrote the parent's instead.
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const viewingPatient = viewingId ? familyMembers.find((m) => m.id === viewingId) || patient : patient;
+
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({
-    phone: patient?.phone || '',
-    passportSerial: patient?.passportSerial || '',
-    birthDate: patient?.birthDate || '',
-    bloodGroup: patient?.bloodGroup || '',
-    allergies: patient?.allergies || '',
-    chronicDiseases: patient?.chronicDiseases || '',
+    phone: viewingPatient?.phone || '',
+    passportSerial: viewingPatient?.passportSerial || '',
+    birthDate: viewingPatient?.birthDate || '',
+    bloodGroup: viewingPatient?.bloodGroup || '',
+    allergies: viewingPatient?.allergies || '',
+    chronicDiseases: viewingPatient?.chronicDiseases || '',
   });
   useEffect(() => {
     if (isEditingProfile) return;
     setProfileForm({
-      phone: patient?.phone || '',
-      passportSerial: patient?.passportSerial || '',
-      birthDate: patient?.birthDate || '',
-      bloodGroup: patient?.bloodGroup || '',
-      allergies: patient?.allergies || '',
-      chronicDiseases: patient?.chronicDiseases || '',
+      phone: viewingPatient?.phone || '',
+      passportSerial: viewingPatient?.passportSerial || '',
+      birthDate: viewingPatient?.birthDate || '',
+      bloodGroup: viewingPatient?.bloodGroup || '',
+      allergies: viewingPatient?.allergies || '',
+      chronicDiseases: viewingPatient?.chronicDiseases || '',
     });
     // Only re-sync from the incoming patient prop while NOT editing — otherwise
     // the background poll refreshing `patient` every few seconds would stomp
-    // on whatever the user is mid-typing.
+    // on whatever the user is mid-typing. Also re-syncs on switching who is
+    // being viewed, so the form shows the newly-picked family member's own
+    // values instead of briefly showing the previous patient's.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patient?.id, patient?.phone, patient?.passportSerial, patient?.birthDate, patient?.bloodGroup, patient?.allergies, patient?.chronicDiseases, isEditingProfile]);
+  }, [viewingPatient?.id, viewingPatient?.phone, viewingPatient?.passportSerial, viewingPatient?.birthDate, viewingPatient?.bloodGroup, viewingPatient?.allergies, viewingPatient?.chronicDiseases, isEditingProfile]);
   const handleSaveProfile = async () => {
     if (!onUpdateProfile) return;
     setIsSavingProfile(true);
     try {
       await onUpdateProfile({
+        id: viewingPatient.id,
         phone: profileForm.phone.trim() || undefined,
         passportSerial: profileForm.passportSerial.trim() || undefined,
         birthDate: profileForm.birthDate || undefined,
@@ -264,10 +280,7 @@ export default function PatientPanel({
   }, []);
   const [planItems, setPlanItems] = useState<TreatmentItem[]>([]);
   const [myReceipts, setMyReceipts] = useState<PaymentReceipt[]>([]);
-  const [viewingId, setViewingId] = useState<string | null>(null);
-  const [familySearchQuery, setFamilySearchQuery] = useState('');
-  const [familySearchResults, setFamilySearchResults] = useState<Patient[] | null>(null);
-  const [isFamilySearching, setIsFamilySearching] = useState(false);
+  const [myCharges, setMyCharges] = useState<TreatmentCharge[]>([]);
   const [showRegisterFamilyForm, setShowRegisterFamilyForm] = useState(false);
   const [newFamilyMember, setNewFamilyMember] = useState<NewFamilyMemberInfo>({
     fullName: '', phone: '', passportSerial: '', birthDate: '', password: '',
@@ -327,16 +340,6 @@ export default function PatientPanel({
     }
   };
 
-  const handleFamilySearch = async () => {
-    if (!familySearchQuery.trim() || !onSearchFamilyMember) return;
-    setIsFamilySearching(true);
-    try {
-      const results = await onSearchFamilyMember(familySearchQuery.trim());
-      setFamilySearchResults(results.filter((r) => r.id !== patient.id));
-    } finally {
-      setIsFamilySearching(false);
-    }
-  };
 
   const handleRegisterFamilyMember = async () => {
     if (!newFamilyMember.fullName.trim() || !newFamilyMember.phone.trim() || !newFamilyMember.passportSerial.trim() || !newFamilyMember.password.trim()) return;
@@ -357,7 +360,6 @@ export default function PatientPanel({
     }
   };
 
-  const viewingPatient = viewingId ? familyMembers.find((m) => m.id === viewingId) || patient : patient;
   const isViewingSelf = viewingPatient.id === patient.id;
 
   useEffect(() => {
@@ -375,18 +377,24 @@ export default function PatientPanel({
     return () => unsub();
   }, [viewingPatient?.id]);
 
-  // The patient's own confirmed payments, so their "remaining" figure nets off
-  // what they have already paid instead of showing the whole plan as owed.
+  // The patient's own payments AND charges, so their figures match the doctor's.
+  // Charges carry the discounts: passing an empty list here (as this used to)
+  // made every treatment fall back to its undiscounted list price, so the
+  // patient was shown a different bill from the one their doctor sees.
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('dstoma_patient_token') : null;
-    if (!viewingPatient?.id || !token) { setMyReceipts([]); return; }
+    if (!viewingPatient?.id || !token) { setMyReceipts([]); setMyCharges([]); return; }
     let active = true;
-    fetch(`${getApiUrl()}/api/payment-receipts?patientId=${encodeURIComponent(viewingPatient.id)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const headers = { Authorization: `Bearer ${token}` };
+    const q = encodeURIComponent(viewingPatient.id);
+    fetch(`${getApiUrl()}/api/payment-receipts?patientId=${q}`, { headers })
       .then((r) => (r.ok ? r.json() : []))
       .then((d) => { if (active) setMyReceipts(Array.isArray(d) ? d : []); })
       .catch(() => { if (active) setMyReceipts([]); });
+    fetch(`${getApiUrl()}/api/treatment-charges?patientId=${q}`, { headers })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => { if (active) setMyCharges(Array.isArray(d) ? d : []); })
+      .catch(() => { if (active) setMyCharges([]); });
     return () => { active = false; };
   }, [viewingPatient?.id]);
 
@@ -405,6 +413,20 @@ export default function PatientPanel({
     .filter((q) => ['pending', 'scheduled', 'calling', 'in_progress'].includes(q.status))
     .sort((a, b) => new Date(a.appointmentDate || a.createdAt).getTime() - new Date(b.appointmentDate || b.createdAt).getTime())[0] || null;
 
+  // "Oldingizda N kishi" for an undated walk-in ticket — the same doctor's other
+  // still-waiting walk-ins with a lower ticket number. Scheduled appointments
+  // (a picked date/time) don't have a meaningful queue position, so this stays
+  // null for those and the UI falls back to showing the date/time instead.
+  const queuePosition = (nextQueue && nextQueue.status === 'pending' && !nextQueue.appointmentDate)
+    ? queues.filter((q) =>
+        q.doctorId === nextQueue.doctorId &&
+        q.clinicId === nextQueue.clinicId &&
+        !q.appointmentDate &&
+        ['pending', 'calling', 'in_progress'].includes(q.status) &&
+        q.number < nextQueue.number
+      ).length
+    : null;
+
   const visits = [...(viewingPatient?.clinicVisits || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const activePlanItems = planItems.filter((i) => i.status !== 'Cancelled');
@@ -412,12 +434,12 @@ export default function PatientPanel({
   // doctor does. Without a patient session token the payment list stays empty,
   // in which case this reads as fully outstanding — never as wrongly paid.
   const patientBilling = useMemo(
-    () => patientBalance(planItems, [], myReceipts, {
+    () => patientBalance(planItems, myCharges, myReceipts, {
       clinicId: viewingPatient?.clinicId,
       patientId: viewingPatient?.id,
       patientName: viewingPatient?.fullName,
     }),
-    [planItems, myReceipts, viewingPatient?.id, viewingPatient?.clinicId, viewingPatient?.fullName]
+    [planItems, myCharges, myReceipts, viewingPatient?.id, viewingPatient?.clinicId, viewingPatient?.fullName]
   );
   const totalCost = patientBilling.total;
   const completedCost = patientBilling.paid;
@@ -555,7 +577,7 @@ export default function PatientPanel({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <InstallAppBanner />
               <TreatingDoctorCard
-                patient={patient}
+                patient={viewingPatient}
                 doctors={doctors}
                 onChangeDoctor={onChangeDoctor}
                 t={t}
@@ -586,7 +608,17 @@ export default function PatientPanel({
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="font-bold text-slate-900">{t("keyingi navbatingiz")}</h3>
                   {nextQueue && (
-                    <span className="px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-bold rounded-lg border border-emerald-100">
+                    <span className={
+                      "px-3 py-1 text-[10px] font-bold rounded-lg border " +
+                      (nextQueue.status === 'calling'
+                        // Visually distinct on purpose: this is the one status that means
+                        // "go to the cabinet right now" — it used to look identical to
+                        // plain waiting, so patients had no visual cue to act on.
+                        ? 'bg-amber-100 text-amber-700 border-amber-200 animate-pulse'
+                        : nextQueue.status === 'in_progress'
+                          ? 'bg-blue-50 text-blue-600 border-blue-100'
+                          : 'bg-emerald-50 text-emerald-600 border-emerald-100')
+                    }>
                       {nextQueue.status === 'scheduled' ? t("rejalashtirilgan") : nextQueue.status === 'calling' ? t("chaqirilmoqda") : nextQueue.status === 'in_progress' ? t("qabulda") : t("navbatda")}
                     </span>
                   )}
@@ -601,6 +633,11 @@ export default function PatientPanel({
                       <p className="text-xs font-medium text-slate-500">{nextQueue.appointmentTime || ''}</p>
                       <div className="mt-2 text-sm text-slate-700">
                         <p className="font-bold">{t("navbat raqami:")} #{nextQueue.number}</p>
+                        {queuePosition !== null && (
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {queuePosition > 0 ? `${t("oldingizda")} ${queuePosition} ${t("kishi")}` : t("navbat sizda")}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -962,50 +999,15 @@ export default function PatientPanel({
                 )}
               </div>
 
-              <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
-                <h3 className="font-bold text-slate-900 mb-4">{t("mavjud bemorni qidirib qo'shish")}</h3>
-                <div className="flex gap-2 mb-4">
-                  <div className="relative flex-1">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      value={familySearchQuery}
-                      onChange={(e) => setFamilySearchQuery(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleFamilySearch()}
-                      placeholder={t("telefon raqami yoki pasport seriyasi")}
-                      className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500 text-slate-800"
-                    />
-                  </div>
-                  <button
-                    onClick={handleFamilySearch}
-                    disabled={!familySearchQuery.trim() || isFamilySearching}
-                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-xl font-bold text-sm transition-colors"
-                  >
-                    {isFamilySearching ? t('qidirilmoqda...') : t('qidirish')}
-                  </button>
-                </div>
-                {familySearchResults && (
-                  familySearchResults.length === 0 ? (
-                    <p className="text-sm text-slate-400 text-center py-4">{t("bunday bemor topilmadi")}</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {familySearchResults.map((r) => (
-                        <div key={r.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                          <div>
-                            <p className="font-bold text-slate-900 text-sm">{decodeLegacyEntities(r.fullName)}</p>
-                            <p className="text-xs text-slate-500">{decodeLegacyEntities(r.phone)}</p>
-                          </div>
-                          <button
-                            onClick={async () => { await onLinkFamilyMember?.(r); setFamilySearchResults(null); setFamilySearchQuery(''); }}
-                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg text-xs font-bold transition-colors"
-                          >
-                            {t("oilamga qo'shish")}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )
-                )}
+              {/* The "find an existing patient by phone and add them" panel was
+                  removed. Setting managedBy to yourself was its own authorization
+                  server-side, so knowing someone's phone number was enough to
+                  attach them and then read their whole chart. Family members can
+                  now only be registered as new people. */}
+              <div className="bg-slate-50 rounded-3xl p-4 border border-slate-200">
+                <p className="text-xs text-slate-500 font-semibold leading-snug">
+                  {t("oila a'zosini faqat yangi ro'yxatdan o'tkazish orqali qo'shish mumkin")}
+                </p>
               </div>
             </div>
           )}
@@ -1104,34 +1106,34 @@ export default function PatientPanel({
 
               <div className="flex justify-between border-b border-slate-100 pb-3 mb-4 text-sm">
                 <span className="text-slate-500">{t("ism familiya")}</span>
-                <span className="font-bold text-slate-900">{decodeLegacyEntities(patient?.fullName)}</span>
+                <span className="font-bold text-slate-900">{decodeLegacyEntities(viewingPatient?.fullName)}</span>
               </div>
 
               {!isEditingProfile ? (
                 <div className="space-y-4 text-sm">
                   <div className="flex justify-between border-b border-slate-100 pb-3">
                     <span className="text-slate-500">{t("telefon")}</span>
-                    <span className="font-bold text-slate-900">{decodeLegacyEntities(patient?.phone) || '—'}</span>
+                    <span className="font-bold text-slate-900">{decodeLegacyEntities(viewingPatient?.phone) || '—'}</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-100 pb-3">
                     <span className="text-slate-500">{t("pasport seriyasi")}</span>
-                    <span className="font-bold text-slate-900">{decodeLegacyEntities(patient?.passportSerial) || '—'}</span>
+                    <span className="font-bold text-slate-900">{decodeLegacyEntities(viewingPatient?.passportSerial) || '—'}</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-100 pb-3">
                     <span className="text-slate-500">{t("tug'ilgan sana")}</span>
-                    <span className="font-bold text-slate-900">{patient?.birthDate || '—'}</span>
+                    <span className="font-bold text-slate-900">{viewingPatient?.birthDate || '—'}</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-100 pb-3">
                     <span className="text-slate-500">{t("qon guruhi")}</span>
-                    <span className="font-bold text-slate-900">{patient?.bloodGroup || '—'}</span>
+                    <span className="font-bold text-slate-900">{viewingPatient?.bloodGroup || '—'}</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-100 pb-3">
                     <span className="text-slate-500">{t("allergiyalar")}</span>
-                    <span className="font-bold text-slate-900">{decodeLegacyEntities(patient?.allergies) || '—'}</span>
+                    <span className="font-bold text-slate-900">{decodeLegacyEntities(viewingPatient?.allergies) || '—'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">{t("surunkali kasalliklar")}</span>
-                    <span className="font-bold text-slate-900">{decodeLegacyEntities(patient?.chronicDiseases) || '—'}</span>
+                    <span className="font-bold text-slate-900">{decodeLegacyEntities(viewingPatient?.chronicDiseases) || '—'}</span>
                   </div>
                 </div>
               ) : (
@@ -1328,7 +1330,10 @@ function TreatingDoctorCard({
 }: {
   patient: Patient;
   doctors: Doctor[];
-  onChangeDoctor?: (doctorId: string) => Promise<void>;
+  // Takes the patient id explicitly rather than assuming "the logged-in
+  // account" — this card can be showing a managed family member, and the
+  // change must land on that member's own record, not the parent's.
+  onChangeDoctor?: (doctorId: string, forPatientId: string) => Promise<void>;
   t: (s: string) => string;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -1348,7 +1353,7 @@ function TreatingDoctorCard({
     setIsSaving(true);
     setSaveError(false);
     try {
-      await onChangeDoctor(picked);
+      await onChangeDoctor(picked, patient.id);
       setIsEditing(false);
     } catch {
       // Keep the editor open and say so — silently closing would tell the

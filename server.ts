@@ -240,6 +240,15 @@ function rateLimiter(maxRequests: number, windowMs: number) {
 // quotes/apostrophes/slashes: React already escapes text content on render (no
 // dangerouslySetInnerHTML is used anywhere in this app), and entity-encoding here
 // used to corrupt ordinary Uzbek text (apostrophes are common, e.g. "bo'lim").
+// The clinic's calendar day, not the server's. Vercel runs in UTC, so a plain
+// toISOString().slice(0,10) rolls "today" over at 05:00 Tashkent time — right
+// in the middle of a working morning.
+const CLINIC_TIME_ZONE = 'Asia/Tashkent';
+function localDateString(d: Date = new Date()): string {
+  // en-CA formats as YYYY-MM-DD, which is the format stored in appointmentDate.
+  return new Intl.DateTimeFormat('en-CA', { timeZone: CLINIC_TIME_ZONE }).format(d);
+}
+
 function sanitizeString(str: string): string {
   if (typeof str !== 'string') return '';
   return str.replace(/[<>]/g, '');
@@ -1163,6 +1172,77 @@ app.post("/api/patient-login", rateLimiter(10, 60 * 1000), async (req, res) => {
   return res.json({ ok: true, patient: safePatient, token });
 });
 
+/**
+ * Telegram Mini App sign-in.
+ *
+ * The browser previously did this itself: it read `initDataUnsafe` (unverified
+ * by definition), searched the then-public patient list for a matching chat id,
+ * and logged that patient in with no password. Knowing a chat id was enough to
+ * open someone's cabinet.
+ *
+ * Telegram signs initData with a key derived from the bot token, so the
+ * signature can only be checked where that token lives — here.
+ * https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
+ */
+function verifyTelegramInitData(initData: string, botToken: string): any | null {
+  if (!initData || !botToken) return null;
+  const params = new URLSearchParams(initData);
+  const hash = params.get("hash");
+  if (!hash) return null;
+  params.delete("hash");
+
+  const dataCheckString = [...params.entries()]
+    .map(([k, v]) => `${k}=${v}`)
+    .sort()
+    .join("\n");
+
+  const secretKey = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
+  const computed = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
+
+  // Constant-time compare so the check can't be probed byte by byte.
+  const a = Buffer.from(computed, "hex");
+  const b = Buffer.from(hash, "hex");
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+
+  // Reject stale payloads — a captured initData shouldn't work forever.
+  const authDate = Number(params.get("auth_date") || 0);
+  if (!authDate || Date.now() / 1000 - authDate > 24 * 60 * 60) return null;
+
+  try {
+    return JSON.parse(params.get("user") || "null");
+  } catch {
+    return null;
+  }
+}
+
+app.post("/api/telegram-login", rateLimiter(10, 60 * 1000), async (req, res) => {
+  const { initData } = req.body || {};
+  const botToken = activeTelegramToken;
+  if (!botToken) {
+    return res.status(503).json({ ok: false, error: "Telegram bot sozlanmagan" });
+  }
+  const tgUser = verifyTelegramInitData(String(initData || ""), botToken);
+  if (!tgUser?.id) {
+    return res.status(401).json({ ok: false, error: "Telegram imzosi tasdiqlanmadi" });
+  }
+
+  const chatId = String(tgUser.id);
+  const allPatients = await getPatients();
+  const matched: any = allPatients.find((p: any) => String(p.telegramChatId) === chatId);
+
+  if (!matched) {
+    // Verified Telegram user with no account yet: hand back a name to prefill
+    // the registration form, and nothing else.
+    const suggestedName = `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim();
+    return res.status(404).json({ ok: false, suggestedName: suggestedName || undefined });
+  }
+
+  const { password: _pw, ...safePatient } = matched;
+  const token = crypto.randomBytes(32).toString("hex");
+  await savePatientSession(token, { patientId: matched.id, expiresAt: Date.now() + STAFF_SESSION_TTL_MS });
+  return res.json({ ok: true, patient: safePatient, token });
+});
+
 // Superadmin-only: full clinic/doctor records INCLUDING credentials, for the SuperAdmin
 // panel's "view/copy login details" feature. The public /api/clinics and /api/doctors
 // below deliberately omit passwords.
@@ -1588,19 +1668,66 @@ app.get("/api/telegram-webhook-setup", requireSuperAdmin, async (req, res) => {
   }
 });
 
-// Centralized API Routes for patients and queues
+// Fields that only clinic staff may ever see. A patient reading their own record
+// keeps them; a patient reading a family member's summary does not.
+const MEDICAL_FIELDS = [
+  'hasInfection', 'allergies', 'chronicDiseases', 'bloodGroup',
+  'diagnoses', 'clinicVisits', 'medicalNotes', 'passportSerial', 'loginCode',
+] as const;
+
+const stripPassword = (p: any) => { const { password, ...safe } = p; return safe; };
+const stripMedical = (p: any) => {
+  const safe = stripPassword(p);
+  for (const f of MEDICAL_FIELDS) delete safe[f];
+  return safe;
+};
+
+// Centralized API Routes for patients and queues.
+//
+// This used to be fully public and returned EVERY patient of EVERY clinic —
+// names, phones, passports, blood group, allergies, chronic diseases and the
+// hasInfection flag — and the patient app polled it every 4 seconds. It is now
+// scoped by who is asking:
+//   superadmin -> everyone
+//   staff      -> their own clinic only
+//   patient    -> themselves, plus family members they manage (summary only)
 app.get("/api/patients", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  const auth = await getAuthContext(req);
   const allPatients = await getPatients();
-  // Never ship passwords in the bulk list — /api/patient-login verifies credentials
-  // server-side and returns the one matching record (with password) after auth.
-  res.json(allPatients.map((p: any) => { const { password, ...safe } = p; return safe; }));
+
+  if (auth.isSuperAdmin) {
+    return res.json(allPatients.map(stripPassword));
+  }
+
+  if (auth.staff) {
+    const mine = allPatients.filter((p: any) => p.clinicId === auth.staff!.clinicId);
+    return res.json(mine.map(stripPassword));
+  }
+
+  if (auth.patient) {
+    const me = auth.patient.patientId;
+    return res.json(
+      allPatients
+        .filter((p: any) => p.id === me || p.managedBy === me)
+        // Own record keeps its medical detail; a managed member is a summary,
+        // so a compromised account can't harvest a family member's full chart.
+        .map((p: any) => (p.id === me ? stripPassword(p) : stripMedical(p)))
+    );
+  }
+
+  return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
 });
 
-// Cross-clinic lookup: find a patient's global record by phone or passport, regardless
-// of which clinic they originally registered at. Used for portable medical history.
+// Cross-clinic lookup by phone or passport, for portable medical history.
+// Staff only: this used to be open, and it was the first step of an attack that
+// let any patient attach any other patient to their own cabinet.
 app.get("/api/patients/search", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  const auth = await getAuthContext(req);
+  if (!auth.isSuperAdmin && !auth.staff) {
+    return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+  }
   const phoneQuery = String(req.query.phone || "").replace(/\D/g, "");
   const passportQuery = String(req.query.passport || "").replace(/\s+/g, "").toUpperCase();
   if (!phoneQuery && !passportQuery) {
@@ -1612,7 +1739,7 @@ app.get("/api/patients/search", async (req, res) => {
     const pSerial = String(p.passportSerial || "").replace(/\s+/g, "").toUpperCase();
     return (phoneQuery && pPhone && pPhone === phoneQuery) || (passportQuery && pSerial && pSerial === passportQuery);
   });
-  res.json(results.map((p: any) => { const { password, ...safe } = p; return safe; }));
+  res.json(results.map(stripPassword));
 });
 
 // SaaS billing records (clinic -> platform payments). Superadmin sees every clinic;
@@ -1698,12 +1825,20 @@ app.post("/api/patients", rateLimiter(30, 60 * 1000), async (req, res) => {
       // their own record
       auth.patient.patientId === existing.id ||
       // a family member they already manage
-      existing.managedBy === auth.patient.patientId ||
-      // claiming someone as a family member (the family-cabinet link flow)
-      newPatient.managedBy === auth.patient.patientId
+      existing.managedBy === auth.patient.patientId
     );
+    // "newPatient.managedBy === me" is deliberately NOT accepted here. It used
+    // to be, which made setting managedBy to yourself its own authorization:
+    // knowing someone's phone number (or passport) was enough to claim their
+    // existing record and then read their whole chart. A family member can now
+    // only be CREATED, never claimed.
     if (!auth.isSuperAdmin && !isStaffForClinic && !selfOrManaged) {
       return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
+    }
+    // And nobody but staff/superadmin may re-parent an existing record.
+    if (!auth.isSuperAdmin && !isStaffForClinic &&
+        newPatient.managedBy && newPatient.managedBy !== existing.managedBy) {
+      delete newPatient.managedBy;
     }
   } else {
     // The create path itself must stay open (see above), but useNameAsLogin
@@ -1740,10 +1875,51 @@ app.post("/api/patients", rateLimiter(30, 60 * 1000), async (req, res) => {
   res.status(201).json(safeNewPatient);
 });
 
+// Scoped like /api/patients. Each QueueItem carries patientName, patientPhone,
+// passportSerial, hasInfection, complaint and medicalNotes, so the unscoped
+// version leaked the same medical data by a second route.
+//
+// Anonymous callers still get a LIVE BOARD view — ticket number, status and
+// doctor only, no identity — because the waiting-room display and the
+// pre-login booking screen legitimately need to show how busy a clinic is.
 app.get("/api/queues", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-  res.json(await getQueues());
+  const auth = await getAuthContext(req);
+  const all = await getQueues();
+
+  if (auth.isSuperAdmin) return res.json(all);
+  if (auth.staff) return res.json(all.filter((q: any) => q.clinicId === auth.staff!.clinicId));
+
+  if (auth.patient) {
+    const me = auth.patient.patientId;
+    const patients = await getPatients();
+    const managedIds = new Set(
+      patients.filter((p: any) => p.id === me || p.managedBy === me).map((p: any) => p.id)
+    );
+    const mine = all.filter((q: any) => q.patientId && managedIds.has(q.patientId));
+    const board = all
+      .filter((q: any) => !(q.patientId && managedIds.has(q.patientId)))
+      .map((q: any) => publicQueueView(q));
+    return res.json([...mine, ...board]);
+  }
+
+  res.json(all.map((q: any) => publicQueueView(q)));
 });
+
+/** Identity-free projection of a queue item, safe for anonymous callers. */
+function publicQueueView(q: any) {
+  return {
+    id: q.id,
+    clinicId: q.clinicId,
+    doctorId: q.doctorId,
+    serviceId: q.serviceId,
+    number: q.number,
+    status: q.status,
+    createdAt: q.createdAt,
+    appointmentDate: q.appointmentDate,
+    appointmentTime: q.appointmentTime,
+  };
+}
 
 app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
   try {
@@ -1823,7 +1999,16 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
     }
   }
 
-  const ticketNo = qDb.filter(item => item.clinicId === clinicId).length + 104;
+  // Ticket numbers are per clinic, per day. Counting every queue the clinic has
+  // ever had (which is what this did) meant the number climbed forever — a
+  // clinic open a year handed out "#3120" — and, because it counted rather than
+  // took a maximum, deleting any old record made the next new ticket reuse a
+  // number already printed on someone else's ticket.
+  const today = localDateString();
+  const todaysNumbers = qDb
+    .filter(item => item.clinicId === clinicId && (item.appointmentDate || item.createdAt || '').slice(0, 10) === today)
+    .map(item => Number(item.number) || 0);
+  const ticketNo = (todaysNumbers.length ? Math.max(...todaysNumbers) : 100) + 1;
 
   const newQueueItem: any = {
     id: q.id || 'q_' + Math.random().toString(36).substr(2, 9),
@@ -2359,7 +2544,15 @@ app.get("/api/payment-receipts", async (req, res) => {
   if (clinicId) matches = matches.filter((r) => r.clinicId === clinicId);
   if (doctorId) matches = matches.filter((r) => r.doctorId === doctorId);
   if (patientId) matches = matches.filter((r) => r.patientId === patientId);
-  if (matches.length > 0 && !(await isAuthorizedForClinic(req, matches[0].clinicId, true))) {
+
+  // A patient may read their own receipts. isAuthorizedForClinic only ever
+  // returns true for STAFF, so a patient token failed this check and the
+  // cabinet silently fell back to an empty list — which the billing util then
+  // reported as "paid: 0", telling a patient who had paid in full that they
+  // still owed everything.
+  const auth = await getAuthContext(req);
+  const isOwnPatient = !!auth.patient && !!patientId && auth.patient.patientId === patientId;
+  if (!isOwnPatient && matches.length > 0 && !(await isAuthorizedForClinic(req, matches[0].clinicId, true))) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");

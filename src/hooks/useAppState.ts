@@ -753,6 +753,11 @@ export function useAppState() {
           medicalNotes: newQueue.medicalNotes,
           passportSerial: newQueue.passportSerial,
           telegramChatId: newQueue.telegramChatId,
+          // The one thing the patient actually typed. This hand-written field
+          // list left it out, so every complaint written in the booking form
+          // was dropped here and never reached the doctor — the server has
+          // always been ready to store it.
+          complaint: newQueue.complaint,
           status: newQueue.status,
           appointmentDate: newQueue.appointmentDate,
           appointmentTime: newQueue.appointmentTime
@@ -773,12 +778,18 @@ export function useAppState() {
           medicalNotes: saved.medicalNotes || saved.medical_notes || '',
           passportSerial: saved.passportSerial || saved.passport_serial || '',
           telegramChatId: saved.telegramChatId || saved.telegram_chat_id || '',
+          complaint: saved.complaint || newQueue.complaint,
           status: saved.status || 'pending',
           appointmentDate: saved.appointmentDate || saved.appointment_date || undefined,
           appointmentTime: saved.appointmentTime || saved.appointment_time || undefined,
           createdAt: saved.createdAt || saved.created_at || new Date().toISOString()
         };
         setQueues(prev => prev.map(q => q.id === newQueue.id ? mapped : q));
+        isSyncingRef.current = false;
+        // The ticket number is the server's to assign (per clinic, per day) —
+        // hand it back so the caller announces the number that will actually
+        // be on the board, not the placeholder it optimistically guessed.
+        return { ok: true, number: mapped.number };
       } else {
         // Server rejected it (e.g. 409 duplicate-active-queue) — the optimistic
         // add above would otherwise leave a phantom ticket in state that the
