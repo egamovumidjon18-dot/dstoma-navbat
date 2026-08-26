@@ -145,6 +145,12 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "google calendar bilan bog'lash": { ru: "Подключить Google Календарь", en: "Connect Google Calendar", kk: "Google Күнтізбені қосу", ky: "Google Календарын туташтыруу", tg: "Пайваст кардани Google Тақвим", tk: "Google Senenama birikdirmek" },
   "uzish": { ru: "Отключить", en: "Disconnect", kk: "Ажырату", ky: "Ажыратуу", tg: "Ҷудо кардан", tk: "Aýyrmak" },
   "google calendar uzildi": { ru: "Google Календарь отключён", en: "Google Calendar disconnected", kk: "Google Күнтізбе ажыратылды", ky: "Google Календары ажыратылды", tg: "Google Тақвим ҷудо шуд", tk: "Google Senenama aýryldy" },
+  "bir to'lovga qaytarish": { ru: "Вернуть к одному платежу", en: "Back to single payment", kk: "Бір төлемге қайтару", ky: "Бир төлөмгө кайтаруу", tg: "Бозгашт ба як пардохт", tk: "Bir tölege gaýtarmak" },
+  "bosqich": { ru: "этап", en: "stage", kk: "кезең", ky: "этап", tg: "марҳила", tk: "tapgyr" },
+  "bosqichlarga bo'lish": { ru: "Разбить на этапы", en: "Split into stages", kk: "Кезеңдерге бөлу", ky: "Этаптарга бөлүү", tg: "Ба марҳилаҳо тақсим кардан", tk: "Tapgyrlara bölmek" },
+  "bosqich qo'shish": { ru: "Добавить этап", en: "Add stage", kk: "Кезең қосу", ky: "Этап кошуу", tg: "Илова кардани марҳила", tk: "Tapgyr goşmak" },
+  "muolaja bir marta to'liq to'lanadi. bir necha tashrifga bo'lish uchun bosqich qo'shing.": { ru: "Процедура оплачивается полностью за один раз. Чтобы разбить на несколько визитов, добавьте этапы.", en: "The procedure is paid in full at once. To split it across several visits, add stages.", kk: "Ем бір рет толық төленеді. Бірнеше қабылдауға бөлу үшін кезең қосыңыз.", ky: "Дарылоо бир жолу толук төлөнөт. Бир нече кабыл алууга бөлүү үчүн этап кошуңуз.", tg: "Муолаҷа якбора пурра пардохт мешавад. Барои ба якчанд ташриф тақсим кардан, марҳила илова кунед.", tk: "Bejergi bir gezekde doly tölenýär. Birnäçe sapara bölmek üçin tapgyr goşuň." },
+  "jami": { ru: "Итого", en: "Total", kk: "Барлығы", ky: "Жалпы", tg: "Ҳамагӣ", tk: "Jemi" },
   "bir to'lov": { ru: "Один платёж", en: "Single payment", kk: "Бір төлем", ky: "Бир төлөм", tg: "Як пардохт", tk: "Bir töleg" },
   "muolaja bir marta to'liq to'lanadi. bosqichlarga bo'lish uchun sonini tanlang.": { ru: "Процедура оплачивается полностью за один раз. Чтобы разбить на этапы, выберите их количество.", en: "The procedure is paid in full at once. To split it into stages, choose how many.", kk: "Ем бір рет толық төленеді. Кезеңдерге бөлу үшін санын таңдаңыз.", ky: "Дарылоо бир жолу толук төлөнөт. Этапка бөлүү үчүн санын тандаңыз.", tg: "Муолаҷа якбора пурра пардохт мешавад. Барои ба марҳилаҳо тақсим кардан, шумораашро интихоб кунед.", tk: "Bejergi bir gezekde doly tölenýär. Tapgyrlara bölmek üçin sanyny saýlaň." },
   "taqsimlanmagan": { ru: "Не распределено", en: "Unallocated", kk: "Бөлінбеген", ky: "Бөлүштүрүлбөгөн", tg: "Тақсимнашуда", tk: "Paýlanmadyk" },
@@ -4439,11 +4445,20 @@ export default function DoctorDashboard({
                       }));
                     };
                     // Stages divide the DISCOUNTED total, so changing the discount
-                    // has to re-split them or their sum stops matching and the
-                    // save is rejected. Existing stage names are kept.
+                    // moves the target their amounts have to add up to. Only
+                    // re-split automatically while the stages are still an even
+                    // split — once the doctor has hand-set amounts, silently
+                    // rewriting them would throw away deliberate figures. In that
+                    // case the running total below just shows the new gap and the
+                    // doctor rebalances (or taps "teng bo'lish") themselves.
                     const resplitForTotal = (total) =>
-                      setNewBookingStages((prev) => prev.length === 0 ? prev :
-                        splitEvenly(prev.length, total).map((st, i) => ({ name: prev[i]?.name || st.name, amount: st.amount })));
+                      setNewBookingStages((prev) => {
+                        if (prev.length === 0) return prev;
+                        const wasEven = JSON.stringify(prev.map((x) => x.amount)) ===
+                          JSON.stringify(splitEvenly(prev.length, finalPrice).map((x) => x.amount));
+                        if (!wasEven) return prev;
+                        return splitEvenly(prev.length, total).map((st, i) => ({ name: prev[i]?.name || st.name, amount: st.amount }));
+                      });
                     return (
                       <div className="rounded-2xl border-2 border-purple-300 bg-gradient-to-b from-purple-50 to-white overflow-hidden shadow-sm">
                         {/* Price header — the list price stays visible next to what
@@ -4509,71 +4524,97 @@ export default function DoctorDashboard({
                           )}
                         </div>
 
-                        {/* Stages — split the already-discounted total across visits. */}
+                        {/* Stages — the doctor builds these themselves: add a row,
+                            name it, set its amount. The even-split button is only
+                            a convenience for the common case, never the only way in. */}
                         <div className="px-3.5 py-3 space-y-2.5">
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-[11px] font-black text-slate-600 uppercase tracking-wide">{t("bosqichlar")}</span>
-                            <div className="flex items-center gap-1">
+                            {staged && (
                               <button
                                 type="button"
                                 onClick={() => setNewBookingStages([])}
-                                className={`px-2 py-1 rounded-lg text-[10px] font-black transition-colors border ${!staged ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-500 border-slate-200 hover:border-purple-300'}`}
+                                className="text-[10px] font-black text-slate-400 hover:text-rose-500 transition-colors"
                               >
-                                {t("bir to'lov")}
+                                {t("bir to'lovga qaytarish")}
                               </button>
-                              {[2, 3, 4].map((n) => (
-                                <button
-                                  key={n}
-                                  type="button"
-                                  onClick={() => setNewBookingStages(splitEvenly(n, finalPrice))}
-                                  className={`w-7 py-1 rounded-lg text-[10px] font-black transition-colors border ${newBookingStages.length === n ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-500 border-slate-200 hover:border-purple-300'}`}
-                                >
-                                  {n}
-                                </button>
-                              ))}
-                            </div>
+                            )}
                           </div>
                           {!staged ? (
-                            <p className="text-[10px] text-slate-400 font-medium leading-snug">
-                              {t("muolaja bir marta to'liq to'lanadi. bosqichlarga bo'lish uchun sonini tanlang.")}
-                            </p>
+                            <>
+                              <p className="text-[10px] text-slate-400 font-medium leading-snug">
+                                {t("muolaja bir marta to'liq to'lanadi. bir necha tashrifga bo'lish uchun bosqich qo'shing.")}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setNewBookingStages([{ name: `1-${t("bosqich")}`, amount: finalPrice }])}
+                                className="w-full border border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 text-purple-600 rounded-lg py-2 text-[11px] font-black transition-colors"
+                              >
+                                + {t("bosqichlarga bo'lish")}
+                              </button>
+                            </>
                           ) : (
                             <>
                               <div className="space-y-1.5">
                                 {newBookingStages.map((st, i) => (
-                                  <div key={i} className="flex items-center gap-2">
+                                  <div key={i} className="flex items-center gap-1.5">
                                     <span className="w-5 h-5 shrink-0 rounded-md bg-purple-100 text-purple-700 text-[10px] font-black flex items-center justify-center">{i + 1}</span>
                                     <input
                                       type="text"
                                       value={st.name}
+                                      placeholder={`${i + 1}-${t("bosqich")}`}
                                       onChange={(e) => setNewBookingStages((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
                                       className="flex-1 min-w-0 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
                                     />
                                     <input
                                       type="number" min="0"
                                       value={st.amount || ''}
+                                      placeholder="0"
                                       onChange={(e) => setNewBookingStages((prev) => prev.map((x, j) => j === i ? { ...x, amount: Number(e.target.value) } : x))}
-                                      className="w-24 shrink-0 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-right outline-none focus:border-purple-500 font-bold bg-white text-slate-800"
+                                      className="w-[88px] shrink-0 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-right outline-none focus:border-purple-500 font-bold bg-white text-slate-800"
                                     />
+                                    <button
+                                      type="button"
+                                      onClick={() => setNewBookingStages((prev) => prev.filter((_, j) => j !== i))}
+                                      className="shrink-0 p-1 text-slate-300 hover:text-rose-500 transition-colors"
+                                      title={t("o'chirish")}
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
                                   </div>
                                 ))}
                               </div>
-                              {stageDiff !== 0 && (
-                                <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-                                  <span className="text-[10px] font-bold text-amber-700 leading-snug">
-                                    {stageDiff > 0
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setNewBookingStages((prev) => [...prev, { name: `${prev.length + 1}-${t("bosqich")}`, amount: Math.max(0, stageDiff) }])}
+                                  className="flex-1 border border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 text-purple-600 rounded-lg py-1.5 text-[11px] font-black transition-colors"
+                                >
+                                  + {t("bosqich qo'shish")}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setNewBookingStages(splitEvenly(newBookingStages.length, finalPrice).map((st, i) => ({ name: newBookingStages[i]?.name || st.name, amount: st.amount })))}
+                                  className="shrink-0 px-2.5 py-1.5 border border-slate-200 hover:border-purple-400 text-slate-500 hover:text-purple-600 rounded-lg text-[11px] font-black transition-colors"
+                                >
+                                  {t("teng bo'lish")}
+                                </button>
+                              </div>
+                              {/* Server-side validateStageSums rejects a charge whose
+                                  stages don't total the discounted price, so the gap is
+                                  shown here instead of surfacing as a failed save. */}
+                              <div className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 border ${stageDiff === 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+                                <span className={`text-[10px] font-bold leading-snug ${stageDiff === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                  {stageDiff === 0
+                                    ? `${t("jami")}: ${stageSum.toLocaleString()} ✓`
+                                    : stageDiff > 0
                                       ? `${t("taqsimlanmagan")}: ${stageDiff.toLocaleString()}`
                                       : `${t("ortiqcha")}: ${Math.abs(stageDiff).toLocaleString()}`}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setNewBookingStages(splitEvenly(newBookingStages.length, finalPrice))}
-                                    className="shrink-0 text-[10px] font-black text-purple-600 hover:underline"
-                                  >
-                                    {t("teng bo'lish")}
-                                  </button>
-                                </div>
-                              )}
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-400 shrink-0">
+                                  {stageSum.toLocaleString()} / {finalPrice.toLocaleString()}
+                                </span>
+                              </div>
                             </>
                           )}
                         </div>
