@@ -70,6 +70,14 @@ export function getQueueSlot(appointmentTime: string | undefined, scheduleSlots:
   return match;
 }
 
+// A date as the calendar on the wall shows it, not as UTC does.
+// `new Date().toISOString().slice(0, 10)` is a full day behind for the first
+// five hours of every Tashkent morning, which is how the booking modal ended up
+// defaulting to yesterday when opened late at night.
+export function toDateKey(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // Monday-Sunday dates for the week `weekOffset` weeks from the current one (0 = this week).
 export function getWeekDays(weekOffset: number): { date: string; dateObj: Date; weekday: string }[] {
   const now = new Date();
@@ -78,8 +86,7 @@ export function getWeekDays(weekOffset: number): { date: string; dateObj: Date; 
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset + weekOffset * 7);
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    return { date: dateStr, dateObj: d, weekday: WEEKDAY_NAMES_UZ[d.getDay()] };
+    return { date: toDateKey(d), dateObj: d, weekday: WEEKDAY_NAMES_UZ[d.getDay()] };
   });
 }
 

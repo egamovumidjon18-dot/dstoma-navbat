@@ -50,6 +50,7 @@ const PATIENT_PROFILE_TRANSLATIONS: Record<string, PatientProfileDictEntry> = {
   "so'rov telegram orqali yuborildi.": { ru: "Запрос отправлен через Telegram.", en: "Request sent via Telegram.", kk: "Сұрау Telegram арқылы жіберілді.", ky: "Суроо Telegram аркылуу жөнөтүлдү.", tg: "Дархост тавассути Telegram фиристода шуд.", tk: "Isleg Telegram arkaly iberildi." },
   "naqd qabul qildim": { ru: "Принял наличными", en: "Received in cash", kk: "Қолма-қол қабылдадым", ky: "Накталай кабыл алдым", tg: "Нақдина қабул кардам", tk: "Nagt kabul etdim" },
   "naqd to'lov qabul qilindi.": { ru: "Наличный платёж принят.", en: "Cash payment recorded.", kk: "Қолма-қол төлем қабылданды.", ky: "Накталай төлөм кабыл алынды.", tg: "Пардохти нақдӣ қабул шуд.", tk: "Nagt töleg kabul edildi." },
+  "karta to'lovi qabul qilindi.": { ru: "Платёж картой принят.", en: "Card payment recorded.", kk: "Карта арқылы төлем қабылданды.", ky: "Карта аркылуу төлөм кабыл алынды.", tg: "Пардохт бо корт қабул шуд.", tk: "Kart bilen töleg kabul edildi." },
   "summa (so'm)": { ru: "Сумма (сум)", en: "Amount (UZS)", kk: "Сома (сом)", ky: "Сумма (сом)", tg: "Маблағ (сӯм)", tk: "Möçber (sim)" },
   naqd: { ru: "наличные", en: "cash", kk: "қолма-қол", ky: "накталай", tg: "нақдина", tk: "nagt" },
   karta: { ru: "карта", en: "card", kk: "карта", ky: "карта", tg: "корт", tk: "kart" },
@@ -234,7 +235,7 @@ export default function PatientProfile({
     }
   };
 
-  const handleRecordCashPayment = async () => {
+  const handleRecordCashPayment = async (method: "cash" | "card" = "cash") => {
     const amount = Number(cashAmount);
     if (!doctorId || !patient?.clinicId || !(amount > 0)) return;
     setRecordingCash(true);
@@ -249,12 +250,13 @@ export default function PatientProfile({
           patientId,
           patientName: patient?.fullName,
           amount,
+          paymentMethod: method,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "failed");
       setReceipts((prev) => [data, ...prev]);
-      setCashMsg(`✅ ${t("naqd to'lov qabul qilindi.")}`);
+      setCashMsg(`✅ ${method === "card" ? t("karta to'lovi qabul qilindi.") : t("naqd to'lov qabul qilindi.")}`);
       setCashAmount("");
     } catch (err: any) {
       setCashMsg(`⚠️ ${t("yuborib bo'lmadi.")}`);
@@ -634,22 +636,34 @@ export default function PatientProfile({
               {paymentRequestMsg && (
                 <p className="text-[10px] font-bold text-rose-600 mt-2">{paymentRequestMsg}</p>
               )}
-              <div className={`flex items-center gap-2 mt-3 pt-3 border-t ${totalDebt > 0 ? 'border-rose-100' : 'border-emerald-100'}`}>
+              <div className={`mt-3 pt-3 border-t space-y-2 ${totalDebt > 0 ? 'border-rose-100' : 'border-emerald-100'}`}>
                 <input
                   type="number"
                   min="1"
                   value={cashAmount}
                   onChange={(e) => setCashAmount(e.target.value)}
                   placeholder={t("summa (so'm)")}
-                  className="w-24 min-w-0 px-2 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-emerald-400"
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-right font-bold text-slate-700 focus:outline-none focus:border-emerald-400"
                 />
-                <button
-                  onClick={handleRecordCashPayment}
-                  disabled={recordingCash || !doctorId || !(Number(cashAmount) > 0)}
-                  className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-emerald-500/20"
-                >
-                  {recordingCash ? t("yuborilmoqda...") : `💵 ${t("naqd qabul qildim")}`}
-                </button>
+                {/* Which way the money came in is recorded, not assumed — this
+                    box always posted a receipt with no paymentMethod at all, so
+                    the list below could never label a card payment as one. */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => handleRecordCashPayment("cash")}
+                    disabled={recordingCash || !doctorId || !(Number(cashAmount) > 0)}
+                    className="py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-emerald-500/20"
+                  >
+                    {recordingCash ? t("yuborilmoqda...") : `💵 ${t("naqd")}`}
+                  </button>
+                  <button
+                    onClick={() => handleRecordCashPayment("card")}
+                    disabled={recordingCash || !doctorId || !(Number(cashAmount) > 0)}
+                    className="py-2 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-sky-500/20"
+                  >
+                    {recordingCash ? t("yuborilmoqda...") : `💳 ${t("karta")}`}
+                  </button>
+                </div>
               </div>
               {cashMsg && (
                 <p className="text-[10px] font-bold text-emerald-600 mt-2">{cashMsg}</p>

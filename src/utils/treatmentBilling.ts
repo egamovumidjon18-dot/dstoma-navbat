@@ -397,7 +397,15 @@ export function patientBalance(
   ctx?: Parameters<typeof virtualCharge>[1],
 ): PatientBalance {
   const resolved = items.map((item) => resolveCharge(item, charges, ctx));
-  const ledger = allocatePayments(resolved, receipts);
+  // Charges that no plan item points at are still money owed. The booking modal
+  // writes one for every appointment it books and never adds a matching plan
+  // item, so billing the plan alone left those out entirely — the patient's own
+  // card showed nothing owed while clinicBillingSummary, which bills the charge
+  // ledger directly, showed the full amount. Including them here is what makes
+  // the two agree by construction rather than by coincidence.
+  const planned = new Set(resolved.map((c) => String(c.id)));
+  const unplanned = charges.filter((c) => !planned.has(String(c.id)));
+  const ledger = allocatePayments([...resolved, ...unplanned], receipts);
   return {
     total: ledger.total,
     discount: ledger.discount,

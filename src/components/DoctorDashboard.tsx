@@ -33,6 +33,7 @@ import {
   getWorkDays,
   findConflict,
   timeToMinutes,
+  toDateKey,
 } from "../utils/doctorSchedule";
 import {
   Check,
@@ -266,12 +267,14 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "to'langan": { ru: "Оплачено", en: "Paid", kk: "Төленген", ky: "Төлөнгөн", tg: "Пардохтшуда", tk: "Tölenen" },
   "qarz": { ru: "Долг", en: "Debt", kk: "Қарыз", ky: "Карыз", tg: "Қарз", tk: "Bergi" },
   "so'm": { ru: "сум", en: "UZS", kk: "сом", ky: "сом", tg: "сӯм", tk: "som" },
-  "bemorning kartasini ochish uchun qatorni bosing": { ru: "Нажмите на строку, чтобы открыть карту пациента", en: "Tap a row to open the patient chart", kk: "Пациент картасын ашу үшін жолды басыңыз", ky: "Бейтаптын картасын ачуу үчүн сабы басыңыз", tg: "Барои кушодани корти бемор сатрро зер кунед", tk: "Näsag kartasyny açmak üçin hatary basyň" },
+  "bemorning kartasini ochish uchun ismini bosing": { ru: "Нажмите на строку, чтобы открыть карту пациента", en: "Tap the name to open the patient chart", kk: "Пациент картасын ашу үшін атын басыңыз", ky: "Бейтаптын картасын ачуу үчүн сабы басыңыз", tg: "Барои кушодани корти бемор сатрро зер кунед", tk: "Näsag kartasyny açmak üçin hatary basyň" },
   "shu bandlash": { ru: "текущая запись", en: "this booking", kk: "осы жазылу", ky: "ушул жазылуу", tg: "ҳамин сабт", tk: "şu ýazgy" },
   "vaqtni tanlang": { ru: "Выберите время", en: "Choose a time", kk: "Уақытты таңдаңыз", ky: "Убакытты тандаңыз", tg: "Вақтро интихоб кунед", tk: "Wagty saýlaň" },
   "jadvalga qo'shiladi": { ru: "Будет добавлено в расписание", en: "Will be added to the schedule", kk: "Кестеге қосылады", ky: "Графикке кошулат", tg: "Ба ҷадвал илова мешавад", tk: "Tertibe goşular" },
   "ta tashrif": { ru: "визит(ов)", en: "visit(s)", kk: "рет келу", ky: "жолу келүү", tg: "ташриф", tk: "gezek gelme" },
   "ta bosqichning vaqti belgilanmagan — u navbatga qo'shilmaydi, keyinroq belgilashingiz mumkin.": { ru: "этап(ов) без времени — они не попадут в расписание, время можно задать позже.", en: "stage(s) have no time yet — they will not be scheduled; you can set them later.", kk: "кезеңнің уақыты белгіленбеген — олар кестеге қосылмайды, кейін белгілей аласыз.", ky: "этаптын убактысы белгиленген эмес — алар графикке кошулбайт, кийин белгилей аласыз.", tg: "марҳила бе вақт аст — онҳо ба ҷадвал дохил намешаванд, баъдтар муайян карда метавонед.", tk: "tapgyryň wagty bellenmedik — olar tertibe goşulmaz, soňra belläp bilersiňiz." },
+  "yopish": { ru: "Закрыть", en: "Close", kk: "Жабу", ky: "Жабуу", tg: "Пӯшидан", tk: "Ýapmak" },
+  "qarzni so'ndirish": { ru: "Погасить долг", en: "Settle debt", kk: "Қарызды өтеу", ky: "Карызды жабуу", tg: "Пардохти қарз", tk: "Bergini ötlemek" },
   "qabul": { ru: "приёмов", en: "visits", kk: "қабылдаулар", ky: "кабылдоолор", tg: "қабулҳо", tk: "kabullar" },
   "statistikani ko'rish": { ru: "Смотреть статистику", en: "View statistics", kk: "Статистиканы көру", ky: "Статистиканы көрүү", tg: "Дидани статистика", tk: "Statistikany görmek" },
   "bu hafta": { ru: "Эта неделя", en: "This week", kk: "Осы апта", ky: "Ушул жума", tg: "Ҳамин ҳафта", tk: "Şu hepde" },
@@ -763,7 +766,7 @@ export default function DoctorDashboard({
     bookAppointment: true, serviceId: "",
     // Seeded properly by openQuickAddPatient below, which knows the doctor's
     // working hours; this initial value is only ever a placeholder.
-    appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: "09:00",
+    appointmentDate: toDateKey(), appointmentTime: "09:00",
   });
   const [isSavingQuickAddPatient, setIsSavingQuickAddPatient] = useState(false);
   // Shown once, right after a doctor-added patient is saved — loginCode only
@@ -899,6 +902,58 @@ export default function DoctorDashboard({
 
   const [showDebtorsModal, setShowDebtorsModal] = useState(false);
 
+  const openPatientFromDebtors = (patientId: string) => {
+    const go = () => {
+      setSelectedPatientId(patientId);
+      setActiveView("bemorlar");
+    };
+    let done = false;
+    const run = () => { if (!done) { done = true; go(); } };
+    // The layer's own popstate handler is registered first, so by the time this
+    // one runs the modal is already unwound and the card's entry is safe to add.
+    window.addEventListener('popstate', () => setTimeout(run, 0), { once: true });
+    // ...and if there was no entry to unwind, nothing would ever fire.
+    setTimeout(run, 250);
+    setShowDebtorsModal(false);
+  };
+
+  // Settling a debt from the debtor table: how much, and how it was taken.
+  // Same POST /api/payment-receipts the visit-payment box uses, so a settlement
+  // lands in the one ledger every balance on this screen is derived from.
+  const [settlingPatientId, setSettlingPatientId] = useState<string | null>(null);
+  const [settleAmount, setSettleAmount] = useState('');
+  const [settleSaving, setSettleSaving] = useState<'cash' | 'card' | null>(null);
+
+  const handleSettleDebt = async (
+    entry: { patientId: string; patientName?: string },
+    method: 'cash' | 'card',
+  ) => {
+    const amount = Number(settleAmount);
+    if (!currentDoctor?.id || !effectiveClinicId || !(amount > 0)) return;
+    setSettleSaving(method);
+    try {
+      const res = await fetch('/api/payment-receipts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...staffAuthHeaders() },
+        body: JSON.stringify({
+          clinicId: effectiveClinicId,
+          doctorId: currentDoctor.id,
+          patientId: entry.patientId,
+          patientName: myPatients.find((p) => p.id === entry.patientId)?.fullName || entry.patientName,
+          amount,
+          paymentMethod: method,
+        }),
+      });
+      if (res.ok) {
+        setSettlingPatientId(null);
+        setSettleAmount('');
+        reloadClinicBilling.current();
+      }
+    } finally {
+      setSettleSaving(null);
+    }
+  };
+
   const filteredClinicPatients = useMemo(() => {
     const q = patientListSearch.trim().toLowerCase();
     let list = myPatients;
@@ -1014,7 +1069,7 @@ export default function DoctorDashboard({
           fullName: "", phone: "", passportSerial: "", birthDate: "",
           bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false,
           bookAppointment: true, serviceId: "",
-          appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: firstOpenSlot,
+          appointmentDate: toDateKey(), appointmentTime: firstOpenSlot,
         });
         setShowQuickAddPatient(false);
         if (savedPatient.loginCode) {
@@ -1208,7 +1263,7 @@ export default function DoctorDashboard({
       setNewBookingDiscountAmount(0);
       setNewBookingDiscountReason('');
       setNewBookingStages([]);
-      setNewBookingDate(new Date().toISOString().split('T')[0]);
+      setNewBookingDate(toDateKey());
       setNewBookingTime(firstOpenSlot);
       if (patientCreds) setJustAddedPatientCreds(patientCreds);
     } finally {
@@ -1407,7 +1462,7 @@ export default function DoctorDashboard({
   const [scheduleWeekOffset, setScheduleWeekOffset] = useState(0);
 
   const [scheduleModal, setScheduleModal] = useState<{isOpen: boolean, queueId: string | null}>({isOpen: false, queueId: null});
-  const [scheduleDate, setScheduleDate] = useState(new Date().toISOString().split('T')[0]);
+  const [scheduleDate, setScheduleDate] = useState(toDateKey());
   const [scheduleTime, setScheduleTime] = useState('09:00');
   const [scheduleServiceId, setScheduleServiceId] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -1470,7 +1525,7 @@ export default function DoctorDashboard({
   // (see stageDateAt/stageTimeAt) — a second stored copy is exactly how the
   // two would end up disagreeing.
   const [newBookingStages, setNewBookingStages] = useState<{ name: string; amount: number; date: string; time: string }[]>([]);
-  const [newBookingDate, setNewBookingDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newBookingDate, setNewBookingDate] = useState(toDateKey());
   const [newBookingTime, setNewBookingTime] = useState('09:00');
   const [isSavingNewBooking, setIsSavingNewBooking] = useState(false);
   // True when the modal was opened by clicking a specific empty slot in the
@@ -1499,6 +1554,9 @@ export default function DoctorDashboard({
 
   // Browser Back and Escape close the topmost overlay instead of leaving the app.
   useHistoryLayer(showDebtorsModal, () => setShowDebtorsModal(false), 'debtors');
+  useEffect(() => {
+    if (!showDebtorsModal) { setSettlingPatientId(null); setSettleAmount(''); }
+  }, [showDebtorsModal]);
   useHistoryLayer(showNewBookingModal, () => setShowNewBookingModal(false), 'new-booking');
   useHistoryLayer(showScheduleSettingsModal, () => setShowScheduleSettingsModal(false), 'schedule-settings');
   useHistoryLayer(showQuickAddPatient, () => setShowQuickAddPatient(false), 'quick-add-patient');
@@ -1578,7 +1636,7 @@ export default function DoctorDashboard({
     // any negative-offset zone. Noon is far enough from both edges to be safe.
     const d = new Date(`${base}T12:00:00`);
     d.setDate(d.getDate() + 7);
-    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const date = toDateKey(d);
     const preferred = stageTimeAt(prevIndex) || newBookingTime;
     const free = (slot: string) =>
       !isLunchSlot(slot) && !stageSlotTaken(-1, date, slot);
@@ -1593,7 +1651,7 @@ export default function DoctorDashboard({
       fullName: "", phone: "", passportSerial: "", birthDate: "",
       bloodGroup: "", allergies: "", chronicDiseases: "", hasInfection: false, referredBy: "",
       bookAppointment: true, serviceId: "",
-      appointmentDate: new Date().toISOString().split('T')[0], appointmentTime: firstOpenSlot,
+      appointmentDate: toDateKey(), appointmentTime: firstOpenSlot,
     });
     setShowQuickAddPatient(true);
   };
@@ -1612,7 +1670,7 @@ export default function DoctorDashboard({
     setNewBookingSelectedPatientId(null);
     setNewBookingServiceId('');
     setNewBookingServiceQuery('');
-    setNewBookingDate(date || new Date().toISOString().split('T')[0]);
+    setNewBookingDate(date || toDateKey());
     setNewBookingTime(time || firstOpenSlot);
     setShowNewBookingModal(true);
   };
@@ -1633,7 +1691,7 @@ export default function DoctorDashboard({
     setNewBookingPhone(q.patientPhone || '');
     setNewBookingServiceId(q.serviceId || '');
     setNewBookingServiceQuery('');
-    setNewBookingDate(q.appointmentDate || new Date().toISOString().split('T')[0]);
+    setNewBookingDate(q.appointmentDate || toDateKey());
     setNewBookingTime(q.appointmentTime || firstOpenSlot);
     // Editing only moves this one appointment; stages belong to the charge
     // written at booking time, so a leftover split from a cancelled new
@@ -1875,7 +1933,7 @@ export default function DoctorDashboard({
       const { doctorQueues: queueSnapshot, onUpdateQueueStatus: updateStatus } = autoQueueRef.current;
 
       const now = new Date();
-      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const today = toDateKey(now);
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
       const todaysQueues = queueSnapshot.filter((q) => (q.appointmentDate || q.createdAt?.slice(0, 10)) === today);
 
@@ -2575,7 +2633,7 @@ export default function DoctorDashboard({
                                       <button
                                         onClick={() => {
                                           setScheduleServiceId(q.serviceId || '');
-                                          setScheduleDate(q.appointmentDate || new Date().toISOString().split('T')[0]);
+                                          setScheduleDate(q.appointmentDate || toDateKey());
                                           setScheduleTime(q.appointmentTime || firstOpenSlot);
                                           setScheduleModal({ isOpen: true, queueId: q.id! });
                                         }}
@@ -3373,7 +3431,7 @@ export default function DoctorDashboard({
                                     <button
                                       onClick={() => {
                                         setScheduleServiceId(q.serviceId || '');
-                                        setScheduleDate(q.appointmentDate || new Date().toISOString().split('T')[0]);
+                                        setScheduleDate(q.appointmentDate || toDateKey());
                                         setScheduleTime(q.appointmentTime || firstOpenSlot);
                                         setScheduleModal({ isOpen: true, queueId: q.id! });
                                       }}
@@ -4545,41 +4603,119 @@ export default function DoctorDashboard({
                 <tbody className="divide-y divide-slate-100">
                   {myDebtors.map((entry) => {
                     const patient = myPatients.find((p) => p.id === entry.patientId);
+                    const name = decodeLegacyEntities(patient?.fullName || entry.patientName || '') || entry.patientId;
+                    // How the money already collected came in. Read off the same
+                    // confirmed receipts the ledger settled the debt with, so the
+                    // split always adds back up to the "to'langan" column.
+                    const paidBy = (method: 'cash' | 'card') =>
+                      myReceipts
+                        .filter((r) => r.patientId === entry.patientId && r.status === 'confirmed' && r.paymentMethod === method)
+                        .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+                    const cashPaid = paidBy('cash');
+                    const cardPaid = paidBy('card');
+                    const settling = settlingPatientId === entry.patientId;
                     return (
-                      <tr
-                        key={entry.patientId}
-                        onClick={() => {
-                          setShowDebtorsModal(false);
-                          setSelectedPatientId(entry.patientId);
-                          setActiveView("bemorlar");
-                        }}
-                        className="cursor-pointer hover:bg-rose-50/50 transition-colors"
-                      >
-                        <td className="px-4 py-2.5">
-                          <p className="font-bold text-slate-800 truncate">
-                            {decodeLegacyEntities(patient?.fullName || entry.patientName || '') || entry.patientId}
-                          </p>
-                          {patient?.phone && (
-                            <p className="text-[11px] text-slate-400 font-medium">{patient.phone}</p>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-slate-500 font-semibold hidden sm:table-cell">
-                          {entry.total.toLocaleString()}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-emerald-600 font-semibold hidden sm:table-cell">
-                          {entry.paid.toLocaleString()}
-                        </td>
-                        <td className="px-4 py-2.5 text-right font-black text-rose-600 whitespace-nowrap">
-                          {entry.debt.toLocaleString()}
-                        </td>
-                      </tr>
+                      <React.Fragment key={entry.patientId}>
+                        <tr className="hover:bg-rose-50/40 transition-colors">
+                          <td className="px-4 py-2.5">
+                            <button
+                              type="button"
+                              onClick={() => openPatientFromDebtors(entry.patientId)}
+                              className="text-left group"
+                            >
+                              <p className="font-bold text-slate-800 truncate group-hover:text-rose-600 transition-colors">{name}</p>
+                              {patient?.phone && (
+                                <p className="text-[11px] text-slate-400 font-medium">{patient.phone}</p>
+                              )}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-slate-500 font-semibold hidden sm:table-cell">
+                            {entry.total.toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2.5 text-right hidden sm:table-cell">
+                            <p className="text-emerald-600 font-semibold">{entry.paid.toLocaleString()}</p>
+                            {(cashPaid > 0 || cardPaid > 0) && (
+                              <p className="text-[10px] font-bold text-slate-400 whitespace-nowrap">
+                                {cashPaid > 0 && <>{t("naqd")} {cashPaid.toLocaleString()}</>}
+                                {cashPaid > 0 && cardPaid > 0 && ' · '}
+                                {cardPaid > 0 && <>{t("karta")} {cardPaid.toLocaleString()}</>}
+                              </p>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                            <p className="font-black text-rose-600">{entry.debt.toLocaleString()}</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSettlingPatientId(settling ? null : entry.patientId);
+                                setSettleAmount(settling ? '' : String(entry.debt));
+                              }}
+                              className={`mt-1 text-[10px] font-black rounded-full px-2.5 py-1 border transition-colors ${
+                                settling
+                                  ? "bg-slate-100 text-slate-500 border-slate-200"
+                                  : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                              }`}
+                            >
+                              {settling ? t("yopish") : t("qarzni so'ndirish")}
+                            </button>
+                          </td>
+                        </tr>
+                        {settling && (
+                          <tr className="bg-emerald-50/60">
+                            <td colSpan={4} className="px-4 py-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max={entry.debt}
+                                    value={settleAmount}
+                                    onChange={(e) => setSettleAmount(e.target.value)}
+                                    placeholder={t("summa (so'm)")}
+                                    className="w-32 border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm text-right font-bold outline-none focus:border-emerald-500 bg-white text-slate-800"
+                                  />
+                                  <span className="text-[11px] font-bold text-slate-400">{t("so'm")}</span>
+                                </div>
+                                {/* Part-payments are normal here, so anything up to
+                                    the full debt is accepted rather than only the
+                                    whole figure. */}
+                                <button
+                                  type="button"
+                                  onClick={() => setSettleAmount(String(entry.debt))}
+                                  className="text-[10px] font-black text-emerald-700 hover:underline"
+                                >
+                                  {t("to'liq")}
+                                </button>
+                                <div className="flex items-center gap-2 ml-auto">
+                                  <button
+                                    type="button"
+                                    disabled={!!settleSaving || !(Number(settleAmount) > 0)}
+                                    onClick={() => handleSettleDebt(entry, 'cash')}
+                                    className="px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
+                                  >
+                                    {settleSaving === 'cash' ? t("saqlanmoqda...") : <><Wallet className="w-3.5 h-3.5 inline mr-1" />{t("naqd")}</>}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={!!settleSaving || !(Number(settleAmount) > 0)}
+                                    onClick={() => handleSettleDebt(entry, 'card')}
+                                    className="px-3 py-1.5 rounded-xl text-xs font-black bg-sky-600 hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
+                                  >
+                                    {settleSaving === 'card' ? t("saqlanmoqda...") : <><CreditCard className="w-3.5 h-3.5 inline mr-1" />{t("karta")}</>}
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
               </table>
             </div>
             <p className="px-4 py-2.5 border-t border-slate-100 bg-slate-50 text-[10px] font-bold text-slate-400 shrink-0">
-              {t("bemorning kartasini ochish uchun qatorni bosing")}
+              {t("bemorning kartasini ochish uchun ismini bosing")}
             </p>
           </div>
         </div>
@@ -4930,14 +5066,13 @@ export default function DoctorDashboard({
                                         <input
                                           type="date"
                                           value={st.date}
-                                          min={newBookingDate}
                                           onChange={(e) => setNewBookingStages((prev) => prev.map((x, j) => j === i ? { ...x, date: e.target.value } : x))}
-                                          className="flex-1 min-w-0 border border-slate-200 rounded-lg px-2 py-1 text-[11px] outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                                          className="flex-1 min-w-0 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
                                         />
                                         <select
                                           value={st.time}
                                           onChange={(e) => setNewBookingStages((prev) => prev.map((x, j) => j === i ? { ...x, time: e.target.value } : x))}
-                                          className="w-[132px] shrink-0 border border-slate-200 rounded-lg px-2 py-1 text-[11px] outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                                          className="w-[136px] shrink-0 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
                                         >
                                           <option value="">{t("vaqtni tanlang")}</option>
                                           {/* Taken slots stay visible but disabled —
