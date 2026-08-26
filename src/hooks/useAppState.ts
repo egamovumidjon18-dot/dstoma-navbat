@@ -516,6 +516,20 @@ export function useAppState() {
     // repeat traffic every cycle, parsed and diffed on the main thread. Only
     // the queue poll stays fast now.
     const loadServerData = async (includeSlow = true) => {
+      // GET /api/patients and GET /api/queues are identity-scoped now (a staff
+      // session sees its own clinic; an anonymous caller gets 401/a public
+      // board view). This polling effect fetched them with NO Authorization
+      // header at all, so every logged-in doctor/director was treated as
+      // anonymous here: /api/patients 401'd, `patRes.ok` was false, and the
+      // patients state silently stayed at [] forever — which is exactly what
+      // made doctors' saved patients look like they had vanished. Reads the
+      // token refs (not the state) because this effect's closure is captured
+      // once on mount, long before any login happens.
+      const pollAuthHeaders = (): Record<string, string> => {
+        if (superadminTokenRef.current) return { Authorization: `Bearer ${superadminTokenRef.current}` };
+        if (staffTokenRef.current) return { Authorization: `Bearer ${staffTokenRef.current}` };
+        return {};
+      };
       if (includeSlow) {
       try {
         const clRes = await fetch('/api/clinics');
@@ -549,7 +563,7 @@ export function useAppState() {
       }
 
       try {
-        const docRes = await fetch('/api/doctors');
+        const docRes = await fetch('/api/doctors', { headers: pollAuthHeaders() });
         if (docRes.ok) {
           const docList = await docRes.json();
           docList.sort((a, b) => a.name.localeCompare(b.name));
@@ -565,7 +579,7 @@ export function useAppState() {
       }
 
       try {
-        const srvRes = await fetch('/api/services');
+        const srvRes = await fetch('/api/services', { headers: pollAuthHeaders() });
         if (srvRes.ok) {
           const srvList = await srvRes.json();
           srvList.sort((a, b) => a.name.localeCompare(b.name));
@@ -582,7 +596,7 @@ export function useAppState() {
       } // end includeSlow (clinics / doctors / services)
 
       try {
-        const qRes = await fetch('/api/queues');
+        const qRes = await fetch('/api/queues', { headers: pollAuthHeaders() });
         if (qRes.ok) {
           const qList = await qRes.json();
           // Sort to ensure stable JSON serialization and prevent UI jumping
@@ -602,7 +616,7 @@ export function useAppState() {
       if (!includeSlow) { if (active) setIsAppLoading(false); return; }
 
       try {
-        const patRes = await fetch('/api/patients');
+        const patRes = await fetch('/api/patients', { headers: pollAuthHeaders() });
         if (patRes.ok) {
           const patList = await patRes.json();
           patList.sort((a: any, b: any) => a.id.localeCompare(b.id));
@@ -618,7 +632,7 @@ export function useAppState() {
       }
 
       try {
-        const linkRes = await fetch('/api/doctor-clinic-links');
+        const linkRes = await fetch('/api/doctor-clinic-links', { headers: pollAuthHeaders() });
         if (linkRes.ok) {
           const linkList = await linkRes.json();
           linkList.sort((a: any, b: any) => a.id.localeCompare(b.id));

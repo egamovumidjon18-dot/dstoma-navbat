@@ -1763,7 +1763,7 @@ export default function DoctorDashboard({
       const query = queueListSearch.trim().toLowerCase();
       if (!query) return true;
       return (
-        q.patientName.toLowerCase().includes(query) ||
+        (q.patientName || '').toLowerCase().includes(query) ||
         (q.patientPhone || '').includes(query) ||
         String(q.number || '').includes(query)
       );
@@ -3019,7 +3019,7 @@ export default function DoctorDashboard({
                             <td className="py-3 px-2">
                               <div className="flex items-center gap-2">
                                 <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-400">
-                                  {q.patientName.charAt(0)}
+                                  {(q.patientName || '?').charAt(0)}
                                 </div>
                                 <div>
                                   <p className="font-bold text-slate-800">{q.patientName}</p>

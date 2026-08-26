@@ -492,10 +492,16 @@ export default function DirectorDashboard({
     };
   };
 
-  // Search filter for patients
-  const searchResults = clinicQueues.filter(q => 
-    q.patientName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    q.patientPhone.includes(searchQuery)
+  // Search filter for patients. patientName/patientPhone are NOT guaranteed to
+  // be present on every queue object: GET /api/queues strips them (publicQueueView)
+  // for any caller it can't identify, so a request that arrives without a valid
+  // session token yields queue rows with those fields missing. Calling
+  // .toLowerCase() on them unguarded threw a TypeError during render, which the
+  // ErrorBoundary turned into a full-page "Xatolik yuz berdi" — the entire
+  // director panel went down rather than just this one search box misbehaving.
+  const searchResults = clinicQueues.filter(q =>
+    (q.patientName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (q.patientPhone || '').includes(searchQuery)
   );
 
   // Handler for adding doctor
