@@ -51,6 +51,7 @@ const STATS_TRANSLATIONS: Record<string, StatsDictEntry> = {
   "tasdiqlangan to'lovlar": { ru: "Подтверждённые платежи", en: "Confirmed Payments", kk: "Расталған төлемдер", ky: "Тастыкталган төлөмдөр", tg: "Пардохтҳои тасдиқшуда", tk: "Tassyklanan tölegler" },
   "naqd to'lovlar": { ru: "Наличные платежи", en: "Cash Payments", kk: "Қолма-қол төлемдер", ky: "Накталай төлөмдөр", tg: "Пардохтҳои нақдӣ", tk: "Nagt tölegler" },
   "yig'ilgan": { ru: "Собрано", en: "Collected", kk: "Жиналған", ky: "Чогултулган", tg: "Ҷамъоварда", tk: "Ýygnanan" },
+  "ta qarzdor bemor": { ru: "пациентов-должников", en: "patients in debt", kk: "қарыздар пациент", ky: "карыздар бейтап", tg: "бемори қарздор", tk: "bergili näsag" },
   "qarzdorlik": { ru: "Задолженность", en: "Outstanding", kk: "Қарыз", ky: "Карыз", tg: "Қарз", tk: "Bergi" },
   "hisoblangan": { ru: "Начислено", en: "Charged", kk: "Есептелген", ky: "Эсептелген", tg: "Ҳисобшуда", tk: "Hasaplanan" },
   "chegirmalar": { ru: "Скидки", en: "Discounts", kk: "Жеңілдіктер", ky: "Арзандатуулар", tg: "Тахфифҳо", tk: "Arzanlaşyklar" },
@@ -76,6 +77,12 @@ interface StatisticsProps {
   services?: Service[];
   doctors?: Doctor[];
   patients?: Patient[];
+  // The billing ledger, when the caller already holds it. DoctorDashboard passes
+  // its own rows pre-scoped to that doctor's patients, so this page reports the
+  // same debt its dashboard card does instead of the whole clinic's; omitting
+  // both (DirectorDashboard) keeps the clinic-wide read below.
+  charges?: TreatmentCharge[];
+  receipts?: PaymentReceipt[];
   clinicId?: string;
   clinicName?: string;
   staffToken?: string | null;
@@ -86,7 +93,7 @@ interface StatisticsProps {
   initialTimeRange?: 'daily' | 'weekly' | 'monthly' | 'yearly';
 }
 
-export default function Statistics({ queues = [], services = [], doctors = [], patients = [], clinicId, clinicName, staffToken, language, initialTimeRange }: StatisticsProps) {
+export default function Statistics({ queues = [], services = [], doctors = [], patients = [], charges: chargesProp, receipts: receiptsProp, clinicId, clinicName, staffToken, language, initialTimeRange }: StatisticsProps) {
   const localLang: keyof StatsDictEntry | null =
     (language === "ru" || language === "en" || language === "kk" || language === "ky" || language === "tg" || language === "tk")
       ? language
@@ -115,29 +122,31 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
   // orqali tasdiqlanadi) — no cash/card/click/payme method is ever recorded, so
   // this tab reports real confirmed/pending/rejected totals instead of a fabricated
   // payment-method breakdown.
-  const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
+  const [fetchedReceipts, setFetchedReceipts] = useState<PaymentReceipt[]>([]);
   useEffect(() => {
-    if (!clinicId) return;
+    if (!clinicId || receiptsProp) return;
     let active = true;
     fetch(`${getApiUrl()}/api/payment-receipts?clinicId=${encodeURIComponent(clinicId)}`, {
       headers: staffToken ? { Authorization: `Bearer ${staffToken}` } : {},
     })
       .then((res) => (res.ok ? res.json() : []))
-      .then((data) => { if (active) setReceipts(Array.isArray(data) ? data : []); })
-      .catch(() => { if (active) setReceipts([]); });
+      .then((data) => { if (active) setFetchedReceipts(Array.isArray(data) ? data : []); })
+      .catch(() => { if (active) setFetchedReceipts([]); });
     return () => { active = false; };
-  }, [clinicId, staffToken]);
+  }, [clinicId, staffToken, receiptsProp]);
+  const receipts = receiptsProp ?? fetchedReceipts;
 
   // The billing ledger, so this page can report money actually owed and
   // collected rather than only list-price-times-completed-visits.
-  const [charges, setCharges] = useState<TreatmentCharge[]>([]);
+  const [fetchedCharges, setFetchedCharges] = useState<TreatmentCharge[]>([]);
   useEffect(() => {
-    if (!clinicId || !staffToken) return;
+    if (!clinicId || !staffToken || chargesProp) return;
     let active = true;
     fetchTreatmentCharges({ clinicId }, staffToken)
-      .then((data) => { if (active) setCharges(data); });
+      .then((data) => { if (active) setFetchedCharges(data); });
     return () => { active = false; };
-  }, [clinicId, staffToken]);
+  }, [clinicId, staffToken, chargesProp]);
+  const charges = chargesProp ?? fetchedCharges;
 
   const billing = useMemo(() => clinicBillingSummary(charges, receipts), [charges, receipts]);
 
@@ -386,7 +395,7 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
   type DrillRow = { id: string; primary: string; secondary?: string; meta?: string; badge?: string };
   const [drill, setDrill] = useState<{ title: string; rows: DrillRow[] } | null>(null);
 
-  const StatCard = ({ title, value, trend, icon: Icon, color, rows }: any) => {
+  const StatCard = ({ title, value, subtitle, trend, icon: Icon, color, rows }: any) => {
     const clickable = Array.isArray(rows);
     return (
       <div
@@ -419,6 +428,9 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
               <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />
             )}
           </p>
+          {subtitle && (
+            <p className="text-xs font-bold text-slate-400 mt-0.5">{subtitle}</p>
+          )}
         </div>
       </div>
     );
@@ -497,10 +509,14 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
         meta: c.discountPercent ? `${c.discountPercent}%` : dateOf(c.createdAt),
       }));
 
+  // One list behind both the "qarzdorlik" amount's debtor count and the rows the
+  // card drills into, so the headline number and the table can never disagree.
+  const debtors = (Array.from(billing.byPatient.values()) as ClinicPatientBalance[])
+    .filter((entry) => entry.debt > 0)
+    .sort((a, b) => b.debt - a.debt);
+
   const debtorRows = (): DrillRow[] =>
-    (Array.from(billing.byPatient.values()) as ClinicPatientBalance[])
-      .filter((entry) => entry.debt > 0)
-      .sort((a, b) => b.debt - a.debt)
+    debtors
       .map((entry) => ({
         id: entry.patientId,
         primary: decodeLegacyEntities(
@@ -613,7 +629,7 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
                   the billing ledger. The old single "jami tushum" was list price
                   times completed visits, which is a forecast, not takings. */}
               <StatCard title={t("yig'ilgan")} value={money(billing.paid)} icon={DollarSign} color="bg-emerald-500" rows={receiptRows(receipts.filter(r => r.status === 'confirmed'))} />
-              <StatCard title={t("qarzdorlik")} value={money(billing.debt)} icon={TrendingDown} color="bg-rose-500" rows={debtorRows()} />
+              <StatCard title={t("qarzdorlik")} value={money(billing.debt)} subtitle={`${debtors.length} ${t("ta qarzdor bemor")}`} icon={TrendingDown} color="bg-rose-500" rows={debtorRows()} />
               <StatCard title={t("yangi bemorlar")} value={stats.newPatientsInPeriod} icon={Users} color="bg-blue-500" rows={phoneRows(stats.newPatientPhones)} />
               <StatCard title={t("muolajalar soni")} value={stats.visits} trend={stats.visitTrend} icon={Activity} color="bg-indigo-500" rows={queueRows(stats.filteredQueues)} />
             </div>
@@ -767,6 +783,7 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
               <StatCard
                 title={t("qarzdorlik")}
                 value={money(billing.debt)}
+                subtitle={`${debtors.length} ${t("ta qarzdor bemor")}`}
                 icon={TrendingDown}
                 color="bg-rose-600"
                 rows={debtorRows()}

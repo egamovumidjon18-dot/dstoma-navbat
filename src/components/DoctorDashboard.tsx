@@ -18,7 +18,7 @@ import { Clinic, Doctor, Service, QueueItem, Patient, DoctorClinicLink, Reminder
 import { decodeLegacyEntities } from "../utils/textFormat";
 import { TRANSLATIONS, Language, translateMedicalText } from "../translations";
 import { useHistoryLayer } from "../hooks/useHistoryLayer";
-import { allocatePayments, clinicBillingSummary } from "../utils/treatmentBilling";
+import { allocatePayments, clinicBillingSummary, type ClinicPatientBalance } from "../utils/treatmentBilling";
 import { fetchTreatmentCharges, saveTreatmentCharge } from "../utils/treatmentCharges";
 import { effectivePrice } from "../utils/treatmentBilling";
 import {
@@ -73,6 +73,7 @@ import {
   FileDown,
   UserPlus,
   AlertCircle,
+  TrendingDown,
   CalendarClock,
   Package,
   ClipboardCheck,
@@ -256,6 +257,21 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "hozircha rejalashtirilgan qabullar yo'q": { ru: "Пока нет запланированных приёмов", en: "No scheduled appointments yet", kk: "Әзірге жоспарланған қабылдаулар жоқ", ky: "Азырынча пландаштырылган кабылдоолор жок", tg: "Ҳанӯз қабулҳои банақшагирифташуда нест", tk: "Heniz meýilleşdirilen kabullar ýok" },
   "oldingi hafta": { ru: "Предыдущая неделя", en: "Previous week", kk: "Алдыңғы апта", ky: "Мурунку жума", tg: "Ҳафтаи гузашта", tk: "Öňki hepde" },
   "keyingi hafta": { ru: "Следующая неделя", en: "Next week", kk: "Келесі апта", ky: "Кийинки жума", tg: "Ҳафтаи оянда", tk: "Indiki hepde" },
+  "umumiy qarzdorlik": { ru: "Общая задолженность", en: "Total outstanding", kk: "Жалпы қарыз", ky: "Жалпы карыз", tg: "Қарзи умумӣ", tk: "Umumy bergi" },
+  "ta qarzdor bemor": { ru: "пациентов-должников", en: "patients in debt", kk: "қарыздар пациент", ky: "карыздар бейтап", tg: "бемори қарздор", tk: "bergili näsag" },
+  "qarzdorlik yo'q": { ru: "Задолженности нет", en: "No outstanding debt", kk: "Қарыз жоқ", ky: "Карыз жок", tg: "Қарз нест", tk: "Bergi ýok" },
+  "ro'yxatni ko'rish": { ru: "Смотреть список", en: "View list", kk: "Тізімді көру", ky: "Тизмени көрүү", tg: "Дидани рӯйхат", tk: "Sanawy görmek" },
+  "qarzdor bemorlar": { ru: "Пациенты-должники", en: "Patients in debt", kk: "Қарыздар пациенттер", ky: "Карыздар бейтаптар", tg: "Беморони қарздор", tk: "Bergili näsaglar" },
+  "hisoblangan": { ru: "Начислено", en: "Charged", kk: "Есептелген", ky: "Эсептелген", tg: "Ҳисобшуда", tk: "Hasaplanan" },
+  "to'langan": { ru: "Оплачено", en: "Paid", kk: "Төленген", ky: "Төлөнгөн", tg: "Пардохтшуда", tk: "Tölenen" },
+  "qarz": { ru: "Долг", en: "Debt", kk: "Қарыз", ky: "Карыз", tg: "Қарз", tk: "Bergi" },
+  "so'm": { ru: "сум", en: "UZS", kk: "сом", ky: "сом", tg: "сӯм", tk: "som" },
+  "bemorning kartasini ochish uchun qatorni bosing": { ru: "Нажмите на строку, чтобы открыть карту пациента", en: "Tap a row to open the patient chart", kk: "Пациент картасын ашу үшін жолды басыңыз", ky: "Бейтаптын картасын ачуу үчүн сабы басыңыз", tg: "Барои кушодани корти бемор сатрро зер кунед", tk: "Näsag kartasyny açmak üçin hatary basyň" },
+  "shu bandlash": { ru: "текущая запись", en: "this booking", kk: "осы жазылу", ky: "ушул жазылуу", tg: "ҳамин сабт", tk: "şu ýazgy" },
+  "vaqtni tanlang": { ru: "Выберите время", en: "Choose a time", kk: "Уақытты таңдаңыз", ky: "Убакытты тандаңыз", tg: "Вақтро интихоб кунед", tk: "Wagty saýlaň" },
+  "jadvalga qo'shiladi": { ru: "Будет добавлено в расписание", en: "Will be added to the schedule", kk: "Кестеге қосылады", ky: "Графикке кошулат", tg: "Ба ҷадвал илова мешавад", tk: "Tertibe goşular" },
+  "ta tashrif": { ru: "визит(ов)", en: "visit(s)", kk: "рет келу", ky: "жолу келүү", tg: "ташриф", tk: "gezek gelme" },
+  "ta bosqichning vaqti belgilanmagan — u navbatga qo'shilmaydi, keyinroq belgilashingiz mumkin.": { ru: "этап(ов) без времени — они не попадут в расписание, время можно задать позже.", en: "stage(s) have no time yet — they will not be scheduled; you can set them later.", kk: "кезеңнің уақыты белгіленбеген — олар кестеге қосылмайды, кейін белгілей аласыз.", ky: "этаптын убактысы белгиленген эмес — алар графикке кошулбайт, кийин белгилей аласыз.", tg: "марҳила бе вақт аст — онҳо ба ҷадвал дохил намешаванд, баъдтар муайян карда метавонед.", tk: "tapgyryň wagty bellenmedik — olar tertibe goşulmaz, soňra belläp bilersiňiz." },
   "qabul": { ru: "приёмов", en: "visits", kk: "қабылдаулар", ky: "кабылдоолор", tg: "қабулҳо", tk: "kabullar" },
   "statistikani ko'rish": { ru: "Смотреть статистику", en: "View statistics", kk: "Статистиканы көру", ky: "Статистиканы көрүү", tg: "Дидани статистика", tk: "Statistikany görmek" },
   "bu hafta": { ru: "Эта неделя", en: "This week", kk: "Осы апта", ky: "Ушул жума", tg: "Ҳамин ҳафта", tk: "Şu hepde" },
@@ -813,6 +829,12 @@ export default function DoctorDashboard({
   const [patientStatusFilter, setPatientStatusFilter] = useState<'barchasi' | 'faol' | 'yangi' | 'qarzdor'>('barchasi');
   const [debtFilter, setDebtFilter] = useState<'barchasi' | 'qarzdorlar' | "qarzi yo'qlar">('barchasi');
 
+  // Anything that changes what is owed (a payment taken, a charge written at
+  // booking time) calls this the moment it lands, so the debt card, the debtor
+  // table and Statistika show the new figure immediately rather than whenever
+  // the poll below next comes round.
+  const reloadClinicBilling = useRef<() => void>(() => {});
+
   useEffect(() => {
     if (!effectiveClinicId || !staffToken) return;
     let active = true;
@@ -828,6 +850,7 @@ export default function DoctorDashboard({
       setClinicReceipts(Array.isArray(receipts) ? receipts : []);
     };
     load();
+    reloadClinicBilling.current = load;
     // Periodic refresh so a payment taken elsewhere appears without a reload.
     const interval = setInterval(load, 30000);
     return () => { active = false; clearInterval(interval); };
@@ -837,6 +860,44 @@ export default function DoctorDashboard({
     () => clinicBillingSummary(clinicCharges, clinicReceipts),
     [clinicCharges, clinicReceipts]
   );
+
+  // Debt reported over exactly the roster every other doctor-facing number uses
+  // (myPatients). clinicBillingSummary settles each patient independently, so
+  // filtering its per-patient results is identical to summarising pre-filtered
+  // charges — which is why the dashboard card, the debtor table, the Bemorlar
+  // debt column and the Statistika tab cannot drift apart.
+  const myPatientIds = useMemo(
+    () => new Set(myPatients.map((p) => p.id)),
+    [myPatients]
+  );
+
+  const myDebtors = useMemo(
+    () =>
+      (Array.from(clinicBilling.byPatient.values()) as ClinicPatientBalance[])
+        .filter((entry) => entry.debt > 0 && myPatientIds.has(entry.patientId))
+        .sort((a, b) => b.debt - a.debt),
+    [clinicBilling, myPatientIds]
+  );
+
+  const myTotalDebt = useMemo(
+    () => myDebtors.reduce((sum, entry) => sum + entry.debt, 0),
+    [myDebtors]
+  );
+
+  // Handed to Statistics so it reports this doctor's money rather than the whole
+  // clinic's, and reuses rows already loaded here instead of issuing a second,
+  // independently-timed read of the same two collections. The director's
+  // Statistics passes nothing and stays clinic-wide, which is correct there.
+  const myCharges = useMemo(
+    () => clinicCharges.filter((c) => myPatientIds.has(String(c.patientId))),
+    [clinicCharges, myPatientIds]
+  );
+  const myReceipts = useMemo(
+    () => clinicReceipts.filter((r) => myPatientIds.has(String(r.patientId))),
+    [clinicReceipts, myPatientIds]
+  );
+
+  const [showDebtorsModal, setShowDebtorsModal] = useState(false);
 
   const filteredClinicPatients = useMemo(() => {
     const q = patientListSearch.trim().toLowerCase();
@@ -991,6 +1052,36 @@ export default function DoctorDashboard({
       return;
     }
 
+    // Stages 2+ are appointments in their own right, so they get the same two
+    // checks the main slot just passed. All of them are validated up front:
+    // booking visit 1 and then failing on visit 3 would leave the charge's
+    // stages pointing at queue entries that were never created.
+    const laterStages = editingQueueId
+      ? []
+      : newBookingStages
+          .map((st, i) => ({ name: st.name || `${i + 1}-${t("bosqich")}`, index: i, date: stageDateAt(i), time: stageTimeAt(i) }))
+          .filter((st) => st.index > 0 && st.date && st.time);
+    for (const st of laterStages) {
+      if (!isWorkingDay(st.date, doctorWorkingHours)) {
+        if (!window.confirm(`${st.name} — ${t("dam olish")} — ${t("davom etilsinmi?")}`)) return;
+      }
+      const stageClash = findConflict(
+        doctorQueues, activeDoctorId, st.date, st.time, doctorWorkingHours, editingQueueId || undefined
+      );
+      if (stageClash) {
+        window.alert(`${st.name} — ${t("bu vaqt band")}: ${decodeLegacyEntities(stageClash.patientName)} (${stageClash.appointmentTime})`);
+        return;
+      }
+      // ...and not against each other, or against the visit being booked now.
+      const selfClash =
+        (st.date === newBookingDate && st.time === newBookingTime) ||
+        laterStages.some((o) => o.index !== st.index && o.date === st.date && o.time === st.time);
+      if (selfClash) {
+        window.alert(`${st.name} — ${t("bu vaqt band")}`);
+        return;
+      }
+    }
+
     setIsSavingNewBooking(true);
     try {
       if (editingQueueId) {
@@ -1051,6 +1142,24 @@ export default function DoctorDashboard({
       };
       onAddQueue(newQueue);
 
+      // Every later stage becomes its own appointment on the schedule, so the
+      // plan the doctor just built and the calendar they work from are the same
+      // thing. The ids are generated here rather than server-side so the charge
+      // written below can point each stage at the exact visit that carries it
+      // out — the link the treatment plan reads back.
+      const stageQueueIds: Record<number, string> = {};
+      for (const st of laterStages) {
+        const stageQueueId = 'q_' + Math.random().toString(36).substr(2, 9);
+        stageQueueIds[st.index] = stageQueueId;
+        onAddQueue({
+          ...newQueue,
+          id: stageQueueId,
+          appointmentDate: st.date,
+          appointmentTime: st.time,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
       // Record what this booking will actually cost, in the same treatmentCharges
       // ledger the treatment plan writes to — otherwise a discount agreed at
       // booking time exists nowhere and the patient is billed the full list
@@ -1078,9 +1187,14 @@ export default function DoctorDashboard({
                 order: i,
                 amount: Number(st.amount) || 0,
                 status: 'planned' as const,
+                // Read through the same helper the pickers use, so a stage's
+                // recorded date is by construction the one on its appointment.
+                plannedDate: stageDateAt(i) || undefined,
+                queueId: i === 0 ? newQueue.id : stageQueueIds[i],
               }))
             : undefined,
         }, staffToken);
+        reloadClinicBilling.current();
       }
 
       setShowNewBookingModal(false);
@@ -1168,6 +1282,7 @@ export default function DoctorDashboard({
           paymentMethod: method,
         }),
       });
+      reloadClinicBilling.current();
     } catch {
       // best-effort — the visit is already marked completed regardless
     } finally {
@@ -1349,7 +1464,12 @@ export default function DoctorDashboard({
   // the already-discounted total — never the other way round, so a doctor can't
   // accidentally discount the same procedure once per stage. Empty = a single
   // payment, which is what most bookings are.
-  const [newBookingStages, setNewBookingStages] = useState<{ name: string; amount: number }[]>([]);
+  // A stage is a real visit, not just a slice of the bill, so it carries when
+  // it happens as well as what it costs. Stage 1 is deliberately dateless: it
+  // IS the appointment this modal is booking and always reads the main picker
+  // (see stageDateAt/stageTimeAt) — a second stored copy is exactly how the
+  // two would end up disagreeing.
+  const [newBookingStages, setNewBookingStages] = useState<{ name: string; amount: number; date: string; time: string }[]>([]);
   const [newBookingDate, setNewBookingDate] = useState(new Date().toISOString().split('T')[0]);
   const [newBookingTime, setNewBookingTime] = useState('09:00');
   const [isSavingNewBooking, setIsSavingNewBooking] = useState(false);
@@ -1378,6 +1498,7 @@ export default function DoctorDashboard({
   const [scheduleSettingsWorkDays, setScheduleSettingsWorkDays] = useState<number[]>(DEFAULT_WORKING_HOURS.workDays);
 
   // Browser Back and Escape close the topmost overlay instead of leaving the app.
+  useHistoryLayer(showDebtorsModal, () => setShowDebtorsModal(false), 'debtors');
   useHistoryLayer(showNewBookingModal, () => setShowNewBookingModal(false), 'new-booking');
   useHistoryLayer(showScheduleSettingsModal, () => setShowScheduleSettingsModal(false), 'schedule-settings');
   useHistoryLayer(showQuickAddPatient, () => setShowQuickAddPatient(false), 'quick-add-patient');
@@ -1430,6 +1551,41 @@ export default function DoctorDashboard({
   // outside the grid in the first place.
   const firstOpenSlot = scheduleSlots.find((s) => !isLunchSlot(s)) || scheduleSlots[0] || '09:00';
 
+  // ---- When each treatment stage happens -------------------------------
+  // The single reading of a stage's slot, used by the pickers, the conflict
+  // checks and the save alike, so no two of them can ever see it differently.
+  const stageDateAt = (i: number) => (i === 0 ? newBookingDate : newBookingStages[i]?.date || '');
+  const stageTimeAt = (i: number) => (i === 0 ? newBookingTime : newBookingStages[i]?.time || '');
+
+  // Busy means busy for any reason: an appointment already on the schedule,
+  // or another stage of this very plan — including stage 1, which isn't a
+  // saved queue entry yet and so is invisible to findConflict.
+  const stageSlotTaken = (index: number, date: string, time: string) => {
+    if (!date || !time) return false;
+    if (findConflict(doctorQueues, activeDoctorId, date, time, doctorWorkingHours, editingQueueId || undefined)) return true;
+    return newBookingStages.some(
+      (_, j) => j !== index && stageDateAt(j) === date && stageTimeAt(j) === time
+    );
+  };
+
+  // A fresh stage lands a week after the one before it at the same time — the
+  // usual follow-up rhythm, pre-filled so the common case needs no typing,
+  // and moved to the first slot that is actually free that day.
+  const nextStageSlot = (prevIndex: number) => {
+    const base = stageDateAt(prevIndex) || newBookingDate;
+    // Parsed at local noon on purpose: 'YYYY-MM-DD' alone parses as UTC
+    // midnight, which the local getters below then read as the day before in
+    // any negative-offset zone. Noon is far enough from both edges to be safe.
+    const d = new Date(`${base}T12:00:00`);
+    d.setDate(d.getDate() + 7);
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const preferred = stageTimeAt(prevIndex) || newBookingTime;
+    const free = (slot: string) =>
+      !isLunchSlot(slot) && !stageSlotTaken(-1, date, slot);
+    const time = free(preferred) ? preferred : (scheduleSlots.find(free) || preferred);
+    return { date, time };
+  };
+
   // All three "yangi bemor" buttons go through this, so the form is always
   // reset and the appointment time starts at a slot the doctor actually works.
   const openQuickAddPatient = () => {
@@ -1479,6 +1635,10 @@ export default function DoctorDashboard({
     setNewBookingServiceQuery('');
     setNewBookingDate(q.appointmentDate || new Date().toISOString().split('T')[0]);
     setNewBookingTime(q.appointmentTime || firstOpenSlot);
+    // Editing only moves this one appointment; stages belong to the charge
+    // written at booking time, so a leftover split from a cancelled new
+    // booking must not reappear here.
+    setNewBookingStages([]);
     setShowNewBookingModal(true);
   };
 
@@ -2292,6 +2452,55 @@ export default function DoctorDashboard({
                   </span>
                 </button>
               </div>
+
+              {/* Real outstanding balance, straight from the billing ledger —
+                  the same myDebtors/myTotalDebt the table below and the
+                  Statistika tab read, so the three can never disagree. */}
+              <button
+                type="button"
+                onClick={() => myDebtors.length > 0 && setShowDebtorsModal(true)}
+                className={`w-full text-left rounded-2xl border p-4 flex items-center gap-4 transition-all ${
+                  myDebtors.length > 0
+                    ? "bg-gradient-to-r from-rose-50 to-white border-rose-200 hover:border-rose-400 hover:shadow-md cursor-pointer"
+                    : "bg-white border-slate-100 shadow-sm cursor-default"
+                }`}
+              >
+                <div
+                  className={`p-3 rounded-xl shrink-0 ${
+                    myDebtors.length > 0
+                      ? "bg-rose-100 text-rose-600"
+                      : "bg-emerald-50 text-emerald-500"
+                  }`}
+                >
+                  <TrendingDown className="w-6 h-6" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                    {t("umumiy qarzdorlik")}
+                  </h3>
+                  {myDebtors.length > 0 ? (
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 mt-1">
+                      <span className="text-2xl font-black text-rose-600 leading-none">
+                        {myTotalDebt.toLocaleString('uz-UZ').replace(/,/g, ' ')}{' '}
+                        <span className="text-sm">{t("so'm")}</span>
+                      </span>
+                      <span className="text-xs font-bold text-slate-500">
+                        {myDebtors.length} {t("ta qarzdor bemor")}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-sm font-bold text-emerald-600 mt-1">
+                      {t("qarzdorlik yo'q")}
+                    </p>
+                  )}
+                </div>
+                {myDebtors.length > 0 && (
+                  <span className="shrink-0 flex items-center gap-1 text-[11px] font-black text-rose-600 bg-white border border-rose-200 rounded-full px-3 py-1.5">
+                    <span className="hidden sm:inline">{t("ro'yxatni ko'rish")}</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </span>
+                )}
+              </button>
 
               {/* Layout rows */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -4234,7 +4443,7 @@ export default function DoctorDashboard({
                   roster here made "Jami bemorlar" report a different number than
                   the doctor's own "Barcha bemorlar" card two tabs over. The
                   director's Statistics stays clinic-wide, which is correct there. */}
-              <Statistics queues={doctorQueues} services={services} doctors={doctors} patients={myPatients} clinicId={effectiveClinicId} staffToken={staffToken} language={language} />
+              <Statistics queues={doctorQueues} services={services} doctors={doctors} patients={myPatients} charges={myCharges} receipts={myReceipts} clinicId={effectiveClinicId} staffToken={staffToken} language={language} />
             </div>
           )}
 
@@ -4295,6 +4504,86 @@ export default function DoctorDashboard({
           )}
         </div>
       </div>
+
+      {showDebtorsModal && (
+        <div
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowDebtorsModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-2xl shadow-xl border border-slate-100 flex flex-col max-h-[85vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-rose-50/50 shrink-0">
+              <div className="min-w-0">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                  <TrendingDown className="w-5 h-5 text-rose-500" />
+                  {t("qarzdor bemorlar")}
+                </h3>
+                <p className="text-[11px] font-bold text-slate-500 mt-0.5">
+                  {myDebtors.length} {t("ta")} ·{' '}
+                  {myTotalDebt.toLocaleString('uz-UZ').replace(/,/g, ' ')} {t("so'm")}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowDebtorsModal(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 sticky top-0 z-10">
+                  <tr className="text-[10px] uppercase tracking-wider text-slate-500">
+                    <th className="text-left font-bold px-4 py-2">{t("bemor")}</th>
+                    <th className="text-right font-bold px-3 py-2 hidden sm:table-cell">{t("hisoblangan")}</th>
+                    <th className="text-right font-bold px-3 py-2 hidden sm:table-cell">{t("to'langan")}</th>
+                    <th className="text-right font-bold px-4 py-2">{t("qarz")}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {myDebtors.map((entry) => {
+                    const patient = myPatients.find((p) => p.id === entry.patientId);
+                    return (
+                      <tr
+                        key={entry.patientId}
+                        onClick={() => {
+                          setShowDebtorsModal(false);
+                          setSelectedPatientId(entry.patientId);
+                          setActiveView("bemorlar");
+                        }}
+                        className="cursor-pointer hover:bg-rose-50/50 transition-colors"
+                      >
+                        <td className="px-4 py-2.5">
+                          <p className="font-bold text-slate-800 truncate">
+                            {decodeLegacyEntities(patient?.fullName || entry.patientName || '') || entry.patientId}
+                          </p>
+                          {patient?.phone && (
+                            <p className="text-[11px] text-slate-400 font-medium">{patient.phone}</p>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-slate-500 font-semibold hidden sm:table-cell">
+                          {entry.total.toLocaleString()}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-emerald-600 font-semibold hidden sm:table-cell">
+                          {entry.paid.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-black text-rose-600 whitespace-nowrap">
+                          {entry.debt.toLocaleString()}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="px-4 py-2.5 border-t border-slate-100 bg-slate-50 text-[10px] font-bold text-slate-400 shrink-0">
+              {t("bemorning kartasini ochish uchun qatorni bosing")}
+            </p>
+          </div>
+        </div>
+      )}
 
       {showNewBookingModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -4499,7 +4788,9 @@ export default function DoctorDashboard({
                         const wasEven = JSON.stringify(prev.map((x) => x.amount)) ===
                           JSON.stringify(splitEvenly(prev.length, finalPrice).map((x) => x.amount));
                         if (!wasEven) return prev;
-                        return splitEvenly(prev.length, total).map((st, i) => ({ name: prev[i]?.name || st.name, amount: st.amount }));
+                        // Only the amounts are rebalanced — the slots the doctor
+                        // already chose for each stage are left exactly as they are.
+                        return splitEvenly(prev.length, total).map((st, i) => ({ ...prev[i], name: prev[i]?.name || st.name, amount: st.amount }));
                       });
                     return (
                       <div className="rounded-2xl border-2 border-purple-300 bg-gradient-to-b from-purple-50 to-white overflow-hidden shadow-sm">
@@ -4589,7 +4880,7 @@ export default function DoctorDashboard({
                               </p>
                               <button
                                 type="button"
-                                onClick={() => setNewBookingStages([{ name: `1-${t("bosqich")}`, amount: finalPrice }])}
+                                onClick={() => setNewBookingStages([{ name: `1-${t("bosqich")}`, amount: finalPrice, date: '', time: '' }])}
                                 className="w-full border border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 text-purple-600 rounded-lg py-2 text-[11px] font-black transition-colors"
                               >
                                 + {t("bosqichlarga bo'lish")}
@@ -4599,49 +4890,114 @@ export default function DoctorDashboard({
                             <>
                               <div className="space-y-1.5">
                                 {newBookingStages.map((st, i) => (
-                                  <div key={i} className="flex items-center gap-1.5">
-                                    <span className="w-5 h-5 shrink-0 rounded-md bg-purple-100 text-purple-700 text-[10px] font-black flex items-center justify-center">{i + 1}</span>
-                                    <input
-                                      type="text"
-                                      value={st.name}
-                                      placeholder={`${i + 1}-${t("bosqich")}`}
-                                      onChange={(e) => setNewBookingStages((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
-                                      className="flex-1 min-w-0 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
-                                    />
-                                    <input
-                                      type="number" min="0"
-                                      value={st.amount || ''}
-                                      placeholder="0"
-                                      onChange={(e) => setNewBookingStages((prev) => prev.map((x, j) => j === i ? { ...x, amount: Number(e.target.value) } : x))}
-                                      className="w-[88px] shrink-0 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-right outline-none focus:border-purple-500 font-bold bg-white text-slate-800"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => setNewBookingStages((prev) => prev.filter((_, j) => j !== i))}
-                                      className="shrink-0 p-1 text-slate-300 hover:text-rose-500 transition-colors"
-                                      title={t("o'chirish")}
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
+                                  <div key={i} className="rounded-lg border border-slate-200 bg-white p-2 space-y-1.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="w-5 h-5 shrink-0 rounded-md bg-purple-100 text-purple-700 text-[10px] font-black flex items-center justify-center">{i + 1}</span>
+                                      <input
+                                        type="text"
+                                        value={st.name}
+                                        placeholder={`${i + 1}-${t("bosqich")}`}
+                                        onChange={(e) => setNewBookingStages((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                                        className="flex-1 min-w-0 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                                      />
+                                      <input
+                                        type="number" min="0"
+                                        value={st.amount || ''}
+                                        placeholder="0"
+                                        onChange={(e) => setNewBookingStages((prev) => prev.map((x, j) => j === i ? { ...x, amount: Number(e.target.value) } : x))}
+                                        className="w-[88px] shrink-0 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-right outline-none focus:border-purple-500 font-bold bg-white text-slate-800"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => setNewBookingStages((prev) => prev.filter((_, j) => j !== i))}
+                                        className="shrink-0 p-1 text-slate-300 hover:text-rose-500 transition-colors"
+                                        title={t("o'chirish")}
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                    {/* When this stage happens. Stage 1 shows the
+                                        main picker's slot read-only instead of a
+                                        second control that could contradict it. */}
+                                    {i === 0 ? (
+                                      <p className="pl-[26px] text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                                        <CalendarClock className="w-3 h-3 shrink-0" />
+                                        {newBookingDate.split('-').slice(1).reverse().join('.')} · {newBookingTime}
+                                        <span className="text-purple-400">— {t("shu bandlash")}</span>
+                                      </p>
+                                    ) : (
+                                      <div className="pl-[26px] flex items-center gap-1.5">
+                                        <input
+                                          type="date"
+                                          value={st.date}
+                                          min={newBookingDate}
+                                          onChange={(e) => setNewBookingStages((prev) => prev.map((x, j) => j === i ? { ...x, date: e.target.value } : x))}
+                                          className="flex-1 min-w-0 border border-slate-200 rounded-lg px-2 py-1 text-[11px] outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                                        />
+                                        <select
+                                          value={st.time}
+                                          onChange={(e) => setNewBookingStages((prev) => prev.map((x, j) => j === i ? { ...x, time: e.target.value } : x))}
+                                          className="w-[132px] shrink-0 border border-slate-200 rounded-lg px-2 py-1 text-[11px] outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                                        >
+                                          <option value="">{t("vaqtni tanlang")}</option>
+                                          {/* Taken slots stay visible but disabled —
+                                              the doctor sees why a time is gone
+                                              rather than the option vanishing. */}
+                                          {scheduleSlots.map((slot) => {
+                                            const taken = stageSlotTaken(i, st.date, slot);
+                                            return (
+                                              <option key={slot} value={slot} disabled={taken} className="text-slate-800">
+                                                {slot}{taken ? ` — ${t("bu vaqt band")}` : isLunchSlot(slot) ? ` — ${t("tushlik")}` : ''}
+                                              </option>
+                                            );
+                                          })}
+                                        </select>
+                                      </div>
+                                    )}
+                                    {i > 0 && st.date && !isWorkingDay(st.date, doctorWorkingHours) && (
+                                      <p className="pl-[26px] text-[10px] font-black text-amber-600">{t("dam olish")}</p>
+                                    )}
                                   </div>
                                 ))}
                               </div>
                               <div className="flex items-center gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => setNewBookingStages((prev) => [...prev, { name: `${prev.length + 1}-${t("bosqich")}`, amount: Math.max(0, stageDiff) }])}
+                                  onClick={() => setNewBookingStages((prev) => {
+                                    const slot = nextStageSlot(prev.length - 1);
+                                    return [...prev, { name: `${prev.length + 1}-${t("bosqich")}`, amount: Math.max(0, stageDiff), date: slot.date, time: slot.time }];
+                                  })}
                                   className="flex-1 border border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 text-purple-600 rounded-lg py-1.5 text-[11px] font-black transition-colors"
                                 >
                                   + {t("bosqich qo'shish")}
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => setNewBookingStages(splitEvenly(newBookingStages.length, finalPrice).map((st, i) => ({ name: newBookingStages[i]?.name || st.name, amount: st.amount })))}
+                                  onClick={() => setNewBookingStages((prev) => splitEvenly(prev.length, finalPrice).map((st, i) => ({ ...prev[i], name: prev[i]?.name || st.name, amount: st.amount })))}
                                   className="shrink-0 px-2.5 py-1.5 border border-slate-200 hover:border-purple-400 text-slate-500 hover:text-purple-600 rounded-lg text-[11px] font-black transition-colors"
                                 >
                                   {t("teng bo'lish")}
                                 </button>
                               </div>
+                              {/* Exactly what saving will put on the schedule, so
+                                  the doctor confirms visits rather than guessing. */}
+                              {(() => {
+                                const plannedVisits = 1 + newBookingStages.filter((st, i) => i > 0 && st.date && st.time).length;
+                                const unscheduled = newBookingStages.filter((st, i) => i > 0 && (!st.date || !st.time)).length;
+                                return (
+                                  <div className="space-y-1">
+                                    <p className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                                      <CalendarClock className="w-3 h-3 text-purple-400 shrink-0" />
+                                      {t("jadvalga qo'shiladi")}: {plannedVisits} {t("ta tashrif")}
+                                    </p>
+                                    {unscheduled > 0 && (
+                                      <p className="text-[10px] font-medium text-slate-400 leading-snug">
+                                        {unscheduled} {t("ta bosqichning vaqti belgilanmagan — u navbatga qo'shilmaydi, keyinroq belgilashingiz mumkin.")}
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                               {/* Server-side validateStageSums rejects a charge whose
                                   stages don't total the discounted price, so the gap is
                                   shown here instead of surfacing as a failed save. */}
