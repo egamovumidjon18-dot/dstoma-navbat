@@ -339,10 +339,10 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#020712] rounded-3xl p-6 text-slate-300 font-sans border border-slate-800" id="treatment-plan-container">
+    <div className="flex flex-col min-h-full bg-[#020712] rounded-3xl p-6 text-slate-300 font-sans border border-slate-800" id="treatment-plan-container">
       
       {/* Header & Stats */}
-      <div className="flex flex-col lg:flex-row gap-6 mb-8 print:hidden">
+      <div className="flex flex-col lg:flex-row gap-6 mb-5 print:hidden">
         <div className="flex-1 bg-[#0a0f1d] rounded-2xl border border-slate-800 p-6 flex flex-col justify-center">
           <div className="flex justify-between items-start mb-6">
             <div>
@@ -431,7 +431,7 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
       </div>
 
       {/* Table */}
-      <div className="flex-1 bg-[#0a0f1d] rounded-2xl border border-slate-800 overflow-hidden flex flex-col">
+      <div className="bg-[#0a0f1d] rounded-2xl border border-slate-800 flex flex-col">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-[#111827] text-slate-400 border-b border-slate-800">

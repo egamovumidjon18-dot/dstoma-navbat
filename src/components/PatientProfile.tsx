@@ -784,7 +784,10 @@ export default function PatientProfile({
             )}
 
             {activeTab === "plan" && (
-              <div className="h-full">
+              // min-h-full, not h-full: the plan can be arbitrarily long (one
+              // row per treatment), and pinning it to exactly the tab height
+              // made everything past the fold unreachable instead of scrolling.
+              <div className="min-h-full">
                 <TreatmentPlan patientId={patientId.toString()}
                   language={language}
                   clinicId={patient?.clinicId}
