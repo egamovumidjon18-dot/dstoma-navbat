@@ -31,6 +31,9 @@ const PATIENT_PANEL_TRANSLATIONS: Record<string, PatientPanelDictEntry> = {
   "qon guruhi": { ru: "Группа крови", en: "Blood group", kk: "Қан тобы", ky: "Кан тобу", tg: "Гурӯҳи хун", tk: "Gan topary" },
   "allergiyalar": { ru: "Аллергии", en: "Allergies", kk: "Аллергия", ky: "Аллергия", tg: "Аллергияҳо", tk: "Allergiýalar" },
   "surunkali kasalliklar": { ru: "Хронические заболевания", en: "Chronic diseases", kk: "Созылмалы аурулар", ky: "Уланма ооруулар", tg: "Бемориҳои музмин", tk: "Dowamly keseller" },
+  "infeksion kasalliklar mavjudmi?": { ru: "Есть ли инфекционные заболевания?", en: "Are infectious diseases present?", kk: "Инфекциялық аурулар бар ма?", ky: "Инфекциялык оорулар барбы?", tg: "Оё бемориҳои сироятӣ мавҷуданд?", tk: "Ýokanç keseller barmy?" },
+  "ha": { ru: "Да", en: "Yes", kk: "Иә", ky: "Ооба", tg: "Ҳа", tk: "Hawa" },
+  "yo'q": { ru: "Нет", en: "No", kk: "Жоқ", ky: "Жок", tg: "Не", tk: "Ýok" },
   "tanlang (noma'lum)": { ru: "Выберите (неизвестно)", en: "Select (unknown)", kk: "Таңдаңыз (белгісіз)", ky: "Тандаңыз (белгисиз)", tg: "Интихоб кунед (номаълум)", tk: "Saýlaň (näbelli)" },
   "ai yordamchi": { ru: "AI-помощник", en: "AI assistant", kk: "AI көмекші", ky: "AI жардамчы", tg: "Ёрдамчии AI", tk: "AI kömekçi" },
   "ai yordamchi — premium xizmat. bepul sinov muddati tugagan.": { ru: "AI-помощник — Premium-услуга. Бесплатный пробный период закончился.", en: "AI assistant is a Premium feature. The free trial has ended.", kk: "AI көмекші — Premium қызмет. Тегін сынақ мерзімі аяқталды.", ky: "AI жардамчы — Premium кызмат. Акысыз сыноо мөөнөтү бүттү.", tg: "Ёрдамчии AI — хизмати Premium. Мӯҳлати санҷиши ройгон ба охир расид.", tk: "AI kömekçi — Premium hyzmat. Mugt synag möhleti gutardy." },
@@ -226,6 +229,7 @@ export default function PatientPanel({
     bloodGroup: viewingPatient?.bloodGroup || '',
     allergies: viewingPatient?.allergies || '',
     chronicDiseases: viewingPatient?.chronicDiseases || '',
+    hasInfection: viewingPatient?.hasInfection || false,
   });
   useEffect(() => {
     if (isEditingProfile) return;
@@ -236,6 +240,7 @@ export default function PatientPanel({
       bloodGroup: viewingPatient?.bloodGroup || '',
       allergies: viewingPatient?.allergies || '',
       chronicDiseases: viewingPatient?.chronicDiseases || '',
+      hasInfection: viewingPatient?.hasInfection || false,
     });
     // Only re-sync from the incoming patient prop while NOT editing — otherwise
     // the background poll refreshing `patient` every few seconds would stomp
@@ -243,7 +248,7 @@ export default function PatientPanel({
     // being viewed, so the form shows the newly-picked family member's own
     // values instead of briefly showing the previous patient's.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewingPatient?.id, viewingPatient?.phone, viewingPatient?.passportSerial, viewingPatient?.birthDate, viewingPatient?.bloodGroup, viewingPatient?.allergies, viewingPatient?.chronicDiseases, isEditingProfile]);
+  }, [viewingPatient?.id, viewingPatient?.phone, viewingPatient?.passportSerial, viewingPatient?.birthDate, viewingPatient?.bloodGroup, viewingPatient?.allergies, viewingPatient?.chronicDiseases, viewingPatient?.hasInfection, isEditingProfile]);
   const handleSaveProfile = async () => {
     if (!onUpdateProfile) return;
     setIsSavingProfile(true);
@@ -256,6 +261,7 @@ export default function PatientPanel({
         bloodGroup: profileForm.bloodGroup || undefined,
         allergies: profileForm.allergies.trim() || undefined,
         chronicDiseases: profileForm.chronicDiseases.trim() || undefined,
+        hasInfection: profileForm.hasInfection,
       });
       setIsEditingProfile(false);
     } catch (err) {
@@ -1133,9 +1139,15 @@ export default function PatientPanel({
                     <span className="text-slate-500">{t("allergiyalar")}</span>
                     <span className="font-bold text-slate-900">{decodeLegacyEntities(viewingPatient?.allergies) || '—'}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between border-b border-slate-100 pb-3">
                     <span className="text-slate-500">{t("surunkali kasalliklar")}</span>
                     <span className="font-bold text-slate-900">{decodeLegacyEntities(viewingPatient?.chronicDiseases) || '—'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">{t("infeksion kasalliklar mavjudmi?")}</span>
+                    <span className={`font-bold ${viewingPatient?.hasInfection ? 'text-rose-600' : 'text-slate-900'}`}>
+                      {viewingPatient?.hasInfection ? t("ha") : t("yo'q")}
+                    </span>
                   </div>
                 </div>
               ) : (
@@ -1204,6 +1216,15 @@ export default function PatientPanel({
                       className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium text-slate-800 h-16 resize-none"
                     />
                   </div>
+                  <label className="flex items-center gap-2.5 border border-slate-200 rounded-xl px-3 py-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={profileForm.hasInfection}
+                      onChange={(e) => setProfileForm({ ...profileForm, hasInfection: e.target.checked })}
+                      className="w-4 h-4 accent-rose-600"
+                    />
+                    <span className="text-xs font-bold text-slate-700">{t("infeksion kasalliklar mavjudmi?")}</span>
+                  </label>
                   <div className="flex gap-2 pt-2">
                     <button
                       onClick={handleSaveProfile}
