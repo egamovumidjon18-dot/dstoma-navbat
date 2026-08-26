@@ -901,9 +901,9 @@ export default function SuperAdminDashboard({
           </div>
           <div className="flex items-center gap-2.5 shrink-0">
             {setLanguage && <LanguageSwitcher language={language} setLanguage={setLanguage} variant="dark" />}
-            <div className="bg-slate-900/80 px-4 py-2.5 rounded-xl border border-slate-830 flex items-center gap-2">
+            <div className="bg-slate-900/80 px-4 py-2.5 rounded-xl border border-slate-800 flex items-center gap-2">
               <Globe className="w-4 h-4 text-[#06b6d4]" />
-              <span className="text-[11px] font-bold text-slate-350 font-mono">DSTOMA NETWORK CENTRAL</span>
+              <span className="text-[11px] font-bold text-slate-300 font-mono">DSTOMA NETWORK CENTRAL</span>
             </div>
           </div>
         </div>
@@ -912,7 +912,7 @@ export default function SuperAdminDashboard({
       {/* TABBED SHELL: left sidebar nav + right main content area (mirrors Settings.tsx) */}
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         {/* Sidebar Navigation */}
-        <div className="w-full lg:w-64 bg-white border border-slate-150 rounded-3xl shadow-md shrink-0 lg:sticky lg:top-4 overflow-hidden">
+        <div className="w-full lg:w-64 bg-white border border-slate-100 rounded-3xl shadow-md shrink-0 lg:sticky lg:top-4 overflow-hidden">
           <div className="p-4 space-y-1">
             {SUPERADMIN_SECTIONS.map((section) => (
               <button
@@ -939,12 +939,12 @@ export default function SuperAdminDashboard({
         <div className="space-y-6">
       {/* METRICS ROW */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-slate-800">
-        <div className="bg-white rounded-2xl p-4.5 border border-slate-150/80 shadow-xs flex items-center justify-between transition-all hover:shadow-md">
+        <div className="bg-white rounded-2xl p-4.5 border border-slate-100/80 shadow-xs flex items-center justify-between transition-all hover:shadow-md">
           <div>
             <span className="text-[11px] text-slate-400 font-extrabold block uppercase tracking-widest leading-none">
               {t('totalClinics')}
             </span>
-            <div className="text-2xl font-black text-slate-850 font-mono mt-2">
+            <div className="text-2xl font-black text-slate-800 font-mono mt-2">
               {activeClinicsCount} <span className="text-xs font-normal text-slate-400">/ {totalClinics}</span>
             </div>
           </div>
@@ -953,12 +953,12 @@ export default function SuperAdminDashboard({
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-4.5 border border-slate-150/80 shadow-xs flex items-center justify-between transition-all hover:shadow-md">
+        <div className="bg-white rounded-2xl p-4.5 border border-slate-100/80 shadow-xs flex items-center justify-between transition-all hover:shadow-md">
           <div>
             <span className="text-[11px] text-slate-400 font-extrabold block uppercase tracking-widest leading-none">
               {t('mrr')}
             </span>
-            <div className="text-md font-extrabold text-[#0284c7] font-mono mt-2 flex items-center gap-1">
+            <div className="text-base font-extrabold text-[#0284c7] font-mono mt-2 flex items-center gap-1">
               <span>{currentMRR.toLocaleString('uz-UZ')}</span>
               <span className="text-[10px] text-slate-500 font-bold font-sans">so'm/oy</span>
             </div>
@@ -968,12 +968,12 @@ export default function SuperAdminDashboard({
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-4.5 border border-slate-150/80 shadow-xs flex items-center justify-between transition-all hover:shadow-md">
+        <div className="bg-white rounded-2xl p-4.5 border border-slate-100/80 shadow-xs flex items-center justify-between transition-all hover:shadow-md">
           <div>
             <span className="text-[11px] text-slate-400 font-extrabold block uppercase tracking-widest leading-none">
               {t('totalDoctors')}
             </span>
-            <div className="text-2xl font-black text-slate-850 font-mono mt-2">
+            <div className="text-2xl font-black text-slate-800 font-mono mt-2">
               {doctors.length} <span className="text-xs font-normal text-slate-400">nafar</span>
             </div>
           </div>
@@ -982,12 +982,12 @@ export default function SuperAdminDashboard({
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-4.5 border border-slate-150/80 shadow-xs flex items-center justify-between transition-all hover:shadow-md">
+        <div className="bg-white rounded-2xl p-4.5 border border-slate-100/80 shadow-xs flex items-center justify-between transition-all hover:shadow-md">
           <div>
             <span className="text-[11px] text-slate-400 font-extrabold block uppercase tracking-widest leading-none">
               {t('totalPatients')}
             </span>
-            <div className="text-2xl font-black text-slate-850 font-mono mt-2">
+            <div className="text-2xl font-black text-slate-800 font-mono mt-2">
               {totalPatients} <span className="text-xs font-normal text-slate-400">chipta</span>
             </div>
           </div>
@@ -1002,7 +1002,7 @@ export default function SuperAdminDashboard({
       {activeSection === 'onboarding' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-12 space-y-6">
-          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md relative overflow-hidden">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-100 shadow-md relative overflow-hidden">
             <div className="absolute right-0 top-0 w-24 h-24 pointer-events-none opacity-20 bg-[radial-gradient(circle,rgba(99,102,241,0.1),transparent_70%)]"></div>
             
             <div className="flex items-center gap-2.5 mb-4 border-b border-slate-100 pb-3">
@@ -1071,7 +1071,7 @@ export default function SuperAdminDashboard({
                       required
                       value={newClinicFee}
                       onChange={(e) => setNewClinicFee(parseInt(e.target.value) || 0)}
-                      className="w-full bg-transparent text-xs font-bold text-slate-850 focus:outline-none font-mono"
+                      className="w-full bg-transparent text-xs font-bold text-slate-800 focus:outline-none font-mono"
                     />
                     <span className="text-[9px] text-slate-400 font-extrabold shrink-0">S/M</span>
                   </div>
@@ -1173,14 +1173,14 @@ export default function SuperAdminDashboard({
                   </span>
                   <button 
                     onClick={() => setGeneratedCreds(null)}
-                    className="text-slate-500 hover:text-slate-350 p-1"
+                    className="text-slate-500 hover:text-slate-300 p-1"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
 
                 <div className="space-y-2 text-xs">
-                  <div className="bg-slate-900/80 p-3.5 rounded-2xl border border-slate-850 space-y-2">
+                  <div className="bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800 space-y-2">
                     <p className="text-[11px] text-slate-300 leading-relaxed font-semibold">
                       {t('ownerProvisionNotice')}
                     </p>
@@ -1251,7 +1251,7 @@ export default function SuperAdminDashboard({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-12 space-y-6">
           {/* SAAS PREMIUM FINANCIAL FORECAST CALCULATOR */}
-          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-100 shadow-md space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
               <span className="text-xl">📊</span>
               <div>
@@ -1273,7 +1273,7 @@ export default function SuperAdminDashboard({
                 </div>
                 <div>
                   <span className="text-[9px] text-slate-400 font-black uppercase block tracking-wider">Mo'ljaldagi ARR (Yillik)</span>
-                  <strong className="text-sm font-black text-indigo-650 font-mono">
+                  <strong className="text-sm font-black text-indigo-600 font-mono">
                     {(currentMRR * 12).toLocaleString('uz-UZ')} UZS
                   </strong>
                 </div>
@@ -1335,7 +1335,7 @@ export default function SuperAdminDashboard({
               </div>
 
               {/* Forecast calculations box */}
-              <div className="bg-gradient-to-br from-slate-905 to-slate-950 text-white p-4 rounded-2xl border border-slate-800 space-y-2.5">
+              <div className="bg-gradient-to-br from-slate-900 to-slate-950 text-white p-4 rounded-2xl border border-slate-800 space-y-2.5">
                 <span className="text-[9px] font-black uppercase tracking-widest text-[#06b6d4] block">
                   {tL('PROGNOZ NATIJASI')}
                 </span>
@@ -1355,7 +1355,7 @@ export default function SuperAdminDashboard({
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-350 font-medium">Kutilayotgan Jami ARR (Yillik):</span>
+                  <span className="text-slate-300 font-medium">Kutilayotgan Jami ARR (Yillik):</span>
                   <span className="font-black text-cyan-400 font-mono">
                     {((currentMRR + (simAddedClinics * simPricePerClinic)) * 12).toLocaleString('uz-UZ')} so'm/yil
                   </span>
@@ -1365,7 +1365,7 @@ export default function SuperAdminDashboard({
           </div>
 
           {/* ==================== 1. SaaS OYLIK TO'LOVLARNI TASDIQLASH BOARD (USER REQUESTED) ==================== */}
-          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-100 shadow-md space-y-4">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3 font-sans">
               <div className="flex items-center gap-1.5">
                 <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">💵</span>
@@ -1391,7 +1391,7 @@ export default function SuperAdminDashboard({
               
               return (
                 <div className="space-y-4 font-sans">
-                  <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-150 rounded-2xl p-4 flex items-center justify-between">
+                  <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-2xl p-4 flex items-center justify-between">
                     <div>
                       <span className="text-[10px] text-emerald-800 font-black uppercase tracking-wider block">
                         JAMI TASDIQLANGAN HAQIQIY DAROMAD
@@ -1399,7 +1399,7 @@ export default function SuperAdminDashboard({
                       <strong className="text-xl font-black text-emerald-950 font-mono block mt-1">
                         {confirmedTotal.toLocaleString('uz-UZ')} so'm
                       </strong>
-                      <span className="text-[10px] text-slate-550 mt-1 block font-semibold">
+                      <span className="text-[10px] text-slate-500 mt-1 block font-semibold">
                         Faqat rasman to'langan va siz tasdiqlagan obunalar yig'indisi.
                       </span>
                     </div>
@@ -1416,7 +1416,7 @@ export default function SuperAdminDashboard({
                     </h4>
 
                     {pendingPayments.length === 0 ? (
-                      <p className="text-xs text-slate-400 py-4 text-center font-medium bg-slate-50 border border-slate-105 rounded-xl">
+                      <p className="text-xs text-slate-400 py-4 text-center font-medium bg-slate-50 border border-slate-100 rounded-xl">
                         Kutilayotgan yangi oylik to'lov so'rovlari mavjud emas.
                       </p>
                     ) : (
@@ -1433,11 +1433,11 @@ export default function SuperAdminDashboard({
                                   <span className="text-xs font-black text-slate-800">
                                     {associatedClinic ? associatedClinic.name : "Noma'lum Klinika"}
                                   </span>
-                                  <span className={`text-[9px] font-normal uppercase font-mono tracking-wider ${pay.paymentType === 'premium_upgrade' ? 'text-amber-600 font-black' : 'text-slate-450'}`}>
+                                  <span className={`text-[9px] font-normal uppercase font-mono tracking-wider ${pay.paymentType === 'premium_upgrade' ? 'text-amber-600 font-black' : 'text-slate-400'}`}>
                                     {pay.paymentType === 'premium_upgrade' ? '🤖 Premium AI so\'rovi' : 'Oylik obuna'}
                                   </span>
                                 </div>
-                                <p className="text-[10px] text-slate-650 mt-1 font-semibold">
+                                <p className="text-[10px] text-slate-600 mt-1 font-semibold">
                                   {pay.paymentType === 'premium_upgrade' ? 'So\'ralgan to\'lov' : 'Ijara'}: <strong className="font-mono text-indigo-950">{pay.amount.toLocaleString()} UZS</strong> | Yuborildi: <strong className="font-mono text-slate-700">{pay.dueDate}</strong>
                                 </p>
                               </div>
@@ -1477,7 +1477,7 @@ export default function SuperAdminDashboard({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-12 space-y-6">
           {/* ==================== 1. DATA MAINTENANCE ==================== */}
-          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4 font-sans text-left">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-100 shadow-md space-y-4 font-sans text-left">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
               <div className="flex items-center gap-1.5">
                 <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">🧩</span>
@@ -1508,14 +1508,14 @@ export default function SuperAdminDashboard({
             </button>
 
             {backfillResult && (
-              <p className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-150 rounded-xl p-3">
+              <p className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-100 rounded-xl p-3">
                 {backfillResult}
               </p>
             )}
           </div>
 
           {/* ==================== 1B. TEST DATA CLEANUP ==================== */}
-          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4 font-sans text-left">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-100 shadow-md space-y-4 font-sans text-left">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
               <div className="flex items-center gap-1.5">
                 <span className="p-1.5 bg-rose-50 text-rose-600 rounded-lg">🧹</span>
@@ -1547,14 +1547,14 @@ export default function SuperAdminDashboard({
             </button>
 
             {cleanupResult && (
-              <p className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-150 rounded-xl p-3">
+              <p className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-100 rounded-xl p-3">
                 {cleanupResult}
               </p>
             )}
           </div>
 
           {/* ==================== 2. SUPERADMIN PASSWORD UPDATE FORM ==================== */}
-          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4 font-sans text-left">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-100 shadow-md space-y-4 font-sans text-left">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
               <div className="flex items-center gap-1.5">
                 <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">🛡️</span>
@@ -1643,7 +1643,7 @@ export default function SuperAdminDashboard({
                 <span className="p-1 bg-amber-600 rounded-lg text-white font-black text-[9px] uppercase font-mono px-1.5">
                   BILLING
                 </span>
-                <span className="text-[10px] font-black text-slate-450 tracking-wider font-mono">
+                <span className="text-[10px] font-black text-slate-400 tracking-wider font-mono">
                   E'TIBOR TALAB QILADIGAN HOLATLAR
                 </span>
               </div>
@@ -1663,7 +1663,7 @@ export default function SuperAdminDashboard({
                 billingNotifications.map(item => (
                   <div
                     key={item.id}
-                    className="p-3 bg-slate-950/60 hover:bg-slate-950 border border-slate-850 rounded-xl space-y-1.5 transition-all text-xs"
+                    className="p-3 bg-slate-950/60 hover:bg-slate-950 border border-slate-800 rounded-xl space-y-1.5 transition-all text-xs"
                   >
                     <div className="flex items-center justify-between text-[10px]">
                       <span className={`font-bold font-mono ${
@@ -1687,7 +1687,7 @@ export default function SuperAdminDashboard({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-12 space-y-6">
           {/* ==================== ADVERTISING MANAGEMENT (SUPERADMIN-EXCLUSIVE) ==================== */}
-          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4 font-sans text-left">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-100 shadow-md space-y-4 font-sans text-left">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
               <div className="flex items-center gap-1.5">
                 <span className="p-1.5 bg-purple-50 text-purple-600 rounded-lg"><Megaphone className="w-4 h-4" /></span>
@@ -1790,18 +1790,18 @@ export default function SuperAdminDashboard({
 
             <div className="space-y-2">
               {ads.length === 0 ? (
-                <p className="text-xs text-slate-400 py-4 text-center font-medium bg-slate-50 border border-slate-105 rounded-xl">
+                <p className="text-xs text-slate-400 py-4 text-center font-medium bg-slate-50 border border-slate-100 rounded-xl">
                   Hozircha reklama yaratilmagan.
                 </p>
               ) : (
                 ads.map(ad => (
-                  <div key={ad.id} className="p-3 bg-slate-50 border border-slate-150 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div key={ad.id} className="p-3 bg-slate-50 border border-slate-100 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div className="flex items-center gap-2.5">
                       {ad.imageUrl && <img src={ad.imageUrl} alt={ad.title} className="w-10 h-10 object-cover rounded-lg border border-slate-200" />}
                       <div>
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs font-black text-slate-800">{ad.title}</span>
-                          <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${ad.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-150 text-slate-500'}`}>
+                          <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${ad.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
                             {ad.status === 'active' ? 'Faol' : "To'xtatilgan"}
                           </span>
                         </div>
@@ -1848,7 +1848,7 @@ export default function SuperAdminDashboard({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-12 space-y-6">
           {/* ==================== TELEGRAM BOT CONFIGURATION (USER INTEGRATION) ==================== */}
-          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4 font-sans text-left">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-100 shadow-md space-y-4 font-sans text-left">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
               <div className="flex items-center gap-1.5">
                 <span className="p-1.5 bg-blue-50 text-[#2563eb] rounded-lg">🤖</span>
@@ -1895,7 +1895,7 @@ export default function SuperAdminDashboard({
                   placeholder="7514931393:AAFFZJ-fFf9hV4gA-S..."
                   value={telegramToken}
                   onChange={(e) => setTelegramToken(e.target.value)}
-                  className="w-full bg-slate-50 text-xs font-mono text-slate-800 border border-slate-250 rounded-lg px-3 py-2.5 focus:border-[#0284c7] focus:outline-none placeholder:text-slate-400"
+                  className="w-full bg-slate-50 text-xs font-mono text-slate-800 border border-slate-200 rounded-lg px-3 py-2.5 focus:border-[#0284c7] focus:outline-none placeholder:text-slate-400"
                 />
               </div>
               <div>
@@ -1905,7 +1905,7 @@ export default function SuperAdminDashboard({
                   placeholder="7514931393:AAFFZJ-fFf9hV4gA-S..."
                   value={doctorTelegramToken}
                   onChange={(e) => setDoctorTelegramToken(e.target.value)}
-                  className="w-full bg-slate-50 text-xs font-mono text-slate-800 border border-slate-250 rounded-lg px-3 py-2.5 focus:border-[#0284c7] focus:outline-none placeholder:text-slate-400"
+                  className="w-full bg-slate-50 text-xs font-mono text-slate-800 border border-slate-200 rounded-lg px-3 py-2.5 focus:border-[#0284c7] focus:outline-none placeholder:text-slate-400"
                 />
               </div>
               <button
@@ -1920,7 +1920,7 @@ export default function SuperAdminDashboard({
             </form>
 
             {/* Vercel Webhook Setup Section */}
-            <div className="bg-[#f0f9ff] rounded-2xl p-4 border border-blue-150 space-y-3">
+            <div className="bg-[#f0f9ff] rounded-2xl p-4 border border-blue-100 space-y-3">
               <strong className="text-[10px] uppercase font-black tracking-widest text-blue-600 block">🧭 Vercel (Serverless) Webhook Sozlash</strong>
               <p className="text-[11px] text-slate-600 leading-relaxed font-semibold">
                 Agarda platformangiz Vercel serverless tizimida bo'lsa, Telegram bot yangiliklarni qabul qilishi uchun unga saytning webhook manzilini yuklash kerak:
@@ -2032,7 +2032,7 @@ export default function SuperAdminDashboard({
                 </div>
 
                 {webhookStatus ? (
-                  <div className="text-[10px] space-y-1 bg-white p-2 rounded border border-slate-150 font-mono text-slate-700 leading-normal">
+                  <div className="text-[10px] space-y-1 bg-white p-2 rounded border border-slate-100 font-mono text-slate-700 leading-normal">
                     <div className="flex justify-between border-b pb-1 font-sans font-bold">
                       <span>Telegram Holati:</span>
                       <span className={webhookStatus.ok ? "text-green-600" : "text-rose-600"}>
@@ -2044,7 +2044,7 @@ export default function SuperAdminDashboard({
                         <div className="break-all font-semibold"><span className="text-slate-400">Webhook URL:</span> <span className="text-blue-600">{webhookStatus.result.url || "O'RNATILMAGAN ❌"}</span></div>
                         <div><span className="text-slate-400">Kutilayotgan xabarlar (Pending):</span> <span className="font-bold text-amber-600">{webhookStatus.result.pending_update_count} ta</span></div>
                         {webhookStatus.result.last_error_message ? (
-                          <div className="bg-rose-50 text-rose-600 p-1.5 rounded border border-rose-150 mt-1 font-sans text-[10px]">
+                          <div className="bg-rose-50 text-rose-600 p-1.5 rounded border border-rose-100 mt-1 font-sans text-[10px]">
                             <div className="font-bold flex items-center gap-1">⚠️ Telegram xabar yubora olmadi:</div>
                             <div className="mt-0.5 whitespace-pre-wrap leading-relaxed break-words font-mono text-[9px] font-semibold">{webhookStatus.result.last_error_message}</div>
                             {webhookStatus.result.last_error_date && (
@@ -2111,19 +2111,19 @@ export default function SuperAdminDashboard({
               </div>
 
               <p className="text-[9px] text-slate-400 font-semibold leading-normal">
-                Faol Vercel Webhook havolasi: <code className="bg-white/80 px-1 border border-slate-150 rounded font-mono text-[9px] text-[#2563eb]">{window.location.origin}/api/telegram-webhook?token={telegramToken ? telegramToken.slice(0, 15) + "..." : "TOKEN"}</code>
+                Faol Vercel Webhook havolasi: <code className="bg-white/80 px-1 border border-slate-100 rounded font-mono text-[9px] text-[#2563eb]">{window.location.origin}/api/telegram-webhook?token={telegramToken ? telegramToken.slice(0, 15) + "..." : "TOKEN"}</code>
               </p>
             </div>
 
             {/* Test Notification Section */}
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-150 space-y-3">
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
               <strong className="text-[10px] uppercase font-black tracking-widest text-slate-500 block">⚡ Bot Integratsiyasini Test Qilish</strong>
               <div className="flex gap-2">
                 <input
                   type="text"
                   placeholder="ID raqam (masalan, 57896431)"
                   id="test_telegram_chat_id"
-                  className="flex-1 bg-white text-xs font-bold font-mono text-slate-850 border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none"
+                  className="flex-1 bg-white text-xs font-bold font-mono text-slate-800 border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none"
                 />
                 <button
                   type="button"
@@ -2157,7 +2157,7 @@ export default function SuperAdminDashboard({
                       triggerToast("Telegramga bog'lanishda xatolik yuz berdi!");
                     }
                   }}
-                  className="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-850 text-white font-extrabold text-[10px] tracking-wide rounded-xl transition-all shadow-sm shrink-0 cursor-pointer"
+                  className="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-[10px] tracking-wide rounded-xl transition-all shadow-sm shrink-0 cursor-pointer"
                 >
                   Test Xabar Yuborish ➔
                 </button>
@@ -2176,7 +2176,7 @@ export default function SuperAdminDashboard({
         <div className="lg:col-span-12 space-y-6">
 
           {/* SECTION 1: CLINIC CREDENTIALS & LICENSING BILLING BOX */}
-          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-100 shadow-md space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <span className="text-xl">🏢</span>
@@ -2222,7 +2222,7 @@ export default function SuperAdminDashboard({
                           </span>
                         </div>
                         <p className="text-[10px] text-slate-400 font-bold mt-1.5">
-                          Rahbar/CEO: <span className="text-slate-700">{clinic.ownerName || "Kiritilmagan"}</span> | Oylik litsenziya: <span className="text-slate-850 font-mono font-bold">{fee.toLocaleString('uz-UZ')} so'm</span>
+                          Rahbar/CEO: <span className="text-slate-700">{clinic.ownerName || "Kiritilmagan"}</span> | Oylik litsenziya: <span className="text-slate-800 font-mono font-bold">{fee.toLocaleString('uz-UZ')} so'm</span>
                         </p>
                       </div>
 
@@ -2265,7 +2265,7 @@ export default function SuperAdminDashboard({
                     </div>
 
                     {/* Interactive Credentials View & Editing for Clinics */}
-                    <div className="bg-white p-3 rounded-xl border border-slate-150/80">
+                    <div className="bg-white p-3 rounded-xl border border-slate-100/80">
                       {isEditing ? (
                         <div className="space-y-3">
                           <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 mb-1">
@@ -2310,14 +2310,14 @@ export default function SuperAdminDashboard({
                                 setClinicLoginVal(defaultLog);
                                 setClinicPassVal(defaultPass);
                               }}
-                              className="p-1 px-2.5 text-[9px] bg-slate-100 text-slate-650 font-bold rounded-md hover:bg-slate-200"
+                              className="p-1 px-2.5 text-[9px] bg-slate-100 text-slate-600 font-bold rounded-md hover:bg-slate-200"
                               title="Tizim tomonidan tasodifiy hisob ma'lumotlarini o'rnatish"
                             >
                               Tasodifiy generatsiya
                             </button>
                             <button
                               onClick={() => handleSaveClinicCredsSubmit(clinic.id)}
-                              className="p-1 px-3 text-[9px] bg-slate-900 hover:bg-slate-850 text-white font-black rounded-md flex items-center gap-1 active:scale-95"
+                              className="p-1 px-3 text-[9px] bg-slate-900 hover:bg-slate-800 text-white font-black rounded-md flex items-center gap-1 active:scale-95"
                             >
                               <Save className="w-3 h-3 text-cyan-400" /> {t('saveCredChange')}
                             </button>
@@ -2351,7 +2351,7 @@ export default function SuperAdminDashboard({
                           <div className="flex gap-1">
                             <button
                               onClick={() => setClinicToEdit(clinic)}
-                              className="px-2.5 py-1 text-indigo-650 hover:text-indigo-850 rounded bg-indigo-50 hover:bg-indigo-100 text-[10px] font-black cursor-pointer flex items-center gap-1"
+                              className="px-2.5 py-1 text-indigo-600 hover:text-indigo-800 rounded bg-indigo-50 hover:bg-indigo-100 text-[10px] font-black cursor-pointer flex items-center gap-1"
                               title="Klinika ma'lumotlarini o'zgartirish"
                             >
                               ⚙️ Tahrirlash
@@ -2379,7 +2379,7 @@ export default function SuperAdminDashboard({
                             {onAdminImpersonate && (
                               <button
                                 onClick={() => onAdminImpersonate('director', clinic.id)}
-                                className="px-2.5 py-1 text-violet-650 hover:text-violet-850 rounded bg-violet-50 hover:bg-violet-100 text-[10px] font-black cursor-pointer flex items-center gap-1"
+                                className="px-2.5 py-1 text-violet-600 hover:text-violet-800 rounded bg-violet-50 hover:bg-violet-100 text-[10px] font-black cursor-pointer flex items-center gap-1"
                                 title="O'z parolisiz Direktor panelga kirish"
                               >
                                 👑 Direktor sifatida kirish
@@ -2409,7 +2409,7 @@ export default function SuperAdminDashboard({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-12 space-y-6">
           {/* SECTION 2: DOCTOR CREDENTIALS HUB (EXPLICITLY GIVEN BY OWNER) */}
-          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-150 shadow-md space-y-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 border border-slate-100 shadow-md space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <span className="text-xl">👨‍⚕</span>
@@ -2461,9 +2461,9 @@ export default function SuperAdminDashboard({
                           className="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0"
                         />
                         <div className="space-y-0.5">
-                          <h4 className="text-xs font-black text-slate-850 leading-tight">{doc.name}</h4>
+                          <h4 className="text-xs font-black text-slate-800 leading-tight">{doc.name}</h4>
                           <span className="text-[10px] text-slate-400 font-bold block">
-                            Specialty: <span className="text-slate-650">{doc.specialty}</span> | Filial: <span className="text-[#06b6d4] font-mono text-[9px] font-black uppercase bg-cyan-950/10 px-1.5 py-0.5 rounded">{doc.clinicId}</span>
+                            Specialty: <span className="text-slate-600">{doc.specialty}</span> | Filial: <span className="text-[#06b6d4] font-mono text-[9px] font-black uppercase bg-cyan-950/10 px-1.5 py-0.5 rounded">{doc.clinicId}</span>
                           </span>
                         </div>
                       </div>
@@ -2493,7 +2493,7 @@ export default function SuperAdminDashboard({
                     </div>
 
                     {/* Credentials status or Edit form for specific Doctor */}
-                    <div className="bg-slate-50 p-3 rounded-2xl border border-slate-150">
+                    <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
                       {isEditingDoc ? (
                         <div className="space-y-3">
                           <div className="flex items-center justify-between border-b border-slate-200/60 pb-1">
@@ -2582,7 +2582,7 @@ export default function SuperAdminDashboard({
                                 }
                                 handleCopyGeneric(`Shifokor: ${doc.name} | Login: ${doc.login || (doc.name || 'Doc').split(' ')[0].toLowerCase()} | Password: ${pw}`);
                               }}
-                              className="p-1 text-slate-400 hover:text-slate-600 bg-white border border-slate-150 rounded"
+                              className="p-1 text-slate-400 hover:text-slate-600 bg-white border border-slate-100 rounded"
                             >
                               <Copy className="w-3.5 h-3.5" />
                             </button>
@@ -2603,7 +2603,7 @@ export default function SuperAdminDashboard({
                             {onAdminImpersonate && (
                               <button
                                 onClick={() => onAdminImpersonate('doctor', doc.id)}
-                                className="p-1 px-2.5 text-violet-650 hover:text-violet-850 rounded bg-violet-50 hover:bg-violet-100 text-[10px] font-black cursor-pointer"
+                                className="p-1 px-2.5 text-violet-600 hover:text-violet-800 rounded bg-violet-50 hover:bg-violet-100 text-[10px] font-black cursor-pointer"
                                 title="O'z parolisiz Shifokor panelga kirish"
                               >
                                 👑 Shifokor sifatida kirish
@@ -2643,7 +2643,7 @@ export default function SuperAdminDashboard({
               <span className="text-[10px] font-extrabold text-cyan-400 tracking-widest uppercase flex items-center gap-1.5 font-mono">
                 🔓 Hisob ma'lumotlari
               </span>
-              <button onClick={() => setJustSetCredential(null)} className="text-slate-500 hover:text-slate-350 p-1">
+              <button onClick={() => setJustSetCredential(null)} className="text-slate-500 hover:text-slate-300 p-1">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -2652,7 +2652,7 @@ export default function SuperAdminDashboard({
                 ⚠️ Bu login-parolni tegishli shaxsga yetkazing. Keyinroq ham ro'yxatdagi 👁 belgisini bosib qayta ko'rishingiz mumkin.
               </p>
             </div>
-            <div className="font-mono text-[11px] space-y-1.5 text-slate-200 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-850 select-all">
+            <div className="font-mono text-[11px] space-y-1.5 text-slate-200 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800 select-all">
               <p className="text-slate-400">{justSetCredential.label}</p>
               <hr className="border-slate-800/60 my-2" />
               <p className="text-cyan-400 font-bold"><span className="text-slate-500">Login:</span> {justSetCredential.login}</p>
@@ -2682,7 +2682,7 @@ export default function SuperAdminDashboard({
               </h3>
               <button 
                 onClick={() => setClinicToEdit(null)} 
-                className="text-slate-400 hover:text-slate-650 text-sm font-black cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 text-sm font-black cursor-pointer"
               >
                 ✖
               </button>
@@ -2775,7 +2775,7 @@ export default function SuperAdminDashboard({
                   placeholder="Masalan: https://google.com/maps/..."
                   value={clinicToEdit.mapLink || ""}
                   onChange={(e) => setClinicToEdit({ ...clinicToEdit, mapLink: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] text-slate-850 font-bold focus:outline-none focus:border-cyan-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] text-slate-800 font-bold focus:outline-none focus:border-cyan-500"
                 />
               </div>
 

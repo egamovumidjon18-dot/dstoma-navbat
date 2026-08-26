@@ -263,7 +263,7 @@ export default function ProcedureCatalog({
                                 ? 'bg-rose-50 text-rose-500 border-rose-100'
                                 : low
                                 ? 'bg-amber-50 text-amber-700 border-amber-100'
-                                : 'bg-slate-50 text-slate-600 border-slate-150'
+                                : 'bg-slate-50 text-slate-600 border-slate-100'
                             }`}
                             title={!mat ? "Bu material ombordan o'chirilgan" : low ? 'Omborda yetarli emas' : ''}
                           >

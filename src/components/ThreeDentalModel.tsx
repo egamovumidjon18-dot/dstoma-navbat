@@ -1005,7 +1005,7 @@ export default function ThreeDentalModel({
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-550">Risk category:</span>
+                        <span className="text-slate-500">Risk category:</span>
                         <span className={`font-bold ${currentMetrics?.riskLabel === 'HIGH' ? 'text-rose-400 animate-pulse' : currentMetrics?.riskLabel === 'MEDIUM' ? 'text-amber-400' : 'text-emerald-400'}`}>
                           {currentMetrics?.riskLabel ?? 'LOW'}
                         </span>
@@ -1049,7 +1049,7 @@ export default function ThreeDentalModel({
                   {/* Actions & E-Signature Verification bar */}
                   <div className="mt-auto pt-3 border-t border-cyan-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
                     <div className="flex items-center gap-1">
-                      <span className="text-slate-550 text-[7px] uppercase tracking-tighter">SIGIL VERIFIED TYPE:</span>
+                      <span className="text-slate-500 text-[7px] uppercase tracking-tighter">SIGIL VERIFIED TYPE:</span>
                       <span className="text-emerald-400 font-extrabold text-[8px] tracking-wide border border-emerald-500/20 bg-emerald-950/30 px-1 py-0.5 rounded">
                         DR. AI DIAGNOST DDS
                       </span>
@@ -1262,7 +1262,7 @@ export default function ThreeDentalModel({
               ].map((log) => (
                 <div key={log.date} className="flex items-center justify-between text-[8px] sm:text-[9px] font-mono leading-none py-1 border-b border-cyan-950/20 last:border-0 border-dashed">
                   <div className="flex flex-col text-left">
-                    <span className="text-slate-550 font-bold">{log.date}</span>
+                    <span className="text-slate-500 font-bold">{log.date}</span>
                     <span className="text-slate-500 text-[7px] mt-0.5">{log.desc}</span>
                   </div>
                   <span className="text-cyan-400 font-bold">{log.h}</span>

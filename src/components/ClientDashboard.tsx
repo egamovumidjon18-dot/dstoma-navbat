@@ -1344,10 +1344,10 @@ export default function ClientDashboard({
           {/* Header */}
           <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-5 border-b border-slate-100 text-center relative">
             <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center justify-center gap-2">
-              <UserPlus2 className="w-5 h-5 text-indigo-650" />
+              <UserPlus2 className="w-5 h-5 text-indigo-600" />
               Bemor Ma'lumotlari
             </h2>
-            <p className="text-[10px] text-slate-450 font-semibold mt-1">Iltimos, elektron kartangizni ochish uchun formulani to'ldiring</p>
+            <p className="text-[10px] text-slate-400 font-semibold mt-1">Iltimos, elektron kartangizni ochish uchun formulani to'ldiring</p>
           </div>
 
           {/* Body Form — deliberately just name + password. Passport, phone,
@@ -1437,7 +1437,7 @@ export default function ClientDashboard({
               <LogIn className="w-5 h-5 text-cyan-600" />
               Bemor Kabinetiga Kirish
             </h2>
-            <p className="text-[10px] text-slate-450 font-semibold mt-1">
+            <p className="text-[10px] text-slate-400 font-semibold mt-1">
               Ro'yxatdan o'tishda olgan kodingiz (yoki pasportingiz) va parolingizni kiriting
             </p>
           </div>
@@ -1478,7 +1478,7 @@ export default function ClientDashboard({
             <div className="flex items-center gap-3.5 pt-4">
               <button
                 type="submit"
-                className="flex-1 py-3.5 bg-gradient-to-r from-cyan-500 to-blue-650 hover:from-cyan-400 hover:to-blue-550 active:scale-95 text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-lg shadow-cyan-950/20 cursor-pointer transition-all text-center"
+                className="flex-1 py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-95 text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-lg shadow-cyan-950/20 cursor-pointer transition-all text-center"
               >
                 Tizimga kirish
               </button>

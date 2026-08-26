@@ -440,11 +440,20 @@ export default function DirectorDashboard({
   const currentClinicId = clinicId || 'samarqand';
   const clinicDoctors = doctors.filter(d => d.clinicId === currentClinicId);
   const clinicServices = services.filter(s => s.clinicId === currentClinicId);
-  const clinicQueues = queues.filter(q => q.clinicId === currentClinicId && q.passportSerial !== 'AA1234567');
+  // 'AA1234567' is the PLACEHOLDER shown in the passport input's example text
+  // (see PatientPanel's "AA1234567" placeholder) — a hardcoded filter matching
+  // that exact value doesn't hide demo data, it hides any real patient who
+  // happened to type it in, or has a passport that genuinely reads that way.
+  const clinicQueues = queues.filter(q => q.clinicId === currentClinicId);
 
-  // Filter queues by status
-  const pendingQueues = clinicQueues.filter(q => q.status === 'pending');
-  const callingQueues = clinicQueues.filter(q => q.status === 'calling' || q.status === 'in_progress');
+  // Filter queues by status. Date-scoped to today: an abandoned ticket from
+  // weeks ago that nobody ever marked completed/cancelled used to count
+  // forever, so this KPI (and each doctor's "active" count) only ever grew —
+  // a doctor's own view showed "2 kutmoqda" while this showed "37".
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isToday = (q: QueueItem) => q.createdAt?.startsWith(todayStr);
+  const pendingQueues = clinicQueues.filter(q => q.status === 'pending' && isToday(q));
+  const callingQueues = clinicQueues.filter(q => (q.status === 'calling' || q.status === 'in_progress') && isToday(q));
   // All-time completed, across every tab. Every "Bugun/Bugungi" (Today) label in
   // this file used to read straight from this — meaning "today's revenue",
   // "today's admissions", and each doctor's "today" card were silently showing
@@ -452,8 +461,7 @@ export default function DirectorDashboard({
   // createdAt, the only timestamp a QueueItem carries — same convention the
   // server's own daily report snapshot uses) is what those actually need.
   const completedQueuesAllTime = clinicQueues.filter(q => q.status === 'completed');
-  const todayStr = new Date().toISOString().split('T')[0];
-  const completedQueuesToday = completedQueuesAllTime.filter(q => q.createdAt?.startsWith(todayStr));
+  const completedQueuesToday = completedQueuesAllTime.filter(isToday);
 
   // Calculations for KPI Cards
   const totalCompletedToday = completedQueuesToday.length;
@@ -463,6 +471,11 @@ export default function DirectorDashboard({
     return services.find(s => s.id === id)?.price || 0;
   };
 
+  // List price × completed visits — a forecast, not money actually taken (a
+  // discounted or partially-paid visit still counts at full price). Statistics
+  // computes the exact same number and is honest about what it is; this KPI
+  // card used to call it "Bugun joriy daromad" ("today's current revenue"),
+  // which reads as real income. Label fixed below to match.
   const todayRevenue = completedQueuesToday.reduce((sum, q) => sum + getServicePrice(q.serviceId), 0);
 
   // Doctor-clinic business relationship for this clinic (rental vs revenue-share); no
@@ -701,7 +714,7 @@ export default function DirectorDashboard({
           <h1 className="text-xl sm:text-2xl font-black mt-2 tracking-tight font-display">
             {clinicNameStr === "Samarqand Filiali" ? t("Samarqand Filiali Boshqaruv Markazi") : `${clinicNameStr} ${t("Boshqaruv Markazi")}`} — {new Date().toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}
           </h1>
-          <p className="text-xs text-indigo-205/75 mt-1 font-semibold leading-relaxed">{t("Sizga bog'langan klinika tarmog'ini masofadan analitika va biznes mantiqi yordamida boshqaring.")}</p>
+          <p className="text-xs text-indigo-200/75 mt-1 font-semibold leading-relaxed">{t("Sizga bog'langan klinika tarmog'ini masofadan analitika va biznes mantiqi yordamida boshqaring.")}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 z-10 shrink-0">
@@ -754,7 +767,7 @@ export default function DirectorDashboard({
               <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-1.5 uppercase">
                 <Search className="text-blue-500 w-4 h-4" /> {t("Bemorlarni qidirish")}
               </h3>
-              <button onClick={() => setShowSearchModal(false)} className="text-slate-400 hover:text-slate-650">
+              <button onClick={() => setShowSearchModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -794,7 +807,7 @@ export default function DirectorDashboard({
 
             <button
               onClick={() => { setShowSearchModal(false); setSearchQuery(''); }}
-              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-755 font-bold rounded-xl text-xs transition-all cursor-pointer"
+              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-all cursor-pointer"
             >
               {t("Yopish")}
             </button>
@@ -887,9 +900,9 @@ export default function DirectorDashboard({
         >
           <div>
             <span className="text-[11px] text-slate-500 font-extrabold block uppercase tracking-widest mb-1.5 group-hover:text-emerald-400 transition-colors">
-              {t("Bugun joriy daromad")}
+              {t("Bugungi potentsial tushum")}
             </span>
-            <div className="text-md font-black text-emerald-400 font-mono flex items-baseline gap-1 mt-2">
+            <div className="text-base font-black text-emerald-400 font-mono flex items-baseline gap-1 mt-2">
               {todayRevenue.toLocaleString('uz-UZ')} <span className="text-[10px] text-emerald-500/50 uppercase">{t("UZS")}</span>
             </div>
           </div>
@@ -950,8 +963,8 @@ export default function DirectorDashboard({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             
             {/* Shifokorlar bugungi hisoboti (Tab 1 left part) */}
-            <div className="lg:col-span-8 bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/80 shadow-md">
-              <h3 className="text-sm font-extrabold text-slate-850 uppercase tracking-widest mb-4 border-b border-slate-50 pb-2">
+            <div className="lg:col-span-8 bg-white text-slate-800 rounded-3xl p-5 border border-slate-100/80 shadow-md">
+              <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-widest mb-4 border-b border-slate-50 pb-2">
                 🩺 Shifokorlar bugungi ko'rsatkichlari
               </h3>
 
@@ -966,7 +979,7 @@ export default function DirectorDashboard({
                       <th className="px-4 py-2.5 text-center">Amallar</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50 font-semibold text-slate-705">
+                  <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
                     {clinicDoctors.map((doc) => {
                       const stats = getDocTodayStats(doc.id);
                       const link = getDoctorLink(doc.id);
@@ -1034,7 +1047,7 @@ export default function DirectorDashboard({
                               <span className="text-slate-300">|</span>
                               <button
                                 onClick={() => setDoctorToDelete(doc)}
-                                className="text-rose-650 hover:text-rose-800 font-extrabold underline cursor-pointer text-[11px] flex items-center gap-0.5"
+                                className="text-rose-600 hover:text-rose-800 font-extrabold underline cursor-pointer text-[11px] flex items-center gap-0.5"
                               >
                                 🗑️ {t("O'chirish")}
                               </button>
@@ -1049,7 +1062,7 @@ export default function DirectorDashboard({
             </div>
 
             {/* Xizmatlar (bugun) (Tab 1 right part) */}
-            <div className="lg:col-span-4 bg-white text-slate-800 rounded-[2rem] p-5 lg:p-6 border border-slate-150/80 shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] flex flex-col h-full max-h-[650px] relative overflow-hidden group/catalog">
+            <div className="lg:col-span-4 bg-white text-slate-800 rounded-[2rem] p-5 lg:p-6 border border-slate-100/80 shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] flex flex-col h-full max-h-[650px] relative overflow-hidden group/catalog">
               {/* Decorative backgrounds */}
               <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-indigo-50/50 via-sky-50/30 to-transparent rounded-bl-full pointer-events-none -mr-8 -mt-8 transition-transform duration-700 group-hover/catalog:scale-110" />
               
@@ -1149,11 +1162,11 @@ export default function DirectorDashboard({
 
           {/* Full width: bugungi barcha navbatlar list */}
           {/* BEMORLAR TAHLILI - YANGI VS JAMI ALOHIDA (CREATIVE TABBED LAYOUT) */}
-          <div id="bemorlar-baza" className="bg-white text-slate-800 rounded-3xl p-6 border border-slate-150/80 shadow-lg space-y-6">
+          <div id="bemorlar-baza" className="bg-white text-slate-800 rounded-3xl p-6 border border-slate-100/80 shadow-lg space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-widest text-[#0ea5e9]">👥 Bemorlar Ma'lumot BAZASI</span>
-                <h3 className="text-md font-black text-slate-850 mt-1">
+                <h3 className="text-base font-black text-slate-800 mt-1">
                   Yangi va Jami Ro'yxatdan O'tganlar Tafsiloti
                 </h3>
               </div>
@@ -1208,14 +1221,14 @@ export default function DirectorDashboard({
             {/* Render selected sub-section */}
             {selectedPatientTab === 'yangi' ? (
               <div className="space-y-4">
-                <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl text-xs text-amber-850 leading-relaxed">
+                <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl text-xs text-amber-800 leading-relaxed">
                   💡 <strong>Bugun Navbatda Turgan Yangi Bemorlar:</strong> Ushbu ro'yxat bugun elektron chipta orqali yoki shaxsan kelib navbat olgan va klinikani ziyorat qilayotgan bemorlarni ko'rsatadi. Bu ma'lumotlar real-vaqt rejimida avtomatik ravishda yangilanadi.
                 </div>
 
                 <div className="overflow-x-auto text-xs">
                   <table className="w-full min-w-[700px] text-left border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 text-slate-405 text-[10px] uppercase font-extrabold border-b border-slate-100">
+                      <tr className="bg-slate-50 text-slate-400 text-[10px] uppercase font-extrabold border-b border-slate-100">
                         <th className="px-4 py-3"># Chipta</th>
                         <th className="px-4 py-3">F.I.SH Ismi</th>
                         <th className="px-4 py-3">Aloqa raqami</th>
@@ -1250,7 +1263,7 @@ export default function DirectorDashboard({
                               <td className="px-4 py-3 text-slate-700">
                                 {doc?.name || 'Nevizual/Boshqa'}
                               </td>
-                              <td className="px-4 py-3 text-slate-650">
+                              <td className="px-4 py-3 text-slate-600">
                                 {srv?.name || 'Ko\'rik'}
                               </td>
                               <td className="px-4 py-3">
@@ -1273,7 +1286,7 @@ export default function DirectorDashboard({
                                 )}
                               </td>
                               <td className="px-4 py-3 text-right text-amber-400 text-xs">
-                                {item.rating ? '★'.repeat(item.rating) : <span className="text-slate-350 font-normal font-mono text-[10px]">-</span>}
+                                {item.rating ? '★'.repeat(item.rating) : <span className="text-slate-300 font-normal font-mono text-[10px]">-</span>}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <button 
@@ -1294,7 +1307,7 @@ export default function DirectorDashboard({
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="p-4 bg-sky-500/5 border border-sky-500/10 rounded-2xl text-xs text-sky-850 leading-relaxed flex items-center justify-between gap-3 flex-wrap">
+                <div className="p-4 bg-sky-500/5 border border-sky-500/10 rounded-2xl text-xs text-sky-800 leading-relaxed flex items-center justify-between gap-3 flex-wrap">
                   <div>
                     💡 <strong>Klinika Passport Bemorlar BAZASI (CRM):</strong> Quyida klinika terminali, telefon va mobil ilova orqali bugungacha ro'yxatdan o'tgan barcha tarixiy va faol bemorlar bazasining sinxron tahlili keltirilgan.
                   </div>
@@ -1306,7 +1319,7 @@ export default function DirectorDashboard({
                 <div className="overflow-x-auto text-xs">
                   <table className="w-full min-w-[700px] text-left border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 text-slate-405 text-[10px] uppercase font-extrabold border-b border-slate-100">
+                      <tr className="bg-slate-50 text-slate-400 text-[10px] uppercase font-extrabold border-b border-slate-100">
                         <th className="px-4 py-3">Bemor F.I.SH</th>
                         <th className="px-4 py-3">ID / Passport</th>
                         <th className="px-4 py-3">Aloqa raqami</th>
@@ -1321,7 +1334,7 @@ export default function DirectorDashboard({
                       {directoryPatients.map((pt) => (
                         <tr key={pt.id} className="hover:bg-slate-50/20 transition-all">
                           <td className="px-4 py-3">
-                            <span className="text-slate-850 font-extrabold block">{pt.fullName}</span>
+                            <span className="text-slate-800 font-extrabold block">{pt.fullName}</span>
                           </td>
                           <td className="px-4 py-3 font-mono text-[10.5px] text-slate-400">
                             {pt.passport}
@@ -1329,7 +1342,7 @@ export default function DirectorDashboard({
                           <td className="px-4 py-3 font-mono text-slate-500">
                             {pt.phone}
                           </td>
-                          <td className="px-4 py-3 text-center text-slate-550 font-mono">
+                          <td className="px-4 py-3 text-center text-slate-500 font-mono">
                             {pt.age !== null ? `${pt.age} yosh` : '—'}
                           </td>
                           <td className="px-4 py-3 text-center text-slate-500 font-mono font-bold">
@@ -1427,7 +1440,7 @@ export default function DirectorDashboard({
                       value={newDocName}
                       onChange={(e) => setNewDocName(e.target.value)}
                       placeholder="Masalan: Dr. Sardor Rustamov"
-                      className="w-full bg-white border border-slate-250 text-xs font-bold text-slate-800 rounded-xl px-4 py-2.5 focus:border-cyan-500 focus:outline-none"
+                      className="w-full bg-white border border-slate-200 text-xs font-bold text-slate-800 rounded-xl px-4 py-2.5 focus:border-cyan-500 focus:outline-none"
                     />
                   </div>
 
@@ -1436,7 +1449,7 @@ export default function DirectorDashboard({
                     <select
                       value={newDocSpecialty}
                       onChange={(e) => setNewDocSpecialty(e.target.value)}
-                      className="w-full bg-white border border-slate-250 text-xs font-bold text-slate-800 rounded-xl px-4 py-2.5 focus:border-cyan-500"
+                      className="w-full bg-white border border-slate-200 text-xs font-bold text-slate-800 rounded-xl px-4 py-2.5 focus:border-cyan-500"
                     >
                       <option value="Stomatolog-ortoped">Stomatolog-ortoped</option>
                       <option value="Xirurg-Stomatolog">Xirurg-Stomatolog</option>
@@ -1474,11 +1487,11 @@ export default function DirectorDashboard({
               const link = getDoctorLink(doc.id);
               const isRental = link?.relationshipType === 'rental';
               return (
-                <div key={doc.id} className="bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md">
+                <div key={doc.id} className="bg-white rounded-3xl p-5 border border-slate-100/80 shadow-md">
                   <div className="flex items-center gap-4 border-b border-slate-50 pb-4 mb-4">
                     <img src={doc.image} alt={doc.name} className="w-16 h-16 rounded-2xl object-cover shrink-0 border-2 border-blue-500 shadow-sm" referrerPolicy="no-referrer" />
                     <div>
-                      <h3 className="text-md font-extrabold text-slate-800 flex items-center gap-1.5">
+                      <h3 className="text-base font-extrabold text-slate-800 flex items-center gap-1.5">
                         {doc.name}
                         {link?.relationshipType === 'independent' && (
                           <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-100">
@@ -1506,11 +1519,11 @@ export default function DirectorDashboard({
                     <div className="grid grid-cols-3 gap-2.5 text-center mb-4">
                       <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                         <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider">Bugun</span>
-                        <strong className="text-xs font-bold text-slate-750 font-mono">{todayStats.completedCount} kishi</strong>
+                        <strong className="text-xs font-bold text-slate-700 font-mono">{todayStats.completedCount} kishi</strong>
                       </div>
                       <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                         <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider">Haftalik</span>
-                        <strong className="text-xs font-bold text-slate-750 font-mono">{todayStats.completedThisWeek} kishi</strong>
+                        <strong className="text-xs font-bold text-slate-700 font-mono">{todayStats.completedThisWeek} kishi</strong>
                       </div>
                       <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                         <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider">Erkinligi</span>
@@ -1520,7 +1533,7 @@ export default function DirectorDashboard({
                   )}
 
                   <div className="flex items-center justify-between pt-1">
-                    <span className="text-[10px] text-slate-450 font-bold">Status:🟢 Qabulga tayyor</span>
+                    <span className="text-[10px] text-slate-400 font-bold">Status:🟢 Qabulga tayyor</span>
                     <button
                       onClick={() => setActiveTab && setActiveTab('shifokor')}
                       className="text-blue-500 hover:text-blue-600 text-xs font-extrabold flex items-center gap-0.5 hover:underline cursor-pointer"
@@ -1956,7 +1969,7 @@ export default function DirectorDashboard({
       {activeSubTab === 'obuna' && (
         <div className="space-y-6">
           {/* Main Info Box */}
-          <div className="bg-white text-slate-800 rounded-3xl p-6 border border-slate-150/80 shadow-md">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 border border-slate-100/80 shadow-md">
             <div className="flex items-center justify-between border-b border-slate-50 pb-4 flex-wrap gap-4">
               <div className="flex items-center gap-2">
                 <span className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">💳</span>
@@ -2013,7 +2026,7 @@ export default function DirectorDashboard({
                 <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">
                   {t("Oylik abonent to'lovi")}
                 </span>
-                <strong className="text-lg text-indigo-750 font-semibold block mt-1.5 font-mono">
+                <strong className="text-lg text-indigo-700 font-semibold block mt-1.5 font-mono">
                   {(myClinic?.rentalPrice || 1500000).toLocaleString('uz-UZ')} {t("so'm")}
                 </strong>
                 <span className="text-xs text-slate-400 font-semibold mt-1 block">
@@ -2038,7 +2051,7 @@ export default function DirectorDashboard({
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start text-slate-800">
             {/* Interactive Billing Form */}
-            <div className="lg:col-span-4 bg-white rounded-3xl p-5 border border-slate-150/80 shadow-md">
+            <div className="lg:col-span-4 bg-white rounded-3xl p-5 border border-slate-100/80 shadow-md">
               <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-3 block">
                 💳 {t("To'lovni amalga oshirish")}
               </h4>
@@ -2073,11 +2086,11 @@ export default function DirectorDashboard({
                         </p>
                       </div>
                       <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-left space-y-1">
-                        <div className="text-[10px] text-slate-405 flex justify-between">
+                        <div className="text-[10px] text-slate-400 flex justify-between">
                           <span>{t("Summa:")}</span>
                           <span className="font-bold font-mono text-slate-800">{pendingApprovalInvoice.amount.toLocaleString()} UZS</span>
                         </div>
-                        <div className="text-[10px] text-slate-405 flex justify-between">
+                        <div className="text-[10px] text-slate-400 flex justify-between">
                           <span>{t("Yuborilgan sana:")}</span>
                           <span className="font-medium font-mono text-slate-700">{pendingApprovalInvoice.dueDate}</span>
                         </div>
@@ -2111,7 +2124,7 @@ export default function DirectorDashboard({
             </div>
 
             {/* Invoices History Table */}
-            <div className="lg:col-span-8 bg-white text-slate-800 rounded-3xl p-5 border border-slate-150/80 shadow-md space-y-4">
+            <div className="lg:col-span-8 bg-white text-slate-800 rounded-3xl p-5 border border-slate-100/80 shadow-md space-y-4">
               <div className="flex items-center justify-between border-b border-slate-50 pb-3">
                 <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400 block">
                   📜 {t("To'lovlar tarixi monitoringi (Filial bo'yicha)")}
@@ -2124,7 +2137,7 @@ export default function DirectorDashboard({
               <div className="overflow-x-auto">
                 <table className="w-full text-xs text-left">
                   <thead>
-                    <tr className="border-b border-slate-100 text-slate-420 font-black tracking-wider uppercase text-[10px]">
+                    <tr className="border-b border-slate-100 text-slate-400 font-black tracking-wider uppercase text-[10px]">
                       <th className="py-2.5">{t("Kvitansiya ID")}</th>
                       <th className="py-2.5">{t("Muddati")}</th>
                       <th className="py-2.5 text-right">{t("Summa (UZS)")}</th>

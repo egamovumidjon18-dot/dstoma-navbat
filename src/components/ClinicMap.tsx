@@ -331,7 +331,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
           <div class="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold border-2 shrink-0 shadow-lg ${
             isSelected
               ? 'bg-cyan-600 text-white border-white scale-110 shadow-cyan-500/55'
-              : 'bg-[#0f172a] text-cyan-405 border-cyan-500 hover:border-cyan-400 hover:text-cyan-350'
+              : 'bg-[#0f172a] text-cyan-400 border-cyan-500 hover:border-cyan-400 hover:text-cyan-300'
           }">
             ${clinic.logo || '🦷'}
           </div>
@@ -634,7 +634,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         {/* Sorted list of Clinics based on Geolocation closeness */}
         <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 scrollbar-thin">
           {!selectedClinic && filteredClinics.length > 0 && (
-            <div className="p-3.5 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 text-emerald-350 text-[11px] leading-relaxed relative overflow-hidden flex flex-col gap-1 shadow-sm text-left animate-fade-in mb-1">
+            <div className="p-3.5 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 text-emerald-300 text-[11px] leading-relaxed relative overflow-hidden flex flex-col gap-1 shadow-sm text-left animate-fade-in mb-1">
               <div className="flex items-center gap-1.5 font-black uppercase text-[10px] text-emerald-400">
                 <Info className="w-3.5 h-3.5 shrink-0" />
                 {t('recommendedLabel')}
@@ -693,7 +693,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                         target="_blank"
                         referrerPolicy="no-referrer"
                         rel="noopener noreferrer"
-                        className="text-cyan-400 hover:text-cyan-350 font-black flex items-center gap-0.5 text-[8.5px] uppercase shrink-0 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-500/20"
+                        className="text-cyan-400 hover:text-cyan-300 font-black flex items-center gap-0.5 text-[8.5px] uppercase shrink-0 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-500/20"
                         title="Link"
                         onClick={(e) => e.stopPropagation()}
                       >
@@ -706,12 +706,12 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                     {clinic.address}
                   </p>
                   
-                  <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-[#1e3256]/30 text-slate-404">
-                    <span className="font-semibold text-slate-305 flex items-center gap-1 bg-[#10b981]/5 px-2 py-0.5 rounded border border-[#10b981]/15">
-                      <Navigation className="text-emerald-450 w-3 h-3" />
-                      {t('distanceFromYou')}: <strong className="text-emerald-450">{clinic.distance} km</strong>
+                  <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-[#1e3256]/30 text-slate-400">
+                    <span className="font-semibold text-slate-300 flex items-center gap-1 bg-[#10b981]/5 px-2 py-0.5 rounded border border-[#10b981]/15">
+                      <Navigation className="text-emerald-400 w-3 h-3" />
+                      {t('distanceFromYou')}: <strong className="text-emerald-400">{clinic.distance} km</strong>
                     </span>
-                    <span className="flex items-center gap-0.5 font-bold text-[10px] text-emerald-450 uppercase">
+                    <span className="flex items-center gap-0.5 font-bold text-[10px] text-emerald-400 uppercase">
                       <Activity className="w-3 h-3 text-emerald-400 animate-pulse" />
                       {clinic.activePatients} {t('activeOnQueue')}
                     </span>
@@ -719,7 +719,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
 
                   {/* Explicit CTA Select Button to select by name/item */}
                   <div className="mt-3 pt-2.5 border-t border-[#1e3256]/20 flex items-center justify-between">
-                    <span className="text-[9px] font-bold text-slate-550 uppercase tracking-widest text-slate-400">
+                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest text-slate-400">
                       {isSelected 
                         ? t('selectedLabel')
                         : t('notActiveLabel')
@@ -764,7 +764,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                           target="_blank"
                           referrerPolicy="no-referrer"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-1 py-1 text-[9px] font-black text-rose-450 bg-rose-950/40 border border-rose-500/20 rounded-lg hover:bg-rose-500 hover:text-white transition-all uppercase"
+                          className="flex items-center justify-center gap-1 py-1 text-[9px] font-black text-rose-400 bg-rose-950/40 border border-rose-500/20 rounded-lg hover:bg-rose-500 hover:text-white transition-all uppercase"
                         >
                           2GIS Navigation
                         </a>
@@ -853,8 +853,8 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
         {selectedClinic && (
           <div className="absolute top-14 sm:top-4 right-2 sm:right-4 z-40 max-w-[270px] bg-slate-950/95 backdrop-blur-md p-3 rounded-2xl shadow-2xl border border-[#1e3256]/60 text-left scale-90 sm:scale-100 origin-top-right">
             <div className="flex items-center justify-between gap-1 mb-1.5">
-              <div className="flex items-center gap-1 text-[8.5px] uppercase tracking-wider font-slate-400 text-emerald-450 font-black leading-none">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-405 shrink-0" /> {t('verifiedClinicLabel')}
+              <div className="flex items-center gap-1 text-[8.5px] uppercase tracking-wider font-slate-400 text-emerald-400 font-black leading-none">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> {t('verifiedClinicLabel')}
               </div>
               <button 
                 onClick={(e) => {
@@ -862,7 +862,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                   e.stopPropagation();
                   onSelectClinic(null as any);
                 }}
-                className="text-[9px] text-slate-400 hover:text-slate-205 bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 leading-none font-bold"
+                className="text-[9px] text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 leading-none font-bold"
               >
                 {t('closeLabel')}
               </button>
@@ -871,8 +871,8 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
             <p className="text-[10px] text-slate-400 overflow-hidden leading-relaxed mb-1.5">{selectedClinic.address}</p>
             <div className="space-y-1.5 pt-1.5 border-t border-[#1e3256]/30">
               <div className="flex items-center justify-between text-[11px] font-semibold text-slate-300">
-                <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-emerald-405 shrink-0" /> {selectedClinic.phone}</span>
-                <span className="text-emerald-450 font-black">{getDistance(userLat, userLng, selectedClinic.lat, selectedClinic.lng)} km</span>
+                <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> {selectedClinic.phone}</span>
+                <span className="text-emerald-400 font-black">{getDistance(userLat, userLng, selectedClinic.lat, selectedClinic.lng)} km</span>
               </div>
               <div className="grid grid-cols-2 gap-1.5 text-center">
                 <a
