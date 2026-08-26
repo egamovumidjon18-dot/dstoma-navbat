@@ -699,10 +699,14 @@ export default function DirectorDashboard({
   // Calculate subscription alert conditions
   const isTrial = myClinic?.subscriptionStatus === 'trial';
   const isSuspended = myClinic?.subscriptionStatus === 'suspended';
+  // No fallback to a made-up 30 — that silently told a clinic with no payment
+  // date on file "30 kun qoldi" right next to a "belgilanmagan" label for the
+  // very same field, and suppressed the warning banner (30 >= 7) for exactly
+  // the case that most needs one: nobody has set a payment date at all.
   const daysDiff = myClinic?.nextPaymentDate
     ? Math.floor((new Date(myClinic.nextPaymentDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-    : 30;
-  const showWarning = isTrial || isSuspended || daysDiff < 7;
+    : null;
+  const showWarning = isTrial || isSuspended || daysDiff === null || daysDiff < 7;
 
   return (
     <div className="space-y-6 font-sans text-left">
@@ -744,8 +748,8 @@ export default function DirectorDashboard({
             </h3>
             <p className="text-xs text-slate-700 mt-1">
               {language === 'uz' ? 'Sizning' : t("sizning obuna statusingiz filial uchun")} <strong>{clinicNameStr}</strong>: <span className="font-bold underline text-amber-900">{isSuspended ? t("To'xtatilgan ❌") : isTrial ? t("1 haftalik bepul trial (sinov) muddatida 🎁") : t("Faol ✅")}</span>.
-              &nbsp;{t("To'g'ridan-to'g'ri to'lov muddati:")} <strong className="font-mono text-amber-900">{myClinic?.nextPaymentDate || t("belgilanmagan")}</strong> {daysDiff <= 0 ? `(${t("Kechikkan!")})` : `(${daysDiff} ${t("kun qoldi")})`}.
-              &nbsp;{t("Oylik obuna narxi:")} <strong className="text-indigo-900 font-mono">{(myClinic?.rentalPrice || 1500000).toLocaleString('uz-UZ')} {t("so'm")}</strong>.
+              &nbsp;{t("To'g'ridan-to'g'ri to'lov muddati:")} <strong className="font-mono text-amber-900">{myClinic?.nextPaymentDate || t("belgilanmagan")}</strong> {daysDiff === null ? '' : daysDiff <= 0 ? `(${t("Kechikkan!")})` : `(${daysDiff} ${t("kun qoldi")})`}.
+              &nbsp;{t("Oylik obuna narxi:")} <strong className="text-indigo-900 font-mono">{myClinic?.rentalPrice ? `${myClinic.rentalPrice.toLocaleString('uz-UZ')} ${t("so'm")}` : t("belgilanmagan")}</strong>.
             </p>
           </div>
           <div className="flex gap-2 self-stretch sm:self-auto shrink-0">
@@ -1022,7 +1026,10 @@ export default function DirectorDashboard({
                             </>
                           )}
                           <td className="px-4 py-3.5 text-center text-amber-400 font-sans font-bold">
-                            ★ {doc.rating.toFixed(1)}
+                            {/* A brand-new doctor is created with rating: 5.0 as a
+                                placeholder default and no reviews yet — showing it
+                                unconditionally read as a genuine 5-star record. */}
+                            {doc.ratingCount ? `★ ${doc.rating.toFixed(1)}` : <span className="text-slate-300 font-normal">—</span>}
                           </td>
                           <td className="px-4 py-3.5 text-center">
                             <div className="flex items-center justify-center gap-2.5">
@@ -1255,7 +1262,12 @@ export default function DirectorDashboard({
                               </td>
                               <td className="px-4 py-3">
                                 <span className="text-slate-800 font-bold block">{item.patientName}</span>
-                                <span className="text-[10px] font-mono text-emerald-600 uppercase tracking-wider bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100/55 inline-block">Bugun Yangi</span>
+                                {/* This table lists every ticket the clinic has ever had, not
+                                    just today's — the badge used to say "Bugun Yangi" on every
+                                    row regardless of age. */}
+                                {isToday(item) && (
+                                  <span className="text-[10px] font-mono text-emerald-600 uppercase tracking-wider bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100/55 inline-block">Bugun Yangi</span>
+                                )}
                               </td>
                               <td className="px-4 py-3 text-slate-500 font-mono">
                                 {item.patientPhone}
@@ -1289,12 +1301,16 @@ export default function DirectorDashboard({
                                 {item.rating ? '★'.repeat(item.rating) : <span className="text-slate-300 font-normal font-mono text-[10px]">-</span>}
                               </td>
                               <td className="px-4 py-3 text-center">
-                                <button 
-                                  onClick={() => onCancelQueue && onCancelQueue(item.id)}
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm("Ushbu navbatni bekor qilmoqchimisiz?")) {
+                                      onCancelQueue && onCancelQueue(item.id);
+                                    }
+                                  }}
                                   className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded shrink-0 text-[10px] font-extrabold uppercase transition-all"
-                                  title="O'chirish (Fake bemorni olib tashlash)"
+                                  title="Navbatni bekor qilish"
                                 >
-                                  O'chirish
+                                  Bekor qilish
                                 </button>
                               </td>
                             </tr>
@@ -1502,7 +1518,11 @@ export default function DirectorDashboard({
                       <p className="text-xs text-slate-400 font-semibold">{doc.specialty}</p>
 
                       <div className="flex items-center text-amber-500 text-xs mt-1.5 gap-1 font-bold">
-                        <span>★ {doc.rating.toFixed(1)}</span>
+                        {doc.ratingCount ? (
+                          <span>★ {doc.rating.toFixed(1)}</span>
+                        ) : (
+                          <span className="text-slate-300 font-normal">—</span>
+                        )}
                         <span className="text-slate-400 text-[10px] font-normal font-mono">({doc.ratingCount || 0} sharhlar)</span>
                       </div>
                     </div>
@@ -1533,7 +1553,11 @@ export default function DirectorDashboard({
                   )}
 
                   <div className="flex items-center justify-between pt-1">
-                    <span className="text-[10px] text-slate-400 font-bold">Status:🟢 Qabulga tayyor</span>
+                    {/* Used to hardcode "🟢 Qabulga tayyor" regardless of doc.status —
+                        a doctor who was busy or at lunch still showed as ready. */}
+                    <span className="text-[10px] text-slate-400 font-bold">
+                      Status:{doc.status === 'idle' ? '🟢 Qabulga tayyor' : doc.status === 'busy' ? '🔴 Band' : '🟡 Tushlikda'}
+                    </span>
                     <button
                       onClick={() => setActiveTab && setActiveTab('shifokor')}
                       className="text-blue-500 hover:text-blue-600 text-xs font-extrabold flex items-center gap-0.5 hover:underline cursor-pointer"
@@ -2004,7 +2028,9 @@ export default function DirectorDashboard({
                   {myClinic?.nextPaymentDate || t("Mavjud emas")}
                 </strong>
                 <span className="text-xs text-slate-400 font-semibold mt-1 block">
-                  {daysDiff <= 0
+                  {daysDiff === null
+                    ? t("To'lov sanasi belgilanmagan.")
+                    : daysDiff <= 0
                     ? t("Muddati o'tgan! Iltimos to'lashni amalga oshiring.")
                     : (() => {
                         const daysLeftTpl: Record<string, string> = {
@@ -2027,7 +2053,10 @@ export default function DirectorDashboard({
                   {t("Oylik abonent to'lovi")}
                 </span>
                 <strong className="text-lg text-indigo-700 font-semibold block mt-1.5 font-mono">
-                  {(myClinic?.rentalPrice || 1500000).toLocaleString('uz-UZ')} {t("so'm")}
+                  {/* This used to fall back to a hardcoded 1,500,000 so'm whenever
+                      rentalPrice wasn't actually set, presenting a fabricated fee
+                      as the clinic's real subscription price. */}
+                  {myClinic?.rentalPrice ? `${myClinic.rentalPrice.toLocaleString('uz-UZ')} ${t("so'm")}` : t("belgilanmagan")}
                 </strong>
                 <span className="text-xs text-slate-400 font-semibold mt-1 block">
                   {t("Yillik litsenziya imtiyozlari qo'llanilgan.")}
