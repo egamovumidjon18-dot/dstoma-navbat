@@ -1136,7 +1136,20 @@ async function syncQueueToGoogleCalendar(item: QueueItem, action: 'upsert' | 'de
     // token, refreshing it if the library's cached one has expired. This is
     // the one thing google-auth-library's OAuth2Client does for us that a
     // hand-rolled fetch-only implementation would otherwise have to redo.
-    const { token: accessToken } = await oauth2Client.getAccessToken();
+    let accessToken: string | null | undefined;
+    try {
+      accessToken = (await oauth2Client.getAccessToken()).token;
+    } catch (err: any) {
+      // invalid_grant = the doctor revoked access from their Google account
+      // settings (or the token was otherwise invalidated) — every future sync
+      // for them would fail the exact same way forever. Without this, the UI
+      // keeps showing "✅ ulangan" while nothing has actually synced in who
+      // knows how long, which is worse than just being honestly disconnected.
+      if (String(err?.message || "").includes("invalid_grant")) {
+        await saveDoctor({ id: doctor.id, googleRefreshToken: null, googleCalendarConnected: false } as any);
+      }
+      throw err;
+    }
     if (!accessToken) return;
     const calendarId = encodeURIComponent(doctor.googleCalendarId || "primary");
     const calendarApi = (path: string, init: RequestInit) =>

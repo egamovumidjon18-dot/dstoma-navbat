@@ -1163,9 +1163,11 @@ export default function ClientDashboard({
                 body: JSON.stringify({ rating }),
               });
               if (!res.ok) throw new Error(`Rating rejected (${res.status})`);
+              return true;
             } catch (err) {
               console.warn('[ClientDashboard] Failed to submit rating', err);
               showToast(t("Baholashda xatolik yuz berdi. Qayta urinib ko'ring."), "error");
+              return false;
             }
           }}
           onGoToBooking={() => {

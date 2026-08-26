@@ -200,7 +200,7 @@ export default function PatientPanel({
   // else already rates a visit via the "★1-5" buttons the bot sends on
   // completion (server.ts buildRatingKeyboard). Same POST /api/queues/:id/rate
   // either way, so both paths feed the same live doctor/clinic rating average.
-  onRateQueue?: (queueId: string, rating: number) => void;
+  onRateQueue?: (queueId: string, rating: number) => Promise<boolean>;
   familyMembers?: Patient[];
   onUnlinkFamilyMember?: (member: Patient) => Promise<void>;
   onRegisterFamilyMember?: (info: NewFamilyMemberInfo) => Promise<Patient>;
@@ -1570,7 +1570,7 @@ function QuickAction({ icon, title, desc, bg, border, onClick }: { icon: React.R
 // one — the in-app fallback for patients with no linked Telegram chat, who
 // otherwise have no way to rate a visit at all (everyone else already does
 // this via the bot's "★1-5" buttons sent on completion).
-function QueueRatingRow({ queue, onRateQueue, t }: { queue: QueueItem; onRateQueue?: (queueId: string, rating: number) => void; t: (s: string) => string }) {
+function QueueRatingRow({ queue, onRateQueue, t }: { queue: QueueItem; onRateQueue?: (queueId: string, rating: number) => Promise<boolean>; t: (s: string) => string }) {
   const [isSaving, setIsSaving] = useState(false);
   const [justRated, setJustRated] = useState<number | null>(null);
 
@@ -1598,10 +1598,18 @@ function QueueRatingRow({ queue, onRateQueue, t }: { queue: QueueItem; onRateQue
             key={n}
             type="button"
             disabled={isSaving}
-            onClick={() => {
+            onClick={async () => {
               setIsSaving(true);
               setJustRated(n);
-              onRateQueue(queue.id, n);
+              // Rolls back the optimistic star display if the server actually
+              // rejected it (e.g. network failure, or the visit wasn't really
+              // 'completed' yet) — this used to leave "baholandi" showing
+              // permanently even when nothing was ever saved.
+              const ok = await onRateQueue(queue.id, n);
+              if (!ok) {
+                setJustRated(null);
+                setIsSaving(false);
+              }
             }}
             className="p-0.5 disabled:opacity-60"
             aria-label={`${n} ${t("yulduzcha")}`}
