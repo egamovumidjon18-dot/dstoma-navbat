@@ -3,6 +3,7 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../services/firebase";
 import { Patient, PaymentReceipt, Reminder, TreatmentCharge } from "../types";
 import { patientBalance, itemBalance, type PlanItemLike } from "../utils/treatmentBilling";
+import { fetchTreatmentCharges } from "../utils/treatmentCharges";
 import { useHistoryLayer } from "../hooks/useHistoryLayer";
 import { decodeLegacyEntities } from "../utils/textFormat";
 import { getApiUrl } from "../services/api";
@@ -432,6 +433,26 @@ export default function PatientProfile({
     );
     return () => unsub();
   }, [patientId]);
+
+  // charges/receipts used to only load once the staff member clicked into the
+  // "to'lovlar" tab (fetchReceipts was gated on activeTab === "payments", and
+  // nothing ever called setCharges at all) — so `balance`/`totalDebt` below,
+  // which the cash-payment box prefills from, silently used undiscounted list
+  // prices and zero payments until then. Both now load as soon as the profile
+  // opens, same as planItems.
+  useEffect(() => {
+    if (!patientId || !staffToken) return;
+    let active = true;
+    fetchTreatmentCharges({ patientId: String(patientId) }, staffToken)
+      .then((data) => { if (active) setCharges(data); });
+    fetch(`${getApiUrl()}/api/payment-receipts?patientId=${encodeURIComponent(String(patientId))}`, {
+      headers: { Authorization: `Bearer ${staffToken}` },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => { if (active) setReceipts(Array.isArray(data) ? data : []); })
+      .catch(() => { if (active) setReceipts([]); });
+    return () => { active = false; };
+  }, [patientId, staffToken]);
 
   // Every money figure on this screen comes from one place. Crucially this nets
   // confirmed payments off the plan total — the old code summed plan prices only,
