@@ -62,6 +62,8 @@ const PATIENT_PANEL_TRANSLATIONS: Record<string, PatientPanelDictEntry> = {
   "eslatmalarim": { ru: "Мои напоминания", en: "My reminders", kk: "Менің ескертулерім", ky: "Менин эскертүүлөрүм", tg: "Ёдоварҳои ман", tk: "Meniň duýduryşlarym" },
   oilam: { ru: "Моя семья", en: "My family", kk: "Менің отбасым", ky: "Менин үй-бүлөм", tg: "Оилаи ман", tk: "Maşgalam" },
   "tish sxemasi": { ru: "Зубная карта", en: "Dental chart", kk: "Тіс картасы", ky: "Тиш картасы", tg: "Харитаи дандон", tk: "Diş kartasy" },
+  "navbatlar": { ru: "Очереди", en: "Queues", kk: "Кезектер", ky: "Кезектер", tg: "Навбатҳо", tk: "Nobatlar" },
+  "profil": { ru: "Профиль", en: "Profile", kk: "Профиль", ky: "Профиль", tg: "Профил", tk: "Profil" },
   sozlamalar: { ru: "Настройки", en: "Settings", kk: "Баптаулар", ky: "Тууралоолор", tg: "Танзимот", tk: "Sazlamalar" },
   "ko'rilayotgan kabinet": { ru: "Просматриваемый кабинет", en: "Viewing cabinet", kk: "Қаралып жатқан кабинет", ky: "Каралып жаткан кабинет", tg: "Кабинети дидашаванда", tk: "Görülýän kabinet" },
   men: { ru: "Я", en: "Me", kk: "Мен", ky: "Мен", tg: "Ман", tk: "Men" },
@@ -1313,6 +1315,7 @@ export default function PatientPanel({
         onNavigate={(tab) => setActiveTab(tab)}
         onBook={() => onGoToBooking?.()}
         onOpenMore={() => setIsMobileNavOpen(true)}
+        t={t}
       />
     </div>
   );

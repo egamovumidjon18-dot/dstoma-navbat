@@ -984,7 +984,7 @@ export default function ClientDashboard({
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !password) {
-      showToast("Iltimos, yulduzcha (*) qo'yilgan barcha majburiy maydonlarni to'ldiring!", "error");
+      showToast(t("Iltimos, yulduzcha (*) qo'yilgan barcha majburiy maydonlarni to'ldiring!"), "error");
       return;
     }
     const newPatient: Patient = {
@@ -1084,7 +1084,7 @@ export default function ClientDashboard({
         setPatients(prev => prev.some(p => p.id === foundPatient.id) ? prev.map(p => p.id === foundPatient.id ? foundPatient : p) : [...prev, foundPatient]);
         setCurrentUser(foundPatient);
         setTelegramIdInput(foundPatient.telegramChatId || '');
-        showToast("Kabinetga muvaffaqiyatli kirdingiz!");
+        showToast(t("Kabinetga muvaffaqiyatli kirdingiz!"));
         setActiveSubView('cabinet');
       } else {
         showToast("Login yoki parol noto'g'ri. Hisobingiz yo'q bo'lsa, 'Ro'yxatdan o'tish' orqali yarating.", "error");
@@ -1743,7 +1743,7 @@ export default function ClientDashboard({
           clinic={selectedClinic}
           onCancelQueue={(id) => {
             onCancelQueue(id);
-            showToast("Navbat bekor qilindi", "error");
+            showToast(t("Navbat bekor qilindi"), "error");
           }}
           onGoToBooking={() => {
             // One active ticket per patient — send them to their existing
