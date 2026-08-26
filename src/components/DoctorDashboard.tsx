@@ -4586,10 +4586,10 @@ export default function DoctorDashboard({
       )}
 
       {showNewBookingModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl border border-slate-100 flex flex-col max-h-[90vh]">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md sm:max-w-xl lg:max-w-2xl overflow-hidden shadow-xl border border-slate-100 flex flex-col max-h-[96vh] sm:max-h-[90vh]">
+            <div className="p-4 sm:px-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+              <h3 className="font-bold text-slate-800 text-base sm:text-lg flex items-center gap-2">
                 <CalendarClock className="w-5 h-5 text-purple-500" />
                 {editingQueueId ? t("tahrirlash") : t("yangi bandlash")}
               </h3>
@@ -4600,7 +4600,7 @@ export default function DoctorDashboard({
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-5 flex flex-col gap-4 overflow-y-auto">
+            <div className="p-4 sm:p-6 flex flex-col gap-4 sm:gap-5 overflow-y-auto">
               {/* Two ways to fill in the patient: pick an existing record
                   (search-only, name/phone read-only) or register a brand-new
                   one right here (editable name/phone, same creation call
@@ -5038,7 +5038,7 @@ export default function DoctorDashboard({
                       {filteredServices.length === 0 ? (
                         <p className="text-[11px] text-slate-400 font-medium px-1">{t("muolaja topilmadi")}</p>
                       ) : (
-                        <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-0.5">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 sm:max-h-64 overflow-y-auto pr-0.5">
                           {filteredServices.map((s: any) => (
                             <button
                               key={s.id}
@@ -5103,17 +5103,17 @@ export default function DoctorDashboard({
                 </div>
               </div>
             </div>
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0">
+            <div className="p-4 sm:px-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0">
               <button
                 onClick={() => setShowNewBookingModal(false)}
-                className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-200 rounded-xl transition-colors"
+                className="px-4 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-200 rounded-xl transition-colors"
               >
                 {t("bekor qilish")}
               </button>
               <button
                 onClick={handleNewBooking}
                 disabled={!newBookingName.trim() || !newBookingDate || !newBookingTime || isSavingNewBooking || (!editingQueueId && newBookingMode === 'existing' && !newBookingSelectedPatientId)}
-                className="px-4 py-2 text-sm font-bold bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-colors shadow-md shadow-purple-500/20"
+                className="px-5 py-2.5 text-sm font-bold bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-colors shadow-md shadow-purple-500/20"
               >
                 {editingQueueId ? t("saqlash") : t("tasdiqlash")}
               </button>
