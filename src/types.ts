@@ -58,6 +58,14 @@ export interface Doctor {
   // cold starts. Never exposed via GET /api/doctors (see the response mapping
   // there, which whitelists fields the same way password is excluded).
   telegramChatId?: string;
+  // Google Calendar sync (one-way: DStoma -> Google only). Same shape as
+  // telegramChatId above — googleRefreshToken is written/read server-only and
+  // NEVER included in the GET /api/doctors response; googleCalendarConnected
+  // is the one safe derived boolean the client actually sees, driving the
+  // connect/disconnect button in the doctor's own settings.
+  googleCalendarConnected?: boolean;
+  googleRefreshToken?: string;
+  googleCalendarId?: string; // usually 'primary'
   // Doctor-configurable weekly schedule used to render the "Rejalashtirilgan"
   // time-slot grid. Falls back to a default (08:00-18:00, 60min, 13:00-14:00
   // lunch) when absent — see DEFAULT_WORKING_HOURS in DoctorDashboard.tsx.
@@ -301,6 +309,11 @@ export interface QueueItem {
   // has gone out for this appointment — the idempotency guard against the
   // job running more than once for the same day.
   reminderSentAt?: string;
+  // Set once this appointment is pushed to the doctor's connected Google
+  // Calendar (see server.ts syncQueueToGoogleCalendar) — lets later
+  // update/delete calls target the right event instead of creating a
+  // duplicate. Absent for every queue whose doctor hasn't connected Calendar.
+  googleEventId?: string;
 }
 
 export interface SaaSPayment {

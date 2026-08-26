@@ -138,6 +138,12 @@ const VIEW_TITLES: Record<string, string> = {
 };
 
 const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
+  "google calendar": { ru: "Google Календарь", en: "Google Calendar", kk: "Google Күнтізбе", ky: "Google Календары", tg: "Тақвими Google", tk: "Google Senenama" },
+  "dstoma jadvalingiz shaxsiy google calendar'ingizga avtomatik qo'shiladi.": { ru: "Ваше расписание DStoma будет автоматически добавляться в личный Google Календарь.", en: "Your DStoma schedule will be automatically added to your personal Google Calendar.", kk: "DStoma кестеңіз жеке Google Күнтізбеңізге автоматты түрде қосылады.", ky: "DStoma жадыбалыңыз жеке Google Календарыңызга автоматтык кошулат.", tg: "Ҷадвали DStoma-и шумо ба таквими шахсии Google-и шумо automatически илова мешавад.", tk: "DStoma tertibiňiz şahsy Google Senenamaňyza awtomatiki goşular." },
+  "ulangan": { ru: "Подключено", en: "Connected", kk: "Қосылған", ky: "Туташтырылган", tg: "Пайваст", tk: "Birikdirildi" },
+  "google calendar bilan bog'lash": { ru: "Подключить Google Календарь", en: "Connect Google Calendar", kk: "Google Күнтізбені қосу", ky: "Google Календарын туташтыруу", tg: "Пайваст кардани Google Тақвим", tk: "Google Senenama birikdirmek" },
+  "uzish": { ru: "Отключить", en: "Disconnect", kk: "Ажырату", ky: "Ажыратуу", tg: "Ҷудо кардан", tk: "Aýyrmak" },
+  "google calendar uzildi": { ru: "Google Календарь отключён", en: "Google Calendar disconnected", kk: "Google Күнтізбе ажыратылды", ky: "Google Календары ажыратылды", tg: "Google Тақвим ҷудо шуд", tk: "Google Senenama aýryldy" },
   "qabul yakunlandi": { ru: "Приём завершён", en: "Visit completed", kk: "Қабылдау аяқталды", ky: "Кабыл алуу аяктады", tg: "Қабул анҷом ёфт", tk: "Kabul tamamlandy" },
   "to'liq": { ru: "Полностью", en: "Full", kk: "Толық", ky: "Толук", tg: "Пурра", tk: "Doly" },
   "qisman": { ru: "Частично", en: "Partial", kk: "Ішінара", ky: "Жарым-жартылай", tg: "Қисман", tk: "Bölekleýin" },
@@ -1439,6 +1445,27 @@ export default function DoctorDashboard({
       if (ok) setShowScheduleSettingsModal(false);
     } finally {
       setIsSavingScheduleSettings(false);
+    }
+  };
+
+  const [isDisconnectingGoogle, setIsDisconnectingGoogle] = useState(false);
+  const [googleCalendarMsg, setGoogleCalendarMsg] = useState<string | null>(null);
+  const handleDisconnectGoogleCalendar = async () => {
+    setIsDisconnectingGoogle(true);
+    try {
+      const res = await fetch('/api/google-calendar/disconnect', {
+        method: 'POST',
+        headers: staffAuthHeaders(),
+      });
+      if (res.ok) {
+        setGoogleCalendarMsg(t("google calendar uzildi"));
+        // No local doctors state here to optimistically flip — the next poll
+        // cycle (this app already polls doctors/queues periodically) picks up
+        // googleCalendarConnected: false from the server.
+      }
+    } finally {
+      setIsDisconnectingGoogle(false);
+      setTimeout(() => setGoogleCalendarMsg(null), 3000);
     }
   };
 
@@ -4558,6 +4585,38 @@ export default function DoctorDashboard({
                       />
                     </div>
                   </div>
+                )}
+              </div>
+
+              <div className="border-t border-slate-100 pt-4">
+                <span className="text-xs font-bold text-slate-600 block mb-1">📅 {t("google calendar")}</span>
+                <p className="text-[11px] text-slate-400 font-semibold leading-snug mb-2.5">
+                  {t("dstoma jadvalingiz shaxsiy google calendar'ingizga avtomatik qo'shiladi.")}
+                </p>
+                {currentDoctor?.googleCalendarConnected ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-emerald-600 flex items-center gap-1.5">✅ {t("ulangan")}</span>
+                    <button
+                      type="button"
+                      onClick={handleDisconnectGoogleCalendar}
+                      disabled={isDisconnectingGoogle}
+                      className="px-3 py-1.5 text-xs font-bold text-rose-500 hover:bg-rose-50 disabled:opacity-40 rounded-lg transition-colors border border-rose-100"
+                    >
+                      {t("uzish")}
+                    </button>
+                  </div>
+                ) : (
+                  <a
+                    href={`/api/google-calendar/connect?token=${encodeURIComponent(staffToken || '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-lg transition-colors"
+                  >
+                    📅 {t("google calendar bilan bog'lash")}
+                  </a>
+                )}
+                {googleCalendarMsg && (
+                  <p className="text-[11px] font-bold text-emerald-600 mt-2">{googleCalendarMsg}</p>
                 )}
               </div>
             </div>

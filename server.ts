@@ -6,6 +6,13 @@ import path from "path";
 import dotenv from "dotenv";
 import crypto from "crypto";
 import { Type } from "@google/genai";
+// Deliberately the lightweight auth-only package, not the full `googleapis`
+// SDK — that package bundles generated types for every Google API and its
+// sheer type-checking surface crashed `tsc` with an out-of-memory error on
+// this machine. Only OAuth2 (get a token, refresh a token) is needed here;
+// the actual Calendar API calls go through plain fetch() below, same as
+// every other external call in this file.
+import { OAuth2Client } from "google-auth-library";
 // The single money authority, shared verbatim with the frontend so the two can
 // never disagree about a balance. It is a pure module (types only, no firebase,
 // no react), so esbuild bundles it into dist/server.cjs cleanly.
@@ -365,6 +372,7 @@ interface QueueItem {
   telegramChatId?: string;
   complaint?: string;
   reminderSentAt?: string;
+  googleEventId?: string;
 }
 
 const g = globalThis as any;
@@ -1024,6 +1032,158 @@ async function saveAdminCreds(login: string, pass: string, alreadyHashed = false
 // Dynamic variables to hold active Telegram Bot Tokens in memory for cross-client synchrony
 let activeTelegramToken = process.env.VITE_TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "";
 let activeDoctorBotToken = process.env.DOCTOR_BOT_TOKEN || "";
+
+// --- Google Calendar sync (one-way: DStoma -> Google only) ---
+//
+// One OAuth client for the whole app (provisioned once by the SaaS owner in
+// Google Cloud Console — not superadmin-editable at runtime like the Telegram
+// token, since it never needs to change without a code deploy anyway).
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || "";
+
+function newGoogleOAuthClient() {
+  return new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
+}
+
+// One-time-use nonce -> doctorId, so GET /api/google-calendar/callback (a plain
+// browser redirect from Google, no Authorization header available) knows which
+// doctor to attach the resulting refresh token to, without trusting anything
+// Google echoes back unverified. Same in-memory-Map shape as staffSessions etc.
+const googleConnectNonces = new Map<string, { doctorId: string; expiresAt: number }>();
+
+app.get("/api/google-calendar/connect", async (req, res) => {
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
+    return res.status(503).send("Google Calendar integratsiyasi hali sozlanmagan. Administratorga murojaat qiling.");
+  }
+  // This is a top-level browser navigation (the doctor clicks a link that must
+  // end up at Google's own consent page), not a fetch() call — there is no way
+  // to attach an Authorization header to it. The doctor's staffToken is passed
+  // as a query param instead, purely to resolve the session the same way the
+  // header normally would; getAuthContext still does the actual verification.
+  if (!req.headers.authorization && req.query.token) {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  const auth = await getAuthContext(req);
+  if (!auth.staff || auth.staff.role !== 'doctor' || !auth.staff.doctorId) {
+    return res.status(401).send("Shifokor sessiyasi topilmadi. Qayta kiring.");
+  }
+  const nonce = crypto.randomBytes(24).toString("hex");
+  googleConnectNonces.set(nonce, { doctorId: auth.staff.doctorId, expiresAt: Date.now() + 10 * 60 * 1000 });
+
+  const oauth2Client = newGoogleOAuthClient();
+  const url = oauth2Client.generateAuthUrl({
+    access_type: "offline", // required to get back a refresh_token, not just a short-lived access token
+    prompt: "consent",      // forces the consent screen every time, so a refresh_token is issued even on a re-connect
+    scope: ["https://www.googleapis.com/auth/calendar.events"],
+    state: nonce,
+  });
+  res.redirect(url);
+});
+
+app.get("/api/google-calendar/callback", async (req, res) => {
+  const code = String(req.query.code || "");
+  const nonce = String(req.query.state || "");
+  const pending = googleConnectNonces.get(nonce);
+  googleConnectNonces.delete(nonce); // one-time use regardless of outcome
+
+  if (!code || !pending || pending.expiresAt < Date.now()) {
+    return res.status(400).send("Google ulanishi muddati tugagan yoki bekor qilindi. Qaytadan urinib ko'ring.");
+  }
+  try {
+    const oauth2Client = newGoogleOAuthClient();
+    const { tokens } = await oauth2Client.getToken(code);
+    if (!tokens.refresh_token) {
+      // Happens if the doctor had already granted consent before and Google
+      // decided not to re-issue a refresh_token — prompt: 'consent' above is
+      // meant to prevent this, but fail loudly rather than silently no-op.
+      return res.status(400).send("Google'dan uzoq muddatli ruxsat olinmadi. Google hisobingizdagi ulangan ilovalar ro'yxatidan DStoma'ni olib tashlab, qayta urinib ko'ring.");
+    }
+    await saveDoctor({ id: pending.doctorId, googleRefreshToken: tokens.refresh_token, googleCalendarConnected: true, googleCalendarId: 'primary' } as any);
+  } catch (err: any) {
+    console.error("[Google Calendar] OAuth callback failed:", err.message);
+    return res.status(500).send("Google Calendar bilan bog'lashda xatolik yuz berdi.");
+  }
+  // Plain HTML instead of a redirect back into the SPA: this response comes
+  // straight from Google's servers to whatever browser the doctor did the
+  // consent flow in, which may not even be the same tab/session as the app.
+  res.send("<html><body style='font-family:sans-serif;text-align:center;padding:40px'><h2>✅ Google Calendar ulandi!</h2><p>Bu oynani yopib, DStoma ilovasiga qaytishingiz mumkin.</p></body></html>");
+});
+
+app.post("/api/google-calendar/disconnect", async (req, res) => {
+  const auth = await getAuthContext(req);
+  if (!auth.staff || auth.staff.role !== 'doctor' || !auth.staff.doctorId) {
+    return res.status(401).json({ ok: false, error: "Shifokor sessiyasi topilmadi" });
+  }
+  await saveDoctor({ id: auth.staff.doctorId, googleRefreshToken: null, googleCalendarConnected: false } as any);
+  res.json({ ok: true });
+});
+
+// Pushes a single appointment to its doctor's connected Google Calendar.
+// No-ops immediately (the common case — most doctors never connect) if the
+// doctor has no refresh token. Never throws into a caller's request/response
+// cycle — same fire-and-forget discipline as the existing Telegram sends.
+async function syncQueueToGoogleCalendar(item: QueueItem, action: 'upsert' | 'delete'): Promise<void> {
+  try {
+    if (!GOOGLE_CLIENT_ID || !item.doctorId) return;
+    const doctors = await getDoctors();
+    const doctor: any = doctors.find((d: any) => d.id === item.doctorId);
+    if (!doctor?.googleRefreshToken) return;
+
+    const oauth2Client = newGoogleOAuthClient();
+    oauth2Client.setCredentials({ refresh_token: doctor.googleRefreshToken });
+    // Exchanges the stored refresh_token for a fresh (short-lived) access
+    // token, refreshing it if the library's cached one has expired. This is
+    // the one thing google-auth-library's OAuth2Client does for us that a
+    // hand-rolled fetch-only implementation would otherwise have to redo.
+    const { token: accessToken } = await oauth2Client.getAccessToken();
+    if (!accessToken) return;
+    const calendarId = encodeURIComponent(doctor.googleCalendarId || "primary");
+    const calendarApi = (path: string, init: RequestInit) =>
+      fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events${path}`, {
+        ...init,
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", ...(init.headers || {}) },
+      });
+
+    if (action === 'delete') {
+      if (!item.googleEventId) return;
+      const res = await calendarApi(`/${item.googleEventId}`, { method: "DELETE" });
+      // 404/410 = already gone (e.g. deleted by hand in Google Calendar) — not an error for us.
+      if (!res.ok && res.status !== 404 && res.status !== 410) {
+        throw new Error(`Calendar delete failed: ${res.status}`);
+      }
+      return;
+    }
+
+    // upsert — walk-in tickets with no scheduled time have nothing to push
+    if (!item.appointmentDate || !item.appointmentTime) return;
+    const slotMinutes = doctor.workingHours?.slotMinutes || 60;
+    const start = new Date(`${item.appointmentDate}T${item.appointmentTime}:00`);
+    if (Number.isNaN(start.getTime())) return;
+    const end = new Date(start.getTime() + slotMinutes * 60 * 1000);
+
+    const eventBody = {
+      summary: `DStoma: ${item.patientName || "Bemor"}`,
+      description: item.complaint ? `Shikoyat: ${item.complaint}` : undefined,
+      start: { dateTime: start.toISOString() },
+      end: { dateTime: end.toISOString() },
+    };
+
+    if (item.googleEventId) {
+      const res = await calendarApi(`/${item.googleEventId}`, { method: "PATCH", body: JSON.stringify(eventBody) });
+      if (!res.ok) throw new Error(`Calendar update failed: ${res.status}`);
+    } else {
+      const res = await calendarApi("", { method: "POST", body: JSON.stringify(eventBody) });
+      if (!res.ok) throw new Error(`Calendar insert failed: ${res.status}`);
+      const created = await res.json();
+      if (created.id) {
+        await saveQueue({ ...item, googleEventId: created.id } as QueueItem);
+      }
+    }
+  } catch (err: any) {
+    console.error(`[Google Calendar] Sync failed for queue ${item.id}:`, err.message);
+  }
+}
 
 async function loadTelegramCreds() {
   if (fDb) {
@@ -2060,6 +2220,12 @@ app.post("/api/queues", rateLimiter(20, 60 * 1000), async (req, res) => {
 
   await saveQueue(newQueueItem as QueueItem);
 
+  // Fire-and-forget — a doctor who hasn't connected Google Calendar (the vast
+  // majority) no-ops instantly inside this call, so this never adds meaningful
+  // latency to booking. Only meaningful for a scheduled appointment; a walk-in
+  // ticket with no date/time is a no-op inside the function itself too.
+  syncQueueToGoogleCalendar(newQueueItem as QueueItem, 'upsert').catch(() => {});
+
   // A patient's "treating doctor" (primaryDoctorId) tracks whoever they most
   // recently booked a queue with, so it stays accurate as a patient switches
   // doctors over time — this is also what scopes each doctor's "Bemorlar" list
@@ -2176,7 +2342,12 @@ app.patch("/api/queues/:id", async (req, res) => {
         ...(updateFields.medical_notes !== undefined ? { medicalNotes: sanitizeString(updateFields.medical_notes) } : {})
       };
       await saveQueue(updatedItem);
-      
+
+      // Fire-and-forget, same no-op-if-not-connected discipline as the create
+      // path. A cancelled visit removes its calendar event rather than leaving
+      // a stale "still scheduled" block on the doctor's personal calendar.
+      syncQueueToGoogleCalendar(updatedItem, updatedItem.status === 'cancelled' ? 'delete' : 'upsert').catch(() => {});
+
       const item = updatedItem as QueueItem;
       // Memory sync as requested by user
       if (typeof (globalThis as any)._queuesDb !== 'undefined') {
@@ -2317,6 +2488,7 @@ app.delete("/api/queues/:id", async (req, res) => {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   await deleteQueue(id);
+  if (existing) syncQueueToGoogleCalendar(existing, 'delete').catch(() => {});
   res.json({ ok: true });
 });
 
@@ -2474,7 +2646,9 @@ app.get("/api/doctors", async (req, res) => {
     clinicId: d.clinicId,
     paymentCardNumber: d.paymentCardNumber,
     paymentPhone: d.paymentPhone,
-    workingHours: d.workingHours
+    workingHours: d.workingHours,
+    // googleRefreshToken itself is never in this whitelist — same as password.
+    googleCalendarConnected: !!d.googleRefreshToken
     };
   });
   res.json(mapped);
