@@ -1179,7 +1179,10 @@ export default function DoctorDashboard({
     try {
       const digits = q.replace(/\D/g, "");
       const params = digits.length >= 7 ? `phone=${encodeURIComponent(digits)}` : `passport=${encodeURIComponent(q)}`;
-      const res = await fetch(`/api/patients/search?${params}`);
+      // /api/patients/search is staff-only now (it was open, and that was the
+      // first step of an attack chain). Without the token it 401s and this
+      // silently showed "nothing found" for every real patient.
+      const res = await fetch(`/api/patients/search?${params}`, { headers: staffAuthHeaders() });
       const data = res.ok ? await res.json() : [];
       setCrossClinicResults(data);
     } catch (err) {

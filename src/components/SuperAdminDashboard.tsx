@@ -595,18 +595,27 @@ export default function SuperAdminDashboard({
   }, [clinics, queues, doctors]);
 
   const [patientsCount, setPatientsCount] = React.useState(0);
-  
+
+  // GET /api/patients is superadmin/staff-scoped — this fetched it with no
+  // Authorization header, so it got a 401 body, `data.length` was undefined,
+  // and the count silently sat at 0. Same omission as the main polling effect
+  // in useAppState. Also drops the 4-second interval: the full patient list is
+  // one of the heaviest payloads in the app and this only needs a count, so
+  // re-pulling it 15x a minute was pure waste — 60s matches how often the rest
+  // of the slow-moving data refreshes.
   React.useEffect(() => {
+    if (!superadminToken) return;
+    let active = true;
     const fetchPatients = () => {
-      fetch('/api/patients')
-        .then(r => r.json())
-        .then(data => setPatientsCount(data.length || 0))
+      fetch('/api/patients', { headers: { Authorization: `Bearer ${superadminToken}` } })
+        .then(r => (r.ok ? r.json() : []))
+        .then(data => { if (active) setPatientsCount(Array.isArray(data) ? data.length : 0); })
         .catch(e => console.warn(e));
     };
     fetchPatients();
-    const interval = setInterval(fetchPatients, 4000);
-    return () => clearInterval(interval);
-  }, []);
+    const interval = setInterval(fetchPatients, 60000);
+    return () => { active = false; clearInterval(interval); };
+  }, [superadminToken]);
 
   const totalPatients = patientsCount + queues.length;
 
