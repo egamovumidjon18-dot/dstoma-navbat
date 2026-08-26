@@ -1279,11 +1279,19 @@ export default function ClientDashboard({
             animate={{ opacity: 1, y: 0, x: "-50%", scale: 1 }}
             exit={{ opacity: 0, y: -20, x: "-50%", scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="fixed top-24 left-1/2 z-50 pointer-events-none"
+            // z-50 sat BEHIND the patient cabinet (z-[100]) and its own dialogs
+            // (z-[110]/[200]) — a toast fired while the cabinet was open (e.g.
+            // "Sizda allaqachon faol navbat mavjud") rendered but was never
+            // visible. Above every z-index in use anywhere in the app now.
+            className="fixed top-24 left-1/2 z-[999] pointer-events-none"
           >
-            <div className={`px-5 py-3.5 rounded-2xl shadow-xl flex items-center gap-2.5 backdrop-blur-md border ${
-              toastMsg.type === 'success' 
-                ? 'bg-emerald-500/95 border-emerald-400 text-white shadow-emerald-950/20' 
+            {/* inline-flex + a viewport-relative max-width: stays a snug,
+                content-hugging pill for a short message (unchanged from
+                before) but wraps instead of running off both edges of a
+                narrow phone screen for a long one. */}
+            <div className={`inline-flex max-w-[calc(100vw-2rem)] px-5 py-3.5 rounded-2xl shadow-xl items-center gap-2.5 backdrop-blur-md border ${
+              toastMsg.type === 'success'
+                ? 'bg-emerald-500/95 border-emerald-400 text-white shadow-emerald-950/20'
                 : 'bg-rose-500/95 border-rose-400 text-white shadow-rose-950/20'
             }`}>
               {toastMsg.type === 'success' ? (

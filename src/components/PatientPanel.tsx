@@ -1228,7 +1228,7 @@ export default function PatientPanel({
 
       {showRegisterFamilyForm && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-bold text-slate-900">{t("oila a'zosini ro'yxatdan o'tkazish")}</h3>
               <button onClick={() => setShowRegisterFamilyForm(false)} className="text-slate-400 hover:text-slate-600">
@@ -1246,7 +1246,7 @@ export default function PatientPanel({
                   placeholder={t("ism familiya (namuna)")}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("telefon")} *</label>
                   <input
@@ -1487,13 +1487,23 @@ const VisitItem: React.FC<{ date: string, badge?: string, title: string, doctor:
 };
 
 function QuickAction({ icon, title, desc, bg, border, onClick }: { icon: React.ReactNode, title: string, desc: string, bg: string, border: string, onClick?: () => void }) {
-  return (
-    <div onClick={onClick} className={`rounded-2xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-transform hover:scale-105 bg-white border ${border} shadow-sm`}>
+  // A clickable card rendered as a <div onClick> — unreachable by keyboard (no
+  // tab stop, no Enter/Space activation) and invisible to screen readers as an
+  // action. Real <button> only when there's actually an onClick to fire; the
+  // info-only cards (no onClick, e.g. "klinika bilan aloqa" with no number on
+  // file) correctly stay a plain, non-interactive div.
+  const className = `rounded-2xl p-4 flex flex-col items-center justify-center text-center bg-white border ${border} shadow-sm ${onClick ? 'cursor-pointer transition-transform hover:scale-105' : ''}`;
+  const content = (
+    <>
       <div className={`w-12 h-12 rounded-2xl ${bg} flex items-center justify-center mb-3`}>
         {icon}
       </div>
       <p className="font-bold text-slate-900 text-xs mb-1">{title}</p>
       <p className="text-[10px] text-slate-500 font-medium">{desc}</p>
-    </div>
+    </>
   );
+  if (onClick) {
+    return <button type="button" onClick={onClick} className={`${className} w-full`}>{content}</button>;
+  }
+  return <div className={className}>{content}</div>;
 }

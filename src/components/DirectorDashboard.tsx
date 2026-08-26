@@ -765,8 +765,8 @@ export default function DirectorDashboard({
 
       {/* SEARCH PATIENT MODAL POPUP */}
       {showSearchModal && (
-        <div className="fixed inset-0 z-55 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-          <div className="bg-white text-slate-800 rounded-3xl p-5 max-w-lg w-full border border-slate-100 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-5 max-w-lg w-full max-h-[90vh] overflow-y-auto border border-slate-100 shadow-2xl space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-slate-100">
               <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-1.5 uppercase">
                 <Search className="text-blue-500 w-4 h-4" /> {t("Bemorlarni qidirish")}
@@ -2232,7 +2232,7 @@ export default function DirectorDashboard({
       {/* DOCTOR-CLINIC RELATIONSHIP MODAL */}
       {linkEditDoctor && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
-          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl space-y-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto border border-slate-100 shadow-2xl space-y-4">
             <div className="text-center">
               <div className="w-16 h-16 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mx-auto mb-2">
                 <span className="text-3xl">🤝</span>
@@ -2338,7 +2338,7 @@ export default function DirectorDashboard({
       {/* DELETE DOCTOR CONFIRMATION MODAL */}
       {doctorToDelete && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
-          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl space-y-4 text-center">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto border border-slate-100 shadow-2xl space-y-4 text-center">
             <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-2">
               <span className="text-3xl">👨‍⚕️</span>
             </div>
@@ -2384,7 +2384,7 @@ export default function DirectorDashboard({
       {/* DELETE SERVICE CONFIRMATION MODAL */}
       {serviceToDelete && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
-          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl space-y-4 text-center">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto border border-slate-100 shadow-2xl space-y-4 text-center">
             <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-2">
               <span className="text-3xl">⚙️</span>
             </div>

@@ -944,12 +944,12 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
             </div>
 
             {/* High-Tech Constellation SVG Map */}
-            <div className="relative flex-1 w-full flex items-center justify-center py-2 select-none z-15">
+            <div className="relative flex-1 w-full flex items-center justify-center py-2 select-none z-10">
               <div className="relative w-full max-w-[580px] h-[310px] bg-[#0c1328]/50 border border-[#233355]/40 rounded-3xl p-4 flex items-center justify-center overflow-hidden">
                 <div className="absolute w-[440px] h-[440px] border border-[#1b2b4d]/40 rounded-full animate-spin" style={{ animationDuration: '40s' }} />
                 <div className="absolute w-[240px] h-[240px] border border-dashed border-[#1ea5e9]/10 rounded-full animate-spin" style={{ animationDuration: '24s', animationDirection: 'reverse' }} />
 
-                <svg viewBox="0 0 600 320" className="w-full h-full relative z-15 filter drop-shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+                <svg viewBox="0 0 600 320" className="w-full h-full relative z-10 filter drop-shadow-[0_0_15px_rgba(16,185,129,0.15)]">
                   <text x="15" y="25" fill="#384f73" fontSize="8" fontFamily="monospace">41.2995° N, 69.2401° E</text>
                   <text x="15" y="305" fill="#384f73" fontSize="8" fontFamily="monospace">GRID PROJ: MERCATOR CYBER</text>
                   

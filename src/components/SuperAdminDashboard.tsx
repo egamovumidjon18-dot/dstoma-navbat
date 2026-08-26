@@ -1027,7 +1027,7 @@ export default function SuperAdminDashboard({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-black text-slate-600 block mb-1 uppercase tracking-wide">
                     {t('subdomain')} *
@@ -1060,7 +1060,7 @@ export default function SuperAdminDashboard({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-black text-slate-600 block mb-1 uppercase tracking-wide">
                     {t('licenceFee')} *
@@ -1115,7 +1115,7 @@ export default function SuperAdminDashboard({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                 <div>
                   <label className="text-[10px] font-black text-slate-600 block mb-1 uppercase tracking-wide">
                     Latitude (Kenglik) *
@@ -1264,7 +1264,7 @@ export default function SuperAdminDashboard({
 
             <div className="space-y-3.5">
               {/* Actual Financial Metrics Grid */}
-              <div className="grid grid-cols-2 gap-3.5 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
                 <div>
                   <span className="text-[9px] text-slate-400 font-black uppercase block tracking-wider">Haqiqiy MRR (Oylik)</span>
                   <strong className="text-sm font-black text-slate-800 font-mono">
@@ -1597,7 +1597,7 @@ export default function SuperAdminDashboard({
                   className="w-full bg-slate-50 text-xs font-black font-mono text-slate-800 border border-slate-200 rounded-lg px-3 py-2.5 focus:border-[#0284c7] focus:outline-none"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="text-[9px] font-black text-slate-500 block mb-1 uppercase tracking-widest">YANGI LOGIN *</label>
                   <input
@@ -2226,7 +2226,12 @@ export default function SuperAdminDashboard({
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
+                      {/* flex-wrap: this row can hold edit/delete buttons, a status
+                          badge, and an activate/block button at once — on a narrow
+                          phone that's more than fits one line, so it now wraps to a
+                          second line instead of pushing the rightmost button (delete)
+                          off the edge of the screen. */}
+                      <div className="flex items-center flex-wrap gap-2 shrink-0">
                         <button
                           onClick={() => setClinicToEdit(clinic)}
                           className="p-1 px-2.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 rounded text-[10px] font-bold shadow-sm transition-all"
@@ -2280,7 +2285,7 @@ export default function SuperAdminDashboard({
                             </button>
                           </div>
                           
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                               <label className="text-[9px] font-black text-slate-500 block mb-1">LOGIN</label>
                               <input
@@ -2448,10 +2453,15 @@ export default function SuperAdminDashboard({
                 const isEditingDoc = editingDoctorId === doc.id;
                 return (
                   <div key={doc.id} className="py-4.5 flex flex-col gap-3">
-                    <div className="flex items-center justify-between gap-4">
-                      
+                    {/* This row never stacked on mobile — with a long doctor name and
+                        the status dot/text plus edit/delete buttons all fighting for
+                        one line, the delete button ran off the right edge of narrow
+                        phone screens. Stacks below sm: now, matching the clinic list
+                        row above. */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+
                       <div className="flex items-center gap-3">
-                        <img 
+                        <img
                           src={doc.image} 
                           alt={doc.name} 
                           onError={(e) => {
@@ -2468,7 +2478,7 @@ export default function SuperAdminDashboard({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center flex-wrap gap-1.5">
                         <span className={`w-2.5 h-2.5 rounded-full ${
                           doc.status === 'idle' ? 'bg-emerald-500' : doc.status === 'busy' ? 'bg-rose-500' : 'bg-amber-400'
                         }`} title={`Hozirgi holat: ${doc.status}`}></span>
@@ -2505,7 +2515,7 @@ export default function SuperAdminDashboard({
                             </button>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                               <label className="text-[9px] font-black text-slate-500 block mb-0.5">LOGIN</label>
                               <input
@@ -2637,7 +2647,7 @@ export default function SuperAdminDashboard({
           visible again, since it's hashed irreversibly the instant it's saved. */}
       {justSetCredential && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4">
-          <div className="bg-slate-950 text-white p-5 rounded-3xl border border-slate-800 shadow-2xl max-w-sm w-full space-y-4 relative overflow-hidden">
+          <div className="bg-slate-950 text-white p-5 rounded-3xl border border-slate-800 shadow-2xl max-w-sm w-full max-h-[90vh] overflow-y-auto overflow-x-hidden space-y-4 relative">
             <div className="absolute right-0 top-0 w-32 h-32 pointer-events-none opacity-25 bg-[radial-gradient(circle,rgba(6,182,212,0.15),transparent_70%)]"></div>
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
               <span className="text-[10px] font-extrabold text-cyan-400 tracking-widest uppercase flex items-center gap-1.5 font-mono">
@@ -2673,8 +2683,8 @@ export default function SuperAdminDashboard({
 
       {/* DETAILED CLINIC EDITING MODAL (USER REQUIREMENT) */}
       {clinicToEdit && (
-        <div className="fixed inset-0 z-55 flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
-          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-lg w-full border border-slate-100 shadow-2xl space-y-4 font-sans text-left">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto border border-slate-100 shadow-2xl space-y-4 font-sans text-left">
             {/* Modal Header */}
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
               <h3 className="text-xs font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
@@ -2712,7 +2722,7 @@ export default function SuperAdminDashboard({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
                     Subdomen (subdomain) *
@@ -2739,7 +2749,7 @@ export default function SuperAdminDashboard({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
                     Telefon raqami
@@ -2779,7 +2789,7 @@ export default function SuperAdminDashboard({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
                     Latitude (Kenglik) *
@@ -2808,7 +2818,7 @@ export default function SuperAdminDashboard({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
                     Navbatdagi to'lov muddati
@@ -2870,7 +2880,7 @@ export default function SuperAdminDashboard({
       {/* DELETE CLINIC CONFIRMATION MODAL */}
       {clinicToDelete && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
-          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl space-y-4 text-center">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto border border-slate-100 shadow-2xl space-y-4 text-center">
             <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-2">
               <ShieldAlert className="w-8 h-8" />
             </div>
@@ -2923,7 +2933,7 @@ export default function SuperAdminDashboard({
       {/* DELETE DOCTOR CONFIRMATION MODAL */}
       {doctorToDelete && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
-          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl space-y-4 text-center">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto border border-slate-100 shadow-2xl space-y-4 text-center">
             <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-2">
               <ShieldAlert className="w-8 h-8" />
             </div>
@@ -2971,7 +2981,7 @@ export default function SuperAdminDashboard({
       {/* ADD DOCTOR MODAL */}
       {showAddDoctorModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
-          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl space-y-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto border border-slate-100 shadow-2xl space-y-4">
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest text-center border-b border-slate-100 pb-2">
               {tL("Yangi Shifokor Qo'shish")}
             </h3>
@@ -3040,7 +3050,7 @@ export default function SuperAdminDashboard({
       {/* EDIT DOCTOR DETAILS MODAL */}
       {doctorToEditDetails && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
-          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full border border-slate-100 shadow-2xl space-y-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto border border-slate-100 shadow-2xl space-y-4">
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest text-center border-b border-slate-100 pb-2">
               {tL("Shifokorni Tahrirlash")}
             </h3>
