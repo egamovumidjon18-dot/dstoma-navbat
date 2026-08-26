@@ -1,22 +1,13 @@
 import React, { useState, useEffect } from 'react';
 
 import { 
-  Sparkles, 
   Sliders, 
-  RefreshCw, 
   ZoomIn, 
-  ZoomOut,
-  Info,
   Activity,
   ShieldCheck,
-  ShieldAlert,
   Bot,
   Calendar,
-  Move,
-  Compass,
   Crosshair,
-  TrendingUp,
-  Clock,
   Terminal,
   Cpu,
   Bookmark,

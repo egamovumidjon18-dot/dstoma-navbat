@@ -6,7 +6,6 @@ import { compressImage } from '../utils/imageCompressor';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { 
   Building, 
-  TrendingUp, 
   Plus, 
   CheckCircle2, 
   X, 
@@ -18,23 +17,13 @@ import {
   Eye,
   EyeOff,
   Users,
-  CreditCard,
   Crown,
   KeyRound,
-  User,
   Shield,
-  Briefcase,
-  Smartphone,
   Save,
-  RotateCcw,
   Search,
   Globe,
-  Lock,
-  ListRestart,
-  Mail,
   Inbox,
-  PenSquare,
-  AlertTriangle,
   Trash2,
   Pencil,
   Megaphone,
@@ -110,7 +99,6 @@ export default function SuperAdminDashboard({
   superadminPassword = '',
   superadminToken = null,
   onUpdateSuperadminCreds,
-  onMockSendPayment,
   onAdminImpersonate
 }: SuperAdminDashboardProps) {
 

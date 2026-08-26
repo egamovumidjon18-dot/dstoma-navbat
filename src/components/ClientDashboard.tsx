@@ -4,50 +4,18 @@ import { Clinic, Doctor, Service, QueueItem, Patient, ToothDiagnosis } from '../
 import { getApiUrl } from '../services/api';
 import { TRANSLATIONS, Language, translateMedicalText } from '../translations';
 import PatientPanel from './PatientPanel';
-import ThreeDentalModel from './ThreeDentalModel';
 import ClinicMap from './ClinicMap';
 import DoctorAvailability from './DoctorAvailability';
-import AdBanner from './AdBanner';
 import InstallAppBanner from './InstallAppBanner';
 import { 
-  User, 
-  Phone, 
-  FileText, 
-  Ticket, 
-  Star, 
-  Calendar, 
   RefreshCw, 
-  Bell, 
   AlertCircle, 
-  Sparkles, 
   CheckCircle2, 
-  Terminal, 
-  ArrowLeft, 
   LogIn, 
-  PlusCircle, 
-  Check, 
-  ChevronDown, 
-  ChevronUp,
-  Search,
-  ShieldAlert, 
-  ThumbsUp,
   UserPlus2,
-  Play,
-  Pause,
-  Zap,
-  ShieldCheck,
-  Award,
-  Upload,
-  QrCode,
-  Bot,
   MapPin,
   List as ListIcon,
-  Navigation,
-  Users,
-  Building2,
-  History
 } from 'lucide-react';
-import ClinicCard from './ClinicCard';
 
 interface ClientDashboardProps {
   clinics: Clinic[];
@@ -80,11 +48,8 @@ export default function ClientDashboard({
   services,
   queues,
   selectedClinic,
-  onSelectClinic,
   onAddQueue,
   onCancelQueue,
-  onUpdateDoctorRating,
-  setActiveTab,
   language,
   userLocationRef,
   initialSubView,

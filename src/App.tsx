@@ -43,7 +43,6 @@ export default function App() {
     handleReturnToSuperAdmin,
     saasPayments,
     userLocationRef,
-    t,
     handleUpdateClinicCreds,
     handleUpdateDoctorCreds,
     handleUpdateDoctorDetails,

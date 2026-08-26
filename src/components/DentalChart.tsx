@@ -1,16 +1,28 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { collection, doc, onSnapshot, setDoc, writeBatch } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
 import { STANDARD_SERVICES_CATALOG } from './DirectorDashboard';
 import { Language } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';
 import { saveTreatmentCharge } from '../utils/treatmentCharges';
-import { 
-  Stethoscope, Plus, History, Activity, Info, AlertTriangle, 
-  Check, X, FileText, Pill, Syringe, Brain, User, Calendar, Phone,
-  CreditCard, DollarSign, Download, Upload, Trash2, Edit, Printer, ChevronRight,
-  ZoomIn, ZoomOut, Camera, Image as ImageIcon, CheckCircle2,
-  ListTodo, Layers, Sparkles, PieChart, HeartPulse, Clock, FileDigit, Settings, Grid, RotateCcw, Search, Bell, Filter, BarChart2, Save, ShieldCheck
+import {
+  Stethoscope,
+  Plus,
+  History,
+  AlertTriangle,
+  X,
+  Brain,
+  DollarSign,
+  Edit,
+  ZoomIn,
+  ZoomOut,
+  Image as ImageIcon,
+  CheckCircle2,
+  Sparkles,
+  Grid,
+  RotateCcw,
+  Search,
+  Save
 } from 'lucide-react';
 
 export interface ToothSurfaceData {
