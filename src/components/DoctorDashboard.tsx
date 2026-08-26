@@ -145,6 +145,11 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "google calendar bilan bog'lash": { ru: "Подключить Google Календарь", en: "Connect Google Calendar", kk: "Google Күнтізбені қосу", ky: "Google Календарын туташтыруу", tg: "Пайваст кардани Google Тақвим", tk: "Google Senenama birikdirmek" },
   "uzish": { ru: "Отключить", en: "Disconnect", kk: "Ажырату", ky: "Ажыратуу", tg: "Ҷудо кардан", tk: "Aýyrmak" },
   "google calendar uzildi": { ru: "Google Календарь отключён", en: "Google Calendar disconnected", kk: "Google Күнтізбе ажыратылды", ky: "Google Календары ажыратылды", tg: "Google Тақвим ҷудо шуд", tk: "Google Senenama aýryldy" },
+  "bir to'lov": { ru: "Один платёж", en: "Single payment", kk: "Бір төлем", ky: "Бир төлөм", tg: "Як пардохт", tk: "Bir töleg" },
+  "muolaja bir marta to'liq to'lanadi. bosqichlarga bo'lish uchun sonini tanlang.": { ru: "Процедура оплачивается полностью за один раз. Чтобы разбить на этапы, выберите их количество.", en: "The procedure is paid in full at once. To split it into stages, choose how many.", kk: "Ем бір рет толық төленеді. Кезеңдерге бөлу үшін санын таңдаңыз.", ky: "Дарылоо бир жолу толук төлөнөт. Этапка бөлүү үчүн санын тандаңыз.", tg: "Муолаҷа якбора пурра пардохт мешавад. Барои ба марҳилаҳо тақсим кардан, шумораашро интихоб кунед.", tk: "Bejergi bir gezekde doly tölenýär. Tapgyrlara bölmek üçin sanyny saýlaň." },
+  "taqsimlanmagan": { ru: "Не распределено", en: "Unallocated", kk: "Бөлінбеген", ky: "Бөлүштүрүлбөгөн", tg: "Тақсимнашуда", tk: "Paýlanmadyk" },
+  "ortiqcha": { ru: "Превышение", en: "Over", kk: "Артық", ky: "Ашык", tg: "Зиёдатӣ", tk: "Artykmaç" },
+  "teng bo'lish": { ru: "Разделить поровну", en: "Split evenly", kk: "Тең бөлу", ky: "Тең бөлүү", tg: "Баробар тақсим", tk: "Deň bölmek" },
   "chegirma": { ru: "Скидка", en: "Discount", kk: "Жеңілдік", ky: "Арзандатуу", tg: "Тахфиф", tk: "Arzanlaşyk" },
   "foiz (%)": { ru: "Процент (%)", en: "Percent (%)", kk: "Пайыз (%)", ky: "Пайыз (%)", tg: "Фоиз (%)", tk: "Göterim (%)" },
   "chegirma sababi": { ru: "Причина скидки", en: "Discount reason", kk: "Жеңілдік себебі", ky: "Арзандатуу себеби", tg: "Сабаби тахфиф", tk: "Arzanlaşyk sebäbi" },
@@ -1057,6 +1062,15 @@ export default function DoctorDashboard({
           discountPercent: Number(newBookingDiscountPercent) || 0,
           discountAmount: Number(newBookingDiscountAmount) || 0,
           discountReason: newBookingDiscountReason.trim() || undefined,
+          stages: newBookingStages.length > 0
+            ? newBookingStages.map((st, i) => ({
+                id: `stage_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}`,
+                name: st.name || `${i + 1}-bosqich`,
+                order: i,
+                amount: Number(st.amount) || 0,
+                status: 'planned' as const,
+              }))
+            : undefined,
         }, staffToken);
       }
 
@@ -1070,6 +1084,7 @@ export default function DoctorDashboard({
       setNewBookingDiscountPercent(0);
       setNewBookingDiscountAmount(0);
       setNewBookingDiscountReason('');
+      setNewBookingStages([]);
       setNewBookingDate(new Date().toISOString().split('T')[0]);
       setNewBookingTime(firstOpenSlot);
       if (patientCreds) setJustAddedPatientCreds(patientCreds);
@@ -1320,6 +1335,12 @@ export default function DoctorDashboard({
   const [newBookingDiscountPercent, setNewBookingDiscountPercent] = useState(0);
   const [newBookingDiscountAmount, setNewBookingDiscountAmount] = useState(0);
   const [newBookingDiscountReason, setNewBookingDiscountReason] = useState('');
+  // Optional split of one procedure into visits ("1-bosqich", "2-bosqich", ...).
+  // The DISCOUNT applies to the procedure as a whole, and the stages then divide
+  // the already-discounted total — never the other way round, so a doctor can't
+  // accidentally discount the same procedure once per stage. Empty = a single
+  // payment, which is what most bookings are.
+  const [newBookingStages, setNewBookingStages] = useState<{ name: string; amount: number }[]>([]);
   const [newBookingDate, setNewBookingDate] = useState(new Date().toISOString().split('T')[0]);
   const [newBookingTime, setNewBookingTime] = useState('09:00');
   const [isSavingNewBooking, setIsSavingNewBooking] = useState(false);
@@ -4380,7 +4401,7 @@ export default function DoctorDashboard({
                   {newBookingServiceId && (
                     <button
                       type="button"
-                      onClick={() => { setNewBookingServiceId(''); setNewBookingDiscountPercent(0); setNewBookingDiscountAmount(0); setNewBookingDiscountReason(''); }}
+                      onClick={() => { setNewBookingServiceId(''); setNewBookingDiscountPercent(0); setNewBookingDiscountAmount(0); setNewBookingDiscountReason(''); setNewBookingStages([]); }}
                       className="text-[11px] font-bold text-purple-600 hover:underline"
                     >
                       {t("boshqa muolaja tanlash")}
@@ -4398,37 +4419,68 @@ export default function DoctorDashboard({
                       discountAmount: Number(newBookingDiscountAmount) || 0,
                     });
                     const hasDiscount = finalPrice < listPrice;
+                    const staged = newBookingStages.length > 0;
+                    const stageSum = newBookingStages.reduce((sum, st) => sum + (Number(st.amount) || 0), 0);
+                    // The server rejects a charge whose stages don't add up to
+                    // exactly the discounted price (validateStageSums), so any
+                    // mismatch is surfaced here rather than as a failed save.
+                    const stageDiff = finalPrice - stageSum;
+                    // Splits the total directly rather than via percentage shares:
+                    // routing 150,000 through 34/33/33 percent gives 51,000 +
+                    // 49,500 + 49,500, when it divides evenly into 3 x 50,000.
+                    // Any leftover so'm goes to the earliest stages, so the parts
+                    // still add back up to exactly the total.
+                    const splitEvenly = (count, total) => {
+                      const base = Math.floor(total / count);
+                      let rem = total - base * count;
+                      return Array.from({ length: count }, (_, i) => ({
+                        name: `${i + 1}-bosqich`,
+                        amount: base + (i < rem ? 1 : 0),
+                      }));
+                    };
+                    // Stages divide the DISCOUNTED total, so changing the discount
+                    // has to re-split them or their sum stops matching and the
+                    // save is rejected. Existing stage names are kept.
+                    const resplitForTotal = (total) =>
+                      setNewBookingStages((prev) => prev.length === 0 ? prev :
+                        splitEvenly(prev.length, total).map((st, i) => ({ name: prev[i]?.name || st.name, amount: st.amount })));
                     return (
-                      <div className="border-2 border-purple-500 bg-purple-50 rounded-xl overflow-hidden">
-                        <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-                          <span className="text-sm font-bold text-slate-800 truncate">{selectedService.name}</span>
-                          {/* The list price stays visible even after a discount is
-                              applied — struck through next to what the patient
-                              actually pays, so the doctor can always see what was
-                              given away rather than just the final number. */}
-                          <span className="text-xs font-black shrink-0 flex items-center gap-1.5">
+                      <div className="rounded-2xl border-2 border-purple-300 bg-gradient-to-b from-purple-50 to-white overflow-hidden shadow-sm">
+                        {/* Price header — the list price stays visible next to what
+                            the patient actually pays, so the doctor always sees what
+                            was given away, not just the resulting number. */}
+                        <div className="px-3.5 py-3 bg-white/60 border-b border-purple-200">
+                          <p className="text-sm font-bold text-slate-800 leading-snug mb-1.5">{selectedService.name}</p>
+                          <div className="flex items-end justify-between gap-3">
+                            <div className="flex items-baseline gap-2">
+                              {hasDiscount && (
+                                <span className="text-xs text-slate-400 line-through font-bold">{listPrice.toLocaleString()}</span>
+                              )}
+                              <span className="text-lg font-black text-purple-700 leading-none">{finalPrice.toLocaleString()}</span>
+                              <span className="text-[11px] font-bold text-purple-400">{t("so'm")}</span>
+                            </div>
                             {hasDiscount && (
-                              <span className="text-slate-400 line-through font-bold">{listPrice.toLocaleString()}</span>
-                            )}
-                            <span className="text-purple-700">{finalPrice.toLocaleString()} so'm</span>
-                          </span>
-                        </div>
-                        <div className="bg-white/70 border-t border-purple-200 px-3 py-2.5 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold text-violet-700">{t("chegirma")}</span>
-                            {hasDiscount && (
-                              <span className="text-[11px] font-bold text-emerald-600">
-                                −{(listPrice - finalPrice).toLocaleString()} so'm
+                              <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+                                −{(listPrice - finalPrice).toLocaleString()}
                               </span>
                             )}
                           </div>
+                        </div>
+
+                        {/* Discount — applies to the procedure as a whole, never per stage. */}
+                        <div className="px-3.5 py-3 border-b border-purple-100 space-y-2">
+                          <span className="text-[11px] font-black text-violet-700 uppercase tracking-wide">{t("chegirma")}</span>
                           <div className="grid grid-cols-2 gap-2">
                             <div>
                               <label className="block text-[10px] font-bold text-slate-500 mb-1">{t("foiz (%)")}</label>
                               <input
                                 type="number" min="0" max="100" placeholder="0"
                                 value={newBookingDiscountPercent || ''}
-                                onChange={(e) => setNewBookingDiscountPercent(Number(e.target.value))}
+                                onChange={(e) => {
+                                  const v = Number(e.target.value);
+                                  setNewBookingDiscountPercent(v);
+                                  resplitForTotal(effectivePrice({ listPrice, discountPercent: v, discountAmount: Number(newBookingDiscountAmount) || 0 }));
+                                }}
                                 className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-violet-500 font-medium bg-white text-slate-800"
                               />
                             </div>
@@ -4437,7 +4489,11 @@ export default function DoctorDashboard({
                               <input
                                 type="number" min="0" placeholder="0"
                                 value={newBookingDiscountAmount || ''}
-                                onChange={(e) => setNewBookingDiscountAmount(Number(e.target.value))}
+                                onChange={(e) => {
+                                  const v = Number(e.target.value);
+                                  setNewBookingDiscountAmount(v);
+                                  resplitForTotal(effectivePrice({ listPrice, discountPercent: Number(newBookingDiscountPercent) || 0, discountAmount: v }));
+                                }}
                                 className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-violet-500 font-medium bg-white text-slate-800"
                               />
                             </div>
@@ -4450,6 +4506,75 @@ export default function DoctorDashboard({
                               onChange={(e) => setNewBookingDiscountReason(e.target.value)}
                               className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-violet-500 font-medium bg-white text-slate-800"
                             />
+                          )}
+                        </div>
+
+                        {/* Stages — split the already-discounted total across visits. */}
+                        <div className="px-3.5 py-3 space-y-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-black text-slate-600 uppercase tracking-wide">{t("bosqichlar")}</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setNewBookingStages([])}
+                                className={`px-2 py-1 rounded-lg text-[10px] font-black transition-colors border ${!staged ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-500 border-slate-200 hover:border-purple-300'}`}
+                              >
+                                {t("bir to'lov")}
+                              </button>
+                              {[2, 3, 4].map((n) => (
+                                <button
+                                  key={n}
+                                  type="button"
+                                  onClick={() => setNewBookingStages(splitEvenly(n, finalPrice))}
+                                  className={`w-7 py-1 rounded-lg text-[10px] font-black transition-colors border ${newBookingStages.length === n ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-500 border-slate-200 hover:border-purple-300'}`}
+                                >
+                                  {n}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {!staged ? (
+                            <p className="text-[10px] text-slate-400 font-medium leading-snug">
+                              {t("muolaja bir marta to'liq to'lanadi. bosqichlarga bo'lish uchun sonini tanlang.")}
+                            </p>
+                          ) : (
+                            <>
+                              <div className="space-y-1.5">
+                                {newBookingStages.map((st, i) => (
+                                  <div key={i} className="flex items-center gap-2">
+                                    <span className="w-5 h-5 shrink-0 rounded-md bg-purple-100 text-purple-700 text-[10px] font-black flex items-center justify-center">{i + 1}</span>
+                                    <input
+                                      type="text"
+                                      value={st.name}
+                                      onChange={(e) => setNewBookingStages((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                                      className="flex-1 min-w-0 border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-purple-500 font-medium bg-white text-slate-800"
+                                    />
+                                    <input
+                                      type="number" min="0"
+                                      value={st.amount || ''}
+                                      onChange={(e) => setNewBookingStages((prev) => prev.map((x, j) => j === i ? { ...x, amount: Number(e.target.value) } : x))}
+                                      className="w-24 shrink-0 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-right outline-none focus:border-purple-500 font-bold bg-white text-slate-800"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                              {stageDiff !== 0 && (
+                                <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                                  <span className="text-[10px] font-bold text-amber-700 leading-snug">
+                                    {stageDiff > 0
+                                      ? `${t("taqsimlanmagan")}: ${stageDiff.toLocaleString()}`
+                                      : `${t("ortiqcha")}: ${Math.abs(stageDiff).toLocaleString()}`}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setNewBookingStages(splitEvenly(newBookingStages.length, finalPrice))}
+                                    className="shrink-0 text-[10px] font-black text-purple-600 hover:underline"
+                                  >
+                                    {t("teng bo'lish")}
+                                  </button>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
@@ -4479,7 +4604,7 @@ export default function DoctorDashboard({
                             <button
                               key={s.id}
                               type="button"
-                              onClick={() => { setNewBookingServiceId(s.id); setNewBookingServiceQuery(''); setNewBookingDiscountPercent(0); setNewBookingDiscountAmount(0); setNewBookingDiscountReason(''); }}
+                              onClick={() => { setNewBookingServiceId(s.id); setNewBookingServiceQuery(''); setNewBookingDiscountPercent(0); setNewBookingDiscountAmount(0); setNewBookingDiscountReason(''); setNewBookingStages([]); }}
                               className="text-left border border-slate-200 hover:border-purple-400 hover:bg-purple-50 rounded-xl px-3 py-2.5 transition-colors"
                             >
                               <p className="text-xs font-bold text-slate-800 leading-snug line-clamp-2">{s.name}</p>
