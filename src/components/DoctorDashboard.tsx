@@ -54,6 +54,7 @@ import {
   Image as ImageIcon,
   Bell,
   BarChart2,
+  Star,
   LogOut,
   Menu,
   Send,
@@ -255,6 +256,8 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "hozircha rejalashtirilgan qabullar yo'q": { ru: "Пока нет запланированных приёмов", en: "No scheduled appointments yet", kk: "Әзірге жоспарланған қабылдаулар жоқ", ky: "Азырынча пландаштырылган кабылдоолор жок", tg: "Ҳанӯз қабулҳои банақшагирифташуда нест", tk: "Heniz meýilleşdirilen kabullar ýok" },
   "oldingi hafta": { ru: "Предыдущая неделя", en: "Previous week", kk: "Алдыңғы апта", ky: "Мурунку жума", tg: "Ҳафтаи гузашта", tk: "Öňki hepde" },
   "keyingi hafta": { ru: "Следующая неделя", en: "Next week", kk: "Келесі апта", ky: "Кийинки жума", tg: "Ҳафтаи оянда", tk: "Indiki hepde" },
+  "qabul": { ru: "приёмов", en: "visits", kk: "қабылдаулар", ky: "кабылдоолор", tg: "қабулҳо", tk: "kabullar" },
+  "statistikani ko'rish": { ru: "Смотреть статистику", en: "View statistics", kk: "Статистиканы көру", ky: "Статистиканы көрүү", tg: "Дидани статистика", tk: "Statistikany görmek" },
   "bu hafta": { ru: "Эта неделя", en: "This week", kk: "Осы апта", ky: "Ушул жума", tg: "Ҳамин ҳафта", tk: "Şu hepde" },
   yakshanba: { ru: "Воскресенье", en: "Sunday", kk: "Жексенбі", ky: "Жекшемби", tg: "Якшанбе", tk: "Ýekşenbe" },
   dushanba: { ru: "Понедельник", en: "Monday", kk: "Дүйсенбі", ky: "Дүйшөмбү", tg: "Душанбе", tk: "Duşenbe" },
@@ -1894,6 +1897,22 @@ export default function DoctorDashboard({
     0,
   );
 
+  // Bridges the dashboard to the Statistika tab without duplicating its full
+  // analysis — just enough real numbers (this doctor, last 7 days) to be worth
+  // a glance before drilling in. Same "list price x completed visits" shape as
+  // dailyRevenue above (a forecast, not a netted collection figure — the real
+  // discount/payment-aware number lives in Moliya/Statistika), so it's labelled
+  // the same honest way there rather than implied as money actually taken.
+  const weekAgoDate = new Date();
+  weekAgoDate.setDate(weekAgoDate.getDate() - 7);
+  const weeklyCompletedQueues = completedQueues.filter(
+    (q) => q.createdAt && new Date(q.createdAt) >= weekAgoDate,
+  );
+  const weeklyRevenue = weeklyCompletedQueues.reduce(
+    (sum, item) => sum + getServicePrice(item.serviceId),
+    0,
+  );
+
   // On mobile the drawer is either fully open or fully closed — no point
   // opening it into the icon-only "collapsed" state, so its content always
   // renders expanded there regardless of the desktop collapse toggle.
@@ -2233,26 +2252,45 @@ export default function DoctorDashboard({
                   </div>
                 </div>
 
-                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                {/* Bridges into Statistika without duplicating it — real numbers
+                    (this doctor, last 7 days), clickable straight into the full
+                    tab. Replaces a hardcoded "28 daqiqa" that measured nothing —
+                    no visit start/end timestamps are tracked anywhere to compute
+                    a real average consultation time from. */}
+                <button
+                  type="button"
+                  onClick={() => setActiveView('statistika')}
+                  className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between text-left hover:border-indigo-200 hover:shadow-md transition-all group"
+                >
                   <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-rose-50 text-rose-500 rounded-xl">
-                      <Clock className="w-5 h-5" />
+                    <div className="p-2.5 bg-indigo-50 text-indigo-500 rounded-xl">
+                      <BarChart2 className="w-5 h-5" />
                     </div>
                     <div>
                       <h3 className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                        {t("o'rtacha qabul vaqti")}
+                        {t("bu hafta")}
                       </h3>
                     </div>
                   </div>
-                  <div className="mt-3 flex items-end gap-1">
-                    <span className="text-3xl font-black text-slate-800">
-                      28
-                    </span>
-                    <span className="text-xs font-semibold text-slate-500 mb-1">
-                      {t("daqiqa")}
-                    </span>
+                  <div className="mt-3 flex items-end justify-between">
+                    <div>
+                      <span className="text-3xl font-black text-slate-800">
+                        {weeklyCompletedQueues.length}
+                      </span>
+                      <span className="text-[10px] font-semibold text-slate-400 ml-1">
+                        {t("qabul")}
+                      </span>
+                    </div>
+                    {currentDoctor && currentDoctor.ratingCount > 0 && (
+                      <span className="flex items-center gap-0.5 text-amber-500 text-xs font-black mb-1">
+                        <Star className="w-3 h-3 fill-amber-400" /> {currentDoctor.rating.toFixed(1)}
+                      </span>
+                    )}
                   </div>
-                </div>
+                  <span className="text-[9px] font-bold text-indigo-400 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {t("statistikani ko'rish")} →
+                  </span>
+                </button>
               </div>
 
               {/* Layout rows */}
@@ -2263,7 +2301,11 @@ export default function DoctorDashboard({
                     <h3 className="font-bold text-slate-800 text-base">
                       {t("bugungi navbatlar")}
                     </h3>
-                    <button className="text-blue-600 bg-blue-50 px-3 py-1 rounded-full text-xs font-bold hover:bg-blue-100 transition-colors">
+                    {/* Never actually navigated anywhere — dead button. */}
+                    <button
+                      onClick={() => setActiveView('navbatlar')}
+                      className="text-blue-600 bg-blue-50 px-3 py-1 rounded-full text-xs font-bold hover:bg-blue-100 transition-colors"
+                    >
                       {t("barcha navbatlar")}
                     </button>
                   </div>
