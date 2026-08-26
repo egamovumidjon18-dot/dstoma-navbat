@@ -19,7 +19,8 @@ import { decodeLegacyEntities } from "../utils/textFormat";
 import { TRANSLATIONS, Language, translateMedicalText } from "../translations";
 import { useHistoryLayer } from "../hooks/useHistoryLayer";
 import { allocatePayments, clinicBillingSummary } from "../utils/treatmentBilling";
-import { fetchTreatmentCharges } from "../utils/treatmentCharges";
+import { fetchTreatmentCharges, saveTreatmentCharge } from "../utils/treatmentCharges";
+import { effectivePrice } from "../utils/treatmentBilling";
 import {
   DEFAULT_WORKING_HOURS,
   WEEKDAY_NAMES_UZ,
@@ -144,6 +145,9 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "google calendar bilan bog'lash": { ru: "Подключить Google Календарь", en: "Connect Google Calendar", kk: "Google Күнтізбені қосу", ky: "Google Календарын туташтыруу", tg: "Пайваст кардани Google Тақвим", tk: "Google Senenama birikdirmek" },
   "uzish": { ru: "Отключить", en: "Disconnect", kk: "Ажырату", ky: "Ажыратуу", tg: "Ҷудо кардан", tk: "Aýyrmak" },
   "google calendar uzildi": { ru: "Google Календарь отключён", en: "Google Calendar disconnected", kk: "Google Күнтізбе ажыратылды", ky: "Google Календары ажыратылды", tg: "Google Тақвим ҷудо шуд", tk: "Google Senenama aýryldy" },
+  "chegirma": { ru: "Скидка", en: "Discount", kk: "Жеңілдік", ky: "Арзандатуу", tg: "Тахфиф", tk: "Arzanlaşyk" },
+  "foiz (%)": { ru: "Процент (%)", en: "Percent (%)", kk: "Пайыз (%)", ky: "Пайыз (%)", tg: "Фоиз (%)", tk: "Göterim (%)" },
+  "chegirma sababi": { ru: "Причина скидки", en: "Discount reason", kk: "Жеңілдік себебі", ky: "Арзандатуу себеби", tg: "Сабаби тахфиф", tk: "Arzanlaşyk sebäbi" },
   "qabul yakunlandi": { ru: "Приём завершён", en: "Visit completed", kk: "Қабылдау аяқталды", ky: "Кабыл алуу аяктады", tg: "Қабул анҷом ёфт", tk: "Kabul tamamlandy" },
   "to'liq": { ru: "Полностью", en: "Full", kk: "Толық", ky: "Толук", tg: "Пурра", tk: "Doly" },
   "qisman": { ru: "Частично", en: "Partial", kk: "Ішінара", ky: "Жарым-жартылай", tg: "Қисман", tk: "Bölekleýin" },
@@ -1032,6 +1036,30 @@ export default function DoctorDashboard({
         createdAt: new Date().toISOString(),
       };
       onAddQueue(newQueue);
+
+      // Record what this booking will actually cost, in the same treatmentCharges
+      // ledger the treatment plan writes to — otherwise a discount agreed at
+      // booking time exists nowhere and the patient is billed the full list
+      // price. Only written when there's a real service and patient to attach
+      // it to; a booking with no procedure chosen yet has nothing to charge.
+      const bookedService = services.find((sv: any) => sv.id === newBookingServiceId);
+      if (bookedService && patientId && effectiveClinicId && currentDoctor?.id) {
+        const listPrice = Number(bookedService.price) || 0;
+        await saveTreatmentCharge({
+          id: 'chg_' + Math.random().toString(36).substr(2, 9),
+          clinicId: effectiveClinicId,
+          patientId,
+          doctorId: currentDoctor.id,
+          patientName: newBookingName.trim(),
+          treatmentName: bookedService.name,
+          serviceId: bookedService.id,
+          listPrice,
+          discountPercent: Number(newBookingDiscountPercent) || 0,
+          discountAmount: Number(newBookingDiscountAmount) || 0,
+          discountReason: newBookingDiscountReason.trim() || undefined,
+        }, staffToken);
+      }
+
       setShowNewBookingModal(false);
       setNewBookingMode('existing');
       setNewBookingQuery('');
@@ -1039,6 +1067,9 @@ export default function DoctorDashboard({
       setNewBookingPhone('');
       setNewBookingSelectedPatientId(null);
       setNewBookingServiceId('');
+      setNewBookingDiscountPercent(0);
+      setNewBookingDiscountAmount(0);
+      setNewBookingDiscountReason('');
       setNewBookingDate(new Date().toISOString().split('T')[0]);
       setNewBookingTime(firstOpenSlot);
       if (patientCreds) setJustAddedPatientCreds(patientCreds);
@@ -1282,6 +1313,13 @@ export default function DoctorDashboard({
   const [newBookingMode, setNewBookingMode] = useState<'existing' | 'new'>('existing');
   const [newBookingServiceId, setNewBookingServiceId] = useState('');
   const [newBookingServiceQuery, setNewBookingServiceQuery] = useState('');
+  // Per-booking discount off the selected procedure's list price. Both kinds
+  // are supported (percentage first, then a flat sum) to match the treatment
+  // plan's own discount fields and the shared effectivePrice() rounding rule,
+  // so the same procedure discounted the same way costs the same either way.
+  const [newBookingDiscountPercent, setNewBookingDiscountPercent] = useState(0);
+  const [newBookingDiscountAmount, setNewBookingDiscountAmount] = useState(0);
+  const [newBookingDiscountReason, setNewBookingDiscountReason] = useState('');
   const [newBookingDate, setNewBookingDate] = useState(new Date().toISOString().split('T')[0]);
   const [newBookingTime, setNewBookingTime] = useState('09:00');
   const [isSavingNewBooking, setIsSavingNewBooking] = useState(false);
@@ -4342,7 +4380,7 @@ export default function DoctorDashboard({
                   {newBookingServiceId && (
                     <button
                       type="button"
-                      onClick={() => setNewBookingServiceId('')}
+                      onClick={() => { setNewBookingServiceId(''); setNewBookingDiscountPercent(0); setNewBookingDiscountAmount(0); setNewBookingDiscountReason(''); }}
                       className="text-[11px] font-bold text-purple-600 hover:underline"
                     >
                       {t("boshqa muolaja tanlash")}
@@ -4353,10 +4391,67 @@ export default function DoctorDashboard({
                   const clinicServices = services.filter((s: any) => !effectiveClinicId || s.clinicId === effectiveClinicId);
                   const selectedService = clinicServices.find((s: any) => s.id === newBookingServiceId);
                   if (selectedService) {
+                    const listPrice = Number(selectedService.price) || 0;
+                    const finalPrice = effectivePrice({
+                      listPrice,
+                      discountPercent: Number(newBookingDiscountPercent) || 0,
+                      discountAmount: Number(newBookingDiscountAmount) || 0,
+                    });
+                    const hasDiscount = finalPrice < listPrice;
                     return (
-                      <div className="flex items-center justify-between gap-3 border-2 border-purple-500 bg-purple-50 rounded-xl px-3 py-2.5">
-                        <span className="text-sm font-bold text-slate-800 truncate">{selectedService.name}</span>
-                        <span className="text-xs font-black text-purple-700 shrink-0">{Number(selectedService.price).toLocaleString()} so'm</span>
+                      <div className="border-2 border-purple-500 bg-purple-50 rounded-xl overflow-hidden">
+                        <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                          <span className="text-sm font-bold text-slate-800 truncate">{selectedService.name}</span>
+                          {/* The list price stays visible even after a discount is
+                              applied — struck through next to what the patient
+                              actually pays, so the doctor can always see what was
+                              given away rather than just the final number. */}
+                          <span className="text-xs font-black shrink-0 flex items-center gap-1.5">
+                            {hasDiscount && (
+                              <span className="text-slate-400 line-through font-bold">{listPrice.toLocaleString()}</span>
+                            )}
+                            <span className="text-purple-700">{finalPrice.toLocaleString()} so'm</span>
+                          </span>
+                        </div>
+                        <div className="bg-white/70 border-t border-purple-200 px-3 py-2.5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-violet-700">{t("chegirma")}</span>
+                            {hasDiscount && (
+                              <span className="text-[11px] font-bold text-emerald-600">
+                                −{(listPrice - finalPrice).toLocaleString()} so'm
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 mb-1">{t("foiz (%)")}</label>
+                              <input
+                                type="number" min="0" max="100" placeholder="0"
+                                value={newBookingDiscountPercent || ''}
+                                onChange={(e) => setNewBookingDiscountPercent(Number(e.target.value))}
+                                className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-violet-500 font-medium bg-white text-slate-800"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 mb-1">{t("summa (so'm)")}</label>
+                              <input
+                                type="number" min="0" placeholder="0"
+                                value={newBookingDiscountAmount || ''}
+                                onChange={(e) => setNewBookingDiscountAmount(Number(e.target.value))}
+                                className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-violet-500 font-medium bg-white text-slate-800"
+                              />
+                            </div>
+                          </div>
+                          {hasDiscount && (
+                            <input
+                              type="text"
+                              placeholder={t("chegirma sababi")}
+                              value={newBookingDiscountReason}
+                              onChange={(e) => setNewBookingDiscountReason(e.target.value)}
+                              className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-violet-500 font-medium bg-white text-slate-800"
+                            />
+                          )}
+                        </div>
                       </div>
                     );
                   }
@@ -4384,7 +4479,7 @@ export default function DoctorDashboard({
                             <button
                               key={s.id}
                               type="button"
-                              onClick={() => { setNewBookingServiceId(s.id); setNewBookingServiceQuery(''); }}
+                              onClick={() => { setNewBookingServiceId(s.id); setNewBookingServiceQuery(''); setNewBookingDiscountPercent(0); setNewBookingDiscountAmount(0); setNewBookingDiscountReason(''); }}
                               className="text-left border border-slate-200 hover:border-purple-400 hover:bg-purple-50 rounded-xl px-3 py-2.5 transition-colors"
                             >
                               <p className="text-xs font-bold text-slate-800 leading-snug line-clamp-2">{s.name}</p>
