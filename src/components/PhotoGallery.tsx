@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { collection, doc, getDoc, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
 import { useHistoryLayer } from '../hooks/useHistoryLayer';

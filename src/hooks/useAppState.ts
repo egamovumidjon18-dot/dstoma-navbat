@@ -484,7 +484,6 @@ export function useAppState() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    const clinicParam = params.get('clinic');
 
     if (tabParam && ['bemor', 'shifokor', 'boshliq', 'superadmin'].includes(tabParam)) {
       setActiveTab(tabParam as any);

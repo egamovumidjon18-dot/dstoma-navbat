@@ -289,7 +289,6 @@ const InteractiveTooth = ({
 
   const surfaces = data?.surfaces || {};
   const conditions = data?.conditions || (data?.condition ? [data.condition] : ['Healthy']);
-  const globalCondition = conditions[0] || 'Healthy';
   
   const hasCond = (c: string) => conditions.includes(c);
   
@@ -345,7 +344,6 @@ const InteractiveTooth = ({
     rootStroke = '#0891b2';
   }
 
-  const lastHistory = data?.history && data.history.length > 0 ? data.history[0] : null;
 
   const upperSingleRoot = "M 16 70 Q 25 10 34 70 Z";
   const upperMolarRoot = "M 12 70 Q 18 10 23 60 Q 25 55 27 60 Q 32 10 38 70 Z";
@@ -932,8 +930,6 @@ export default function DentalChart({
   };
 
   const currentToothData = selectedTooth ? (pendingPaintChanges[selectedTooth] || teeth[selectedTooth]) : null;
-  const currentStatus = (selectedSurface ? currentToothData?.surfaces?.[selectedSurface] : (currentToothData?.conditions?.[0] || currentToothData?.condition)) || currentToothData?.conditions?.[0] || currentToothData?.condition || 'Healthy';
-  const currentConditionLabel = CONDITIONS.find(c => c.id === currentStatus)?.label || "Sog'lom";
 
   const getICD10 = (condition: string) => {
     switch (condition) {

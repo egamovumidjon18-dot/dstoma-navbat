@@ -3,9 +3,19 @@ import { collection, doc, onSnapshot, setDoc, deleteDoc, query, collectionGroup 
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
 import { exportPrescriptionPdf, printPrescriptionPdf, exportPrescriptionsListPdf } from '../utils/pdfExport';
 import {
-  Pill, FileText, Plus, Search, Filter,
-  Send, Download, Printer, Trash2, Calendar,
-  Clock, CheckCircle, BrainCircuit, X, AlertTriangle, AlertCircle
+  Pill,
+  FileText,
+  Plus,
+  Search,
+  Send,
+  Download,
+  Printer,
+  Trash2,
+  Calendar,
+  Clock,
+  BrainCircuit,
+  X,
+  AlertCircle
 } from 'lucide-react';
 import { Language } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';

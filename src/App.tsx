@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAppState } from './hooks/useAppState';
 import ClientDashboard from './components/ClientDashboard';
 import DoctorDashboard from './components/DoctorDashboard';
@@ -8,8 +8,7 @@ import WelcomeScreen from './components/WelcomeScreen';
 import UnifiedLoginScreen from './components/welcome/UnifiedLoginScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
-import { KeyRound, ShieldAlert, LogOut, CheckCircle, Smartphone, Lock, ClipboardCheck, ChevronDown, Check } from 'lucide-react';
-import type { Language } from './translations';
+import { ShieldAlert, LogOut, Lock } from 'lucide-react';
 
 export default function App() {
   const {

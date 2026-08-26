@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Wallet, CreditCard, TrendingDown, Tag, Layers, Users, ChevronRight } from 'lucide-react';
+import { Wallet, CreditCard, TrendingDown, Tag, Layers, ChevronRight } from 'lucide-react';
 import type { PaymentReceipt, TreatmentCharge } from '../types';
 import {
   clinicBillingSummary,

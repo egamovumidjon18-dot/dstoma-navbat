@@ -2,8 +2,17 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
 import {
-  FileText, Plus, Check, Clock, XCircle, PlayCircle,
-  Download, Send, Sparkles, User, Calendar, Trash2, Search, Layers
+  FileText,
+  Plus,
+  XCircle,
+  Download,
+  Send,
+  Sparkles,
+  User,
+  Calendar,
+  Trash2,
+  Search,
+  Layers
 } from 'lucide-react';
 import { Language } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';

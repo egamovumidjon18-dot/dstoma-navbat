@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot, Sparkles, ChevronRight, Activity, FileText, Pill, Plus } from 'lucide-react';
+import { Bot, Sparkles, ChevronRight, Activity, Plus } from 'lucide-react';
 import { Patient } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
 

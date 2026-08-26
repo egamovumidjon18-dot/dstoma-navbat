@@ -1789,34 +1789,15 @@ export default function DoctorDashboard({
     return () => unsub();
   }, [activeConsultPatient?.id]);
 
-  // Smart Separation of patients: "Yangi mijozlar" & "Doimiy mijozlar"
-  const newPatients = pendingQueues.filter(q => {
-    const priorVisits = queues.filter(
-      other => other.patientName === q.patientName && other.status === "completed"
-    );
-    return priorVisits.length === 0;
-  });
-  const regularPatients = pendingQueues.filter(q => {
-    const priorVisits = queues.filter(
-      other => other.patientName === q.patientName && other.status === "completed"
-    );
-    return priorVisits.length > 0;
-  });
-
   const getServicePrice = (sId: string) => {
     const srv = services.find((s) => s.id === sId);
     return srv ? srv.price : 0;
-  };
-
-  const getServiceInfo = (sId: string) => {
-    return services.find((s) => s.id === sId);
   };
 
   const dailyRevenue = todayCompletedQueues.reduce(
     (sum, item) => sum + getServicePrice(item.serviceId),
     0,
   );
-  const avgRating = currentDoctor ? currentDoctor.rating : 4.7;
 
   // On mobile the drawer is either fully open or fully closed — no point
   // opening it into the icon-only "collapsed" state, so its content always

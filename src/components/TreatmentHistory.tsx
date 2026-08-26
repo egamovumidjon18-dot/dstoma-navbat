@@ -7,9 +7,22 @@ import type { PaymentReceipt, TreatmentCharge } from '../types';
 import { patientBalance, itemBalance } from '../utils/treatmentBilling';
 import { exportTreatmentListPdf, exportTreatmentRecordPdf } from '../utils/pdfExport';
 import {
-  History, Calendar, User, FileText, Download, Filter,
-  Search, Clock, LayoutList, List, AlertTriangle, Activity,
-  ChevronRight, ImageIcon, Camera, Link as LinkIcon, Check
+  History,
+  Calendar,
+  User,
+  FileText,
+  Download,
+  Filter,
+  Search,
+  Clock,
+  LayoutList,
+  AlertTriangle,
+  Activity,
+  ChevronRight,
+  ImageIcon,
+  Camera,
+  Link as LinkIcon,
+  Check
 } from 'lucide-react';
 import { Language } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';
@@ -199,7 +212,7 @@ export default function TreatmentHistory({ patientId, patientName, language, sta
               </div>
             ) : viewMode === 'timeline' ? (
               <div className="relative pl-6 md:pl-8 py-4 space-y-8 before:absolute before:inset-0 before:ml-[2.25rem] before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-800 before:to-transparent">
-                {filteredItems.map((item, index) => {
+                {filteredItems.map((item) => {
                   const hasWarning = checkWarnings(item.toothId, item.createdAt);
                   return (
                     <div key={item.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../services/firebase';
-import { Package, Plus, Search, Filter, AlertTriangle, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Check, X } from 'lucide-react';
+import { Package, Plus, Search, AlertTriangle, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Check, X } from 'lucide-react';
 import { Language } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';
 

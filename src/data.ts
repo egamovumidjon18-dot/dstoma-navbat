@@ -1,7 +1,7 @@
 // DIQQAT: Bu faqat development uchun mock ma'lumotlar.
 // Production da real database ishlatiladi.
 
-import { Clinic, Doctor, Service, QueueItem, CodeSnippet, SaaSPayment } from './types';
+import { Clinic, Doctor, Service, QueueItem, CodeSnippet } from './types';
 
 export const INITIAL_CLINICS: Clinic[] = [];
 

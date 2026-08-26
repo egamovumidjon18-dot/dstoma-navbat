@@ -3,10 +3,29 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../services/firebase';
 import { patientBalance } from '../utils/treatmentBilling';
 import {
-  Home, Calendar, FileText, CreditCard,
-  Smile, Clock, Bell, Users, Folder, Settings,
-  HelpCircle, ChevronDown, BellRing,
-  User, Star, Check, Phone, MessageCircle, Plus, Search, UserPlus, X, Trash2, Menu, Bot, Send, ImagePlus, Stethoscope
+  Home,
+  Calendar,
+  FileText,
+  CreditCard,
+  Smile,
+  Clock,
+  Bell,
+  Users,
+  Settings,
+  HelpCircle,
+  ChevronDown,
+  User,
+  Check,
+  Phone,
+  MessageCircle,
+  UserPlus,
+  X,
+  Trash2,
+  Menu,
+  Bot,
+  Send,
+  ImagePlus,
+  Stethoscope
 } from 'lucide-react';
 import { Patient, QueueItem, Clinic, Doctor, PaymentReceipt, TreatmentCharge } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
