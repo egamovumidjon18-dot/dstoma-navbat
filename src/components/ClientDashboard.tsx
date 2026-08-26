@@ -90,6 +90,7 @@ export default function ClientDashboard({
       "navbatni tasdiqlash": { ru: "Подтвердить очередь", en: "Confirm booking", kk: "Кезекті растау", ky: "Кезекти ырастоо", tg: "Тасдиқи навбат", tk: "Nobaty tassyklamak" },
       "ro'yxat": { ru: "Список", en: "List", kk: "Тізім", ky: "Тизме", tg: "Рӯйхат", tk: "Sanaw" },
       "shikoyatingiz (ixtiyoriy)": { ru: "Ваша жалоба (необязательно)", en: "Your complaint (optional)", kk: "Шағымыңыз (міндетті емес)", ky: "Арызыңыз (милдеттүү эмес)", tg: "Шикояти шумо (ихтиёрӣ)", tk: "Şikaýatyňyz (hökman däl)" },
+      "aloqa uchun telefon raqamingiz (ixtiyoriy)": { ru: "Ваш номер телефона для связи (необязательно)", en: "Your contact phone number (optional)", kk: "Байланыс үшін телефон нөміріңіз (міндетті емес)", ky: "Байланыш үчүн телефон номериңиз (милдеттүү эмес)", tg: "Рақами телефони шумо барои тамос (ихтиёрӣ)", tk: "Habarlaşmak üçin telefon belgiňiz (hökman däl)" },
       "xarita": { ru: "Карта", en: "Map", kk: "Карта", ky: "Карта", tg: "Харита", tk: "Karta" },
       "yangi navbat olish": { ru: "Взять новую очередь", en: "Book a new appointment", kk: "Жаңа кезек алу", ky: "Жаңы кезек алуу", tg: "Гирифтани навбати нав", tk: "Täze nobat almak" },
       "shifokorning bandligi": { ru: "Занятость врача", en: "Doctor's availability", kk: "Дәрігердің бос уақыты", ky: "Дарыгердин бош убактысы", tg: "Машғулияти духтур", tk: "Lukmanyň meşgullygy" },
@@ -1665,6 +1666,24 @@ export default function ClientDashboard({
                 </div>
               );
             })()}
+
+            {/* Contact phone — only asked when the account doesn't already have one on
+                file. Without this the booking silently sent patientPhone: '' whenever
+                a patient (registration only collects fullName + password now) hadn't
+                separately gone into Sozlamalar to fill theirs in, and the clinic had
+                no number to call if something about the appointment needed confirming. */}
+            {!currentUser?.phone && (
+              <div>
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3">{t("Aloqa uchun telefon raqamingiz (ixtiyoriy)")}</h4>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+998 90 123 45 67"
+                  className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-blue-500 bg-slate-50 focus:bg-white transition-colors text-slate-800"
+                />
+              </div>
+            )}
 
             {/* Step 3: Complaint (optional) */}
             <div>
