@@ -1892,7 +1892,28 @@ app.get("/api/patients", async (req, res) => {
   }
 
   if (auth.staff) {
-    const mine = allPatients.filter((p: any) => p.clinicId === auth.staff!.clinicId);
+    // A director is tied to exactly one clinic, but a doctor can be linked to
+    // several (doctorClinicLinks) and see their own past patients regardless of
+    // which clinic those patients are filed under — DoctorDashboard's own
+    // clinicPatients/myPatients logic already assumed this (it matches on
+    // primaryDoctorId first, clinic second). Scoping this endpoint down to a
+    // single clinicId broke exactly that: a multi-clinic doctor's own roster
+    // (or any patient tagged to a clinic other than their current session's
+    // clinic) silently disappeared, even though nothing about their data
+    // actually changed. staff.clinicId ∪ every clinic the doctor is actively
+    // linked to ∪ "this patient's primaryDoctorId is literally me" — any one
+    // of those makes a patient visible; a director still only ever gets the one.
+    let allowedClinicIds = new Set<string>([auth.staff.clinicId]);
+    if (auth.staff.role === 'doctor' && auth.staff.doctorId) {
+      const links = await getDoctorClinicLinks();
+      for (const l of links as any[]) {
+        if (l.doctorId === auth.staff!.doctorId && l.status === 'active') allowedClinicIds.add(l.clinicId);
+      }
+    }
+    const doctorId = auth.staff.doctorId;
+    const mine = allPatients.filter((p: any) =>
+      allowedClinicIds.has(p.clinicId) || (doctorId && p.primaryDoctorId === doctorId)
+    );
     return res.json(mine.map(stripPassword));
   }
 
@@ -2079,7 +2100,25 @@ app.get("/api/queues", async (req, res) => {
   const all = await getQueues();
 
   if (auth.isSuperAdmin) return res.json(all);
-  if (auth.staff) return res.json(all.filter((q: any) => q.clinicId === auth.staff!.clinicId));
+  if (auth.staff) {
+    // Same multi-clinic-doctor gap as GET /api/patients above, and it has the
+    // same symptom: a doctor linked to more than one clinic lost visibility
+    // into their own queue history (and by extension, DoctorDashboard's
+    // clinicPatients computation, which partly derives "is this my patient"
+    // from queue records) at every clinic except whichever one their current
+    // session token happens to be tied to.
+    let allowedClinicIds = new Set<string>([auth.staff.clinicId]);
+    if (auth.staff.role === 'doctor' && auth.staff.doctorId) {
+      const links = await getDoctorClinicLinks();
+      for (const l of links as any[]) {
+        if (l.doctorId === auth.staff!.doctorId && l.status === 'active') allowedClinicIds.add(l.clinicId);
+      }
+    }
+    const doctorId = auth.staff.doctorId;
+    return res.json(all.filter((q: any) =>
+      allowedClinicIds.has(q.clinicId) || (doctorId && q.doctorId === doctorId)
+    ));
+  }
 
   if (auth.patient) {
     const me = auth.patient.patientId;
