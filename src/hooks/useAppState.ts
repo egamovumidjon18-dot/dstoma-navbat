@@ -1126,19 +1126,28 @@ export function useAppState() {
     }
   };
 
-  const handleAddClinic = async (newClinic: Clinic) => {
+  const handleAddClinic = async (newClinic: Clinic): Promise<boolean> => {
     setClinics(prev => [...prev, newClinic]);
     if (!selectedClinic) {
       setSelectedClinic(newClinic);
     }
+    // This used to swallow the result entirely: the panel showed the generated
+    // login/password and a success toast the instant it was called, whether or
+    // not the server ever saved the clinic. A rejected write (e.g. the
+    // subdomain-uniqueness check losing a race) meant the optimistic add here
+    // got reverted by the next poll — after the owner had already been handed
+    // credentials for a clinic that no longer existed. Now the caller is told.
     try {
-      await fetch('/api/clinics', {
+      const res = await fetch('/api/clinics', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...superAdminAuthHeaders() },
         body: JSON.stringify(newClinic)
       });
+      if (!res.ok) throw new Error(`save failed (${res.status})`);
     } catch (e) {
       console.warn(e);
+      setClinics(prev => prev.filter(c => c.id !== newClinic.id));
+      return false;
     }
 
     const trialInvoice: SaaSPayment = {
@@ -1161,6 +1170,9 @@ export function useAppState() {
     } catch (e) {
       console.warn(e);
     }
+    // The trial invoice failing to save is not fatal to "clinic was created" —
+    // the clinic write above already succeeded, so this still reports success.
+    return true;
   };
 
   const handleAddDoctor = async (newDoc: Doctor): Promise<boolean> => {
@@ -1234,17 +1246,23 @@ export function useAppState() {
     }
   };
 
-  const handleAddService = async (newSrv: Service) => {
+  const handleAddService = async (newSrv: Service): Promise<boolean> => {
     isSyncingRef.current = true;
     setServices(prev => [...prev, newSrv]);
     try {
-      await fetch('/api/services', {
+      const res = await fetch('/api/services', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...superAdminAuthHeaders(), ...staffAuthHeaders() },
         body: JSON.stringify(newSrv)
       });
+      // This used to report success unconditionally — the director saw "xizmat
+      // saqlandi" for a service the server never actually stored.
+      if (!res.ok) throw new Error(`save failed (${res.status})`);
+      return true;
     } catch (e) {
       console.warn(e);
+      setServices(prev => prev.filter(s => s.id !== newSrv.id));
+      return false;
     } finally {
       isSyncingRef.current = false;
     }

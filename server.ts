@@ -1128,6 +1128,14 @@ app.post("/api/doctor-login", rateLimiter(5, 60 * 1000), async (req, res) => {
   if (!matched) {
     return res.status(401).json({ ok: false, error: "Login yoki parol noto'g'ri" });
   }
+  // Deleting a clinic (DELETE /api/clinics/:id) never cascades to its doctors —
+  // their records, including login credentials, are untouched. Without this
+  // check a doctor whose clinic was deleted could still log in indefinitely
+  // and act against a clinicId that no longer exists anywhere else.
+  const clinicStillExists = (await getClinics()).some((c: any) => c.id === matched.clinicId);
+  if (!clinicStillExists) {
+    return res.status(401).json({ ok: false, error: "Klinikangiz faol emas. Administrator bilan bog'laning." });
+  }
   if (!isHashedPassword(matched.password) && !isEncryptedCredential(matched.password)) {
     await saveDoctor({ id: matched.id, password: encryptCredential(password) } as any);
   }
@@ -1377,6 +1385,9 @@ app.post("/api/admin/backfill-primary-doctor", requireSuperAdmin, async (req, re
     if (name && isNewer(latestQueueByName, name)) latestQueueByName.set(name, q);
   });
 
+  // A bulk write across every patient with no preview — the panel can now show
+  // "N ta bemor yangilanadi" and get confirmation before anything is written.
+  const dryRun = !!req.query.dryRun;
   let updated = 0;
   for (const p of allPatients as any[]) {
     const latestQueue =
@@ -1384,12 +1395,12 @@ app.post("/api/admin/backfill-primary-doctor", requireSuperAdmin, async (req, re
       (p.phone && latestQueueByPhone.get(normPhone(p.phone))) ||
       latestQueueByName.get(normName(p.fullName));
     if (latestQueue && latestQueue.doctorId && p.primaryDoctorId !== latestQueue.doctorId) {
-      await savePatient({ id: p.id, primaryDoctorId: latestQueue.doctorId } as Patient);
+      if (!dryRun) await savePatient({ id: p.id, primaryDoctorId: latestQueue.doctorId } as Patient);
       updated++;
     }
   }
 
-  res.json({ ok: true, totalPatients: allPatients.length, updated });
+  res.json({ ok: true, totalPatients: allPatients.length, updated, dryRun });
 });
 
 // One-time cleanup: removes a fixed, hand-verified list of queue/patient records
@@ -1403,6 +1414,13 @@ const KNOWN_TEST_QUEUE_IDS = [
   "q_8914mab8q", // Booking Test Patient
   "q_bottest_28jb21", // Bot Test Patient
   "q_jop2l7etn", // fdtrttry
+  // Created by mistake while manually verifying POST /api/queues' validation
+  // during development — a retry loop against an empty body created three
+  // copies against clinicId 'samarqand'/doctorId 'doc_sm_1', neither of which
+  // exists, so they render in no panel but sit in the database regardless.
+  "q_dhgeqtbmw",
+  "q_w58uu67o1",
+  "q_c8amoy23h",
 ];
 const KNOWN_TEST_PATIENT_IDS = [
   "pat_3hg3o", // Combined Test Patient
@@ -3051,11 +3069,19 @@ app.post("/api/ads/:id/broadcast", requireSuperAdmin, async (req, res) => {
   const ad: any = ads.find((a: any) => a.id === req.params.id);
   if (!ad) return res.status(404).json({ ok: false, error: "Ad not found" });
 
-  const token = activeTelegramToken;
-  if (!token) return res.status(400).json({ ok: false, error: "Telegram bot tokeni sozlanmagan" });
-
   const allPatients = await getPatients();
   const targets = allPatients.filter((p: any) => p.telegramChatId && (!ad.clinicId || p.clinicId === ad.clinicId));
+
+  // Lets the panel show "yuboriladi: N kishiga" and get confirmation BEFORE an
+  // irreversible platform-wide send — a blank ad.clinicId reaches every patient
+  // in every clinic with a linked Telegram chat, and there was previously no
+  // way to know how many that was without just sending it.
+  if (req.query.dryRun) {
+    return res.json({ ok: true, total: targets.length, dryRun: true });
+  }
+
+  const token = activeTelegramToken;
+  if (!token) return res.status(400).json({ ok: false, error: "Telegram bot tokeni sozlanmagan" });
 
   const replyMarkup = ad.linkUrl ? { inline_keyboard: [[{ text: "Batafsil", url: ad.linkUrl }]] } : undefined;
   const caption = `📢 *${ad.title}*${ad.body ? `\n\n${ad.body}` : ''}`;

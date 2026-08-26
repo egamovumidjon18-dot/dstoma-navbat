@@ -48,7 +48,7 @@ interface SuperAdminDashboardProps {
   clinics: Clinic[];
   queues: QueueItem[];
   doctors: Doctor[];
-  onAddClinic: (newClinic: Clinic) => void;
+  onAddClinic: (newClinic: Clinic) => Promise<boolean>;
   onAddDoctor?: (newDoctor: Doctor) => Promise<boolean>;
   onToggleSubscription: (clinicId: string) => void;
   onUpdateClinicCreds?: (clinicId: string, login: string, pass: string) => Promise<boolean>;
@@ -283,11 +283,15 @@ export default function SuperAdminDashboard({
       clinicId: newAdClinicId || undefined,
     };
     try {
-      await fetch('/api/ads', {
+      const res = await fetch('/api/ads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(superadminToken ? { Authorization: `Bearer ${superadminToken}` } : {}) },
         body: JSON.stringify(newAd),
       });
+      // This used to report success unconditionally — the form cleared and a
+      // green toast appeared even on a rejected/failed request, so a director
+      // could see "reklama yaratildi" for an ad that was never actually saved.
+      if (!res.ok) throw new Error(`Server rad etdi (${res.status})`);
       setAds(prev => [newAd, ...prev]);
       addLog(`Yangi reklama yaratildi: ${newAd.title}`, 'success');
       triggerToast("Reklama muvaffaqiyatli yaratildi! 📢");
@@ -302,28 +306,36 @@ export default function SuperAdminDashboard({
   const handleToggleAdStatus = async (ad: Advertisement) => {
     const updated: Advertisement = { ...ad, status: ad.status === 'active' ? 'paused' : 'active' };
     try {
-      await fetch('/api/ads', {
+      const res = await fetch('/api/ads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(superadminToken ? { Authorization: `Bearer ${superadminToken}` } : {}) },
         body: JSON.stringify(updated),
       });
+      if (!res.ok) throw new Error(`Server rad etdi (${res.status})`);
       setAds(prev => prev.map(a => a.id === ad.id ? updated : a));
       addLog(`Reklama holati o'zgartirildi: ${ad.title} — ${updated.status}`, 'info');
     } catch (e: any) {
+      // The status shown on screen must not silently drift from the server's —
+      // this used to flip it locally even when the write failed.
       triggerToast("Xatolik: " + e.message);
     }
   };
 
   const handleDeleteAd = async (ad: Advertisement) => {
+    // Every other delete in this panel confirms first; this one didn't.
+    if (!window.confirm(`"${ad.title}" reklamasini o'chirmoqchimisiz?`)) return;
     try {
-      await fetch(`/api/ads/${ad.id}`, {
+      const res = await fetch(`/api/ads/${ad.id}`, {
         method: 'DELETE',
         headers: superadminToken ? { Authorization: `Bearer ${superadminToken}` } : {},
       });
+      if (!res.ok) throw new Error(`Server rad etdi (${res.status})`);
       setAds(prev => prev.filter(a => a.id !== ad.id));
       addLog(`Reklama o'chirildi: ${ad.title}`, 'warn');
       triggerToast("Reklama o'chirildi.");
     } catch (e: any) {
+      // Removing it from the list here would be a lie if the server rejected
+      // the delete — it stays in the list on failure now.
       triggerToast("Xatolik: " + e.message);
     }
   };
@@ -331,6 +343,25 @@ export default function SuperAdminDashboard({
   const handleBroadcastAd = async (ad: Advertisement) => {
     setBroadcastingAdId(ad.id);
     try {
+      // A blank ad.clinicId reaches every patient in every clinic with a linked
+      // Telegram chat, and this send can't be recalled — so a dry run gets the
+      // real recipient count and confirmation happens BEFORE anything is sent,
+      // not after the fact.
+      const dryRunRes = await fetch(`/api/ads/${ad.id}/broadcast?dryRun=1`, {
+        method: 'POST',
+        headers: superadminToken ? { Authorization: `Bearer ${superadminToken}` } : {},
+      });
+      if (!dryRunRes.ok) {
+        triggerToast("Qabul qiluvchilar sonini aniqlab bo'lmadi.");
+        return;
+      }
+      const dryRunData = await dryRunRes.json();
+      const scope = ad.clinicId ? "shu klinikadagi" : "BARCHA klinikalardagi";
+      const confirmed = window.confirm(
+        `${dryRunData.total} ta ${scope} bemorga Telegram orqali "${ad.title}" reklamasi yuboriladi. Bu amalni ortga qaytarib bo'lmaydi. Davom etasizmi?`
+      );
+      if (!confirmed) return;
+
       const res = await fetch(`/api/ads/${ad.id}/broadcast`, {
         method: 'POST',
         headers: superadminToken ? { Authorization: `Bearer ${superadminToken}` } : {},
@@ -561,7 +592,7 @@ export default function SuperAdminDashboard({
 
   const totalPatients = patientsCount + queues.length;
 
-  const handleCreateClinicSubmit = (e: React.FormEvent) => {
+  const handleCreateClinicSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClinicName || !newClinicSubdomain || !newClinicOwner) {
       triggerToast(tL("Iltimos, barcha majburiy maydonlarni to'ldiring!"));
@@ -599,7 +630,15 @@ export default function SuperAdminDashboard({
       password: generatedPass
     };
 
-    onAddClinic(initialClinic);
+    // This used to fire-and-forget and show the generated login/password
+    // immediately regardless of outcome — if the server rejected the write, the
+    // owner was handed credentials for a clinic that would vanish on the next
+    // poll sync, with no error shown anywhere.
+    const created = await onAddClinic(initialClinic);
+    if (!created) {
+      triggerToast(tL("Klinika saqlanmadi. Qayta urinib ko'ring."));
+      return;
+    }
     addLog(`New clinic "${newClinicName}" onboarded under tenant [${cleanSubdomain}]`, 'success');
 
     setGeneratedCreds({
@@ -754,6 +793,24 @@ export default function SuperAdminDashboard({
     setIsBackfilling(true);
     setBackfillResult(null);
     try {
+      // Preview first — this writes to every patient missing a primaryDoctorId,
+      // and the panel had no way to say how many that would be before running it.
+      const dryRunRes = await fetch('/api/admin/backfill-primary-doctor?dryRun=1', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${superadminToken}` },
+      });
+      const dryRunData = await dryRunRes.json();
+      if (!dryRunRes.ok || !dryRunData.ok) {
+        setBackfillResult(`⚠️ ${dryRunData.error || 'Amal bajarilmadi.'}`);
+        return;
+      }
+      if (dryRunData.updated === 0) {
+        setBackfillResult(`✅ Barcha bemorlar allaqachon to'g'ri shifokorga biriktirilgan (${dryRunData.totalPatients} ta tekshirildi).`);
+        return;
+      }
+      if (!window.confirm(`${dryRunData.updated} ta bemor (jami ${dryRunData.totalPatients} tadan) shifokorga biriktiriladi. Davom etasizmi?`)) {
+        return;
+      }
       const res = await fetch('/api/admin/backfill-primary-doctor', {
         method: 'POST',
         headers: { Authorization: `Bearer ${superadminToken}` },
@@ -783,6 +840,9 @@ export default function SuperAdminDashboard({
       setCleanupResult("Superadmin sessiyasi topilmadi — qayta kiring.");
       return;
     }
+    // Deletes by a fixed, hand-verified exact-id list (server-side), so this
+    // can't touch a real patient — but a delete is still a delete.
+    if (!window.confirm("Test navbatlari va bemorlarini o'chirishni tasdiqlaysizmi?")) return;
     setIsCleaningTestData(true);
     setCleanupResult(null);
     try {
@@ -2821,13 +2881,18 @@ export default function SuperAdminDashboard({
               {(() => {
                 const nm = clinicToDelete.name;
                 const tpl: Record<string, string> = {
-                  uz: `"${nm}" klinikasini butunlay o'chirishni tasdiqlaysizmi? Barcha bog'liq shifokorlar va navbatlar ham o'chib ketadi.`,
-                  ru: `Вы действительно хотите удалить клинику "${nm}"? Все врачи и очереди этой клиники тоже будут удалены.`,
-                  en: `Are you sure you want to completely delete "${nm}" clinic? All associated doctors and queues will also be deleted.`,
-                  kk: `"${nm}" клиникасын толығымен жоюды растайсыз ба? Барлық байланысты дәрігерлер мен кезектер де жойылады.`,
-                  ky: `"${nm}" клиникасын толугу менен өчүрүүнү ырастайсызбы? Бардык байланыштуу дарыгерлер жана кезектер да өчүрүлөт.`,
-                  tg: `Оё нест кардани пурраи клиникаи "${nm}"-ро тасдиқ мекунед? Ҳамаи духтурон ва навбатҳои алоқаманд низ нест мешаванд.`,
-                  tk: `"${nm}" klinikasyny doly pozmagy tassyklaýarsyňyzmy? Ähli baglanyşykly lukmanlar we nobatlar hem pozular.`
+                  // This used to promise a cascade delete of doctors and queues that
+                  // the server never actually performed — the clinic record vanished
+                  // but its doctors, queues, patients and services stayed in the
+                  // database as orphaned records. Doctors can no longer log in to a
+                  // deleted clinic (blocked server-side), but their data is not erased.
+                  uz: `"${nm}" klinikasini o'chirishni tasdiqlaysizmi? Klinika ro'yxatdan olib tashlanadi va uning shifokorlari endi tizimga kira olmaydi — lekin shifokorlar, navbatlar va bemorlar ma'lumotlari bazada saqlanib qoladi (o'chirilmaydi).`,
+                  ru: `Удалить клинику "${nm}"? Клиника будет убрана из списка, и её врачи больше не смогут войти в систему — но данные врачей, очередей и пациентов останутся в базе (не удаляются).`,
+                  en: `Delete "${nm}" clinic? The clinic will be removed and its doctors will no longer be able to log in — but the clinic's doctors, queues and patient records are NOT deleted and remain in the database.`,
+                  kk: `"${nm}" клиникасын өшіресізбе? Клиника тізімнен алынады, оның дәрігерлері енді жүйеге кіре алмайды — бірақ дәрігерлер, кезектер және науқастар деректері дерекқорда қалады (өшірілмейді).`,
+                  ky: `"${nm}" клиникасын өчүрөсүзбү? Клиника тизмеден алынат, анын дарыгерлери эми тутумга кире алышпайт — бирок дарыгерлер, кезектер жана бейтаптар маалыматы дерекканада калат (өчүрүлбөйт).`,
+                  tg: `Клиникаи "${nm}"-ро нест мекунед? Клиника аз рӯйхат хориҷ мешавад ва духтуронаш дигар ба система дохил шуда наметавонанд — аммо маълумоти духтурон, навбатҳо ва беморон дар пойгоҳи додаҳо мемонад (нест намешавад).`,
+                  tk: `"${nm}" klinikasyny pozmagy tassyklaýarsyňyzmy? Klinika sanawdan aýrylar we onuň lukmanlary indi ulgama girip bilmezler — emma lukmanlar, nobatlar we näsag maglumatlary bazada galar (pozulmaýar).`
                 };
                 return tpl[language] || tpl.en;
               })()}

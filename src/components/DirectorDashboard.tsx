@@ -38,13 +38,13 @@ interface DirectorDashboardProps {
   patients?: Patient[];
   onDeletePatient?: (patientId: string) => void;
   setActiveTab?: (tab: 'bemor' | 'shifokor' | 'boshliq' | 'kod' | 'superadmin') => void;
-  onAddDoctor?: (newDoc: Doctor) => void;
+  onAddDoctor?: (newDoc: Doctor) => void | Promise<boolean>;
   onDeleteDoctor?: (doctorId: string) => void;
   doctorClinicLinks?: DoctorClinicLink[];
   onSaveDoctorClinicLink?: (link: DoctorClinicLink) => void;
   onDeleteDoctorClinicLink?: (linkId: string) => void;
   onUpdateService?: (updatedService: Service) => void;
-  onAddService?: (newService: Service) => void;
+  onAddService?: (newService: Service) => void | Promise<boolean>;
   onDeleteService?: (serviceId: string) => void;
   onCancelQueue?: (id: string) => void;
   onLogout?: () => void;
@@ -495,7 +495,7 @@ export default function DirectorDashboard({
   );
 
   // Handler for adding doctor
-  const handleCreateDoctorSubmit = (e: React.FormEvent) => {
+  const handleCreateDoctorSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDocName) {
       setDocFeedbackMsg("Iltimos, shifokor ismini to'liq kiriting!");
@@ -503,7 +503,10 @@ export default function DirectorDashboard({
     }
 
     const newDocObj: Doctor = {
-      id: 'doc_sm_' + (doctors.length + 1),
+      // 'doc_sm_' + count reused an id the moment any earlier doctor was
+      // deleted (count drops, the next create lands on the same id again) —
+      // two doctors then shared one id and their stats/schedules merged.
+      id: 'doc_' + Math.random().toString(36).substr(2, 9),
       clinicId: currentClinicId,
       name: newDocName,
       specialty: newDocSpecialty,
@@ -514,7 +517,13 @@ export default function DirectorDashboard({
     };
 
     if (onAddDoctor) {
-      onAddDoctor(newDocObj);
+      // This used to fire-and-forget: the form cleared and showed "saqlandi"
+      // immediately, even if the server rejected the write.
+      const result = await onAddDoctor(newDocObj);
+      if (result === false) {
+        setDocFeedbackMsg("Shifokorni saqlab bo'lmadi. Qayta urinib ko'ring.");
+        return;
+      }
     } else {
       // Local addition fallback
       doctors.push(newDocObj);
@@ -565,7 +574,7 @@ export default function DirectorDashboard({
   };
 
   // Handler for adding services
-  const handleCreateServiceSubmit = (e: React.FormEvent) => {
+  const handleCreateServiceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newServiceName || !newServicePrice || Number(newServicePrice) <= 0) {
       setSrvFeedbackMsg("Iltimos, xizmat nomi va narxini to'g'ri kiriting!");
@@ -573,14 +582,20 @@ export default function DirectorDashboard({
     }
 
     const newSrvObj: Service = {
-      id: 'srv_sm_' + (services.length + 1) + '_' + Math.floor(Math.random() * 100),
+      id: 'srv_' + Math.random().toString(36).substr(2, 9),
       clinicId: currentClinicId,
       name: newServiceName,
       price: Number(newServicePrice)
     };
 
     if (onAddService) {
-      onAddService(newSrvObj);
+      // This used to fire-and-forget: the form cleared and showed "saqlandi"
+      // immediately, even if the server rejected the write.
+      const result = await onAddService(newSrvObj);
+      if (result === false) {
+        setSrvFeedbackMsg("Xizmatni saqlab bo'lmadi. Qayta urinib ko'ring.");
+        return;
+      }
     } else {
       services.push(newSrvObj);
     }
@@ -1681,7 +1696,7 @@ export default function DirectorDashboard({
 
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={async () => {
                                 const newSrv: Service = {
                                   id: `srv_${currentClinicId}_std_${Date.now()}_${idX}_${Math.floor(Math.random() * 100)}`,
                                   clinicId: currentClinicId,
@@ -1689,7 +1704,14 @@ export default function DirectorDashboard({
                                   price: customPrice
                                 };
                                 if (onAddService) {
-                                  onAddService(newSrv);
+                                  // This used to show the success toast unconditionally,
+                                  // even when the server rejected the write.
+                                  const result = await onAddService(newSrv);
+                                  if (result === false) {
+                                    setSrvFeedbackMsg("Xizmatni saqlab bo'lmadi. Qayta urinib ko'ring.");
+                                    setTimeout(() => setSrvFeedbackMsg(''), 4000);
+                                    return;
+                                  }
                                   const srvAddedTpl: Record<string, string> = { uz: `"${item.name}" yangi narx bilan qo'shildi!`, ru: `"${item.name}" добавлена с новой ценой!`, en: `"${item.name}" standard service added with customized price!`, kk: `"${item.name}" жаңа бағамен қосылды!`, ky: `"${item.name}" жаңы баа менен кошулду!`, tg: `"${item.name}" бо нархи нав илова шуд!`, tk: `"${item.name}" täze baha bilen goşuldy!` };
                                   setSrvFeedbackMsg(srvAddedTpl[language] || srvAddedTpl.en);
                                   setTimeout(() => setSrvFeedbackMsg(''), 4000);
