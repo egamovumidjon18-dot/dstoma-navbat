@@ -15,7 +15,7 @@ import AdBanner from './AdBanner';
 import InstallAppBanner from './InstallAppBanner';
 import BottomNav from './BottomNav';
 import DentalChart from './DentalChart';
-import { TRANSLATIONS, Language } from '../translations';
+import { TRANSLATIONS, Language, translateMedicalText } from '../translations';
 import { getApiUrl } from '../services/api';
 
 interface NewFamilyMemberInfo {
@@ -693,7 +693,7 @@ export default function PatientPanel({
                         <PlanItem
                           key={item.id}
                           status={item.status === 'Completed' ? 'done' : item.status === 'In Progress' ? 'current' : 'planned'}
-                          title={`${item.toothId ? `${item.toothId}-tish ` : ''}${item.treatment}`}
+                          title={`${item.toothId ? `${item.toothId}-tish ` : ''}${translateMedicalText(item.treatment, language || 'uz')}`}
                           price={`${item.price.toLocaleString()} ${t("so'm")}`}
                           date={item.status === 'Completed' ? new Date(item.createdAt).toLocaleDateString() : undefined}
                           doneLabel={t("bajarildi")}
@@ -861,7 +861,7 @@ export default function PatientPanel({
                     <PlanItem
                       key={item.id}
                       status={item.status === 'Completed' ? 'done' : item.status === 'In Progress' ? 'current' : 'planned'}
-                      title={`${item.toothId ? `${item.toothId}-tish ` : ''}${item.treatment}`}
+                      title={`${item.toothId ? `${item.toothId}-tish ` : ''}${translateMedicalText(item.treatment, language || 'uz')}`}
                       price={`${item.price.toLocaleString()} ${t("so'm")}`}
                       date={item.status === 'Completed' ? new Date(item.createdAt).toLocaleDateString() : undefined}
                       doneLabel={t("bajarildi")}
