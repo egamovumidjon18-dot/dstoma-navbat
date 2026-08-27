@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../services/firebase";
 import { Patient, PaymentReceipt, Reminder, TreatmentCharge } from "../types";
 import { patientBalance, type PlanItemLike, type ItemBalance } from "../utils/treatmentBilling";
-import { fetchTreatmentCharges } from "../utils/treatmentCharges";
+import { fetchTreatmentCharges, saveTreatmentCharge } from "../utils/treatmentCharges";
 import { useHistoryLayer } from "../hooks/useHistoryLayer";
 import { decodeLegacyEntities } from "../utils/textFormat";
 import { getApiUrl } from "../services/api";
@@ -67,6 +67,12 @@ const PATIENT_PROFILE_TRANSLATIONS: Record<string, PatientProfileDictEntry> = {
   "barchasi": { ru: "Все", en: "All", kk: "Барлығы", ky: "Бардыгы", tg: "Ҳама", tk: "Ählisi" },
   "qarzni so'ndirish": { ru: "Погасить долг", en: "Settle debt", kk: "Қарызды өтеу", ky: "Карызды жабуу", tg: "Пардохти қарз", tk: "Bergini ötlemek" },
   "to'liq summa": { ru: "Вся сумма", en: "Full amount", kk: "Толық сома", ky: "Толук сумма", tg: "Маблағи пурра", tk: "Doly mukdar" },
+  "qarz qo'shish": { ru: "Добавить долг", en: "Add a debt", kk: "Қарыз қосу", ky: "Карыз кошуу", tg: "Илова кардани қарз", tk: "Bergi goşmak" },
+  "qarzga qo'shish": { ru: "Добавить в долг", en: "Add to debt", kk: "Қарызға қосу", ky: "Карызга кошуу", tg: "Ба қарз илова кардан", tk: "Bergä goşmak" },
+  "qo'shimcha xizmat": { ru: "Дополнительная услуга", en: "Additional service", kk: "Қосымша қызмет", ky: "Кошумча кызмат", tg: "Хизмати иловагӣ", tk: "Goşmaça hyzmat" },
+  "shifokor": { ru: "Врач", en: "Doctor", kk: "Дәрігер", ky: "Дарыгер", tg: "Духтур", tk: "Lukman" },
+  "qarz qo'shildi.": { ru: "Долг добавлен.", en: "Debt added.", kk: "Қарыз қосылды.", ky: "Карыз кошулду.", tg: "Қарз илова шуд.", tk: "Bergi goşuldy." },
+  "nima uchun? (masalan: eski qarz)": { ru: "За что? (например: старый долг)", en: "What for? (e.g. old debt)", kk: "Не үшін? (мысалы: ескі қарыз)", ky: "Эмне үчүн? (мисалы: эски карыз)", tg: "Барои чӣ? (масалан: қарзи кӯҳна)", tk: "Näme üçin? (mysal: köne bergi)" },
   "qabul qilingan": { ru: "Принято", en: "Received", kk: "Қабылданды", ky: "Кабыл алынды", tg: "Қабулшуда", tk: "Kabul edildi" },
   tashriflar: { ru: "Визиты", en: "Visits", kk: "Келулер", ky: "Келүүлөр", tg: "Ташрифҳо", tk: "Gelmeler" },
   oxirgi: { ru: "Последний", en: "Last", kk: "Соңғы", ky: "Акыркы", tg: "Охирин", tk: "Soňky" },
@@ -172,6 +178,15 @@ export default function PatientProfile({
   const [paymentRequestMsg, setPaymentRequestMsg] = useState<string | null>(null);
   const [cashAmount, setCashAmount] = useState("");
   const [recordingCash, setRecordingCash] = useState(false);
+  // Entering a debt by hand. Everything else on this screen is worked out from
+  // treatments the system already knows about, but a balance carried over from
+  // before DStoma — or work done outside the booking flow — has nothing to
+  // derive it from and would otherwise be unrecordable.
+  const [showAddCharge, setShowAddCharge] = useState(false);
+  const [manualChargeName, setManualChargeName] = useState("");
+  const [manualChargeAmount, setManualChargeAmount] = useState("");
+  const [savingManualCharge, setSavingManualCharge] = useState(false);
+  const [chargeMsg, setChargeMsg] = useState<string | null>(null);
   const [cashMsg, setCashMsg] = useState<string | null>(null);
 
   const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
@@ -279,6 +294,49 @@ export default function PatientProfile({
     } finally {
       setRecordingCash(false);
       setTimeout(() => setCashMsg(null), 5000);
+    }
+  };
+
+  const handleAddManualCharge = async () => {
+    const amount = Number(manualChargeAmount);
+    if (!doctorId || !patient?.clinicId || !staffToken || !(amount > 0)) return;
+    setSavingManualCharge(true);
+    setChargeMsg(null);
+    try {
+      // One id for the clinical record and the money record, exactly as the
+      // booking flow and TreatmentPlan do it — that shared id is what lets the
+      // charge, the plan item and every balance on this screen line up.
+      const id = 'man_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      const name = manualChargeName.trim() || t("qo'shimcha xizmat");
+      await setDoc(doc(db, `patients/${patientId}/treatmentPlans`, id), {
+        id,
+        toothId: '-',
+        treatment: name,
+        price: amount,
+        status: 'Planned',
+        doctorName: lastVisit?.doctorName || t("shifokor"),
+        createdAt: new Date().toISOString(),
+      });
+      const saved = await saveTreatmentCharge({
+        id,
+        clinicId: patient.clinicId,
+        patientId: String(patientId),
+        doctorId,
+        patientName: patient?.fullName,
+        treatmentName: name,
+        listPrice: amount,
+      }, staffToken);
+      if (!saved) throw new Error("failed");
+      setCharges((prev) => [...prev.filter((c) => c.id !== saved.id), saved]);
+      setManualChargeName("");
+      setManualChargeAmount("");
+      setShowAddCharge(false);
+      setChargeMsg(`✅ ${t("qarz qo'shildi.")}`);
+    } catch {
+      setChargeMsg(`⚠️ ${t("yuborib bo'lmadi.")}`);
+    } finally {
+      setSavingManualCharge(false);
+      setTimeout(() => setChargeMsg(null), 5000);
     }
   };
 
@@ -937,6 +995,66 @@ export default function PatientProfile({
               )}
               {paymentRequestMsg && (
                 <p className="text-[10px] font-bold text-rose-600">{paymentRequestMsg}</p>
+              )}
+            </div>
+
+            {/* The other direction: adding what is owed. Every other figure here
+                is worked out from treatments the system already knows about, so
+                a balance carried over from before DStoma, or work done outside
+                the booking flow, has nothing to derive it from. Written as a
+                real treatment + charge under one id, which is why it lands in
+                Davolash rejasi, the debtor list and Statistika at the same time
+                rather than being a number that only exists on this screen. */}
+            <div className="mt-3 pt-3 border-t border-slate-100">
+              {!showAddCharge ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAddCharge(true)}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-slate-300 text-slate-500 hover:border-rose-300 hover:text-rose-600 hover:bg-rose-50/50 text-[11px] font-black transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  {t("qarz qo'shish")}
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                      {t("qarz qo'shish")}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setShowAddCharge(false); setManualChargeName(""); setManualChargeAmount(""); }}
+                      className="text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={manualChargeName}
+                    onChange={(e) => setManualChargeName(e.target.value)}
+                    placeholder={t("nima uchun? (masalan: eski qarz)")}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-rose-400"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    value={manualChargeAmount}
+                    onChange={(e) => setManualChargeAmount(e.target.value)}
+                    placeholder={t("summa (so'm)")}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-right font-bold text-slate-700 focus:outline-none focus:border-rose-400"
+                  />
+                  <button
+                    onClick={handleAddManualCharge}
+                    disabled={savingManualCharge || !(Number(manualChargeAmount) > 0)}
+                    className="w-full py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-rose-500/20"
+                  >
+                    {savingManualCharge ? t("yuborilmoqda...") : t("qarzga qo'shish")}
+                  </button>
+                </div>
+              )}
+              {chargeMsg && (
+                <p className="text-[10px] font-bold text-slate-600 mt-2">{chargeMsg}</p>
               )}
             </div>
           </div>
