@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../services/firebase";
 import { Patient, PaymentReceipt, Reminder, TreatmentCharge } from "../types";
-import { patientBalance, itemBalance, type PlanItemLike } from "../utils/treatmentBilling";
+import { patientBalance, type PlanItemLike, type ItemBalance } from "../utils/treatmentBilling";
 import { fetchTreatmentCharges } from "../utils/treatmentCharges";
 import { useHistoryLayer } from "../hooks/useHistoryLayer";
 import { decodeLegacyEntities } from "../utils/textFormat";
@@ -34,6 +34,7 @@ import {
   History,
   X,
   Wallet,
+  ChevronDown,
 } from "lucide-react";
 
 interface PatientProfileProps {
@@ -59,6 +60,12 @@ const PATIENT_PROFILE_TRANSLATIONS: Record<string, PatientProfileDictEntry> = {
   "to'langan": { ru: "Оплачено", en: "Paid", kk: "Төленген", ky: "Төлөнгөн", tg: "Пардохтшуда", tk: "Tölenen" },
   tasdiqlanmagan: { ru: "Не подтверждено", en: "Unconfirmed", kk: "Расталмаған", ky: "Тастыкталбаган", tg: "Тасдиқнашуда", tk: "Tassyklanmadyk" },
   "ortiqcha to'lov": { ru: "Переплата", en: "Overpaid", kk: "Артық төлем", ky: "Ашык төлөм", tg: "Пардохти изофа", tk: "Artykmaç töleg" },
+  "muolaja": { ru: "Процедура", en: "Treatment", kk: "Процедура", ky: "Процедура", tg: "Муолиҷа", tk: "Bejergi" },
+  "yashirish": { ru: "Свернуть", en: "Hide", kk: "Жасыру", ky: "Жашыруу", tg: "Пинҳон кардан", tk: "Gizlemek" },
+  "batafsil hisobot": { ru: "Подробный отчёт", en: "Full breakdown", kk: "Толық есеп", ky: "Толук отчёт", tg: "Ҳисоботи муфассал", tk: "Jikme-jik hasabat" },
+  "so'ndirilgan to'lovlar": { ru: "Поступившие платежи", en: "Payments received", kk: "Түскен төлемдер", ky: "Түшкөн төлөмдөр", tg: "Пардохтҳои воридшуда", tk: "Gelen tölegler" },
+  "barchasi": { ru: "Все", en: "All", kk: "Барлығы", ky: "Бардыгы", tg: "Ҳама", tk: "Ählisi" },
+  "qarzni so'ndirish": { ru: "Погасить долг", en: "Settle debt", kk: "Қарызды өтеу", ky: "Карызды жабуу", tg: "Пардохти қарз", tk: "Bergini ötlemek" },
   "qabul qilingan": { ru: "Принято", en: "Received", kk: "Қабылданды", ky: "Кабыл алынды", tg: "Қабулшуда", tk: "Kabul edildi" },
   tashriflar: { ru: "Визиты", en: "Visits", kk: "Келулер", ky: "Келүүлөр", tg: "Ташрифҳо", tk: "Gelmeler" },
   oxirgi: { ru: "Последний", en: "Last", kk: "Соңғы", ky: "Акыркы", tg: "Охирин", tk: "Soňky" },
@@ -503,6 +510,31 @@ export default function PatientProfile({
   const paidPercent =
     balance.total > 0 ? Math.min(100, Math.round((balance.paid / balance.total) * 100)) : 0;
 
+  // Every billed item, named. The ledger covers charges the treatment plan knows
+  // nothing about — the booking modal writes one per appointment and never adds
+  // a plan item — so listing plan items alone leaves part of the debt with
+  // nothing to explain it. Names come from whichever source has one.
+  const ledgerRows = useMemo(() => {
+    const nameById = new Map<string, string>();
+    for (const c of charges) if (c.treatmentName) nameById.set(String(c.id), c.treatmentName);
+    for (const i of planItems) if (i.treatment) nameById.set(String(i.id), i.treatment);
+    return (Array.from(balance.ledger.items.values()) as ItemBalance[])
+      .map((b) => ({ ...b, name: nameById.get(b.itemId) || t("muolaja") }))
+      .sort((a, b) => b.debt - a.debt || b.total - a.total);
+  }, [balance, charges, planItems, language]);
+
+  // Confirmed payments, newest first — "how much of the debt has been settled,
+  // and how" answered from the receipts themselves rather than a running total.
+  const settledPayments = useMemo(
+    () =>
+      receipts
+        .filter((r) => r.status === 'confirmed')
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [receipts]
+  );
+
+  const [showFinanceDetail, setShowFinanceDetail] = useState(false);
+
   // Treatment progress, from the same plan items the money is billed against.
   const planProgress = useMemo(() => {
     const active = planItems.filter((i) => i.status !== 'Cancelled');
@@ -755,12 +787,97 @@ export default function PatientProfile({
               )}
             </div>
 
-            {/* Taking the money. Prefilled with the outstanding balance, but a
-                part-payment is just as normal, so the figure stays editable. */}
+            {/* The full account, in place. It reads the same ledger the totals
+                above are derived from, so opening it can only ever add detail —
+                never a second, differing set of numbers. */}
+            {(ledgerRows.length > 0 || settledPayments.length > 0) && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowFinanceDetail((v) => !v)}
+                  className="mt-2 w-full flex items-center justify-center gap-1 py-1.5 text-[10px] font-black text-slate-400 hover:text-emerald-600 transition-colors"
+                >
+                  {showFinanceDetail ? t("yashirish") : t("batafsil hisobot")}
+                  <ChevronDown className={`w-3 h-3 transition-transform ${showFinanceDetail ? 'rotate-180' : ''}`} />
+                </button>
+
+                {showFinanceDetail && (
+                  <div className="space-y-3 pb-1">
+                    {ledgerRows.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
+                          {t("muolajalar bo'yicha")}
+                        </p>
+                        <div className="space-y-1">
+                          {ledgerRows.map((row) => (
+                            <div key={row.itemId} className="flex items-start gap-2 bg-slate-50 border border-slate-100 rounded-xl px-2.5 py-2">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[11px] font-bold text-slate-700 truncate">{row.name}</p>
+                                <p className="text-[10px] text-slate-400 font-medium">
+                                  {row.total.toLocaleString()}
+                                  {row.discount > 0 && (
+                                    <span className="text-violet-500"> · −{row.discount.toLocaleString()}</span>
+                                  )}
+                                </p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="text-[10px] font-black text-emerald-600">{row.paid.toLocaleString()}</p>
+                                <p className={`text-[10px] font-black ${row.debt > 0 ? 'text-rose-600' : 'text-slate-300'}`}>
+                                  {row.debt.toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {settledPayments.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
+                          {t("so'ndirilgan to'lovlar")}
+                        </p>
+                        <div className="space-y-1">
+                          {settledPayments.slice(0, 6).map((r) => (
+                            <div key={r.id} className="flex items-center justify-between gap-2 bg-white border border-slate-100 rounded-xl px-2.5 py-1.5">
+                              <div className="min-w-0">
+                                <p className="text-[11px] font-bold text-slate-700">
+                                  {r.paymentMethod === 'card' ? `💳 ${t("karta")}` : `💵 ${t("naqd")}`}
+                                </p>
+                                <p className="text-[10px] text-slate-400 font-medium">
+                                  {new Date(r.createdAt).toLocaleDateString("uz-UZ")}
+                                </p>
+                              </div>
+                              <span className="text-[11px] font-black text-emerald-600 shrink-0">
+                                +{(Number(r.amount) || 0).toLocaleString()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        {settledPayments.length > 6 && (
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab("payments")}
+                            className="mt-1.5 w-full text-[10px] font-black text-slate-400 hover:text-emerald-600 transition-colors"
+                          >
+                            {t("barchasi")} ({settledPayments.length}) →
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Settling up. Prefilled with the outstanding balance, but a
+                part-payment is just as normal, so the figure stays editable.
+                Same POST the doctor dashboard's debtor table uses, so a payment
+                taken here and one taken there are the same record. */}
             <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                  {t("to'lov qabul qilish")}
+                  {totalDebt > 0 ? t("qarzni so'ndirish") : t("to'lov qabul qilish")}
                 </span>
                 {totalDebt > 0 && (
                   <button
@@ -1027,31 +1144,55 @@ export default function PatientProfile({
                 </div>
 
                 {/* Per-treatment breakdown, so "why do they owe X" is answerable
-                    from this same tab instead of hopping to Davolash rejasi. */}
-                {planItems.filter((i) => i.status !== 'Cancelled').length > 0 && (
+                    from this same tab instead of hopping to Davolash rejasi.
+                    Driven by the ledger rather than the plan: a charge booked
+                    from the appointment modal has no plan item, and listing only
+                    plan items left that part of the debt unaccounted for. */}
+                {ledgerRows.length > 0 && (
                   <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
                     <h4 className="font-bold text-slate-800 text-base mb-3 flex items-center gap-2">
                       <FileText className="w-4 h-4 text-emerald-500" /> {t("muolajalar bo'yicha")}
                     </h4>
-                    <div className="space-y-2">
-                      {planItems.filter((i) => i.status !== 'Cancelled').map((item) => {
-                        const b = itemBalance(item.id, balance.ledger);
-                        return (
-                          <div key={item.id} className="flex items-center gap-3 bg-slate-50 border border-slate-100 rounded-xl p-3">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-bold text-slate-700 truncate">{item.treatment}</p>
-                              <p className="text-[10px] text-slate-400">
-                                {(b.listPrice || item.price).toLocaleString()} {t("so'm")}
-                                {b.discount > 0 && <span className="text-violet-500"> · −{b.discount.toLocaleString()}</span>}
-                              </p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-[10px] font-bold text-emerald-600">{b.paid.toLocaleString()}</p>
-                              <p className={`text-[10px] font-bold ${b.debt > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{b.debt.toLocaleString()}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-[9px] uppercase tracking-wider text-slate-400">
+                            <th className="text-left font-bold pb-2">{t("muolaja")}</th>
+                            <th className="text-right font-bold pb-2 px-2">{t("jami")}</th>
+                            <th className="text-right font-bold pb-2 px-2 hidden sm:table-cell">{t("chegirma")}</th>
+                            <th className="text-right font-bold pb-2 px-2">{t("to'langan")}</th>
+                            <th className="text-right font-bold pb-2">{t("qarz")}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {ledgerRows.map((row) => (
+                            <tr key={row.itemId}>
+                              <td className="py-2 pr-2 font-bold text-slate-700">{row.name}</td>
+                              <td className="py-2 px-2 text-right font-semibold text-slate-600">{row.total.toLocaleString()}</td>
+                              <td className="py-2 px-2 text-right font-semibold text-violet-600 hidden sm:table-cell">
+                                {row.discount > 0 ? `−${row.discount.toLocaleString()}` : '—'}
+                              </td>
+                              <td className="py-2 px-2 text-right font-semibold text-emerald-600">{row.paid.toLocaleString()}</td>
+                              <td className={`py-2 text-right font-black ${row.debt > 0 ? 'text-rose-600' : 'text-slate-300'}`}>
+                                {row.debt.toLocaleString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-slate-100 text-[11px]">
+                            <td className="pt-2 font-black text-slate-500 uppercase tracking-wider text-[9px]">{t("jami")}</td>
+                            <td className="pt-2 px-2 text-right font-black text-slate-700">{balance.total.toLocaleString()}</td>
+                            <td className="pt-2 px-2 text-right font-black text-violet-700 hidden sm:table-cell">
+                              {balance.discount > 0 ? `−${balance.discount.toLocaleString()}` : '—'}
+                            </td>
+                            <td className="pt-2 px-2 text-right font-black text-emerald-700">{balance.paid.toLocaleString()}</td>
+                            <td className={`pt-2 text-right font-black ${totalDebt > 0 ? 'text-rose-700' : 'text-slate-300'}`}>
+                              {totalDebt.toLocaleString()}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
                     </div>
                   </div>
                 )}
