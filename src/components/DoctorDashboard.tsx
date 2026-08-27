@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, updateDoc, getDocs, query, where } from "firebase/firestore";
 import { db } from "../services/firebase";
 import PatientProfile from "./PatientProfile";
 import DentalChart from "./DentalChart";
@@ -19,7 +19,7 @@ import { decodeLegacyEntities } from "../utils/textFormat";
 import { TRANSLATIONS, Language, translateMedicalText } from "../translations";
 import { useHistoryLayer } from "../hooks/useHistoryLayer";
 import { allocatePayments, clinicBillingSummary, type ClinicPatientBalance } from "../utils/treatmentBilling";
-import { fetchTreatmentCharges, saveTreatmentCharge } from "../utils/treatmentCharges";
+import { fetchTreatmentCharges, saveTreatmentCharge, patchTreatmentCharge } from "../utils/treatmentCharges";
 import { effectivePrice } from "../utils/treatmentBilling";
 import {
   DEFAULT_WORKING_HOURS,
@@ -1224,8 +1224,34 @@ export default function DoctorDashboard({
       const bookedService = services.find((sv: any) => sv.id === newBookingServiceId);
       if (bookedService && patientId && effectiveClinicId && currentDoctor?.id) {
         const listPrice = Number(bookedService.price) || 0;
+        // One id for the clinical record and the money record, which is what ties
+        // them together everywhere else (resolveCharge matches a plan item to its
+        // charge by id). A booking used to write only the charge, so the work it
+        // scheduled never appeared in Davolash rejasi or Muolaja tarixi at all.
+        const treatmentId = 'bk_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        const nowIso = new Date().toISOString();
+        try {
+          // Clinical record first, same order TreatmentPlan uses: a failed
+          // charge write must never lose the treatment itself.
+          await setDoc(doc(db, `patients/${patientId}/treatmentPlans`, treatmentId), {
+            id: treatmentId,
+            toothId: '-',
+            treatment: bookedService.name,
+            price: listPrice,
+            status: 'Planned',
+            doctorName: currentDoctor?.name || t("shifokor"),
+            createdAt: nowIso,
+            // What links this treatment back to the visit that carries it out,
+            // so finishing that visit can move it into the history.
+            queueId: newQueue.id,
+            appointmentDate: newBookingDate,
+            appointmentTime: newBookingTime,
+          });
+        } catch (err) {
+          console.warn('[DoctorDashboard] treatment plan write failed', err);
+        }
         await saveTreatmentCharge({
-          id: 'chg_' + Math.random().toString(36).substr(2, 9),
+          id: treatmentId,
           clinicId: effectiveClinicId,
           patientId,
           doctorId: currentDoctor.id,
@@ -1277,9 +1303,57 @@ export default function DoctorDashboard({
   // deductMaterialsForCompletedQueue in server.ts), so that completing from the
   // Telegram bot or any other surface deducts identically. Nothing extra to do
   // here beyond the status change itself.
+  // Finishing a visit marks off the work it was booked for. A staged course
+  // only reaches "Completed" — and so Muolaja tarixi, which lists exactly the
+  // completed plan items — once every stage's visit is done; ticking it off at
+  // the first appointment would file a course of treatment as finished halfway
+  // through it.
+  const completeTreatmentForQueue = async (q: QueueItem) => {
+    if (!q?.id || !q.patientId || !staffToken) return;
+    try {
+      const charges = await fetchTreatmentCharges({ patientId: q.patientId }, staffToken);
+      const staged = charges.find((c) => (c.stages || []).some((st) => st.queueId === q.id));
+      let treatmentId = staged?.id || null;
+
+      if (!treatmentId) {
+        // Single-visit booking: the link lives on the plan doc instead, since a
+        // charge with no stages has nowhere to carry a queue id.
+        const snap = await getDocs(
+          query(collection(db, `patients/${q.patientId}/treatmentPlans`), where('queueId', '==', q.id))
+        );
+        treatmentId = snap.docs[0]?.id || null;
+      }
+      // Not booked through this flow (hand-entered plan item, walk-in, legacy
+      // record) — there is nothing to advance.
+      if (!treatmentId) return;
+
+      let everyStageDone = true;
+      if (staged?.stages?.length) {
+        const stages = staged.stages.map((st) =>
+          st.queueId === q.id
+            ? { ...st, status: 'completed' as const, completedAt: new Date().toISOString() }
+            : st
+        );
+        await patchTreatmentCharge(treatmentId, { stages }, staffToken);
+        everyStageDone = stages.every((st) => st.status === 'completed');
+      }
+
+      if (everyStageDone) {
+        await updateDoc(doc(db, `patients/${q.patientId}/treatmentPlans`, treatmentId), {
+          status: 'Completed',
+        });
+      }
+      reloadClinicBilling.current();
+    } catch (err) {
+      // The visit is completed either way — this is bookkeeping on top of it.
+      console.warn('[DoctorDashboard] completing treatment for queue failed', err);
+    }
+  };
+
   const handleCompleteQueue = async (q: QueueItem) => {
     if (!q?.id) return;
     onUpdateQueueStatus(q.id, "completed");
+    completeTreatmentForQueue(q);
     // Right after finishing, ask how the patient paid — this lets a doctor log
     // an in-person cash or card payment immediately, without the patient needing
     // to be reachable on Telegram afterwards to upload a photo receipt.
