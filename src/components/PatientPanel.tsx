@@ -753,7 +753,7 @@ export default function PatientPanel({
                       <VisitItem
                         key={v.id}
                         date={new Date(v.date).toLocaleDateString()}
-                        title={v.serviceName}
+                        title={v.serviceName ? translateMedicalText(v.serviceName, language || 'uz') : undefined}
                         doctor={decodeLegacyEntities(v.doctorName) || ''}
                       />
                     ))}
@@ -779,7 +779,7 @@ export default function PatientPanel({
                               <Calendar size={20} />
                             </div>
                             <div>
-                              <p className="font-bold text-slate-900 text-sm">{item.treatment}</p>
+                              <p className="font-bold text-slate-900 text-sm">{translateMedicalText(item.treatment, language || 'uz')}</p>
                               <p className="text-xs text-slate-500">{item.toothId ? `${item.toothId}-tish` : ''}</p>
                             </div>
                           </div>
@@ -949,7 +949,7 @@ export default function PatientPanel({
                     <VisitItem
                       key={v.id}
                       date={new Date(v.date).toLocaleDateString()}
-                      title={v.serviceName}
+                      title={v.serviceName ? translateMedicalText(v.serviceName, language || 'uz') : undefined}
                       doctor={decodeLegacyEntities(v.doctorName) || ''}
                     />
                   ))}
@@ -972,7 +972,7 @@ export default function PatientPanel({
                           <Calendar size={20} />
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900 text-sm">{item.treatment}</p>
+                          <p className="font-bold text-slate-900 text-sm">{translateMedicalText(item.treatment, language || 'uz')}</p>
                           <p className="text-xs text-slate-500">{item.toothId ? `${item.toothId}-tish` : ''}</p>
                         </div>
                       </div>

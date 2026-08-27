@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { QueueItem, Doctor, Service, Patient, PaymentReceipt, Reminder } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
-import { TRANSLATIONS, Language } from '../translations';
+import { TRANSLATIONS, Language, translateMedicalText } from '../translations';
 import { exportClinicReportPdf } from '../utils/pdfExport';
 
 type StatsDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
@@ -505,7 +505,7 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
       .map((c) => ({
         id: c.id,
         primary: decodeLegacyEntities(c.patientName || '') || c.patientId || '—',
-        secondary: `${c.treatmentName || '—'} · −${money(discountValue(c))}`,
+        secondary: `${c.treatmentName ? translateMedicalText(c.treatmentName, language || 'uz') : '—'} · −${money(discountValue(c))}`,
         meta: c.discountPercent ? `${c.discountPercent}%` : dateOf(c.createdAt),
       }));
 

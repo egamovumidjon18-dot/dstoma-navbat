@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, doc, onSnapshot, setDoc, writeBatch } from 'firebase/firestore';
 import { db, OperationType, handleFirestoreError } from '../services/firebase';
 import { STANDARD_SERVICES_CATALOG } from './DirectorDashboard';
-import { Language } from '../translations';
+import { Language, translateMedicalText } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';
 import { saveTreatmentCharge } from '../utils/treatmentCharges';
 import {
@@ -1506,7 +1506,7 @@ export default function DentalChart({
                               <div className="bg-white/5 border border-white/5 p-3 rounded-xl flex flex-col gap-2 group hover:border-white/10 transition-colors">
                                  <div className="flex justify-between items-center">
                                     <div className="flex flex-col gap-1">
-                                      <span className="text-sm font-black text-white leading-tight">{h.treatment}</span>
+                                      <span className="text-sm font-black text-white leading-tight">{translateMedicalText(h.treatment, language || 'uz')}</span>
                                       <span className="text-xs font-bold text-slate-500 uppercase">{CONDITIONS.find(c => c.id === h.condition)?.label}</span>
                                     </div>
                                     <div className="text-xs text-slate-400 font-medium whitespace-nowrap ml-2">

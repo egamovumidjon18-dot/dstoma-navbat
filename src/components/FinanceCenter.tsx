@@ -8,7 +8,7 @@ import {
   normalizeStages,
   type ClinicPatientBalance,
 } from '../utils/treatmentBilling';
-import { Language } from '../translations';
+import { Language, translateMedicalText } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';
 
 const FINANCE_TRANSLATIONS: Dict = {
@@ -197,7 +197,7 @@ export default function FinanceCenter({
                       {patientNameById?.(charge.patientId) || charge.patientName || charge.patientId}
                     </td>
                     <td className="px-4 py-3 text-slate-600">
-                      {charge.treatmentName || '—'}
+                      {charge.treatmentName ? translateMedicalText(charge.treatmentName, language || 'uz') : '—'}
                       {charge.discountReason && <span className="text-slate-400"> · {charge.discountReason}</span>}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-slate-600">{money(charge.listPrice)}</td>
@@ -226,7 +226,7 @@ export default function FinanceCenter({
                         <p className="font-black text-slate-800 text-sm truncate">
                           {patientNameById?.(charge.patientId) || charge.patientName || charge.patientId}
                         </p>
-                        <p className="text-[11px] text-slate-500 font-semibold truncate">{charge.treatmentName || '—'}</p>
+                        <p className="text-[11px] text-slate-500 font-semibold truncate">{charge.treatmentName ? translateMedicalText(charge.treatmentName, language || 'uz') : '—'}</p>
                       </div>
                       <span className="text-xs font-mono font-black text-slate-700 shrink-0 ml-3">
                         {money(effectivePrice(charge))} {t("so'm")}

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../services/firebase';
 import { ClipboardList, Search, Plus, Trash2, Package, Check, X, Edit2, AlertTriangle } from 'lucide-react';
-import { Language } from '../translations';
+import { Language, translateMedicalText } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';
 
 const CATALOG_TRANSLATIONS: Dict = {
@@ -242,7 +242,7 @@ export default function ProcedureCatalog({
             return (
               <div key={service.id} className="p-4 flex items-start justify-between gap-4 flex-wrap hover:bg-slate-50/60 transition-colors">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-slate-800">{service.name}</p>
+                  <p className="text-sm font-bold text-slate-800">{translateMedicalText(service.name, language || 'uz')}</p>
                   <p className="text-[11px] text-slate-400 font-semibold mb-2">
                     {Number(service.price).toLocaleString()} so'm
                   </p>

@@ -2844,7 +2844,7 @@ export default function DoctorDashboard({
                               <tr key={item.id}>
                                 <td className="py-2.5">{item.toothId}</td>
                                 <td className="py-2.5 text-slate-800">
-                                  {item.treatment}
+                                  {translateMedicalText(item.treatment, language || 'uz')}
                                 </td>
                                 <td className="py-2.5 text-right text-slate-800">
                                   {item.price.toLocaleString()}
@@ -5011,7 +5011,7 @@ export default function DoctorDashboard({
                             the patient actually pays, so the doctor always sees what
                             was given away, not just the resulting number. */}
                         <div className="px-3.5 py-3 bg-white/60 border-b border-purple-200">
-                          <p className="text-sm font-bold text-slate-800 leading-snug mb-1.5">{selectedService.name}</p>
+                          <p className="text-sm font-bold text-slate-800 leading-snug mb-1.5">{translateMedicalText(selectedService.name, language || 'uz')}</p>
                           <div className="flex items-end justify-between gap-3">
                             <div className="flex items-baseline gap-2">
                               {hasDiscount && (
@@ -5258,7 +5258,7 @@ export default function DoctorDashboard({
                               onClick={() => { setNewBookingServiceId(s.id); setNewBookingServiceQuery(''); setNewBookingDiscountPercent(0); setNewBookingDiscountAmount(0); setNewBookingDiscountReason(''); setNewBookingStages([]); }}
                               className="text-left border border-slate-200 hover:border-purple-400 hover:bg-purple-50 rounded-xl px-3 py-2.5 transition-colors"
                             >
-                              <p className="text-xs font-bold text-slate-800 leading-snug line-clamp-2">{s.name}</p>
+                              <p className="text-xs font-bold text-slate-800 leading-snug line-clamp-2">{translateMedicalText(s.name, language || 'uz')}</p>
                               <p className="text-[11px] font-black text-purple-600 mt-1">{Number(s.price).toLocaleString()} so'm</p>
                             </button>
                           ))}
@@ -5538,7 +5538,7 @@ export default function DoctorDashboard({
                 >
                   <option value="" className="text-slate-800">{t("— muolajani tanlang —")}</option>
                   {services.filter((s: any) => !effectiveClinicId || s.clinicId === effectiveClinicId).map((s: any) => (
-                    <option key={s.id} value={s.id} className="text-slate-800">{s.name} — {Number(s.price).toLocaleString()} so'm</option>
+                    <option key={s.id} value={s.id} className="text-slate-800">{translateMedicalText(s.name, language || 'uz')} — {Number(s.price).toLocaleString()} {t("so'm")}</option>
                   ))}
                 </select>
               </div>
@@ -5648,7 +5648,7 @@ export default function DoctorDashboard({
                     return (
                       <div key={v.id} className="flex items-center justify-between bg-slate-50 rounded-lg p-3 text-xs">
                         <div>
-                          <p className="font-bold text-slate-800">{v.serviceName || "—"}</p>
+                          <p className="font-bold text-slate-800">{v.serviceName ? translateMedicalText(v.serviceName, language || 'uz') : "—"}</p>
                           <p className="text-slate-400">{visitClinicName} · {v.doctorName}</p>
                         </div>
                         <span className="text-slate-500 font-mono">{new Date(v.date).toLocaleDateString()}</span>
@@ -5818,7 +5818,7 @@ export default function DoctorDashboard({
                     >
                       <option value="" className="text-slate-800">{t("— muolajani tanlang —")}</option>
                       {services.filter((s: any) => !effectiveClinicId || s.clinicId === effectiveClinicId).map((s: any) => (
-                        <option key={s.id} value={s.id} className="text-slate-800">{s.name} — {Number(s.price).toLocaleString()} so'm</option>
+                        <option key={s.id} value={s.id} className="text-slate-800">{translateMedicalText(s.name, language || 'uz')} — {Number(s.price).toLocaleString()} {t("so'm")}</option>
                       ))}
                     </select>
                     <div className="grid grid-cols-2 gap-2.5">

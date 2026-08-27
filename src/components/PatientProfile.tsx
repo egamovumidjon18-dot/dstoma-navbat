@@ -7,7 +7,7 @@ import { fetchTreatmentCharges, saveTreatmentCharge } from "../utils/treatmentCh
 import { useHistoryLayer } from "../hooks/useHistoryLayer";
 import { decodeLegacyEntities } from "../utils/textFormat";
 import { getApiUrl } from "../services/api";
-import { TRANSLATIONS, Language } from "../translations";
+import { TRANSLATIONS, Language, translateMedicalText } from "../translations";
 import DentalChart from "./DentalChart";
 import TreatmentPlan from "./TreatmentPlan";
 import XRayCenter from "./XRayCenter";
@@ -578,7 +578,10 @@ export default function PatientProfile({
     for (const c of charges) if (c.treatmentName) nameById.set(String(c.id), c.treatmentName);
     for (const i of planItems) if (i.treatment) nameById.set(String(i.id), i.treatment);
     return (Array.from(balance.ledger.items.values()) as ItemBalance[])
-      .map((b) => ({ ...b, name: nameById.get(b.itemId) || t("muolaja") }))
+      .map((b) => ({
+        ...b,
+        name: translateMedicalText(nameById.get(b.itemId) || t("muolaja"), language || 'uz'),
+      }))
       .sort((a, b) => b.debt - a.debt || b.total - a.total);
   }, [balance, charges, planItems, language]);
 

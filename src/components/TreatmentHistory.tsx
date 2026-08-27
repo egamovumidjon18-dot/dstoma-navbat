@@ -24,7 +24,7 @@ import {
   Link as LinkIcon,
   Check
 } from 'lucide-react';
-import { Language } from '../translations';
+import { Language, translateMedicalText } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';
 
 const HISTORY_TRANSLATIONS: Dict = {
@@ -229,7 +229,7 @@ export default function TreatmentHistory({ patientId, patientName, language, sta
                           </span>
                           <span className="text-xs font-bold bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full">{t("Bajarildi")}</span>
                         </div>
-                        <h4 className="text-base font-bold text-white mb-2">{item.treatment}</h4>
+                        <h4 className="text-base font-bold text-white mb-2">{translateMedicalText(item.treatment, language || 'uz')}</h4>
                         <div className="flex flex-wrap items-center gap-4 text-sm text-slate-400">
                           <div className="flex items-center gap-1.5 bg-[#111827] px-2 py-1 rounded-lg">
                             <span className="text-emerald-500 font-bold">{t("Tish:")}</span>
@@ -272,7 +272,7 @@ export default function TreatmentHistory({ patientId, patientName, language, sta
                           </span>
                         </td>
                         <td className="px-6 py-4 font-medium text-white">
-                          {item.treatment}
+                          {translateMedicalText(item.treatment, language || 'uz')}
                           {checkWarnings(item.toothId, item.createdAt) && <AlertTriangle className="w-3.5 h-3.5 text-amber-500 inline-block ml-2" />}
                         </td>
                         <td className="px-6 py-4 text-slate-400">{item.doctorName}</td>
@@ -320,7 +320,7 @@ export default function TreatmentHistory({ patientId, patientName, language, sta
                 <div className="grid grid-cols-2 gap-6 mb-6">
                   <div>
                     <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t("Muolaja turi")}</span>
-                    <p className="text-lg font-bold text-white">{selectedRecord.treatment}</p>
+                    <p className="text-lg font-bold text-white">{translateMedicalText(selectedRecord.treatment, language || 'uz')}</p>
                   </div>
                   <div>
                     <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t("Shifokor")}</span>

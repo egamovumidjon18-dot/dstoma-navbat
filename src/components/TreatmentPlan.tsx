@@ -14,7 +14,7 @@ import {
   Search,
   Layers
 } from 'lucide-react';
-import { Language } from '../translations';
+import { Language, translateMedicalText } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';
 import { getApiUrl } from '../services/api';
 import type { PaymentReceipt, TreatmentCharge } from '../types';
@@ -460,7 +460,7 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
                     </span>
                   </td>
                   <td className="px-6 py-4 font-medium text-white">
-                    {item.treatment}
+                    {translateMedicalText(item.treatment, language || 'uz')}
                     {unsynced && (
                       <button
                         onClick={() => retryChargeSync(item)}
