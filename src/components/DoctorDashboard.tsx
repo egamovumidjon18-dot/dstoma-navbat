@@ -275,6 +275,7 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "ta bosqichning vaqti belgilanmagan — u navbatga qo'shilmaydi, keyinroq belgilashingiz mumkin.": { ru: "этап(ов) без времени — они не попадут в расписание, время можно задать позже.", en: "stage(s) have no time yet — they will not be scheduled; you can set them later.", kk: "кезеңнің уақыты белгіленбеген — олар кестеге қосылмайды, кейін белгілей аласыз.", ky: "этаптын убактысы белгиленген эмес — алар графикке кошулбайт, кийин белгилей аласыз.", tg: "марҳила бе вақт аст — онҳо ба ҷадвал дохил намешаванд, баъдтар муайян карда метавонед.", tk: "tapgyryň wagty bellenmedik — olar tertibe goşulmaz, soňra belläp bilersiňiz." },
   "yopish": { ru: "Закрыть", en: "Close", kk: "Жабу", ky: "Жабуу", tg: "Пӯшидан", tk: "Ýapmak" },
   "qarzni so'ndirish": { ru: "Погасить долг", en: "Settle debt", kk: "Қарызды өтеу", ky: "Карызды жабуу", tg: "Пардохти қарз", tk: "Bergini ötlemek" },
+  "to'liq summa": { ru: "Вся сумма", en: "Full amount", kk: "Толық сома", ky: "Толук сумма", tg: "Маблағи пурра", tk: "Doly mukdar" },
   "qabul": { ru: "приёмов", en: "visits", kk: "қабылдаулар", ky: "кабылдоолор", tg: "қабулҳо", tk: "kabullar" },
   "statistikani ko'rish": { ru: "Смотреть статистику", en: "View statistics", kk: "Статистиканы көру", ky: "Статистиканы көрүү", tg: "Дидани статистика", tk: "Statistikany görmek" },
   "bu hafta": { ru: "Эта неделя", en: "This week", kk: "Осы апта", ky: "Ушул жума", tg: "Ҳамин ҳафта", tk: "Şu hepde" },
@@ -4682,9 +4683,11 @@ export default function DoctorDashboard({
                                 <button
                                   type="button"
                                   onClick={() => setSettleAmount(String(entry.debt))}
-                                  className="text-[10px] font-black text-emerald-700 hover:underline"
+                                  title={`${entry.debt.toLocaleString()} ${t("so'm")}`}
+                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-white text-emerald-700 text-[10px] font-black hover:bg-emerald-50 hover:border-emerald-300 active:scale-95 transition-all"
                                 >
-                                  {t("to'liq")}
+                                  <Wallet className="w-3 h-3" />
+                                  {t("to'liq summa")}
                                 </button>
                                 <div className="flex items-center gap-2 ml-auto">
                                   <button

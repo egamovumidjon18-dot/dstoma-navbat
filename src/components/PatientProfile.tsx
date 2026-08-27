@@ -66,6 +66,7 @@ const PATIENT_PROFILE_TRANSLATIONS: Record<string, PatientProfileDictEntry> = {
   "so'ndirilgan to'lovlar": { ru: "Поступившие платежи", en: "Payments received", kk: "Түскен төлемдер", ky: "Түшкөн төлөмдөр", tg: "Пардохтҳои воридшуда", tk: "Gelen tölegler" },
   "barchasi": { ru: "Все", en: "All", kk: "Барлығы", ky: "Бардыгы", tg: "Ҳама", tk: "Ählisi" },
   "qarzni so'ndirish": { ru: "Погасить долг", en: "Settle debt", kk: "Қарызды өтеу", ky: "Карызды жабуу", tg: "Пардохти қарз", tk: "Bergini ötlemek" },
+  "to'liq summa": { ru: "Вся сумма", en: "Full amount", kk: "Толық сома", ky: "Толук сумма", tg: "Маблағи пурра", tk: "Doly mukdar" },
   "qabul qilingan": { ru: "Принято", en: "Received", kk: "Қабылданды", ky: "Кабыл алынды", tg: "Қабулшуда", tk: "Kabul edildi" },
   tashriflar: { ru: "Визиты", en: "Visits", kk: "Келулер", ky: "Келүүлөр", tg: "Ташрифҳо", tk: "Gelmeler" },
   oxirgi: { ru: "Последний", en: "Last", kk: "Соңғы", ky: "Акыркы", tg: "Охирин", tk: "Soňky" },
@@ -879,13 +880,17 @@ export default function PatientProfile({
                 <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
                   {totalDebt > 0 ? t("qarzni so'ndirish") : t("to'lov qabul qilish")}
                 </span>
+                {/* Reads as a button rather than a stray green word: it fills the
+                    amount box with the whole outstanding balance. */}
                 {totalDebt > 0 && (
                   <button
                     type="button"
                     onClick={() => setCashAmount(String(totalDebt))}
-                    className="text-[10px] font-black text-emerald-600 hover:underline"
+                    title={`${totalDebt.toLocaleString()} ${t("so'm")}`}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px] font-black hover:bg-emerald-100 hover:border-emerald-300 active:scale-95 transition-all"
                   >
-                    {t("to'liq")}
+                    <Wallet className="w-3 h-3" />
+                    {t("to'liq summa")}
                   </button>
                 )}
               </div>
