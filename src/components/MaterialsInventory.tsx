@@ -18,6 +18,9 @@ const MATERIALS_TRANSLATIONS: Dict = {
   "kategoriyalarni tahrirlash": { ru: "Редактировать категории", en: "Edit categories", kk: "Санаттарды өңдеу", ky: "Категорияларды түзөтүү", tg: "Таҳрири категорияҳо", tk: "Kategoriýalary redaktirlemek" },
   "material nomini qidiring...": { ru: "Поиск по названию материала...", en: "Search material name...", kk: "Материал атауын іздеу...", ky: "Материал атын издөө...", tg: "Ҷустуҷӯи номи мавод...", tk: "Material adyny gözle..." },
   "material nomi": { ru: "Название материала", en: "Material name", kk: "Материал атауы", ky: "Материал аты", tg: "Номи мавод", tk: "Material ady" },
+  "shifokor": { ru: "Врач", en: "Doctor", kk: "Дәрігер", ky: "Дарыгер", tg: "Духтур", tk: "Lukman" },
+  "umumiy": { ru: "Общий", en: "Shared", kk: "Ортақ", ky: "Жалпы", tg: "Умумӣ", tk: "Umumy" },
+  "shifokorlar bo'yicha": { ru: "По врачам", en: "By doctor", kk: "Дәрігерлер бойынша", ky: "Дарыгерлер боюнча", tg: "Аз рӯи духтурон", tk: "Lukmanlar boýunça" },
   "kategoriya": { ru: "Категория", en: "Category", kk: "Санат", ky: "Категория", tg: "Категория", tk: "Kategoriýa" },
   "qoldiq": { ru: "Остаток", en: "Remaining", kk: "Қалдық", ky: "Калдык", tg: "Боқимонда", tk: "Galyndy" },
   "narxi": { ru: "Цена", en: "Price", kk: "Бағасы", ky: "Баасы", tg: "Нарх", tk: "Bahasy" },
@@ -68,11 +71,30 @@ interface Material {
   minQuantity: number;
   price: number;
   lastRestock: string;
+  // Whose shelf this sits on. Absent means it belongs to the clinic as a whole:
+  // every material predates this field, so treating "no owner" as shared is
+  // what keeps existing stock visible to everyone instead of vanishing.
+  doctorId?: string;
 }
 
 const DEFAULT_CATEGORIES = ['Plombalar', 'Anestetiklar', 'Endodontiya', 'Jarrohlik', 'Ortopediya', 'Boshqa'];
 
-export default function MaterialsInventory({ clinicId, language }: { clinicId?: string; language?: Language }) {
+export default function MaterialsInventory({
+  clinicId,
+  language,
+  doctorId,
+  aggregate = false,
+  doctorNameById,
+}: {
+  clinicId?: string;
+  language?: Language;
+  // A doctor sees their own shelf plus the clinic's shared stock, and anything
+  // they add lands on their own shelf.
+  doctorId?: string;
+  // The director's view: every doctor's stock at once, totalled and attributed.
+  aggregate?: boolean;
+  doctorNameById?: (id: string) => string | undefined;
+}) {
   const t = createTranslator(language, MATERIALS_TRANSLATIONS);
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -131,14 +153,41 @@ export default function MaterialsInventory({ clinicId, language }: { clinicId?: 
     }
   };
 
-  const filteredMaterials = materials.filter(m => {
+  // Everything this view is allowed to see. The doctor's own shelf plus the
+  // clinic's unassigned stock; the director's aggregate sees the lot. Every
+  // count and total below is derived from this, so the cards and the table can
+  // never describe different sets of materials.
+  const visibleMaterials = aggregate
+    ? materials
+    : materials.filter((m) => !m.doctorId || m.doctorId === doctorId);
+
+  const ownerLabel = (m: Material) =>
+    m.doctorId ? (doctorNameById?.(m.doctorId) || t('shifokor')) : t('umumiy');
+
+  const filteredMaterials = visibleMaterials.filter(m => {
     const matchesCategory = activeCategory === 'Barcha' || m.category === activeCategory;
     const matchesSearch = m.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
-  const lowStockMaterials = materials.filter(m => m.quantity <= m.minQuantity);
-  const totalValue = materials.reduce((sum, m) => sum + (m.quantity * m.price), 0);
+  const lowStockMaterials = visibleMaterials.filter(m => m.quantity <= m.minQuantity);
+  const totalValue = visibleMaterials.reduce((sum, m) => sum + (m.quantity * m.price), 0);
+
+  // Per-owner roll-up for the director: whose stock is worth what, and who is
+  // running low. Same list the table shows, grouped rather than recomputed.
+  const byOwner = (() => {
+    if (!aggregate) return [];
+    const map = new Map<string, { key: string; label: string; count: number; value: number; low: number }>();
+    for (const m of visibleMaterials) {
+      const key = m.doctorId || '__shared__';
+      const row = map.get(key) || { key, label: ownerLabel(m), count: 0, value: 0, low: 0 };
+      row.count += 1;
+      row.value += (Number(m.quantity) || 0) * (Number(m.price) || 0);
+      if (m.quantity <= m.minQuantity) row.low += 1;
+      map.set(key, row);
+    }
+    return Array.from(map.values()).sort((a, b) => b.value - a.value);
+  })();
 
   const updateMaterialDoc = async (id: string, patch: Partial<Material>) => {
     if (!clinicId) return;
@@ -191,7 +240,10 @@ export default function MaterialsInventory({ clinicId, language }: { clinicId?: 
       unit: newMaterial.unit || 'dona',
       minQuantity: Number(newMaterial.minQuantity) || 0,
       price: Number(newMaterial.price) || 0,
-      lastRestock: new Date().toISOString().split('T')[0]
+      lastRestock: new Date().toISOString().split('T')[0],
+      // Added from a doctor's panel, so it is theirs. The director adds to the
+      // clinic's shared stock instead, which is what the aggregate view is.
+      ...(doctorId && !aggregate ? { doctorId } : {}),
     };
 
     try {
@@ -298,6 +350,30 @@ export default function MaterialsInventory({ clinicId, language }: { clinicId?: 
           </div>
         </div>
 
+        {/* Whose stock is whose. The doctor's own view has no need for this —
+            everything in it is already theirs or the clinic's shared stock. */}
+        {aggregate && byOwner.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-4">
+            <h4 className="font-bold text-slate-800 text-sm mb-3">{t("Shifokorlar bo'yicha")}</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {byOwner.map((row) => (
+                <div key={row.key} className="border border-slate-100 rounded-xl p-3 bg-slate-50/60">
+                  <p className="text-xs font-black text-slate-700 truncate">{row.label}</p>
+                  <p className="text-lg font-black text-slate-900 leading-none mt-1">
+                    {row.value.toLocaleString()} <span className="text-[10px] font-bold text-slate-400">UZS</span>
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-400 mt-1">
+                    {row.count} {t("Ta")}
+                    {row.low > 0 && (
+                      <span className="text-red-500"> · {row.low} {t("Tugayotganlar").toLowerCase()}</span>
+                    )}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Materials Table */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <table className="w-full text-left border-collapse">
@@ -305,6 +381,9 @@ export default function MaterialsInventory({ clinicId, language }: { clinicId?: 
               <tr className="bg-slate-50 border-b border-slate-100">
                 <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">{t("Material Nomi")}</th>
                 <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">{t("Kategoriya")}</th>
+                {aggregate && (
+                  <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">{t("Shifokor")}</th>
+                )}
                 <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">{t("Qoldiq")}</th>
                 <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">{t("Narxi")}</th>
                 <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">{t("Oxirgi kirim")}</th>
@@ -327,6 +406,15 @@ export default function MaterialsInventory({ clinicId, language }: { clinicId?: 
                       {t(material.category)}
                     </span>
                   </td>
+                  {aggregate && (
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold ${
+                        material.doctorId ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {ownerLabel(material)}
+                      </span>
+                    </td>
+                  )}
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <span className={`font-black ${material.quantity <= material.minQuantity ? 'text-red-600' : 'text-slate-800'}`}>

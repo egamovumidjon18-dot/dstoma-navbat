@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Clinic, Doctor, Service, QueueItem, SaaSPayment, DoctorClinicLink, Patient } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
 import { TRANSLATIONS, Language, translateMedicalText } from '../translations';
+import MaterialsInventory from './MaterialsInventory';
 import { 
   Users, 
   DollarSign, 
@@ -389,7 +390,7 @@ export default function DirectorDashboard({
   };
 
   // Tab-specific view model: 'bugun', 'hisobot', 'shifokorlar', 'sozlamalar', 'obuna'
-  const [activeSubTab, setActiveSubTab] = useState<'bugun' | 'hisobot' | 'shifokorlar' | 'sozlamalar' | 'obuna'>('bugun');
+  const [activeSubTab, setActiveSubTab] = useState<'bugun' | 'hisobot' | 'shifokorlar' | 'materiallar' | 'sozlamalar' | 'obuna'>('bugun');
   const [reportPeriod, setReportPeriod] = useState<'kunlik' | 'haftalik' | 'oylik' | 'yillik'>('haftalik');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -847,6 +848,16 @@ export default function DirectorDashboard({
           }`}
         >
           {t("Shifokorlar KPI")}
+        </button>
+        <button
+          onClick={() => setActiveSubTab('materiallar')}
+          className={`px-6 py-3 text-xs font-extrabold uppercase tracking-wider relative transition-all shrink-0 cursor-pointer ${
+            activeSubTab === 'materiallar'
+              ? 'text-blue-600 border-b-2 border-blue-600 font-black'
+              : 'text-slate-400 hover:text-slate-800'
+          }`}
+        >
+          {t("Materiallar")}
         </button>
         <button
           onClick={() => setActiveSubTab('sozlamalar')}
@@ -1412,6 +1423,22 @@ export default function DirectorDashboard({
         </div>
       )}
 
+
+      {/* -------------------- MATERIALLAR: every doctor's stock at once ------ */}
+      {/* Each doctor keeps their own shelf; the director's copy of the same
+          screen adds them all up and says whose is whose. Stock with no owner
+          is the clinic's shared supply — which is what all of it was before
+          shelves were split per doctor. */}
+      {activeSubTab === 'materiallar' && (
+        <div className="h-full min-h-[600px] bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <MaterialsInventory
+            clinicId={currentClinicId}
+            aggregate
+            doctorNameById={(id) => clinicDoctors.find((d: any) => d.id === id)?.name}
+            language={language}
+          />
+        </div>
+      )}
 
       {/* -------------------- TAB 3: SHIFOKORLAR VIEW & CREATE PROFILE (SCREENSHOT 9 COVERS) -------------------- */}
       {activeSubTab === 'shifokorlar' && (

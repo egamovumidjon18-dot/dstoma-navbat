@@ -83,6 +83,11 @@ interface StatisticsProps {
   // both (DirectorDashboard) keeps the clinic-wide read below.
   charges?: TreatmentCharge[];
   receipts?: PaymentReceipt[];
+  // Whose warehouse to report. Stock is kept per doctor, so a doctor's copy of
+  // this page must count their own shelf and the clinic's shared stock — not
+  // the whole clinic's, which would contradict their Materiallar tab. The
+  // director passes nothing and gets the clinic-wide total, as they should.
+  materialsDoctorId?: string;
   clinicId?: string;
   clinicName?: string;
   staffToken?: string | null;
@@ -93,7 +98,7 @@ interface StatisticsProps {
   initialTimeRange?: 'daily' | 'weekly' | 'monthly' | 'yearly';
 }
 
-export default function Statistics({ queues = [], services = [], doctors = [], patients = [], charges: chargesProp, receipts: receiptsProp, clinicId, clinicName, staffToken, language, initialTimeRange }: StatisticsProps) {
+export default function Statistics({ queues = [], services = [], doctors = [], patients = [], charges: chargesProp, receipts: receiptsProp, materialsDoctorId, clinicId, clinicName, staffToken, language, initialTimeRange }: StatisticsProps) {
   const localLang: keyof StatsDictEntry | null =
     (language === "ru" || language === "en" || language === "kk" || language === "ky" || language === "tg" || language === "tk")
       ? language
@@ -185,6 +190,8 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
         const low: { id: string; name: string; quantity: number; unit: string; minQuantity: number }[] = [];
         snapshot.forEach((d) => {
           const m: any = d.data();
+          // Unowned stock is the clinic's shared supply and counts for everyone.
+          if (materialsDoctorId && m.doctorId && m.doctorId !== materialsDoctorId) return;
           value += (m.quantity || 0) * (m.price || 0);
           if ((m.quantity || 0) <= (m.minQuantity || 0)) {
             low.push({
@@ -202,7 +209,7 @@ export default function Statistics({ queues = [], services = [], doctors = [], p
       (error) => handleFirestoreError(error, OperationType.GET, `clinics/${clinicId}/materials`)
     );
     return () => unsub();
-  }, [clinicId]);
+  }, [clinicId, materialsDoctorId]);
 
   // Compute dynamic stats
   const stats = useMemo(() => {

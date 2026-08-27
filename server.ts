@@ -510,6 +510,38 @@ async function deductMaterialsForCompletedQueue(q: any) {
   const serviceId = q?.serviceId;
   if (!fDb || !clinicId || !queueId || !serviceId) return;
 
+  // Stock is kept per doctor, but the recipe is clinic-wide and names one
+  // material id. Left as-is, whichever doctor happened to own that row would
+  // be the one paying for everybody's procedures. So the recipe's material is
+  // first re-pointed at the completing doctor's own copy of the same item,
+  // matched on name and category. No copy of their own means the clinic's
+  // shared stock, which is what the recipe already points at.
+  //
+  // Resolved before the transaction on purpose: a transaction can only read
+  // documents by reference, never run a query.
+  const ownMaterialFor = new Map<string, string>();
+  if (q?.doctorId) {
+    try {
+      const all = await getDocs(collection(fDb, `clinics/${clinicId}/materials`));
+      const key = (m: any) => `${String(m?.name || '').trim().toLowerCase()}|${String(m?.category || '').trim().toLowerCase()}`;
+      const mine = new Map<string, string>();
+      const rows: { id: string; data: any }[] = [];
+      all.forEach((d: any) => {
+        const data = d.data() || {};
+        rows.push({ id: d.id, data });
+        if (data.doctorId === q.doctorId) mine.set(key(data), d.id);
+      });
+      for (const { id, data } of rows) {
+        const own = mine.get(key(data));
+        if (own && own !== id) ownMaterialFor.set(id, own);
+      }
+    } catch (err) {
+      // A failed lookup just means the recipe's own material is used, which is
+      // the behaviour that existed before stock was split per doctor.
+      console.warn('[materials] per-doctor stock lookup failed', err);
+    }
+  }
+
   // Materials that this deduction pushed at-or-below minQuantity for the
   // first time (was above it before, now isn't) — collected inside the
   // transaction, alerted on after it commits, since a Telegram call has no
@@ -535,8 +567,9 @@ async function deductMaterialsForCompletedQueue(q: any) {
       // Firestore requires every read in a transaction before any write.
       const reads = await Promise.all(
         Array.from(merged, async ([materialId, qty]) => {
-          const ref = doc(fDb, `clinics/${clinicId}/materials`, materialId);
-          return { materialId, qty, ref, snap: await tx.get(ref) };
+          const ownId = ownMaterialFor.get(materialId) || materialId;
+          const ref = doc(fDb, `clinics/${clinicId}/materials`, ownId);
+          return { materialId: ownId, qty, ref, snap: await tx.get(ref) };
         })
       );
 

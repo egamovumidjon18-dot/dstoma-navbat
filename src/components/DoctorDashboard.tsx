@@ -4626,7 +4626,7 @@ export default function DoctorDashboard({
                   roster here made "Jami bemorlar" report a different number than
                   the doctor's own "Barcha bemorlar" card two tabs over. The
                   director's Statistics stays clinic-wide, which is correct there. */}
-              <Statistics queues={doctorQueues} services={services} doctors={doctors} patients={myPatients} charges={myCharges} receipts={myReceipts} clinicId={effectiveClinicId} staffToken={staffToken} language={language} />
+              <Statistics queues={doctorQueues} services={services} doctors={doctors} patients={myPatients} charges={myCharges} receipts={myReceipts} materialsDoctorId={currentDoctor?.id} clinicId={effectiveClinicId} staffToken={staffToken} language={language} />
             </div>
           )}
 
@@ -4672,7 +4672,11 @@ export default function DoctorDashboard({
 
           {activeView === "materiallar" && (
             <div className="h-full bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
-              <MaterialsInventory clinicId={effectiveClinicId || undefined} language={language} />
+              <MaterialsInventory
+                clinicId={effectiveClinicId || undefined}
+                doctorId={currentDoctor?.id}
+                language={language}
+              />
             </div>
           )}
 
