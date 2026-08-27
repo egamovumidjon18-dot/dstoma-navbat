@@ -291,7 +291,7 @@ export default function MaterialsInventory({
             </div>
             <div>
               <div className="text-sm font-bold text-slate-500 mb-1">{t("Jami Turlar")}</div>
-              <div className="text-2xl font-black text-slate-800">{materials.length} {t("ta")}</div>
+              <div className="text-2xl font-black text-slate-800">{visibleMaterials.length} {t("ta")}</div>
             </div>
           </div>
           <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex items-center gap-5">
