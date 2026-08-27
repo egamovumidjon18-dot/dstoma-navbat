@@ -162,6 +162,9 @@ const DOCTOR_TRANSLATIONS: Record<string, DoctorDictEntry> = {
   "chegirma": { ru: "Скидка", en: "Discount", kk: "Жеңілдік", ky: "Арзандатуу", tg: "Тахфиф", tk: "Arzanlaşyk" },
   "foiz (%)": { ru: "Процент (%)", en: "Percent (%)", kk: "Пайыз (%)", ky: "Пайыз (%)", tg: "Фоиз (%)", tk: "Göterim (%)" },
   "chegirma sababi": { ru: "Причина скидки", en: "Discount reason", kk: "Жеңілдік себебі", ky: "Арзандатуу себеби", tg: "Сабаби тахфиф", tk: "Arzanlaşyk sebäbi" },
+  "qabulni yakunlash": { ru: "Завершить приём", en: "Complete the visit", kk: "Қабылдауды аяқтау", ky: "Кабыл алууну аяктоо", tg: "Анҷом додани қабул", tk: "Kabuly tamamlamak" },
+  "to'lovsiz yakunlash": { ru: "Завершить без оплаты", en: "Finish without payment", kk: "Төлемсіз аяқтау", ky: "Төлөмсүз аяктоо", tg: "Бе пардохт анҷом додан", tk: "Tölegsiz tamamlamak" },
+  "shu tashrif uchun": { ru: "За этот визит", en: "For this visit", kk: "Осы келу үшін", ky: "Ушул келүү үчүн", tg: "Барои ин ташриф", tk: "Şu gelme üçin" },
   "qabul yakunlandi": { ru: "Приём завершён", en: "Visit completed", kk: "Қабылдау аяқталды", ky: "Кабыл алуу аяктады", tg: "Қабул анҷом ёфт", tk: "Kabul tamamlandy" },
   "to'liq": { ru: "Полностью", en: "Full", kk: "Толық", ky: "Толук", tg: "Пурра", tk: "Doly" },
   "qisman": { ru: "Частично", en: "Partial", kk: "Ішінара", ky: "Жарым-жартылай", tg: "Қисман", tk: "Bölekleýin" },
@@ -1350,16 +1353,35 @@ export default function DoctorDashboard({
     }
   };
 
-  const handleCompleteQueue = async (q: QueueItem) => {
+  // Marking the visit finished and recording the treatment against it. Split
+  // out because it now runs only when the doctor confirms in the dialog below:
+  // it used to fire the moment the button was pressed, so the dialog's X closed
+  // a decision that had already been taken and could not be taken back.
+  const finalizeVisit = (q: QueueItem) => {
     if (!q?.id) return;
     onUpdateQueueStatus(q.id, "completed");
     completeTreatmentForQueue(q);
-    // Right after finishing, ask how the patient paid — this lets a doctor log
-    // an in-person cash or card payment immediately, without the patient needing
-    // to be reachable on Telegram afterwards to upload a photo receipt.
+  };
+
+  const closeVisitPayment = () => {
+    setVisitPaymentQueue(null);
+    setVisitPaymentAmount("");
+    setVisitPaymentMode("full");
+    setVisitOutstanding(null);
+    setVisitPaymentTarget(null);
+    setVisitStageDue(0);
+  };
+
+  const handleCompleteQueue = async (q: QueueItem) => {
+    if (!q?.id) return;
+    // Ask how the patient paid before finishing, so an in-person cash or card
+    // payment is logged there and then rather than depending on the patient
+    // being reachable on Telegram afterwards to upload a photo receipt.
     setVisitPaymentQueue(q);
     setVisitPaymentMode("full");
     setVisitOutstanding(null);
+    setVisitPaymentTarget(null);
+    setVisitStageDue(0);
 
     // Prefer what this patient actually still owes over the service list price:
     // for a staged treatment the visit settles one stage, not the whole course.
@@ -1373,13 +1395,35 @@ export default function DoctorDashboard({
         }).then(r => (r.ok ? r.json() : [])).catch(() => []),
       ]);
       const ledger = allocatePayments(charges, Array.isArray(receipts) ? receipts : []);
-      // The next unpaid stage is what this visit most likely settles.
-      let nextDue = 0;
-      for (const item of ledger.items.values()) {
-        const stage = item.stages.find(s => s.debt > 0);
-        if (stage) { nextDue = stage.debt; break; }
+      // What this visit actually settles is the stage booked against this very
+      // appointment — stages carry the queue id of the visit that carries them
+      // out. Naming it in the receipt is what ties the money to the right part
+      // of the right treatment, instead of letting it spill over whatever
+      // happens to be oldest.
+      let target: { treatmentItemId: string; stageId?: string } | null = null;
+      let due = 0;
+      for (const charge of charges) {
+        const stage = (charge.stages || []).find((st) => st.queueId === q.id);
+        if (!stage) continue;
+        const item = ledger.items.get(String(charge.id));
+        target = { treatmentItemId: String(charge.id), stageId: stage.id };
+        due = item?.stages.find((sb) => sb.stageId === stage.id)?.debt || 0;
+        break;
       }
-      const due = nextDue || ledger.debt;
+      // A walk-in, or a booking made before stages existed: settle the earliest
+      // thing still owed, which is what this used to do for every visit.
+      if (!target) {
+        for (const item of ledger.items.values()) {
+          const stage = item.stages.find((st) => st.debt > 0);
+          if (stage) {
+            target = { treatmentItemId: item.itemId, stageId: stage.stageId };
+            due = stage.debt;
+            break;
+          }
+        }
+      }
+      setVisitPaymentTarget(target);
+      setVisitStageDue(due);
       setVisitOutstanding(ledger.debt);
       if (due > 0) setVisitPaymentAmount(String(due));
     }
@@ -1390,6 +1434,10 @@ export default function DoctorDashboard({
   const [visitPaymentMode, setVisitPaymentMode] = useState<"full" | "partial" | "later">("full");
   const [visitOutstanding, setVisitOutstanding] = useState<number | null>(null);
   const [recordingVisitPayment, setRecordingVisitPayment] = useState<"cash" | "card" | null>(null);
+  // Which treatment stage this visit's payment settles, and how much that stage
+  // still owes — worked out when the dialog opens, sent with the receipt.
+  const [visitPaymentTarget, setVisitPaymentTarget] = useState<{ treatmentItemId: string; stageId?: string } | null>(null);
+  const [visitStageDue, setVisitStageDue] = useState(0);
 
   const handleRecordVisitPayment = async (method: "cash" | "card") => {
     const amount = Number(visitPaymentAmount);
@@ -1410,17 +1458,21 @@ export default function DoctorDashboard({
           queueId: visitPaymentQueue.id,
           amount,
           paymentMethod: method,
+          // Capped at what this stage owes: anything beyond it is left
+          // unallocated and spreads across the rest of the balance, rather
+          // than claiming to settle more of this stage than exists.
+          ...(visitPaymentTarget && visitStageDue > 0
+            ? { allocations: [{ ...visitPaymentTarget, amount: Math.min(amount, visitStageDue) }] }
+            : {}),
         }),
       });
       reloadClinicBilling.current();
     } catch {
-      // best-effort — the visit is already marked completed regardless
+      // best-effort — the visit still happened, so it is still finished below
     } finally {
+      finalizeVisit(visitPaymentQueue);
       setRecordingVisitPayment(null);
-      setVisitPaymentQueue(null);
-      setVisitPaymentAmount("");
-      setVisitPaymentMode("full");
-      setVisitOutstanding(null);
+      closeVisitPayment();
     }
   };
 
@@ -1636,9 +1688,7 @@ export default function DoctorDashboard({
   useHistoryLayer(showScheduleSettingsModal, () => setShowScheduleSettingsModal(false), 'schedule-settings');
   useHistoryLayer(showQuickAddPatient, () => setShowQuickAddPatient(false), 'quick-add-patient');
   useHistoryLayer(!!justAddedPatientCreds, () => setJustAddedPatientCreds(null), 'new-patient-creds');
-  useHistoryLayer(!!visitPaymentQueue, () => {
-    setVisitPaymentQueue(null); setVisitPaymentAmount(''); setVisitPaymentMode('full'); setVisitOutstanding(null);
-  }, 'visit-payment');
+  useHistoryLayer(!!visitPaymentQueue, () => closeVisitPayment(), 'visit-payment');
   // A patient card is its own level: Back returns to the list rather than
   // jumping out of the doctor panel entirely.
   useHistoryLayer(!!selectedPatientId && activeView === 'bemorlar', () => setSelectedPatientId(null), 'patient-card');
@@ -5909,9 +5959,12 @@ export default function DoctorDashboard({
       {visitPaymentQueue && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+            {/* Cancel: the appointment is left exactly as it was. Nothing here
+                has been applied yet, which is the point of asking. */}
             <button
-              onClick={() => { setVisitPaymentQueue(null); setVisitPaymentAmount(""); }}
+              onClick={closeVisitPayment}
               disabled={!!recordingVisitPayment}
+              title={t("Bekor qilish")}
               className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 disabled:opacity-50 p-1"
             >
               <X className="w-5 h-5" />
@@ -5919,7 +5972,7 @@ export default function DoctorDashboard({
             <div className="w-14 h-14 mx-auto bg-emerald-100 rounded-2xl flex items-center justify-center mb-4 text-2xl">
               💰
             </div>
-            <h3 className="text-base font-black text-slate-900 mb-1.5">{t("Qabul yakunlandi")}</h3>
+            <h3 className="text-base font-black text-slate-900 mb-1.5">{t("Qabulni yakunlash")}</h3>
             <p className="text-xs text-slate-500 font-semibold mb-4">
               {t("Bemor to'lovni qanday amalga oshirdi?")}
             </p>
@@ -5960,6 +6013,11 @@ export default function DoctorDashboard({
                   placeholder={t("Summa (so'm)")}
                   className="w-full mb-2 px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-2xl text-center text-lg font-black text-slate-900 focus:outline-none focus:border-emerald-400"
                 />
+                {visitStageDue > 0 && (
+                  <p className="text-[11px] font-bold text-slate-400 mb-1">
+                    {t("Shu tashrif uchun")}: {visitStageDue.toLocaleString()} {t("so'm")}
+                  </p>
+                )}
                 {visitOutstanding !== null && (
                   <p className="text-[11px] font-bold text-slate-500 mb-3">
                     {t("Qoladi")}: <span className={Math.max(0, visitOutstanding - (Number(visitPaymentAmount) || 0)) > 0 ? 'text-amber-600' : 'text-emerald-600'}>
@@ -5977,10 +6035,10 @@ export default function DoctorDashboard({
 
             {visitPaymentMode === 'later' ? (
               <button
-                onClick={() => { setVisitPaymentQueue(null); setVisitPaymentAmount(""); setVisitPaymentMode("full"); setVisitOutstanding(null); }}
+                onClick={() => { finalizeVisit(visitPaymentQueue); closeVisitPayment(); }}
                 className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider rounded-2xl transition-all mb-2.5"
               >
-                {t("Tushunarli")}
+                {t("Qabulni yakunlash")}
               </button>
             ) : (
             <div className="grid grid-cols-2 gap-2.5 mb-2.5">
@@ -6000,12 +6058,14 @@ export default function DoctorDashboard({
               </button>
             </div>
             )}
+            {/* Skips the payment, not the visit: the work is finished either
+                way and what is owed simply stays owed. */}
             <button
-              onClick={() => { setVisitPaymentQueue(null); setVisitPaymentAmount(""); setVisitPaymentMode("full"); setVisitOutstanding(null); }}
+              onClick={() => { finalizeVisit(visitPaymentQueue); closeVisitPayment(); }}
               disabled={!!recordingVisitPayment}
               className="w-full py-2 text-slate-400 hover:text-slate-600 disabled:opacity-50 text-xs font-bold transition-colors"
             >
-              {t("O'tkazib yuborish")}
+              {t("To'lovsiz yakunlash")}
             </button>
           </div>
         </div>
