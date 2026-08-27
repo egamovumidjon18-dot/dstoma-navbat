@@ -59,6 +59,10 @@ const PATIENT_PROFILE_TRANSLATIONS: Record<string, PatientProfileDictEntry> = {
   "to'langan": { ru: "Оплачено", en: "Paid", kk: "Төленген", ky: "Төлөнгөн", tg: "Пардохтшуда", tk: "Tölenen" },
   tasdiqlanmagan: { ru: "Не подтверждено", en: "Unconfirmed", kk: "Расталмаған", ky: "Тастыкталбаган", tg: "Тасдиқнашуда", tk: "Tassyklanmadyk" },
   "ortiqcha to'lov": { ru: "Переплата", en: "Overpaid", kk: "Артық төлем", ky: "Ашык төлөм", tg: "Пардохти изофа", tk: "Artykmaç töleg" },
+  "qabul qilingan": { ru: "Принято", en: "Received", kk: "Қабылданды", ky: "Кабыл алынды", tg: "Қабулшуда", tk: "Kabul edildi" },
+  "to'lov qabul qilish": { ru: "Принять оплату", en: "Take a payment", kk: "Төлемді қабылдау", ky: "Төлөмдү кабыл алуу", tg: "Қабули пардохт", tk: "Töleg kabul etmek" },
+  "to'liq": { ru: "Полностью", en: "Full", kk: "Толық", ky: "Толук", tg: "Пурра", tk: "Doly" },
+  "muolajaga bog'lanmagan to'lov — keyingi muolajalarga o'tadi.": { ru: "Платёж без привязки к процедуре — перейдёт на следующие процедуры.", en: "Payment not tied to a treatment — it carries over to the next ones.", kk: "Процедураға байланбаған төлем — келесі процедураларға өтеді.", ky: "Процедурага байланбаган төлөм — кийинки процедураларга өтөт.", tg: "Пардохти ба муолиҷа вобастанашуда — ба муолиҷаҳои оянда мегузарад.", tk: "Bejergä baglanmadyk töleg — indiki bejergilere geçer." },
   "qarzdorlik yo'q": { ru: "Задолженности нет", en: "No debt", kk: "Қарыз жоқ", ky: "Карыз жок", tg: "Қарз нест", tk: "Bergi ýok" },
   qarz: { ru: "Долг", en: "Debt", kk: "Қарыз", ky: "Карыз", tg: "Қарз", tk: "Bergi" },
   "muolajalar bo'yicha": { ru: "По процедурам", en: "By treatment", kk: "Емдеу бойынша", ky: "Дарылоо боюнча", tg: "Аз рӯи муолиҷа", tk: "Bejergi boýunça" },
@@ -476,6 +480,25 @@ export default function PatientProfile({
     if (totalDebt > 0 && !cashAmount) setCashAmount(String(totalDebt));
   }, [totalDebt]);
 
+  // How the money actually came in. Every confirmed receipt counts, which is
+  // why this is reported against what was *received* rather than against
+  // balance.paid — the ledger only applies as much as there is to bill, and
+  // anything past that shows up as credit, not as a payment method.
+  const receivedByMethod = useMemo(() => {
+    let cash = 0;
+    let card = 0;
+    for (const r of receipts) {
+      if (r.status !== 'confirmed') continue;
+      const amount = Number(r.amount) || 0;
+      if (r.paymentMethod === 'card') card += amount;
+      else cash += amount;
+    }
+    return { cash, card, total: cash + card };
+  }, [receipts]);
+
+  const paidPercent =
+    balance.total > 0 ? Math.min(100, Math.round((balance.paid / balance.total) * 100)) : 0;
+
   const tabs = [
     { id: "general", label: t("umumiy ma'lumot"), icon: User },
     { id: "chart", label: "Dental Chart", icon: Activity },
@@ -584,13 +607,47 @@ export default function PatientProfile({
           </div>
 
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
-            <h4 className="font-bold text-slate-800 text-sm mb-4">
-              {t("moliyaviy holat")}
-            </h4>
-            {/* Breakdown first, then the headline. A patient who owes nothing gets
-                a green card, not a red "0" — the old version framed every patient
-                as a debtor regardless of what they had paid. */}
-            <div className="space-y-1.5 mb-3">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-bold text-slate-800 text-sm">
+                {t("moliyaviy holat")}
+              </h4>
+              <button
+                type="button"
+                onClick={() => setActiveTab("payments")}
+                className="text-[10px] font-black text-slate-400 hover:text-emerald-600 transition-colors"
+              >
+                {t("to'lov cheklari")} →
+              </button>
+            </div>
+
+            {/* The headline answers the only question that gets asked at the
+                chair — how much is still owed — and the bar under it shows how
+                far through the course of treatment that leaves the patient. A
+                patient who owes nothing gets a green card, not a red "0". */}
+            <div className={`border rounded-2xl p-4 ${totalDebt > 0 ? 'bg-rose-50 border-rose-100' : 'bg-emerald-50 border-emerald-100'}`}>
+              <p className={`text-[10px] font-black uppercase tracking-wider ${totalDebt > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
+                {totalDebt > 0 ? t("joriy qarzdorlik") : t("qarzdorlik yo'q")}
+              </p>
+              <p className={`text-3xl font-black mt-0.5 ${totalDebt > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                {totalDebt > 0 ? totalDebt.toLocaleString() : "0"}{" "}
+                <span className={`text-xs font-bold ${totalDebt > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{t("so'm")}</span>
+              </p>
+              {balance.total > 0 && (
+                <>
+                  <div className="mt-3 h-1.5 rounded-full bg-white/80 overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full transition-all"
+                      style={{ width: `${paidPercent}%` }}
+                    />
+                  </div>
+                  <p className="mt-1.5 text-[10px] font-bold text-slate-500">
+                    {balance.paid.toLocaleString()} / {balance.total.toLocaleString()} · {paidPercent}% {t("to'langan")}
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="mt-3 space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-500 font-semibold">{t("jami")}</span>
                 <span className="font-bold text-slate-700">{balance.total.toLocaleString()}</span>
@@ -605,6 +662,21 @@ export default function PatientProfile({
                 <span className="text-slate-500 font-semibold">{t("to'langan")}</span>
                 <span className="font-bold text-emerald-600">{balance.paid.toLocaleString()}</span>
               </div>
+              {/* Split of what was actually received. Shown against "qabul
+                  qilingan" rather than under "to'langan", because once there is
+                  credit the two are different numbers and pinning the split to
+                  the smaller one would make it look like it doesn't add up. */}
+              {receivedByMethod.total > 0 && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-semibold">{t("qabul qilingan")}</span>
+                  <span className="font-bold text-slate-600 text-right">
+                    {receivedByMethod.total.toLocaleString()}
+                    <span className="block text-[10px] font-bold text-slate-400">
+                      {t("naqd")} {receivedByMethod.cash.toLocaleString()} · {t("karta")} {receivedByMethod.card.toLocaleString()}
+                    </span>
+                  </span>
+                </div>
+              )}
               {balance.pending > 0 && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-500 font-semibold">{t("tasdiqlanmagan")}</span>
@@ -612,61 +684,81 @@ export default function PatientProfile({
                 </div>
               )}
               {balance.credit > 0 && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-500 font-semibold">{t("ortiqcha to'lov")}</span>
-                  <span className="font-bold text-sky-600">+{balance.credit.toLocaleString()}</span>
+                <div className="pt-1.5 border-t border-slate-100">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-semibold">{t("ortiqcha to'lov")}</span>
+                    <span className="font-bold text-sky-600">+{balance.credit.toLocaleString()}</span>
+                  </div>
+                  {/* Credit is nearly always old money whose treatment was never
+                      entered in the ledger, which reads as alarming without a
+                      word of explanation next to it. */}
+                  <p className="text-[10px] font-medium text-slate-400 leading-snug mt-0.5">
+                    {t("muolajaga bog'lanmagan to'lov — keyingi muolajalarga o'tadi.")}
+                  </p>
                 </div>
               )}
             </div>
-            <div className={`border rounded-2xl p-4 text-center ${totalDebt > 0 ? 'bg-rose-50 border-rose-100' : 'bg-emerald-50 border-emerald-100'}`}>
-              <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${totalDebt > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
-                {totalDebt > 0 ? t("joriy qarzdorlik") : t("qarzdorlik yo'q")}
-              </p>
-              <p className={`text-2xl font-black ${totalDebt > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                {totalDebt > 0 ? totalDebt.toLocaleString() : "0"}{" "}
-                <span className={`text-xs font-bold ${totalDebt > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{t("so'm")}</span>
-              </p>
-              <button
-                onClick={handleRequestPayment}
-                disabled={requestingPayment || !doctorId || totalDebt <= 0}
-                className="w-full py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl mt-3 transition-colors shadow-md shadow-rose-500/20"
-              >
-                {requestingPayment ? t("yuborilmoqda...") : t("to'lov so'rovini yuborish")}
-              </button>
-              {paymentRequestMsg && (
-                <p className="text-[10px] font-bold text-rose-600 mt-2">{paymentRequestMsg}</p>
-              )}
-              <div className={`mt-3 pt-3 border-t space-y-2 ${totalDebt > 0 ? 'border-rose-100' : 'border-emerald-100'}`}>
-                <input
-                  type="number"
-                  min="1"
-                  value={cashAmount}
-                  onChange={(e) => setCashAmount(e.target.value)}
-                  placeholder={t("summa (so'm)")}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-right font-bold text-slate-700 focus:outline-none focus:border-emerald-400"
-                />
-                {/* Which way the money came in is recorded, not assumed — this
-                    box always posted a receipt with no paymentMethod at all, so
-                    the list below could never label a card payment as one. */}
-                <div className="grid grid-cols-2 gap-2">
+
+            {/* Taking the money. Prefilled with the outstanding balance, but a
+                part-payment is just as normal, so the figure stays editable. */}
+            <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                  {t("to'lov qabul qilish")}
+                </span>
+                {totalDebt > 0 && (
                   <button
-                    onClick={() => handleRecordCashPayment("cash")}
-                    disabled={recordingCash || !doctorId || !(Number(cashAmount) > 0)}
-                    className="py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-emerald-500/20"
+                    type="button"
+                    onClick={() => setCashAmount(String(totalDebt))}
+                    className="text-[10px] font-black text-emerald-600 hover:underline"
                   >
-                    {recordingCash ? t("yuborilmoqda...") : `💵 ${t("naqd")}`}
+                    {t("to'liq")}
                   </button>
-                  <button
-                    onClick={() => handleRecordCashPayment("card")}
-                    disabled={recordingCash || !doctorId || !(Number(cashAmount) > 0)}
-                    className="py-2 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-sky-500/20"
-                  >
-                    {recordingCash ? t("yuborilmoqda...") : `💳 ${t("karta")}`}
-                  </button>
-                </div>
+                )}
+              </div>
+              <input
+                type="number"
+                min="1"
+                value={cashAmount}
+                onChange={(e) => setCashAmount(e.target.value)}
+                placeholder={t("summa (so'm)")}
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-right font-bold text-slate-700 focus:outline-none focus:border-emerald-400"
+              />
+              {/* Which way the money came in is recorded, not assumed — this box
+                  used to post a receipt with no paymentMethod at all, so the
+                  receipt list could never label a card payment as one. */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleRecordCashPayment("cash")}
+                  disabled={recordingCash || !doctorId || !(Number(cashAmount) > 0)}
+                  className="py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-emerald-500/20"
+                >
+                  {recordingCash ? t("yuborilmoqda...") : `💵 ${t("naqd")}`}
+                </button>
+                <button
+                  onClick={() => handleRecordCashPayment("card")}
+                  disabled={recordingCash || !doctorId || !(Number(cashAmount) > 0)}
+                  className="py-2 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-sky-500/20"
+                >
+                  {recordingCash ? t("yuborilmoqda...") : `💳 ${t("karta")}`}
+                </button>
               </div>
               {cashMsg && (
-                <p className="text-[10px] font-bold text-emerald-600 mt-2">{cashMsg}</p>
+                <p className="text-[10px] font-bold text-emerald-600">{cashMsg}</p>
+              )}
+              {/* Only offered when there is something to ask for — it used to sit
+                  there greyed out on every paid-up patient. */}
+              {totalDebt > 0 && (
+                <button
+                  onClick={handleRequestPayment}
+                  disabled={requestingPayment || !doctorId}
+                  className="w-full py-2 border border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-xs rounded-xl transition-colors"
+                >
+                  {requestingPayment ? t("yuborilmoqda...") : t("to'lov so'rovini yuborish")}
+                </button>
+              )}
+              {paymentRequestMsg && (
+                <p className="text-[10px] font-bold text-rose-600">{paymentRequestMsg}</p>
               )}
             </div>
           </div>
