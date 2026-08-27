@@ -60,6 +60,10 @@ const PATIENT_PROFILE_TRANSLATIONS: Record<string, PatientProfileDictEntry> = {
   tasdiqlanmagan: { ru: "Не подтверждено", en: "Unconfirmed", kk: "Расталмаған", ky: "Тастыкталбаган", tg: "Тасдиқнашуда", tk: "Tassyklanmadyk" },
   "ortiqcha to'lov": { ru: "Переплата", en: "Overpaid", kk: "Артық төлем", ky: "Ашык төлөм", tg: "Пардохти изофа", tk: "Artykmaç töleg" },
   "qabul qilingan": { ru: "Принято", en: "Received", kk: "Қабылданды", ky: "Кабыл алынды", tg: "Қабулшуда", tk: "Kabul edildi" },
+  tashriflar: { ru: "Визиты", en: "Visits", kk: "Келулер", ky: "Келүүлөр", tg: "Ташрифҳо", tk: "Gelmeler" },
+  oxirgi: { ru: "Последний", en: "Last", kk: "Соңғы", ky: "Акыркы", tg: "Охирин", tk: "Soňky" },
+  "hali tashrif yo'q": { ru: "Визитов пока нет", en: "No visits yet", kk: "Әзірге келу жоқ", ky: "Азырынча келүү жок", tg: "Ҳанӯз ташриф нест", tk: "Heniz gelme ýok" },
+  "reja tuzilmagan": { ru: "План не составлен", en: "No plan yet", kk: "Жоспар жасалмаған", ky: "План түзүлгөн эмес", tg: "Нақша тартиб дода нашудааст", tk: "Meýilnama düzülmedik" },
   "to'lov qabul qilish": { ru: "Принять оплату", en: "Take a payment", kk: "Төлемді қабылдау", ky: "Төлөмдү кабыл алуу", tg: "Қабули пардохт", tk: "Töleg kabul etmek" },
   "to'liq": { ru: "Полностью", en: "Full", kk: "Толық", ky: "Толук", tg: "Пурра", tk: "Doly" },
   "muolajaga bog'lanmagan to'lov — keyingi muolajalarga o'tadi.": { ru: "Платёж без привязки к процедуре — перейдёт на следующие процедуры.", en: "Payment not tied to a treatment — it carries over to the next ones.", kk: "Процедураға байланбаған төлем — келесі процедураларға өтеді.", ky: "Процедурага байланбаган төлөм — кийинки процедураларга өтөт.", tg: "Пардохти ба муолиҷа вобастанашуда — ба муолиҷаҳои оянда мегузарад.", tk: "Bejergä baglanmadyk töleg — indiki bejergilere geçer." },
@@ -499,6 +503,17 @@ export default function PatientProfile({
   const paidPercent =
     balance.total > 0 ? Math.min(100, Math.round((balance.paid / balance.total) * 100)) : 0;
 
+  // Treatment progress, from the same plan items the money is billed against.
+  const planProgress = useMemo(() => {
+    const active = planItems.filter((i) => i.status !== 'Cancelled');
+    const done = active.filter((i) => i.status === 'Completed').length;
+    return {
+      total: active.length,
+      done,
+      percent: active.length > 0 ? Math.round((done / active.length) * 100) : 0,
+    };
+  }, [planItems]);
+
   const tabs = [
     { id: "general", label: t("umumiy ma'lumot"), icon: User },
     { id: "chart", label: "Dental Chart", icon: Activity },
@@ -552,9 +567,13 @@ export default function PatientProfile({
         </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div className="flex flex-col lg:flex-row gap-6 lg:items-stretch">
         {/* Left Sidebar Info */}
-        <div className="w-full lg:w-[300px] shrink-0 space-y-6">
+        {/* Height-matched to the content card beside it. Left to size itself it
+            ran taller than the card, and the difference showed up as a band of
+            empty page next to the sidebar's lower half. Now whichever column has
+            more to show scrolls inside its own height instead. */}
+        <div className="w-full lg:w-[300px] shrink-0 space-y-6 lg:h-[calc(100vh-11rem)] lg:min-h-[560px] lg:max-h-[900px] lg:overflow-y-auto lg:pr-1 custom-scrollbar">
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 text-center">
             <img
               src={`https://api.dicebear.com/7.x/adventurer/svg?seed=${patientId}`}
@@ -607,6 +626,43 @@ export default function PatientProfile({
           </div>
 
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
+            {/* Treatment at a glance, above the money. Both are read off data
+                already on this screen, and together they fill the column the
+                finance card used to leave half empty. */}
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => setActiveTab("history")}
+                className="rounded-2xl border border-slate-100 bg-slate-50/60 hover:border-emerald-200 hover:bg-emerald-50/50 p-3 text-left transition-colors"
+              >
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  {t("tashriflar")}
+                </p>
+                <p className="text-xl font-black text-slate-800 leading-none mt-1">{visitCount}</p>
+                <p className="text-[10px] font-bold text-slate-400 mt-1 truncate">
+                  {lastVisit?.date
+                    ? `${t("oxirgi")}: ${new Date(lastVisit.date).toLocaleDateString()}`
+                    : t("hali tashrif yo'q")}
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("plan")}
+                className="rounded-2xl border border-slate-100 bg-slate-50/60 hover:border-emerald-200 hover:bg-emerald-50/50 p-3 text-left transition-colors"
+              >
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  {t("davolash rejasi")}
+                </p>
+                <p className="text-xl font-black text-slate-800 leading-none mt-1">
+                  {planProgress.done}
+                  <span className="text-xs font-bold text-slate-400">/{planProgress.total}</span>
+                </p>
+                <p className="text-[10px] font-bold text-slate-400 mt-1">
+                  {planProgress.total > 0 ? `${planProgress.percent}% ${t("bajarildi")}` : t("reja tuzilmagan")}
+                </p>
+              </button>
+            </div>
+
             <div className="flex items-center justify-between mb-3">
               <h4 className="font-bold text-slate-800 text-sm">
                 {t("moliyaviy holat")}
@@ -768,8 +824,10 @@ export default function PatientProfile({
         {/* Scales with the viewport instead of a fixed 500/700px, which either
             cramped tall content or left a wide band of empty page below the
             card on a larger monitor. min-h keeps it usable on short mobile
-            viewports; max-h keeps it from growing absurdly tall on 4K screens. */}
-        <div className="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[70vh] min-h-[520px] max-h-[880px]">
+            viewports; max-h keeps it from growing absurdly tall on 4K screens.
+            The same three values are on the sidebar, which is what keeps the two
+            columns level. */}
+        <div className="flex-1 min-w-0 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[calc(100vh-11rem)] min-h-[560px] max-h-[900px]">
           <div className="flex overflow-x-auto border-b border-slate-100 hide-scrollbar">
             {tabs.map((tab) => (
               <button
