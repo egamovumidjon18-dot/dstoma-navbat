@@ -303,6 +303,7 @@ export default function App() {
                 onDeleteDoctorClinicLink={handleDeleteDoctorClinicLink}
                 setActiveTab={setActiveTab}
                 onAddDoctor={handleAddDoctor}
+                onUpdateDoctorCreds={handleUpdateDoctorCreds}
                 onDeleteDoctor={handleDeleteDoctor}
                 onUpdateService={handleUpdateService}
                 onAddService={handleAddService}

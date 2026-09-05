@@ -34,6 +34,10 @@ interface DirectorDashboardProps {
   onDeletePatient?: (patientId: string) => void;
   setActiveTab?: (tab: 'bemor' | 'shifokor' | 'boshliq' | 'kod' | 'superadmin') => void;
   onAddDoctor?: (newDoc: Doctor) => void | Promise<boolean>;
+  // Letting the director hand a doctor a working login, and reissue one when
+  // it is lost — the credentials are stored encrypted, so nobody can read an
+  // existing password back out.
+  onUpdateDoctorCreds?: (doctorId: string, login: string, pass: string) => Promise<boolean>;
   onDeleteDoctor?: (doctorId: string) => void;
   doctorClinicLinks?: DoctorClinicLink[];
   onSaveDoctorClinicLink?: (link: DoctorClinicLink) => void;
@@ -223,6 +227,7 @@ export default function DirectorDashboard({
   onDeletePatient,
   setActiveTab,
   onAddDoctor,
+  onUpdateDoctorCreds,
   onDeleteDoctor,
   doctorClinicLinks = [],
   onSaveDoctorClinicLink,
@@ -405,6 +410,14 @@ export default function DirectorDashboard({
 
   // Doctor Creation Form States
   const [newDocName, setNewDocName] = useState('');
+  const [newDocLogin, setNewDocLogin] = useState('');
+  // Shown once, right after the account is made. The password is encrypted the
+  // moment it reaches the server, so this is the only chance to read it — the
+  // panel says so rather than letting the director close it and find out.
+  const [newDocCreds, setNewDocCreds] = useState<{ name: string; login: string; pass: string } | null>(null);
+  const [resetCredsFor, setResetCredsFor] = useState<Doctor | null>(null);
+  const [resetLogin, setResetLogin] = useState('');
+  const [savingCreds, setSavingCreds] = useState(false);
   const [newDocSpecialty, setNewDocSpecialty] = useState('Stomatolog-ortoped');
   const [newDocAvatar, setNewDocAvatar] = useState('https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=200&auto=format&fit=crop');
   const [showAddDoctorForm, setShowAddDoctorForm] = useState(false);
@@ -514,12 +527,33 @@ export default function DirectorDashboard({
   );
 
   // Handler for adding doctor
+  // A login has to be unique: /api/doctor-login matches on it, so two doctors
+  // sharing one means whichever is found first wins and the other can never get
+  // in. Derived from the name, then numbered until it is free.
+  const uniqueDoctorLogin = (desired: string) => {
+    const taken = new Set(
+      doctors.map((d) => (d.login || '').trim().toLowerCase()).filter(Boolean)
+    );
+    const base = (desired || '').toLowerCase().replace(/[^a-z0-9]/g, '') || 'shifokor';
+    if (!taken.has(base)) return base;
+    let n = 2;
+    while (taken.has(`${base}${n}`)) n += 1;
+    return `${base}${n}`;
+  };
+
+  const generatedPassword = () => `Doc${Math.floor(1000 + Math.random() * 9000)}`;
+
   const handleCreateDoctorSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDocName) {
       setDocFeedbackMsg("Iltimos, shifokor ismini to'liq kiriting!");
       return;
     }
+
+    // Without these the record shows up in the list but the doctor cannot log
+    // in at all — which is what "adding a doctor" used to mean here.
+    const login = uniqueDoctorLogin(newDocLogin || newDocName);
+    const pass = generatedPassword();
 
     const newDocObj: Doctor = {
       // 'doc_sm_' + count reused an id the moment any earlier doctor was
@@ -532,7 +566,9 @@ export default function DirectorDashboard({
       rating: 5.0,
       ratingCount: 0,
       image: newDocAvatar,
-      status: 'idle'
+      status: 'idle',
+      login,
+      password: pass,
     };
 
     if (onAddDoctor) {
@@ -549,11 +585,31 @@ export default function DirectorDashboard({
     }
 
     setNewDocName('');
-    setDocFeedbackMsg("Yangi shifokor profili muvaffaqiyatli saqlandi va qabulga tayyor!");
-    setTimeout(() => {
-      setDocFeedbackMsg('');
-      setShowAddDoctorForm(false);
-    }, 3000);
+    setNewDocLogin('');
+    setShowAddDoctorForm(false);
+    setNewDocCreds({ name: newDocObj.name, login, pass });
+  };
+
+  const handleResetDoctorCreds = async () => {
+    if (!resetCredsFor || !onUpdateDoctorCreds) return;
+    // Keeping the doctor's existing login is not a collision with themselves,
+    // so it skips the uniqueness pass; anything else has to be free.
+    const typed = (resetLogin || resetCredsFor.name).trim();
+    const unchanged = typed.toLowerCase() === (resetCredsFor.login || '').toLowerCase();
+    const login = unchanged ? (resetCredsFor.login as string) : uniqueDoctorLogin(typed);
+    const pass = generatedPassword();
+    setSavingCreds(true);
+    try {
+      const ok = await onUpdateDoctorCreds(resetCredsFor.id, login, pass);
+      if (!ok) {
+        setDocFeedbackMsg("Login/parolni yangilab bo'lmadi. Qayta urinib ko'ring.");
+        return;
+      }
+      setNewDocCreds({ name: resetCredsFor.name, login, pass });
+      setResetCredsFor(null);
+    } finally {
+      setSavingCreds(false);
+    }
   };
 
   // Handler for editing service prices
@@ -1539,10 +1595,28 @@ export default function DirectorDashboard({
                   </div>
                 </div>
 
+                {/* The doctor has to be able to sign in, which needs a login and a
+                    password. Both are made here; the login is offered ready-made
+                    from the name and stays editable, since two doctors sharing one
+                    would lock the second out of the panel entirely. */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Tizimga kirish logini</label>
+                  <input
+                    type="text"
+                    value={newDocLogin}
+                    onChange={(e) => setNewDocLogin(e.target.value)}
+                    placeholder={newDocName ? uniqueDoctorLogin(newDocName) : 'sardorrustamov'}
+                    className="w-full bg-white border border-slate-200 text-xs font-bold text-slate-800 rounded-xl px-4 py-2.5 focus:border-cyan-500 focus:outline-none"
+                  />
+                  <p className="text-[10px] font-medium text-slate-400 mt-1">
+                    Bo'sh qoldirsangiz — ismdan avtomatik yaratiladi. Parol saqlangandan keyin bir marta ko'rsatiladi.
+                  </p>
+                </div>
+
                 <div className="flex justify-end gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => setShowAddDoctorForm(false)}
+                    onClick={() => { setShowAddDoctorForm(false); setNewDocLogin(''); }}
                     className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
                   >
                     Bekor qilish
@@ -1555,6 +1629,86 @@ export default function DirectorDashboard({
                   </button>
                 </div>
               </form>
+            </div>
+          )}
+
+          {/* The only moment the password is readable. It is encrypted the
+              instant it reaches the server, so this panel stays put until the
+              director dismisses it rather than fading away on a timer. */}
+          {newDocCreds && (
+            <div className="bg-emerald-50 border-2 border-emerald-200 rounded-3xl p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h4 className="text-xs font-black text-emerald-800 uppercase tracking-wider">
+                    🔑 {newDocCreds.name} — kirish ma'lumotlari
+                  </h4>
+                  <p className="text-[11px] font-bold text-emerald-700/70 mt-1">
+                    Parol shu yerdan boshqa hech qayerda ko'rsatilmaydi — nusxa olib, shifokorga bering.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNewDocCreds(null)}
+                  className="shrink-0 text-emerald-700/60 hover:text-emerald-900"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3">
+                <div className="bg-white rounded-xl border border-emerald-200 px-3 py-2">
+                  <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Login</p>
+                  <p className="text-sm font-black text-slate-800 font-mono break-all">{newDocCreds.login}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-emerald-200 px-3 py-2">
+                  <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Parol</p>
+                  <p className="text-sm font-black text-slate-800 font-mono break-all">{newDocCreds.pass}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(`Login: ${newDocCreds.login}\nParol: ${newDocCreds.pass}`)}
+                className="mt-3 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-black transition-colors"
+              >
+                Nusxa olish
+              </button>
+            </div>
+          )}
+
+          {/* Reissuing a login the doctor has lost. There is no way to read the
+              old password back — it is stored encrypted — so the only honest
+              option is to set a new one. */}
+          {resetCredsFor && (
+            <div className="bg-white border-2 border-amber-200 rounded-3xl p-5">
+              <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider mb-1">
+                🔄 {resetCredsFor.name} — yangi login/parol
+              </h4>
+              <p className="text-[11px] font-medium text-slate-500 mb-3">
+                Eski parolni ko'rib bo'lmaydi (u shifrlangan holda saqlanadi). Yangi parol yaratiladi va bir marta ko'rsatiladi.
+              </p>
+              <input
+                type="text"
+                value={resetLogin}
+                onChange={(e) => setResetLogin(e.target.value)}
+                placeholder="Login"
+                className="w-full bg-white border border-slate-200 text-xs font-bold text-slate-800 rounded-xl px-4 py-2.5 focus:border-amber-500 focus:outline-none"
+              />
+              <div className="flex justify-end gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => setResetCredsFor(null)}
+                  className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetDoctorCreds}
+                  disabled={savingCreds || !resetLogin.trim()}
+                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white rounded-xl text-xs font-black transition-all"
+                >
+                  {savingCreds ? '...' : 'Yangi parol yaratish'}
+                </button>
+              </div>
             </div>
           )}
 
@@ -1620,12 +1774,28 @@ export default function DirectorDashboard({
                     <span className="text-[10px] text-slate-400 font-bold">
                       Status:{doc.status === 'idle' ? '🟢 Qabulga tayyor' : doc.status === 'busy' ? '🔴 Band' : '🟡 Tushlikda'}
                     </span>
-                    <button
-                      onClick={() => setActiveTab && setActiveTab('shifokor')}
-                      className="text-blue-500 hover:text-blue-600 text-xs font-extrabold flex items-center gap-0.5 hover:underline cursor-pointer"
-                    >
-                      Kabinetga o'tish <ChevronRight className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-3">
+                      {/* A lost password cannot be looked up — it is stored
+                          encrypted — so the only thing on offer is a new one. */}
+                      {onUpdateDoctorCreds && (
+                        <button
+                          onClick={() => {
+                            setResetCredsFor(doc);
+                            setResetLogin(doc.login || doc.name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+                            setNewDocCreds(null);
+                          }}
+                          className="text-slate-400 hover:text-amber-600 text-xs font-extrabold hover:underline cursor-pointer"
+                        >
+                          🔑 Login/parol
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setActiveTab && setActiveTab('shifokor')}
+                        className="text-blue-500 hover:text-blue-600 text-xs font-extrabold flex items-center gap-0.5 hover:underline cursor-pointer"
+                      >
+                        Kabinetga o'tish <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
