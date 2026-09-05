@@ -4,6 +4,8 @@ import { Clinic, Doctor, Service, QueueItem, SaaSPayment, DoctorClinicLink, Pati
 import { decodeLegacyEntities } from '../utils/textFormat';
 import { TRANSLATIONS, Language, translateMedicalText } from '../translations';
 import MaterialsInventory from './MaterialsInventory';
+import VisitsJournal, { visitDateKey } from './VisitsJournal';
+import { toDateKey } from '../utils/doctorSchedule';
 import { 
   Users, 
   DollarSign, 
@@ -390,7 +392,7 @@ export default function DirectorDashboard({
   };
 
   // Tab-specific view model: 'bugun', 'hisobot', 'shifokorlar', 'sozlamalar', 'obuna'
-  const [activeSubTab, setActiveSubTab] = useState<'bugun' | 'hisobot' | 'shifokorlar' | 'materiallar' | 'sozlamalar' | 'obuna'>('bugun');
+  const [activeSubTab, setActiveSubTab] = useState<'bugun' | 'qabullar' | 'hisobot' | 'shifokorlar' | 'materiallar' | 'sozlamalar' | 'obuna'>('bugun');
   const [reportPeriod, setReportPeriod] = useState<'kunlik' | 'haftalik' | 'oylik' | 'yillik'>('haftalik');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -442,8 +444,14 @@ export default function DirectorDashboard({
   // weeks ago that nobody ever marked completed/cancelled used to count
   // forever, so this KPI (and each doctor's "active" count) only ever grew —
   // a doctor's own view showed "2 kutmoqda" while this showed "37".
-  const todayStr = new Date().toISOString().split('T')[0];
-  const isToday = (q: QueueItem) => q.createdAt?.startsWith(todayStr);
+  // toISOString() is UTC, so between midnight and 05:00 in Tashkent it names
+  // yesterday — every "Bugun" figure on this panel was a day behind all night.
+  const todayStr = toDateKey();
+  // ...and it asked when the ticket was *written*, not when the patient was
+  // seen. An appointment booked a fortnight ahead counted on its booking day
+  // and never on the day it happened. visitDateKey is the one reading of that,
+  // shared with the Qabullar jurnali so the two cannot disagree.
+  const isToday = (q: QueueItem) => visitDateKey(q) === todayStr;
   const pendingQueues = clinicQueues.filter(q => q.status === 'pending' && isToday(q));
   const callingQueues = clinicQueues.filter(q => (q.status === 'calling' || q.status === 'in_progress') && isToday(q));
   // All-time completed, across every tab. Every "Bugun/Bugungi" (Today) label in
@@ -828,6 +836,16 @@ export default function DirectorDashboard({
           }`}
         >
           {t("Bugun")}
+        </button>
+        <button
+          onClick={() => setActiveSubTab('qabullar')}
+          className={`px-6 py-3 text-xs font-extrabold uppercase tracking-wider relative transition-all shrink-0 cursor-pointer ${
+            activeSubTab === 'qabullar'
+              ? 'text-blue-600 border-b-2 border-blue-600 font-black'
+              : 'text-slate-400 hover:text-slate-800'
+          }`}
+        >
+          {t("Qabullar")}
         </button>
         <button
           onClick={() => setActiveSubTab('hisobot')}
@@ -1423,6 +1441,26 @@ export default function DirectorDashboard({
         </div>
       )}
 
+
+      {/* -------------------- QABULLAR: who saw whom, and when --------------- */}
+      {/* Built on the queue records the panel already holds — GET /api/queues
+          returns this clinic's rows in full for a director session, so there is
+          nothing new to fetch and nothing that can fall out of step with the
+          KPI cards, which now read the same visitDateKey. */}
+      {activeSubTab === 'qabullar' && (
+        <div className="h-[calc(100vh-16rem)] min-h-[560px] bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <VisitsJournal
+            queues={clinicQueues}
+            doctors={clinicDoctors}
+            services={clinicServices}
+            patients={clinicPatientsList}
+            clinicId={currentClinicId}
+            clinicName={clinicNameStr}
+            staffToken={staffToken}
+            language={language}
+          />
+        </div>
+      )}
 
       {/* -------------------- MATERIALLAR: every doctor's stock at once ------ */}
       {/* Each doctor keeps their own shelf; the director's copy of the same
