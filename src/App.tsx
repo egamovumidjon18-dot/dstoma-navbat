@@ -1,14 +1,24 @@
 import React, { useState } from 'react';
 import { useAppState } from './hooks/useAppState';
-import ClientDashboard from './components/ClientDashboard';
-import DoctorDashboard from './components/DoctorDashboard';
-import DirectorDashboard from './components/DirectorDashboard';
-import SuperAdminDashboard from './components/SuperAdminDashboard';
 import WelcomeScreen from './components/WelcomeScreen';
+
+const ClientDashboard = React.lazy(() => import('./components/ClientDashboard'));
+const DoctorDashboard = React.lazy(() => import('./components/DoctorDashboard'));
+const DirectorDashboard = React.lazy(() => import('./components/DirectorDashboard'));
+const SuperAdminDashboard = React.lazy(() => import('./components/SuperAdminDashboard'));
 import UnifiedLoginScreen from './components/welcome/UnifiedLoginScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { ShieldAlert, LogOut, Lock } from 'lucide-react';
+
+const PanelLoading = () => (
+  <div className="flex flex-col items-center justify-center w-full min-h-[60vh] py-20">
+    <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+    <p className="mt-5 text-slate-400 font-bold uppercase tracking-widest text-[10px]">
+      Yuklanmoqda...
+    </p>
+  </div>
+);
 
 export default function App() {
   const {
@@ -176,6 +186,7 @@ export default function App() {
     return (
       <ErrorBoundary>
         <ImpersonationBanner />
+        <React.Suspense fallback={<PanelLoading />}>
         <DoctorDashboard
           clinics={clinics}
           doctors={doctors}
@@ -199,6 +210,7 @@ export default function App() {
           onLogout={handleLogout}
           onUpdateDoctorDetails={handleUpdateDoctorDetails}
         />
+        </React.Suspense>
       </ErrorBoundary>
     );
   }
@@ -264,6 +276,7 @@ export default function App() {
           <>
             {activeTab === 'bemor' && (
               <ErrorBoundary>
+                <React.Suspense fallback={<PanelLoading />}>
                 <ClientDashboard
                   clinics={clinics}
                   doctors={doctors}
@@ -279,6 +292,7 @@ export default function App() {
                   initialSubView={welcomeTarget}
                   onExitToWelcome={() => setHasEnteredApp(false)}
                 />
+                </React.Suspense>
               </ErrorBoundary>
             )}
 
@@ -291,6 +305,7 @@ export default function App() {
         {activeTab === 'boshliq' && (
           hasAccess('boshliq') ? (
             <ErrorBoundary>
+              <React.Suspense fallback={<PanelLoading />}>
               <DirectorDashboard
                 clinics={clinics}
                 doctors={doctors}
@@ -317,6 +332,7 @@ export default function App() {
                 setLanguage={setLanguage}
                 staffToken={staffToken}
               />
+              </React.Suspense>
             </ErrorBoundary>
           ) : (
             <div className="flex flex-col items-center justify-center max-w-lg mx-auto w-full my-auto py-12">
@@ -328,6 +344,7 @@ export default function App() {
         {activeTab === 'superadmin' && (
           hasAccess('superadmin') ? (
             <ErrorBoundary>
+              <React.Suspense fallback={<PanelLoading />}>
               <SuperAdminDashboard
                 clinics={clinics}
                 queues={queues}
@@ -351,6 +368,7 @@ export default function App() {
                 onUpdateSuperadminCreds={handleUpdateSuperadminCreds}
                 onAdminImpersonate={handleAdminImpersonate}
               />
+              </React.Suspense>
             </ErrorBoundary>
           ) : (
             <div className="flex flex-col items-center justify-center max-w-lg mx-auto w-full my-auto py-12">

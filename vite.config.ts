@@ -8,6 +8,19 @@ export default defineConfig(() => {
     plugins: [react(), tailwindcss()],
     build: {
       chunkSizeWarningLimit: 1500,
+      rollupOptions: {
+        output: {
+          // Keep the heavy, rarely-changing libraries in their own cached
+          // chunks so a code change doesn't force every visitor to re-download
+          // charts / PDF / animation machinery along with it.
+          manualChunks: {
+            recharts: ['recharts'],
+            pdf: ['jspdf', 'jspdf-autotable'],
+            motion: ['motion'],
+            maps: ['@vis.gl/react-google-maps'],
+          },
+        },
+      },
     },
     define: {
       'process.env.GOOGLE_MAPS_PLATFORM_KEY': JSON.stringify(process.env.GOOGLE_MAPS_PLATFORM_KEY || '')
