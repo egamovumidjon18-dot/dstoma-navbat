@@ -227,6 +227,20 @@ export default function SuperAdminDashboard({
   // Doctor Details Management State
   const [doctorToEditDetails, setDoctorToEditDetails] = useState<Doctor | null>(null);
   const [showAddDoctorModal, setShowAddDoctorModal] = useState(false);
+  // Onboarding a clinic from a staffing list (an Excel export, a paper
+  // roster) one doctor at a time was the bottleneck -- 20+ people through the
+  // single-add form and its own copy/close/reopen cycle. This creates every
+  // row in one pass, generating the same login/password scheme the single
+  // form does, and collects every credential into one list to hand out.
+  const [showBulkAddDoctorModal, setShowBulkAddDoctorModal] = useState(false);
+  const [bulkClinicMode, setBulkClinicMode] = useState<'existing' | 'new'>('existing');
+  const [bulkClinicId, setBulkClinicId] = useState('');
+  const [bulkNewClinicName, setBulkNewClinicName] = useState('');
+  const [bulkDoctorText, setBulkDoctorText] = useState('');
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkResults, setBulkResults] = useState<
+    { name: string; specialty: string; login: string; pass: string; ok: boolean }[] | null
+  >(null);
   const [newDoctorName, setNewDoctorName] = useState('');
   const [newDoctorSpecialty, setNewDoctorSpecialty] = useState('');
   const [newDoctorClinicId, setNewDoctorClinicId] = useState('');
@@ -749,6 +763,185 @@ export default function SuperAdminDashboard({
     const doc = doctors.find(d => d.id === docId);
     setJustSetCredential({ label: `Shifokor: ${doc?.name || doctorLoginVal}`, login: doctorLoginVal, pass: doctorPassVal });
     triggerToast(tL("Shifokor hisob ma'lumotlari yangilandi!"));
+  };
+
+  // Generic Cyrillic -> Latin so a login can be derived from a name or clinic
+  // title written in Cyrillic (Russian or Uzbek) -- logins only need to be
+  // unique and recognisable, not a perfect transliteration.
+  const CYRILLIC_TO_LATIN: Record<string, string> = {
+    'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'j','з':'z','и':'i',
+    'й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t',
+    'у':'u','ф':'f','х':'x','ц':'s','ч':'ch','ш':'sh','щ':'sh','ъ':'','ы':'i','ь':'',
+    'э':'e','ю':'yu','я':'ya','қ':'q','ғ':'gʻ','ў':'oʻ','ҳ':'h',
+  };
+  const slugify = (text: string) =>
+    text
+      .toLowerCase()
+      .split('')
+      .map((ch) => (ch in CYRILLIC_TO_LATIN ? CYRILLIC_TO_LATIN[ch] : ch))
+      .join('')
+      .replace(/[^a-z0-9]/g, '');
+
+  // Numbers past a collision rather than overwriting it -- a login has to be
+  // unique across the whole system, since /api/doctor-login matches on it and
+  // a shared login locks whichever doctor is found second out of the panel.
+  const makeUniqueLogin = (desired: string, taken: Set<string>) => {
+    const base = slugify(desired) || 'shifokor';
+    let login = base;
+    let n = 2;
+    while (taken.has(login)) {
+      login = `${base}${n}`;
+      n += 1;
+    }
+    taken.add(login);
+    return login;
+  };
+
+  const BULK_DOCTOR_PLACEHOLDER = [
+      'Xakimov K\tVrach-stomatolog terapevt',
+      'Tursunov B\tVrach-stomatolog terapevt',
+      'Turdiev Sh\tVrach-stomatolog terapevt',
+      'G\'afforov B\tVrach-stomatolog terapevt',
+      'Artikov T\tVrach-stomatolog terapevt',
+      'Indiaminova A\tVrach-stomatolog terapevt',
+      'Igamkulova D\tVrach-stomatolog terapevt',
+      'Sattarov F\tVrach-stomatolog terapevt',
+      'Amonullayev M\tVrach-stomatolog terapevt',
+      'Safotillayev Sh\tVrach-stomatolog terapevt',
+      'Rashidov T\tVrach-stomatolog terapevt',
+      'Karimov D\tVrach-stomatolog terapevt / Navbatchi (tungi)',
+      'Mahmud S\tVrach-ortodont stomatolog',
+      'Sanakulov M\tVrach-ortodont stomatolog',
+      'Mirzoyev F\tJarroh stomatolog',
+      'Rahimberdiyev A\tJarroh stomatolog',
+      'Erkinov M\tJarroh stomatolog',
+      'Bobokulov A\tNavbatchi vrach-terapevt stomatolog (tungi)',
+      'Nasrullayev J\tNavbatchi vrach-terapevt stomatolog (tungi)',
+      'Abrorov N\tNavbatchi vrach-terapevt stomatolog (tungi)',
+      'Sattorov Sh\tNavbatchi vrach-terapevt stomatolog (tungi)',
+      'Lutfullayev J\tNavbatchi vrach-terapevt stomatolog (tungi)',
+      'Yo\'ldoshev M\tNavbatchi vrach-terapevt stomatolog (tungi)',
+    ].join('\n');
+
+  const openBulkAddDoctorModal = () => {
+    setBulkClinicMode('existing');
+    setBulkClinicId('');
+    setBulkNewClinicName('');
+    setBulkDoctorText(BULK_DOCTOR_PLACEHOLDER);
+    setBulkResults(null);
+    setShowBulkAddDoctorModal(true);
+  };
+
+  const handleBulkImportDoctors = async () => {
+    const lines = bulkDoctorText
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith('#'));
+    if (lines.length === 0) {
+      triggerToast("Kamida bitta shifokor qatorini kiriting!");
+      return;
+    }
+
+    setBulkImporting(true);
+    try {
+      let clinicId = bulkClinicId;
+
+      if (bulkClinicMode === 'new') {
+        const clinicName = bulkNewClinicName.trim();
+        if (!clinicName) {
+          triggerToast("Klinika nomini kiriting!");
+          return;
+        }
+        const takenSubdomains = new Set(clinics.map((c) => c.subdomain));
+        const subdomain = makeUniqueLogin(clinicName, takenSubdomains);
+        const clinicLogin = `ceo_${subdomain}`;
+        const clinicPass = `Stoma${Math.floor(100000 + Math.random() * 900000)}`;
+        const newClinic: Clinic = {
+          id: subdomain,
+          name: clinicName,
+          subdomain,
+          address: "Kiritilmagan",
+          phone: '',
+          lat: 41.311081,
+          lng: 69.240562,
+          logo: '🦷',
+          rating: 5.0,
+          activePatients: 0,
+          mapLink: `https://www.google.com/maps?q=${encodeURIComponent(clinicName + ", O'zbekiston")}`,
+          rentalPrice: 1500000,
+          nextPaymentDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          subscriptionStatus: 'active',
+          ownerName: clinicName,
+          login: clinicLogin,
+          password: clinicPass,
+        };
+        const created = onAddClinic ? await onAddClinic(newClinic) : false;
+        if (!created) {
+          triggerToast("Klinika saqlanmadi. Qayta urinib ko'ring.");
+          return;
+        }
+        clinicId = subdomain;
+        addLog(`New clinic "${clinicName}" onboarded under tenant [${subdomain}] via bulk import`, 'success');
+        setJustSetCredential({ label: `Klinika: ${clinicName}`, login: clinicLogin, pass: clinicPass });
+      }
+
+      if (!clinicId) {
+        triggerToast("Klinikani tanlang yoki yangi klinika nomini kiriting!");
+        return;
+      }
+
+      const takenLogins = new Set(doctors.map((d) => (d.login || '').toLowerCase()).filter(Boolean));
+      const results: { name: string; specialty: string; login: string; pass: string; ok: boolean }[] = [];
+
+      // Sequential, not Promise.all: each write needs the previous one's login
+      // reservation to already be in takenLogins, and a failed row should not
+      // stop the ones after it from still being attempted.
+      for (const line of lines) {
+        const parts = line.split(/\t|\s{2,}|\s*\|\s*/).map((p) => p.trim()).filter(Boolean);
+        const name = parts[0] || line;
+        const specialty = parts.slice(1).join(' ') || 'Stomatolog';
+        const login = makeUniqueLogin(name, takenLogins);
+        const pass = `Doc${Math.floor(1000 + Math.random() * 9000)}`;
+        const newDoc: Doctor = {
+          id: 'doc_' + Math.random().toString(36).substr(2, 9),
+          name,
+          specialty,
+          status: 'idle',
+          clinicId,
+          image: 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + encodeURIComponent(name),
+          rating: 5,
+          ratingCount: 0,
+          login,
+          password: pass,
+        };
+        const ok = onAddDoctor ? await onAddDoctor(newDoc) : false;
+        results.push({ name, specialty, login, pass, ok: !!ok });
+      }
+
+      setBulkResults(results);
+      addLog(
+        `Bulk-imported ${results.filter((r) => r.ok).length}/${results.length} doctors into [${clinicId}]`,
+        results.every((r) => r.ok) ? 'success' : 'warn'
+      );
+    } finally {
+      setBulkImporting(false);
+    }
+  };
+
+  const exportBulkResultsTxt = () => {
+    if (!bulkResults) return;
+    const lines = bulkResults.map(
+      (r) =>
+        `${r.name}\t${r.specialty}\tLogin: ${r.login}\tParol: ${r.pass}` +
+        (r.ok ? '' : '\t(SAQLANMADI)')
+    );
+    const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `shifokorlar_${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleCreateDoctorSubmit = async (e: React.FormEvent) => {
@@ -2522,6 +2715,15 @@ export default function SuperAdminDashboard({
                   <Plus className="w-3.5 h-3.5" />
                   Qo'shish
                 </button>
+                {/* For onboarding a whole staffing list (an Excel export, a
+                    paper roster) at once instead of one doctor at a time. */}
+                <button
+                  onClick={openBulkAddDoctorModal}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wide flex items-center gap-1 transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  Ommaviy qo'shish
+                </button>
               </div>
             </div>
 
@@ -3140,6 +3342,166 @@ export default function SuperAdminDashboard({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* BULK DOCTOR IMPORT: one roster -> every doctor created in one pass */}
+      {showBulkAddDoctorModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
+          <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-2xl w-full max-h-[92vh] overflow-y-auto border border-slate-100 shadow-2xl space-y-4">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest text-center border-b border-slate-100 pb-2">
+              Shifokorlarni ommaviy qo'shish
+            </h3>
+
+            {!bulkResults ? (
+              <>
+                <div>
+                  <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1.5">
+                    Klinika
+                  </label>
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl mb-2 w-fit">
+                    <button
+                      type="button"
+                      onClick={() => setBulkClinicMode('existing')}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-black transition-colors ${
+                        bulkClinicMode === 'existing' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'
+                      }`}
+                    >
+                      Mavjud klinika
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkClinicMode('new')}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-black transition-colors ${
+                        bulkClinicMode === 'new' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'
+                      }`}
+                    >
+                      Yangi klinika
+                    </button>
+                  </div>
+                  {bulkClinicMode === 'existing' ? (
+                    <select
+                      value={bulkClinicId}
+                      onChange={(e) => setBulkClinicId(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="">Klinikani tanlang</option>
+                      {clinics.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        value={bulkNewClinicName}
+                        onChange={(e) => setBulkNewClinicName(e.target.value)}
+                        placeholder="Klinika nomi"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                      />
+                      <p className="text-[10px] font-medium text-slate-400 mt-1">
+                        Manzil, telefon va narx keyinroq "Klinikalar" bo'limida to'ldiriladi — hoziroq standart qiymatlar bilan yaratiladi.
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1.5">
+                    Shifokorlar ro'yxati
+                  </label>
+                  <p className="text-[10px] font-medium text-slate-400 mb-1.5">
+                    Har bir qatorda bitta shifokor: ism va mutaxassislik orasida Tab yoki kamida 2 ta bo'shliq. Qatorlarni o'zingiz tahrirlashingiz, qo'shishingiz yoki o'chirishingiz mumkin.
+                  </p>
+                  <textarea
+                    value={bulkDoctorText}
+                    onChange={(e) => setBulkDoctorText(e.target.value)}
+                    rows={12}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  />
+                  <p className="text-[10px] font-bold text-slate-400 mt-1">
+                    {bulkDoctorText.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#')).length} ta qator
+                  </p>
+                </div>
+
+                <div className="flex justify-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkAddDoctorModal(false)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer"
+                  >
+                    Bekor qilish
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkImportDoctors}
+                    disabled={bulkImporting}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-black rounded-xl cursor-pointer shadow-md"
+                  >
+                    {bulkImporting ? 'Qo\'shilmoqda...' : "Barchasini qo'shish"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs font-bold text-slate-600 text-center">
+                  {bulkResults.filter((r) => r.ok).length} / {bulkResults.length} shifokor muvaffaqiyatli qo'shildi.
+                  {' '}Har bir parol faqat shu yerda ko'rsatiladi — nusxa oling yoki yuklab oling.
+                </p>
+                <div className="border border-slate-100 rounded-xl overflow-hidden">
+                  <table className="w-full text-[11px]">
+                    <thead className="bg-slate-50">
+                      <tr className="text-left text-slate-400 font-black uppercase tracking-wide">
+                        <th className="px-3 py-2">Ism</th>
+                        <th className="px-3 py-2">Login</th>
+                        <th className="px-3 py-2">Parol</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {bulkResults.map((r, i) => (
+                        <tr key={i} className={r.ok ? '' : 'bg-rose-50'}>
+                          <td className="px-3 py-2 font-bold text-slate-700">{r.name}</td>
+                          <td className="px-3 py-2 font-mono text-indigo-600">{r.login}</td>
+                          <td className="px-3 py-2 font-mono text-emerald-600">
+                            {r.ok ? r.pass : 'saqlanmadi'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const text = bulkResults
+                        .map((r) => `${r.name}\t${r.login}\t${r.ok ? r.pass : 'SAQLANMADI'}`)
+                        .join('\n');
+                      navigator.clipboard.writeText(text);
+                    }}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    Nusxalash
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportBulkResultsTxt}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer"
+                  >
+                    Faylga yuklab olish
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkAddDoctorModal(false)}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-md"
+                  >
+                    Yopish
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
