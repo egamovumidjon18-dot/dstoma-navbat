@@ -19,6 +19,7 @@ export interface WelcomeCopy {
   register: string;
   login: string;
   security: string;
+  clinicSignup: string;
   languageLabel: string;
 }
 
@@ -38,6 +39,7 @@ export const WELCOME_TRANSLATIONS: Record<Language, WelcomeCopy> = {
     register: 'Ro‘yxatdan o‘tish',
     login: 'Kirish',
     security: 'Ma’lumotlaringiz xavfsiz va ishonchli',
+    clinicSignup: 'Klinikangizni ro‘yxatdan o‘tkazing',
     languageLabel: 'Tilni tanlash',
   },
 
@@ -56,6 +58,7 @@ export const WELCOME_TRANSLATIONS: Record<Language, WelcomeCopy> = {
     register: 'Регистрация',
     login: 'Вход',
     security: 'Ваши данные защищены и надёжны',
+    clinicSignup: 'Зарегистрировать клинику',
     languageLabel: 'Выбор языка',
   },
 
@@ -74,6 +77,7 @@ export const WELCOME_TRANSLATIONS: Record<Language, WelcomeCopy> = {
     register: 'Sign up',
     login: 'Log in',
     security: 'Your data is safe and secure',
+    clinicSignup: 'Register your clinic',
     languageLabel: 'Select language',
   },
 
@@ -92,6 +96,7 @@ export const WELCOME_TRANSLATIONS: Record<Language, WelcomeCopy> = {
     register: 'Тіркелу',
     login: 'Кіру',
     security: 'Деректеріңіз қауіпсіз және сенімді',
+    clinicSignup: 'Клиникаңызды тіркеңіз',
     languageLabel: 'Тілді таңдау',
   },
 
@@ -110,6 +115,7 @@ export const WELCOME_TRANSLATIONS: Record<Language, WelcomeCopy> = {
     register: 'Каттоо',
     login: 'Кирүү',
     security: 'Маалыматтарыңыз коопсуз жана ишенимдүү',
+    clinicSignup: 'Клиникаңызды каттаңыз',
     languageLabel: 'Тилди тандоо',
   },
 
@@ -128,6 +134,7 @@ export const WELCOME_TRANSLATIONS: Record<Language, WelcomeCopy> = {
     register: 'Сабти ном',
     login: 'Ворид шудан',
     security: 'Маълумоти шумо бехатар ва боэътимод аст',
+    clinicSignup: 'Клиникаи худро сабт кунед',
     languageLabel: 'Интихоби забон',
   },
 
@@ -146,6 +153,7 @@ export const WELCOME_TRANSLATIONS: Record<Language, WelcomeCopy> = {
     register: 'Hasaba durmak',
     login: 'Girmek',
     security: 'Maglumatlaryňyz howpsuz we ygtybarly',
+    clinicSignup: 'Klinikaňyzy hasaba alyň',
     languageLabel: 'Dili saýlamak',
   },
 };

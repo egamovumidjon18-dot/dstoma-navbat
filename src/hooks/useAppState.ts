@@ -403,6 +403,36 @@ export function useAppState() {
     return null;
   };
 
+  // Public clinic self-registration. The server creates the clinic on a trial
+  // and hands back a director session in the same response, so the new owner
+  // lands in their own panel rather than being asked to log in with
+  // credentials they were shown two seconds ago.
+  const handleClinicSignup = async (input: {
+    name: string;
+    ownerName: string;
+    phone: string;
+    address?: string;
+  }): Promise<{ login: string; password: string } | { error: string }> => {
+    try {
+      const res = await fetch('/api/clinic-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return { error: data?.error || "Ro'yxatdan o'tkazib bo'lmadi. Qayta urinib ko'ring." };
+      }
+      const session = { type: 'director' as const, clinicId: data.clinicId, name: input.ownerName };
+      setCurrentUser(session);
+      setStaffTokenPersisted(data.token || null);
+      writeUserSession(session);
+      return { login: data.login, password: data.password };
+    } catch {
+      return { error: "Internetga ulanishda muammo. Qayta urinib ko'ring." };
+    }
+  };
+
   const handleLogout = () => {
     setCurrentUser(null);
     setAuthError(null);
@@ -1321,6 +1351,7 @@ export function useAppState() {
     handleDeletePatient,
     handlePatientUpserted,
     handleLoginSubmit,
+    handleClinicSignup,
     handleLogout,
     handleAddQueue,
     handleCancelQueue,

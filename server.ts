@@ -3218,6 +3218,94 @@ app.delete("/api/reminders/:id", async (req, res) => {
 // Join a doctor's waitlist — public like queue booking itself (a patient
 // waiting for an opening has the same "no credentials yet" problem a
 // first-time booking does), just rate-limited against spam joins.
+// Public clinic self-registration. The only way to create a clinic used to be
+// POST /api/clinics as superadmin, which meant every new customer had to be
+// onboarded by hand. This lets a clinic sign itself up and start on a trial.
+//
+// It is public, so it owns every field that carries value or trust: the caller
+// supplies a name, an owner and a phone, and nothing else. Subscription status,
+// pricing and ids are set here, never read from the body — otherwise anyone
+// could POST themselves an active paid account.
+app.post("/api/clinic-signup", rateLimiter(5, 60 * 60 * 1000), async (req, res) => {
+  const name = sanitizeString(String(req.body?.name || '')).trim();
+  const ownerName = sanitizeString(String(req.body?.ownerName || '')).trim();
+  const phone = sanitizeString(String(req.body?.phone || '')).trim();
+  const address = sanitizeString(String(req.body?.address || '')).trim();
+
+  if (name.length < 3 || ownerName.length < 3 || phone.length < 7) {
+    return res.status(400).json({
+      ok: false,
+      error: "Klinika nomi, rahbar ismi va telefon raqami to'liq kiritilishi kerak",
+    });
+  }
+  if (name.length > 120 || ownerName.length > 120 || phone.length > 40 || address.length > 200) {
+    return res.status(400).json({ ok: false, error: "Kiritilgan ma'lumot juda uzun" });
+  }
+
+  // Latin slug from the clinic name — the id doubles as the subdomain, so it
+  // has to be url-safe and unique across every tenant.
+  const CYR: Record<string, string> = {
+    'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'j','з':'z','и':'i',
+    'й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t',
+    'у':'u','ф':'f','х':'x','ц':'s','ч':'ch','ш':'sh','щ':'sh','ъ':'','ы':'i','ь':'',
+    'э':'e','ю':'yu','я':'ya','қ':'q','ғ':'g','ў':'o','ҳ':'h',
+  };
+  const slug = name.toLowerCase().split('').map((ch) => (ch in CYR ? CYR[ch] : ch)).join('')
+    .replace(/[^a-z0-9]/g, '').slice(0, 24) || 'klinika';
+
+  const allClinics = await getClinics();
+  const taken = new Set(allClinics.map((c: any) => String(c.id)));
+  let clinicId = slug;
+  let n = 2;
+  while (taken.has(clinicId)) { clinicId = `${slug}${n}`; n += 1; }
+
+  const login = `ceo_${clinicId}`;
+  const password = `Stoma${Math.floor(100000 + Math.random() * 900000)}`;
+  const now = new Date().toISOString();
+
+  const clinic: any = {
+    id: clinicId,
+    name,
+    subdomain: clinicId,
+    address: address || "Kiritilmagan",
+    phone,
+    // Tashkent centre until the director sets a real location from their panel.
+    lat: 41.311081,
+    lng: 69.240562,
+    logo: '🦷',
+    rating: 5.0,
+    ratingCount: 0,
+    activePatients: 0,
+    mapLink: `https://www.google.com/maps?q=${encodeURIComponent(name + ", O'zbekiston")}`,
+    rentalPrice: 0,
+    nextPaymentDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    // Trial, not active: a self-registered clinic has paid nothing yet, and
+    // the owner decides when it converts.
+    subscriptionStatus: 'trial',
+    subscriptionTier: 'basic',
+    ownerName,
+    login,
+    password: encryptCredential(password),
+    aiTrialStartDate: now,
+    createdAt: now,
+    selfRegistered: true,
+  };
+
+  await saveClinic(clinic);
+
+  // Signed straight in, so the director lands in their own panel instead of
+  // having to retype credentials they have only just been shown.
+  const token = crypto.randomBytes(32).toString("hex");
+  await saveStaffSession(token, {
+    role: 'director',
+    clinicId,
+    expiresAt: Date.now() + STAFF_SESSION_TTL_MS,
+  });
+
+  console.log(`[signup] new clinic "${name}" registered as [${clinicId}]`);
+  res.status(201).json({ ok: true, clinicId, login, password, token });
+});
+
 app.post("/api/waitlist", rateLimiter(10, 60 * 1000), async (req, res) => {
   const { clinicId, doctorId, patientId, patientName, telegramChatId } = req.body;
   if (!clinicId || !doctorId || !patientName || !telegramChatId) {

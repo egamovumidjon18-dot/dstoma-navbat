@@ -7,6 +7,7 @@ const DoctorDashboard = React.lazy(() => import('./components/DoctorDashboard'))
 const DirectorDashboard = React.lazy(() => import('./components/DirectorDashboard'));
 const SuperAdminDashboard = React.lazy(() => import('./components/SuperAdminDashboard'));
 import UnifiedLoginScreen from './components/welcome/UnifiedLoginScreen';
+import ClinicSignupScreen from './components/welcome/ClinicSignupScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { ShieldAlert, LogOut, Lock } from 'lucide-react';
@@ -59,6 +60,7 @@ export default function App() {
     handleDeleteDoctor,
     handleDeletePatient,
     handleLoginSubmit,
+    handleClinicSignup,
     handleLogout,
     handlePatientUpserted,
     handleAddQueue,
@@ -98,6 +100,9 @@ export default function App() {
   // jumping straight into the patient dashboard — handleLoginSubmit tries every
   // account type and this screen just waits for it to say which one matched.
   const [showUnifiedLogin, setShowUnifiedLogin] = useState(false);
+  // Clinic self-registration: a different visitor entirely from a patient
+  // signing up, so it gets its own screen rather than a mode of the patient one.
+  const [showClinicSignup, setShowClinicSignup] = useState(false);
 
   const enterFromWelcome = (target: 'register' | 'login') => {
     if (target === 'login') {
@@ -149,6 +154,27 @@ export default function App() {
   );
 
   if (!hasEnteredApp && !currentUser) {
+    if (showClinicSignup) {
+      return (
+        <ErrorBoundary>
+          <ClinicSignupScreen
+            language={language}
+            setLanguage={setLanguage}
+            onBack={() => setShowClinicSignup(false)}
+            onGoLogin={() => {
+              setShowClinicSignup(false);
+              setShowUnifiedLogin(true);
+            }}
+            onSubmit={handleClinicSignup}
+            onDone={() => {
+              setShowClinicSignup(false);
+              setActiveTab('boshliq');
+              setHasEnteredApp(true);
+            }}
+          />
+        </ErrorBoundary>
+      );
+    }
     if (showUnifiedLogin) {
       return (
         <ErrorBoundary>
@@ -177,6 +203,7 @@ export default function App() {
           setLanguage={setLanguage}
           onRegister={() => enterFromWelcome('register')}
           onLogin={() => enterFromWelcome('login')}
+          onClinicSignup={() => setShowClinicSignup(true)}
         />
       </ErrorBoundary>
     );

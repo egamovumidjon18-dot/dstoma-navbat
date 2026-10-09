@@ -1,20 +1,24 @@
 import React from 'react';
-import { UserPlus, Lock, ArrowRight, ShieldCheck } from 'lucide-react';
+import { UserPlus, Lock, ArrowRight, ShieldCheck, Building2 } from 'lucide-react';
 
 interface Props {
   registerLabel: string;
   loginLabel: string;
   securityLabel: string;
+  clinicLabel: string;
   onRegister: () => void;
   onLogin: () => void;
+  onClinicSignup: () => void;
 }
 
 export default function AuthPanel({
   registerLabel,
   loginLabel,
   securityLabel,
+  clinicLabel,
   onRegister,
   onLogin,
+  onClinicSignup,
 }: Props) {
   return (
     <div className="welcome-fade-up" style={{ animationDelay: '700ms' }}>
@@ -66,6 +70,20 @@ export default function AuthPanel({
             <span className="text-lg font-semibold sm:text-[22px]">{loginLabel}</span>
           </span>
           <ArrowRight className="h-5 w-5 shrink-0 text-slate-400 transition-all duration-300 group-hover:translate-x-1 group-hover:text-cyan-300 sm:h-6 sm:w-6" />
+        </button>
+
+        {/* Clinic self-registration — the other kind of visitor entirely, so it
+            gets its own entry rather than hiding inside patient signup. */}
+        <button
+          type="button"
+          onClick={onClinicSignup}
+          className="group mt-3 flex w-full items-center justify-between gap-3 rounded-[18px] border border-dashed border-cyan-500/30 bg-cyan-500/[0.06] px-5 py-3.5 text-left transition-all duration-300 hover:border-cyan-400/60 hover:bg-cyan-500/[0.1] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 sm:px-7"
+        >
+          <span className="flex items-center gap-3">
+            <Building2 className="h-5 w-5 shrink-0 text-cyan-300" strokeWidth={2.2} />
+            <span className="text-sm font-bold text-cyan-100 sm:text-base">{clinicLabel}</span>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-cyan-400/70 transition-transform duration-300 group-hover:translate-x-1" />
         </button>
       </div>
 

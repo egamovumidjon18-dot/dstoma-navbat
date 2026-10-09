@@ -16,9 +16,10 @@ interface Props {
   setLanguage: (l: Language) => void;
   onRegister: () => void;
   onLogin: () => void;
+  onClinicSignup: () => void;
 }
 
-export default function WelcomeScreen({ language, setLanguage, onRegister, onLogin }: Props) {
+export default function WelcomeScreen({ language, setLanguage, onRegister, onLogin, onClinicSignup }: Props) {
   const c = getWelcomeCopy(language);
 
   return (
@@ -119,8 +120,10 @@ export default function WelcomeScreen({ language, setLanguage, onRegister, onLog
             registerLabel={c.register}
             loginLabel={c.login}
             securityLabel={c.security}
+            clinicLabel={c.clinicSignup}
             onRegister={onRegister}
             onLogin={onLogin}
+            onClinicSignup={onClinicSignup}
           />
         </main>
       </div>
