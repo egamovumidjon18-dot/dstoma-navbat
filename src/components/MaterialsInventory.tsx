@@ -471,7 +471,7 @@ export default function MaterialsInventory({
               {filteredMaterials.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-medium bg-slate-50/50">
-                    Materiallar topilmadi
+                    {t("Materiallar topilmadi")}
                   </td>
                 </tr>
               )}
@@ -570,14 +570,14 @@ export default function MaterialsInventory({
                 onClick={() => setShowAddModal(false)}
                 className="px-5 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-200 transition-colors"
               >
-                Bekor qilish
+                {t("Bekor qilish")}
               </button>
               <button 
                 onClick={handleAddMaterial}
                 disabled={!newMaterial.name}
                 className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-blue-600/20"
               >
-                Saqlash
+                {t("Saqlash")}
               </button>
             </div>
           </div>
@@ -595,10 +595,10 @@ export default function MaterialsInventory({
             </div>
             <div className="p-6">
               <p className="text-sm font-medium text-slate-500 mb-4">
-                <strong className="text-slate-800">{showUseModal.name}</strong> dan qancha ishlatildi? (Joriy qoldiq: {showUseModal.quantity} {showUseModal.unit})
+                <strong className="text-slate-800">{showUseModal.name}</strong> {t("dan qancha ishlatildi? (Joriy qoldiq:")} {showUseModal.quantity} {showUseModal.unit})
               </p>
               <div>
-                <label className="block text-xs font-black text-slate-500 mb-1.5 uppercase tracking-wider">Miqdor ({showUseModal.unit})</label>
+                <label className="block text-xs font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t("Miqdor (")}{showUseModal.unit})</label>
                 <input 
                   type="number" 
                   value={actionQuantity}
@@ -610,7 +610,7 @@ export default function MaterialsInventory({
             </div>
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
               <button onClick={() => setShowUseModal(null)} className="px-5 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-200 transition-colors">
-                Bekor qilish
+                {t("Bekor qilish")}
               </button>
               <button onClick={handleUseMaterial} disabled={!actionQuantity || Number(actionQuantity) <= 0 || Number(actionQuantity) > showUseModal.quantity} className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-orange-500/20">
                 {t("Ishlatish")}
@@ -632,10 +632,10 @@ export default function MaterialsInventory({
             </div>
             <div className="p-6">
               <p className="text-sm font-medium text-slate-500 mb-4">
-                <strong className="text-slate-800">{showRestockModal.name}</strong> dan qancha keldi?
+                <strong className="text-slate-800">{showRestockModal.name}</strong> {t("dan qancha keldi?")}
               </p>
               <div>
-                <label className="block text-xs font-black text-slate-500 mb-1.5 uppercase tracking-wider">Miqdor ({showRestockModal.unit})</label>
+                <label className="block text-xs font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t("Miqdor (")}{showRestockModal.unit})</label>
                 <input 
                   type="number" 
                   value={actionQuantity}
@@ -647,10 +647,10 @@ export default function MaterialsInventory({
             </div>
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
               <button onClick={() => setShowRestockModal(null)} className="px-5 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-200 transition-colors">
-                Bekor qilish
+                {t("Bekor qilish")}
               </button>
               <button onClick={handleRestockMaterial} disabled={!actionQuantity || Number(actionQuantity) <= 0} className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-emerald-500/20">
-                Qo'shish
+                {t("Qo'shish")}
               </button>
             </div>
           </div>
@@ -747,14 +747,14 @@ export default function MaterialsInventory({
                 onClick={() => setShowEditModal(null)}
                 className="px-5 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-200 transition-colors"
               >
-                Bekor qilish
+                {t("Bekor qilish")}
               </button>
               <button 
                 onClick={handleEditMaterial}
                 disabled={!newMaterial.name}
                 className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-blue-600/20"
               >
-                Saqlash
+                {t("Saqlash")}
               </button>
             </div>
           </div>

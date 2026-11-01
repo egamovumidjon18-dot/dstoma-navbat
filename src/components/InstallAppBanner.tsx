@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Download, X, Menu } from 'lucide-react';
+import { createTranslator } from '../utils/translate';
+import { useLanguage } from '../utils/language';
 
 const DISMISS_KEY = 'dstoma_install_prompt_dismissed_at';
 const DISMISS_DAYS = 14;
@@ -19,6 +21,7 @@ interface Props {
 // dismissed recently (re-prompting every visit would just get it dismissed
 // forever).
 export default function InstallAppBanner({ dark = false }: Props) {
+  const t = createTranslator(useLanguage());
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
   const [isSafariDesktop, setIsSafariDesktop] = useState(false);
@@ -87,7 +90,7 @@ export default function InstallAppBanner({ dark = false }: Props) {
       <button
         onClick={dismiss}
         className={`absolute top-3 right-3 p-1 ${dark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
-        aria-label="Yopish"
+        aria-label={t("Yopish")}
       >
         <X className="w-4 h-4" />
       </button>
@@ -97,7 +100,7 @@ export default function InstallAppBanner({ dark = false }: Props) {
         </div>
         <div className="min-w-0">
           <p className={`font-bold text-sm ${dark ? 'text-white' : 'text-slate-900'}`}>
-            DStoma ilovasini o'rnating
+            {t("DStoma ilovasini o'rnating")}
           </p>
           <p className={`text-xs flex items-center gap-1 flex-wrap ${dark ? 'text-slate-300' : 'text-slate-600'}`}>
             {!isIOS && !deferredPrompt && <Menu className="w-3 h-3 shrink-0" />}
@@ -110,7 +113,7 @@ export default function InstallAppBanner({ dark = false }: Props) {
           onClick={install}
           className="shrink-0 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors self-start sm:self-auto"
         >
-          O'rnatish
+          {t("O'rnatish")}
         </button>
       )}
     </div>

@@ -5,17 +5,22 @@ import { kk } from './translations/kk';
 import { ky } from './translations/ky';
 import { tg } from './translations/tg';
 import { tk } from './translations/tk';
+import { uiPhrasesFor } from './translations/ui';
 
 export type Language = 'uz' | 'ru' | 'en' | 'kk' | 'ky' | 'tg' | 'tk';
 
+// Each language also carries the shared interface phrases (translations/ui.ts),
+// keyed by their Uzbek text. Every component translator checks TRANSLATIONS
+// first, so a phrase listed there is translated wherever it appears. The
+// language file's own keys win on a clash.
 export const TRANSLATIONS = {
-  uz,
-  ru,
-  en,
-  kk,
-  ky,
-  tg,
-  tk
+  uz: { ...uiPhrasesFor('uz'), ...uz },
+  ru: { ...uiPhrasesFor('ru'), ...ru },
+  en: { ...uiPhrasesFor('en'), ...en },
+  kk: { ...uiPhrasesFor('kk'), ...kk },
+  ky: { ...uiPhrasesFor('ky'), ...ky },
+  tg: { ...uiPhrasesFor('tg'), ...tg },
+  tk: { ...uiPhrasesFor('tk'), ...tk }
 };
 
 type MedicalLang = 'ru' | 'en' | 'kk' | 'ky' | 'tg' | 'tk';

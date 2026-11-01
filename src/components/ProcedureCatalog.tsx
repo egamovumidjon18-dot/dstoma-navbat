@@ -244,11 +244,11 @@ export default function ProcedureCatalog({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-slate-800">{translateMedicalText(service.name, language || 'uz')}</p>
                   <p className="text-[11px] text-slate-400 font-semibold mb-2">
-                    {Number(service.price).toLocaleString()} so'm
+                    {Number(service.price).toLocaleString()} {t("so'm")}
                   </p>
                   {items.length === 0 ? (
                     <span className="inline-flex items-center gap-1 text-[10px] font-black text-slate-300 uppercase tracking-wide">
-                      <AlertTriangle className="w-3 h-3" /> Sarf materiali kiritilmagan
+                      <AlertTriangle className="w-3 h-3" /> {t("Sarf materiali kiritilmagan")}
                     </span>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
@@ -265,9 +265,9 @@ export default function ProcedureCatalog({
                                 ? 'bg-amber-50 text-amber-700 border-amber-100'
                                 : 'bg-slate-50 text-slate-600 border-slate-100'
                             }`}
-                            title={!mat ? "Bu material ombordan o'chirilgan" : low ? 'Omborda yetarli emas' : ''}
+                            title={!mat ? t("Bu material ombordan o'chirilgan") : low ? t("Omborda yetarli emas") : ''}
                           >
-                            {mat?.name || "O'chirilgan material"} · {item.qty} {mat?.unit || ''}
+                            {mat?.name || t("O'chirilgan material")} · {item.qty} {mat?.unit || ''}
                           </span>
                         );
                       })}
@@ -278,7 +278,7 @@ export default function ProcedureCatalog({
                   onClick={() => openEditor(service)}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-xs rounded-xl transition-colors shrink-0"
                 >
-                  <Edit2 className="w-3.5 h-3.5" /> Materiallar
+                  <Edit2 className="w-3.5 h-3.5" /> {t("Materiallar")}
                 </button>
               </div>
             );
@@ -294,7 +294,7 @@ export default function ProcedureCatalog({
               <div className="min-w-0">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2 truncate">
                   <Package className="w-5 h-5 text-blue-500 shrink-0" />
-                  Sarf materiallari
+                  {t("Sarf materiallari")}
                 </h3>
                 <p className="text-[11px] text-slate-400 font-semibold truncate mt-0.5">{editingService.name}</p>
               </div>
@@ -309,11 +309,11 @@ export default function ProcedureCatalog({
             <div className="p-5 flex flex-col gap-3 overflow-y-auto">
               {materials.length === 0 ? (
                 <p className="text-xs font-bold text-slate-400 text-center py-6">
-                  Omborda material yo'q. Avval "Material va Anjomlar" bo'limidan material qo'shing.
+                  {t("Omborda material yo'q. Avval \"Material va Anjomlar\" bo'limidan material qo'shing.")}
                 </p>
               ) : draftItems.length === 0 ? (
                 <p className="text-xs font-bold text-slate-400 text-center py-6">
-                  Hali material qo'shilmagan
+                  {t("Hali material qo'shilmagan")}
                 </p>
               ) : (
                 draftItems.map((item, index) => {
@@ -327,17 +327,17 @@ export default function ProcedureCatalog({
                           onChange={(e) => updateDraftRow(index, { materialId: e.target.value })}
                           className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500 font-medium bg-white text-slate-800"
                         >
-                          <option value="">— tanlang —</option>
+                          <option value="">{t("— tanlang —")}</option>
                           {materials.map((m) => (
                             <option key={m.id} value={m.id}>
-                              {m.name} (omborda: {m.quantity} {m.unit})
+                              {m.name} {t("(omborda:")} {m.quantity} {m.unit})
                             </option>
                           ))}
                         </select>
                       </div>
                       <div className="w-28 shrink-0">
                         <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
-                          Miqdor {mat?.unit ? `(${mat.unit})` : ''}
+                          {t("Miqdor")} {mat?.unit ? `(${mat.unit})` : ''}
                         </label>
                         <input
                           type="number"
@@ -365,7 +365,7 @@ export default function ProcedureCatalog({
                   onClick={addDraftRow}
                   className="flex items-center justify-center gap-1.5 w-full py-2 border border-dashed border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 text-slate-500 hover:text-blue-600 font-bold text-xs rounded-xl transition-colors"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Material qo'shish
+                  <Plus className="w-3.5 h-3.5" /> {t("Material qo'shish")}
                 </button>
               )}
             </div>
@@ -375,14 +375,14 @@ export default function ProcedureCatalog({
                 onClick={() => { setEditingService(null); setDraftItems([]); }}
                 className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-200 rounded-xl transition-colors"
               >
-                Bekor qilish
+                {t("Bekor qilish")}
               </button>
               <button
                 onClick={handleSaveRecipe}
                 disabled={isSaving}
                 className="px-4 py-2 text-sm font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-colors shadow-md shadow-blue-500/20"
               >
-                {isSaving ? 'Saqlanmoqda...' : 'Saqlash'}
+                {isSaving ? 'Saqlanmoqda...' : t("Saqlash")}
               </button>
             </div>
           </div>

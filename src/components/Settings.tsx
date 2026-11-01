@@ -673,7 +673,7 @@ export default function Settings({ doctor, clinic, clinicPatients = [], clinicQu
                       )}
                       {link.relationshipType === 'rental' && (
                         <p className="text-xs text-slate-400">
-                          {t("oylik ijara:")} <strong className="text-white">{(link.monthlyRentFee ?? 0).toLocaleString('uz-UZ')} so'm</strong>
+                          {t("oylik ijara:")} <strong className="text-white">{(link.monthlyRentFee ?? 0).toLocaleString('uz-UZ')} {t("so'm")}</strong>
                           {' · '}
                           {t("holat:")} <strong className={link.rentPaymentStatus === 'paid' ? 'text-emerald-400' : 'text-rose-400'}>{link.rentPaymentStatus === 'paid' ? t("to'langan") : t("to'lanmagan")}</strong>
                         </p>
@@ -730,7 +730,7 @@ export default function Settings({ doctor, clinic, clinicPatients = [], clinicQu
                   {receipts.map((r) => (
                     <div key={r.id} className="flex items-center gap-4 bg-[#0a0f1d] border border-slate-800 rounded-xl p-3">
                       <button type="button" onClick={() => setViewerReceipt(r)} className="shrink-0">
-                        <img src={r.imageData} alt="Chek" className="w-16 h-16 rounded-lg object-cover border border-slate-700 hover:opacity-80 transition-opacity" />
+                        <img src={r.imageData} alt={t("Chek")} className="w-16 h-16 rounded-lg object-cover border border-slate-700 hover:opacity-80 transition-opacity" />
                       </button>
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-white text-sm truncate">{r.patientName || t('bemor')}</p>
@@ -772,7 +772,7 @@ export default function Settings({ doctor, clinic, clinicPatients = [], clinicQu
                   <button type="button" onClick={() => setViewerReceipt(null)} className="absolute -top-10 right-0 text-white/70 hover:text-white">
                     <X className="w-6 h-6" />
                   </button>
-                  <img src={viewerReceipt.imageData} alt="Chek" className="w-full rounded-2xl border border-slate-700" />
+                  <img src={viewerReceipt.imageData} alt={t("Chek")} className="w-full rounded-2xl border border-slate-700" />
                   {viewerReceipt.status === 'pending' && (
                     <div className="flex gap-2 mt-4">
                       <button

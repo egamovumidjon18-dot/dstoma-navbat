@@ -44,6 +44,7 @@ interface PatientProfileProps {
   doctorId?: string;
   staffToken?: string | null;
   language?: Language;
+  clinic?: { name?: string; address?: string; phone?: string };
 }
 
 type PatientProfileDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
@@ -150,6 +151,7 @@ export default function PatientProfile({
   doctorId,
   staffToken,
   language,
+  clinic,
 }: PatientProfileProps) {
   const localLang: keyof PatientProfileDictEntry | null =
     (language === "ru" || language === "en" || language === "kk" || language === "ky" || language === "tg" || language === "tk")
@@ -259,7 +261,7 @@ export default function PatientProfile({
       if (!res.ok) throw new Error(data?.error || "failed");
       setPaymentRequestMsg(`✅ ${t("so'rov telegram orqali yuborildi.")}`);
     } catch (err: any) {
-      setPaymentRequestMsg(`⚠️ ${err.message === 'failed' ? t("yuborib bo'lmadi.") : err.message}`);
+      setPaymentRequestMsg(`⚠️ ${err.message === 'failed' ? t("yuborib bo'lmadi.") : t(err.message)}`);
     } finally {
       setRequestingPayment(false);
       setTimeout(() => setPaymentRequestMsg(null), 5000);
@@ -470,7 +472,7 @@ export default function PatientProfile({
 
   const handleSendTelegramMessage = async () => {
     if (!patient?.telegramChatId) {
-      alert("Bemor Telegram botga ulanmagan.");
+      alert(t("Bemor Telegram botga ulanmagan."));
       return;
     }
     const text = window.prompt("Bemorga yuboriladigan xabar matnini kiriting:");
@@ -483,7 +485,7 @@ export default function PatientProfile({
       });
       const data = await res.json();
       if (data.ok && data.sent > 0) {
-        alert("Xabar yuborildi.");
+        alert(t("Xabar yuborildi."));
       } else {
         alert(t("yuborib bo'lmadi."));
       }
@@ -1082,7 +1084,7 @@ export default function PatientProfile({
                     : "border-b-2 border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50"
                 }`}
               >
-                <tab.icon className="w-4 h-4" /> {tab.label}
+                <tab.icon className="w-4 h-4" /> {t(tab.label)}
               </button>
             ))}
           </div>
@@ -1237,6 +1239,7 @@ export default function PatientProfile({
                   patientName={patient?.fullName}
                   patientTelegramChatId={patient?.telegramChatId}
                   language={language}
+                  clinic={clinic}
                 />
               </div>
             )}
@@ -1338,7 +1341,7 @@ export default function PatientProfile({
                         <div key={r.id} className="flex items-center gap-4 bg-slate-50 border border-slate-100 rounded-xl p-3">
                           {r.imageData ? (
                             <button type="button" onClick={() => setViewerReceipt(r)} className="shrink-0">
-                              <img src={r.imageData} alt="Chek" className="w-14 h-14 rounded-lg object-cover border border-slate-200 hover:opacity-80 transition-opacity" />
+                              <img src={r.imageData} alt={t("Chek")} className="w-14 h-14 rounded-lg object-cover border border-slate-200 hover:opacity-80 transition-opacity" />
                             </button>
                           ) : (
                             <div className="w-14 h-14 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-2xl shrink-0">💵</div>
@@ -1386,7 +1389,7 @@ export default function PatientProfile({
                       <button type="button" onClick={() => setViewerReceipt(null)} className="absolute -top-10 right-0 text-white/70 hover:text-white">
                         <X className="w-6 h-6" />
                       </button>
-                      <img src={viewerReceipt.imageData} alt="Chek" className="w-full rounded-2xl border border-slate-700" />
+                      <img src={viewerReceipt.imageData} alt={t("Chek")} className="w-full rounded-2xl border border-slate-700" />
                       {viewerReceipt.status === "pending" && (
                         <div className="flex gap-2 mt-4">
                           <button
@@ -1555,7 +1558,7 @@ export default function PatientProfile({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5">Tug'ilgan sana</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("Tug'ilgan sana")}</label>
                   <input
                     type="date"
                     value={editForm.birthDate}
@@ -1583,7 +1586,7 @@ export default function PatientProfile({
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">Allergiyalar</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("Allergiyalar")}</label>
                 <input
                   type="text"
                   value={editForm.allergies}
@@ -1592,7 +1595,7 @@ export default function PatientProfile({
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">Surunkali kasalliklar</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">{t("Surunkali kasalliklar")}</label>
                 <textarea
                   value={editForm.chronicDiseases}
                   onChange={(e) => setEditForm({ ...editForm, chronicDiseases: e.target.value })}
@@ -1608,7 +1611,7 @@ export default function PatientProfile({
                   className="rounded border-rose-300 text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer mt-0.5 shrink-0"
                 />
                 <label htmlFor="edit-has-infection" className="text-xs font-bold text-rose-900 leading-tight cursor-pointer select-none">
-                  Jiddiy yuqumli kasallik mavjud
+                  {t("Jiddiy yuqumli kasallik mavjud")}
                 </label>
               </div>
             </div>
@@ -1617,14 +1620,14 @@ export default function PatientProfile({
                 onClick={() => setShowEditModal(false)}
                 className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
               >
-                Bekor qilish
+                {t("Bekor qilish")}
               </button>
               <button
                 onClick={handleSaveEdit}
                 disabled={!editForm.fullName.trim() || isSavingEdit}
                 className="px-4 py-2 text-sm font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition-colors shadow-md shadow-blue-500/20"
               >
-                {isSavingEdit ? "Saqlanmoqda..." : "Saqlash"}
+                {isSavingEdit ? "Saqlanmoqda..." : t("Saqlash")}
               </button>
             </div>
           </div>

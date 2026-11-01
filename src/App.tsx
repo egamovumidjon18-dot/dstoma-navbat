@@ -11,6 +11,8 @@ import ClinicSignupScreen from './components/welcome/ClinicSignupScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { ShieldAlert, LogOut, Lock } from 'lucide-react';
+import { createTranslator } from './utils/translate';
+import type { Language } from './translations';
 
 const PanelLoading = () => (
   <div className="flex flex-col items-center justify-center w-full min-h-[60vh] py-20">
@@ -419,7 +421,7 @@ export default function App() {
 interface SecurityLoginFormProps {
   role: 'doctor' | 'director' | 'superadmin';
   onSubmit: (e: React.FormEvent) => void;
-  language: 'uz' | 'ru' | 'en';
+  language: Language;
   error: string | null;
   authUsername: string;
   setAuthUsername: (v: string) => void;
@@ -437,10 +439,11 @@ function SecurityLoginForm({
   authPassword,
   setAuthPassword
 }: SecurityLoginFormProps) {
+  const t = createTranslator(language);
   const getRoleLabel = () => {
-    if (role === 'doctor') return language === 'uz' ? 'Shifokor Kabineti' : language === 'ru' ? 'Кабинет Врача' : 'Doctor Specialist Cabinet';
-    if (role === 'director') return language === 'uz' ? 'Klinika Boshlig\'i Paneli' : language === 'ru' ? 'Панель Директора' : 'Clinic Director Panel';
-    return language === 'uz' ? 'Superadmin SaaS' : language === 'ru' ? 'Суперадмин SaaS' : 'SaaS Superadmin HQ';
+    if (role === 'doctor') return t("Shifokor Kabineti");
+    if (role === 'director') return t("Klinika Boshlig'i Paneli");
+    return 'Superadmin SaaS';
   };
 
   const getRoleIcon = () => {
@@ -461,23 +464,21 @@ function SecurityLoginForm({
           {getRoleLabel()}
         </h2>
         <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto mt-2.5">
-          {language === 'uz' 
-            ? "Ushbu bo'lim faqat ro'yxatdan o'tgan mutaxassislar uchun mo'ljallangan. Profilingizga tegishli kalit so'zlarni kiriting."
-            : "Authorized personnel authentication access only. Please provide secure parameters below."}
+          {t("Ushbu bo'lim faqat ro'yxatdan o'tgan mutaxassislar uchun mo'ljallangan. Profilingizga tegishli kalit so'zlarni kiriting.")}
         </p>
       </div>
 
       {error && (
         <div className="mb-4 bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 text-xs text-rose-400 flex items-center gap-2 font-medium">
           <ShieldAlert className="w-4 h-4 flex-shrink-0" />
-          <span>{error}</span>
+          <span>{t(error)}</span>
         </div>
       )}
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
           <label className="block text-[10px] font-mono tracking-widest text-cyan-400 uppercase font-black mb-1.5">
-            {language === 'uz' ? 'LOGIN / USERNAME' : 'LOGIN / USERNAME'}
+            {t('LOGIN / USERNAME')}
           </label>
           <div className="relative">
             <input
@@ -493,7 +494,7 @@ function SecurityLoginForm({
 
         <div>
           <label className="block text-[10px] font-mono tracking-widest text-[#a855f7] uppercase font-black mb-1.5">
-            {language === 'uz' ? 'KOD / PAROL' : 'ACCESS PASSWORD'}
+            {t('KOD / PAROL')}
           </label>
           <div className="relative">
             <input
@@ -512,7 +513,7 @@ function SecurityLoginForm({
           className="w-full bg-gradient-to-r from-cyan-400 via-indigo-500 to-emerald-400 hover:brightness-110 active:scale-[0.99] text-slate-950 font-display font-extrabold text-xs uppercase py-3.5 rounded-xl tracking-wider transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
         >
           <Lock className="w-3.5 h-3.5" />
-          <span>{language === 'uz' ? 'Profilingizni ochish' : language === 'ru' ? 'Получить доступ' : 'Grant Clearance'}</span>
+          <span>{t('Profilingizni ochish')}</span>
         </button>
       </form>
     </div>

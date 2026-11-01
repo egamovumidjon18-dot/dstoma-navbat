@@ -38,8 +38,8 @@ const svgLucide = `
 
 async function main() {
   const buf = Buffer.from(svgLucide);
-  await sharp(buf).resize(192, 192).png().toFile(path.join(__dirname, 'public/icon-192.png'));
-  await sharp(buf).resize(512, 512).png().toFile(path.join(__dirname, 'public/icon-512.png'));
+  await sharp(buf).resize(192, 192).png().toFile(path.join(__dirname, '../public/icon-192.png'));
+  await sharp(buf).resize(512, 512).png().toFile(path.join(__dirname, '../public/icon-512.png'));
   console.log("Icons generated successfully");
 }
 

@@ -672,7 +672,7 @@ export default function DentalChart({
   const handleResetChart = async () => {
     if (readOnly || !patientId) return;
 
-    if (!window.confirm("Barcha tishlardagi belgilanishlarni va tarixni o'chirib, dastlabki sog'lom holatiga qaytarmoqchimisiz? Bu amalni ortga qaytarib bo'lmaydi.")) {
+    if (!window.confirm(t("Barcha tishlardagi belgilanishlarni va tarixni o'chirib, dastlabki sog'lom holatiga qaytarmoqchimisiz? Bu amalni ortga qaytarib bo'lmaydi."))) {
       return;
     }
 
@@ -686,7 +686,7 @@ export default function DentalChart({
       });
 
       await batch.commit();
-      alert("Barcha tishlar tarixi tozalandi va sog'lom holatga keltirildi!");
+      alert(t("Barcha tishlar tarixi tozalandi va sog'lom holatga keltirildi!"));
       // Also drop unsaved paint — otherwise the canvas still showed the painted
       // teeth right after "everything cleared", and saving resurrected them.
       setPendingPaintChanges({});
@@ -695,7 +695,7 @@ export default function DentalChart({
       setSelectedSurface(null);
     } catch (error) {
       console.error("Tozalashda xatolik:", error);
-      alert("Xatolik yuz berdi.");
+      alert(t("Xatolik yuz berdi."));
     }
   };
 
@@ -1009,18 +1009,18 @@ export default function DentalChart({
                 <div className="flex flex-wrap items-center justify-between text-sm text-gray-700">
                   <div className="flex items-center gap-4 font-semibold flex-wrap">
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-500 text-[10px] uppercase tracking-wider">Ko'rinish:</span>
+                      <span className="text-gray-500 text-[10px] uppercase tracking-wider">{t("Ko'rinish:")}</span>
                       <button className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-md font-bold text-xs">3D</button>
                     </div>
                     <div className="w-px h-4 bg-gray-200 hidden sm:block"></div>
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-500 text-[10px] uppercase tracking-wider">Tishlar turi:</span>
-                      <button onClick={() => setToothType("adult")} className={`px-2 py-1 rounded-md text-xs transition-colors ${toothType === "adult" ? 'bg-emerald-100 text-emerald-700 font-bold' : 'hover:bg-gray-100 text-gray-600'}`}>Doimiy (32)</button>
-                      <button onClick={() => setToothType("child")} className={`px-2 py-1 rounded-md text-xs transition-colors ${toothType === "child" ? 'bg-emerald-100 text-emerald-700 font-bold' : 'hover:bg-gray-100 text-gray-600'}`}>Sut (20)</button>
+                      <span className="text-gray-500 text-[10px] uppercase tracking-wider">{t("Tishlar turi:")}</span>
+                      <button onClick={() => setToothType("adult")} className={`px-2 py-1 rounded-md text-xs transition-colors ${toothType === "adult" ? 'bg-emerald-100 text-emerald-700 font-bold' : 'hover:bg-gray-100 text-gray-600'}`}>{t("Doimiy (32)")}</button>
+                      <button onClick={() => setToothType("child")} className={`px-2 py-1 rounded-md text-xs transition-colors ${toothType === "child" ? 'bg-emerald-100 text-emerald-700 font-bold' : 'hover:bg-gray-100 text-gray-600'}`}>{t("Sut (20)")}</button>
                     </div>
                     <div className="w-px h-4 bg-gray-200 hidden sm:block"></div>
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-500 text-[10px] uppercase tracking-wider">Notatsiya:</span>
+                      <span className="text-gray-500 text-[10px] uppercase tracking-wider">{t("Notatsiya:")}</span>
                       <button onClick={() => setNotation("FDI")} className={`px-2 py-1 rounded-md text-xs transition-colors ${notation === "FDI" ? 'bg-emerald-100 text-emerald-700 font-bold' : 'hover:bg-gray-100 text-gray-600'}`}>FDI</button>
                       <button onClick={() => setNotation("Universal")} className={`px-2 py-1 rounded-md text-xs transition-colors ${notation === "Universal" ? 'bg-emerald-100 text-emerald-700 font-bold' : 'hover:bg-gray-100 text-gray-600'}`}>Universal</button>
                       <button onClick={() => setNotation("Palmer")} className={`px-2 py-1 rounded-md text-xs transition-colors ${notation === "Palmer" ? 'bg-emerald-100 text-emerald-700 font-bold' : 'hover:bg-gray-100 text-gray-600'}`}>Palmer</button>
@@ -1032,10 +1032,10 @@ export default function DentalChart({
                           <button
                             onClick={handleResetChart}
                             className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-md text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm ml-2"
-                            title="Barcha belgilangan tishlarni tozalab, sog'lom holatiga qaytarish"
+                            title={t("Barcha belgilangan tishlarni tozalab, sog'lom holatiga qaytarish")}
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
-                            Barchasini tozalash (Sog'lom)
+                            {t("Barchasini tozalash (Sog'lom)")}
                           </button>
                         </div>
                       </>
@@ -1047,7 +1047,7 @@ export default function DentalChart({
                       <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 transform -translate-y-1/2" />
                       <input 
                         type="text" 
-                        placeholder="Tish raqami (masalan: 18)..." 
+                        placeholder={t("Tish raqami (masalan: 18)...")} 
                         className="pl-7 pr-3 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 w-52 transition-all"
                         value={toothSearch}
                         onChange={(e) => {
@@ -1077,14 +1077,14 @@ export default function DentalChart({
                     <div className="w-px h-4 bg-gray-200 mx-1"></div>
                     <button
                       onClick={() => setShowGrid((v) => !v)}
-                      title="Chizmani ko'rsatish/yashirish"
+                      title={t("Chizmani ko'rsatish/yashirish")}
                       className={`p-1 rounded-md transition-colors ${showGrid ? 'bg-emerald-100 text-emerald-700' : 'hover:bg-gray-100 text-gray-500'}`}
                     >
                       <Grid className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => { setZoom(1); setToothSearch(''); setSelectedTooth(null); }}
-                      title="Ko'rinishni asliga qaytarish"
+                      title={t("Ko'rinishni asliga qaytarish")}
                       className="p-1 hover:bg-gray-100 rounded-md text-gray-500"
                     >
                       <RotateCcw className="w-4 h-4" />
@@ -1137,13 +1137,13 @@ export default function DentalChart({
                     <div className="flex flex-wrap items-center gap-3 px-6 py-4 border-b border-gray-50 bg-gray-50/50">
                        <div className="w-full flex items-center justify-between mb-2">
                          <span className="text-sm font-black text-gray-800 uppercase tracking-wider flex items-center gap-2 shrink-0 mr-2">
-                           <Sparkles className="w-5 h-5 text-emerald-500" /> Tezkor bo'yash:
+                           <Sparkles className="w-5 h-5 text-emerald-500" /> {t("Tezkor bo'yash:")}
                          </span>
 
                          {Object.keys(pendingPaintChanges).length > 0 && (
                            <div className="flex items-center gap-3 shrink-0">
                               <span className="text-xs font-bold text-emerald-600">
-                                {Object.keys(pendingPaintChanges).length} ta o'zgarish
+                                {Object.keys(pendingPaintChanges).length} {t("ta o'zgarish")}
                               </span>
                               <button
                                 onClick={handleSavePaintChanges}
@@ -1151,13 +1151,13 @@ export default function DentalChart({
                                 className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold text-xs rounded-full transition-colors shadow-sm flex items-center gap-2 shrink-0"
                               >
                                 <Save className="w-4 h-4" />
-                                {isSavingPaint ? 'Saqlanmoqda...' : 'Saqlash'}
+                                {isSavingPaint ? 'Saqlanmoqda...' : t("Saqlash")}
                               </button>
                               <button
                                 onClick={() => setPendingPaintChanges({})}
                                 className="px-4 py-2 bg-white text-red-500 hover:bg-red-50 font-bold text-xs rounded-full transition-colors border border-gray-200 shrink-0"
                               >
-                                Tozalash
+                                {t("Tozalash")}
                               </button>
                            </div>
                          )}
@@ -1185,7 +1185,7 @@ export default function DentalChart({
                        </div>
                        {paintCondition && (
                          <button onClick={() => setPaintCondition(null)} className="mt-2 text-xs font-bold text-red-500 hover:text-white px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 hover:bg-red-500 hover:border-red-500 transition-colors self-start">
-                           Bekor qilish
+                           {t("Bekor qilish")}
                          </button>
                        )}
                     </div>
@@ -1306,16 +1306,16 @@ export default function DentalChart({
                     {/* Header */}
                     <div className="flex flex-col gap-4 shrink-0 w-[200px] justify-between border-r border-slate-800 pr-6">
                       <div className="flex flex-col gap-2 mt-1">
-                        <h4 className="text-4xl font-black text-white leading-tight">Tish {selectedTooth ? ((['┐','└','┘','┌'].some(s => getNotationLabel(parseInt(selectedTooth), notation).includes(s))) ? '' : '#') + getNotationLabel(parseInt(selectedTooth), notation) : ''}</h4>
+                        <h4 className="text-4xl font-black text-white leading-tight">{t("Tish")} {selectedTooth ? ((['┐','└','┘','┌'].some(s => getNotationLabel(parseInt(selectedTooth), notation).includes(s))) ? '' : '#') + getNotationLabel(parseInt(selectedTooth), notation) : ''}</h4>
                         {selectedSurface && (
                           <span className="px-3 py-1.5 w-fit bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-md text-sm font-bold uppercase tracking-wider mt-1">
-                            Yuza: {selectedSurface}
+                            {t("Yuza:")} {selectedSurface}
                           </span>
                         )}
                       </div>
                       {!readOnly && (
                         <button onClick={() => { setEditToothData(currentToothData || {}); setShowEditTooth(true); }} className="flex w-full items-center justify-center gap-2 px-4 py-3 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-xl text-sm font-bold transition-colors">
-                          <Edit className="w-4 h-4" /> Tahrirlash
+                          <Edit className="w-4 h-4" /> {t("Tahrirlash")}
                         </button>
                       )}
                     </div>
@@ -1324,19 +1324,19 @@ export default function DentalChart({
                     <div className="flex flex-col gap-4 shrink-0 w-[280px] border-r border-slate-800 pr-6 overflow-y-auto custom-scrollbar">
                       <div className="flex flex-col gap-2 p-3 bg-white/5 rounded-xl border border-white/10">
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-400 font-bold text-sm uppercase tracking-wider">Umumiy holat</span>
+                          <span className="text-slate-400 font-bold text-sm uppercase tracking-wider">{t("Umumiy holat")}</span>
                           <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-sm bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20">
-                            <CheckCircle2 className="w-4 h-4" /> {currentToothData?.history?.length ? "To'langan" : "Yo'q"}
+                            <CheckCircle2 className="w-4 h-4" /> {currentToothData?.history?.length ? t("To'langan") : t("Yo'q")}
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2 mt-1">
                           {((currentToothData?.conditions?.length ? currentToothData.conditions : (currentToothData?.condition ? [currentToothData.condition] : ['Healthy']))).map((cond: string, idx: number) => (
                             <div key={idx} onClick={() => handleToothClick(parseInt(selectedTooth))} className="relative group flex items-center gap-2 px-3 py-1.5 bg-[#0a0f1d] rounded-lg border border-slate-700 cursor-pointer hover:border-slate-500 transition-all overflow-hidden">
                               <span className="w-2.5 h-2.5 rounded-full shadow-sm z-10" style={{ backgroundColor: getConditionColor(cond) }}></span>
-                              <span className="text-sm font-bold text-white z-10">{CONDITIONS.find(c => c.id === cond)?.label || "Sog'lom"}</span>
+                              <span className="text-sm font-bold text-white z-10">{CONDITIONS.find(c => c.id === cond)?.label || t("Sog'lom")}</span>
                               {paintCondition && (
                                 <div className="absolute inset-0 bg-emerald-500/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity z-20">
-                                  <span className="text-xs font-bold text-emerald-400 mix-blend-plus-lighter">Qo'llash</span>
+                                  <span className="text-xs font-bold text-emerald-400 mix-blend-plus-lighter">{t("Qo'llash")}</span>
                                 </div>
                               )}
                             </div>
@@ -1348,37 +1348,37 @@ export default function DentalChart({
                         <div className="flex flex-col gap-2 p-3 bg-white/5 rounded-xl border border-white/10">
                            {currentToothData.material && (
                              <div className="flex items-center justify-between">
-                               <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">Material:</span>
+                               <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">{t("Material:")}</span>
                                <span className="text-sm text-white font-medium">{currentToothData.material}</span>
                              </div>
                            )}
                            {currentToothData.mobility && (
                              <div className="flex items-center justify-between">
-                               <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">Qimirlashi:</span>
+                               <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">{t("Qimirlashi:")}</span>
                                <span className="text-sm text-white font-medium">{currentToothData.mobility}</span>
                              </div>
                            )}
                            {currentToothData.rootCanals !== undefined && (
                              <div className="flex items-center justify-between">
-                               <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">Ildiz kanallari:</span>
+                               <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">{t("Ildiz kanallari:")}</span>
                                <span className="text-sm text-white font-medium">{currentToothData.rootCanals}</span>
                              </div>
                            )}
                            {currentToothData.bleeding && (
                              <div className="flex items-center justify-between">
-                               <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">Qonash:</span>
-                               <span className="text-sm text-rose-400 font-bold">Bor</span>
+                               <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">{t("Qonash:")}</span>
+                               <span className="text-sm text-rose-400 font-bold">{t("Bor")}</span>
                              </div>
                            )}
                            {currentToothData.suppuration && (
                              <div className="flex items-center justify-between">
-                               <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">Yiringlash:</span>
-                               <span className="text-sm text-amber-400 font-bold">Bor</span>
+                               <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">{t("Yiringlash:")}</span>
+                               <span className="text-sm text-amber-400 font-bold">{t("Bor")}</span>
                              </div>
                            )}
                            {currentToothData.notes && (
                              <div className="flex flex-col gap-1 mt-1 pt-2 border-t border-white/5">
-                               <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">Izoh:</span>
+                               <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">{t("Izoh:")}</span>
                                <span className="text-xs text-slate-300 italic">{currentToothData.notes}</span>
                              </div>
                            )}
@@ -1386,21 +1386,21 @@ export default function DentalChart({
                       )}
 
                       <div className="flex flex-col gap-2">
-                         <span className="text-slate-400 font-bold text-sm uppercase tracking-wider">Yuzalar</span>
+                         <span className="text-slate-400 font-bold text-sm uppercase tracking-wider">{t("Yuzalar")}</span>
                          <div className="grid grid-cols-1 gap-2">
                            {['O', 'M', 'D', 'B', 'L'].map((surf) => {
                              const cond = currentToothData?.surfaces?.[surf] || 'Healthy';
                              const label = CONDITIONS.find(c => c.id === cond)?.label || "Sog'lom";
                              return (
                                <div key={surf} onClick={() => handleSurfaceClick(parseInt(selectedTooth), surf)} className={`relative group flex items-center justify-between px-3 py-2 rounded-lg border cursor-pointer hover:border-slate-400 transition-all overflow-hidden ${selectedSurface === surf ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-white/5 border-white/5'}`}>
-                                  <span className="text-xs font-bold text-slate-400 uppercase z-10 w-16">Yuza {surf}</span>
+                                  <span className="text-xs font-bold text-slate-400 uppercase z-10 w-16">{t("Yuza")} {surf}</span>
                                   <div className="flex items-center justify-end gap-2 z-10 flex-1 truncate">
                                     <span className="text-xs font-bold text-white truncate" title={label}>{label}</span>
                                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getConditionColor(cond as string) }}></span>
                                   </div>
                                   {paintCondition && (
                                     <div className="absolute inset-0 bg-emerald-500/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity z-20">
-                                      <span className="text-xs font-bold text-emerald-400 mix-blend-plus-lighter">Qo'llash</span>
+                                      <span className="text-xs font-bold text-emerald-400 mix-blend-plus-lighter">{t("Qo'llash")}</span>
                                     </div>
                                   )}
                                </div>
@@ -1418,15 +1418,15 @@ export default function DentalChart({
                            <span className="font-medium text-white text-sm leading-tight truncate" title={getICD10(currentToothData?.conditions?.[0] || currentToothData?.condition || 'Healthy')}>{getICD10(currentToothData?.conditions?.[0] || currentToothData?.condition || 'Healthy')}</span>
                          </div>
                          <div className="flex flex-col gap-1">
-                           <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Shifokor</span>
-                           <span className="font-medium text-white text-sm truncate leading-tight" title={currentToothData?.history?.[0]?.dentist || doctorName || 'Biriktirilmagan'}>{currentToothData?.history?.[0]?.dentist || doctorName || 'Biriktirilmagan'}</span>
+                           <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">{t("Shifokor")}</span>
+                           <span className="font-medium text-white text-sm truncate leading-tight" title={currentToothData?.history?.[0]?.dentist || doctorName || t("Biriktirilmagan")}>{currentToothData?.history?.[0]?.dentist || doctorName || t("Biriktirilmagan")}</span>
                          </div>
                          <div className="flex flex-col gap-1">
-                           <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Oxirgi tashrif</span>
-                           <span className="font-medium text-white text-sm leading-tight">{currentToothData?.history?.[0]?.date ? new Date(currentToothData.history[0].date).toLocaleDateString('ru-RU') : 'Kiritilmagan'}</span>
+                           <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">{t("Oxirgi tashrif")}</span>
+                           <span className="font-medium text-white text-sm leading-tight">{currentToothData?.history?.[0]?.date ? new Date(currentToothData.history[0].date).toLocaleDateString('ru-RU') : t("Kiritilmagan")}</span>
                          </div>
                          <div className="flex flex-col gap-1">
-                           <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">Davolash narxi</span>
+                           <span className="text-slate-500 font-bold text-xs uppercase tracking-wider">{t("Davolash narxi")}</span>
                            <span className="font-bold text-emerald-400 text-sm leading-tight">{currentToothData?.history?.reduce((acc, h) => acc + h.cost, 0).toLocaleString() || 0} UZS</span>
                          </div>
                        </div>
@@ -1435,12 +1435,12 @@ export default function DentalChart({
                          {!readOnly && (
                            <button onClick={() => setShowAddTreatment(true)} className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl hover:bg-emerald-500/20 transition-all group">
                              <Plus className="w-5 h-5 text-emerald-400" />
-                             <span className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Muolaja</span>
+                             <span className="text-sm font-bold text-emerald-400 uppercase tracking-wider">{t("Muolaja")}</span>
                            </button>
                          )}
                          <button onClick={() => setShowXRay(true)} className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-500/10 border border-blue-500/20 rounded-xl hover:bg-blue-500/20 transition-all group">
                            <ImageIcon className="w-5 h-5 text-blue-400" />
-                           <span className="text-sm font-bold text-blue-400 uppercase tracking-wider">Rentgen</span>
+                           <span className="text-sm font-bold text-blue-400 uppercase tracking-wider">{t("Rentgen")}</span>
                          </button>
                        </div>
                     </div>
@@ -1450,11 +1450,11 @@ export default function DentalChart({
                        <div className="flex items-center justify-between">
                          <div className="flex items-center gap-2 text-indigo-400">
                            <Brain className="w-5 h-5" />
-                           <span className="text-sm font-black uppercase tracking-wider">AI Diagnostika</span>
+                           <span className="text-sm font-black uppercase tracking-wider">{t("AI Diagnostika")}</span>
                          </div>
                          {!aiResult && !isAnalyzing && (
                            <button onClick={runAiAnalysis} className="text-xs bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 px-3 py-1.5 rounded-md font-bold transition-all border border-indigo-500/30">
-                             Tahlil
+                             {t("Tahlil")}
                            </button>
                          )}
                        </div>
@@ -1462,7 +1462,7 @@ export default function DentalChart({
                        {isAnalyzing ? (
                          <div className="flex flex-col items-center justify-center h-full gap-3 mt-2">
                            <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                           <span className="text-sm font-bold text-indigo-400 animate-pulse">Tahlil qilinmoqda...</span>
+                           <span className="text-sm font-bold text-indigo-400 animate-pulse">{t("Tahlil qilinmoqda...")}</span>
                          </div>
                        ) : aiResult ? (
                          <div className="flex flex-col gap-2 mt-2 h-full overflow-y-auto custom-scrollbar text-sm pb-2">
@@ -1473,8 +1473,8 @@ export default function DentalChart({
                             }`}>
                               <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
                               <div className="flex flex-col gap-1">
-                                <span className="font-bold text-xs uppercase opacity-75">Xavf darajasi: {aiResult.riskLevel}</span>
-                                <span className="leading-tight">{CONDITIONS.find(c => c.id === aiResult.findings[0]?.condition)?.label || "Sog'lom"}</span>
+                                <span className="font-bold text-xs uppercase opacity-75">{t("Xavf darajasi:")} {aiResult.riskLevel}</span>
+                                <span className="leading-tight">{CONDITIONS.find(c => c.id === aiResult.findings[0]?.condition)?.label || t("Sog'lom")}</span>
                               </div>
                             </div>
                             <div className="flex items-start gap-2 bg-blue-500/10 text-blue-300 p-3 rounded-lg border border-blue-500/20">
@@ -1484,7 +1484,7 @@ export default function DentalChart({
                          </div>
                        ) : (
                          <div className="flex items-center justify-center h-full text-sm text-slate-500 text-center italic mt-2 leading-relaxed bg-white/5 rounded-xl border border-white/5 p-4">
-                           Sun'iy intellekt orqali tashxis qo'yish uchun tahlilni boshlang
+                           {t("Sun'iy intellekt orqali tashxis qo'yish uchun tahlilni boshlang")}
                          </div>
                        )}
                     </div>
@@ -1493,9 +1493,9 @@ export default function DentalChart({
                     <div className="flex flex-col gap-3 min-w-[280px] flex-1 overflow-y-auto custom-scrollbar pr-2 h-full">
                       <div className="flex items-center justify-between px-1 sticky top-0 bg-[#0a0f1d] pb-2 z-10">
                         <h5 className="text-sm font-black text-slate-400 uppercase tracking-widest">
-                          Davolash tarixi
+                          {t("Davolash tarixi")}
                         </h5>
-                        <span className="text-xs text-slate-500 font-bold bg-white/5 px-2 py-1 rounded-full">{currentToothData?.history?.length || 0} ta yozuv</span>
+                        <span className="text-xs text-slate-500 font-bold bg-white/5 px-2 py-1 rounded-full">{currentToothData?.history?.length || 0} {t("ta yozuv")}</span>
                       </div>
                       
                       {currentToothData?.history && currentToothData.history.length > 0 ? (
@@ -1507,7 +1507,7 @@ export default function DentalChart({
                                  <div className="flex justify-between items-center">
                                     <div className="flex flex-col gap-1">
                                       <span className="text-sm font-black text-white leading-tight">{translateMedicalText(h.treatment, language || 'uz')}</span>
-                                      <span className="text-xs font-bold text-slate-500 uppercase">{CONDITIONS.find(c => c.id === h.condition)?.label}</span>
+                                      <span className="text-xs font-bold text-slate-500 uppercase">{t(CONDITIONS.find(c => c.id === h.condition)?.label || '')}</span>
                                     </div>
                                     <div className="text-xs text-slate-400 font-medium whitespace-nowrap ml-2">
                                        {new Date(h.date).toLocaleDateString('ru-RU')}
@@ -1520,7 +1520,7 @@ export default function DentalChart({
                       ) : (
                         <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-1.5 mt-4">
                           <History className="w-6 h-6 text-slate-700 opacity-50" />
-                          <span className="text-xs italic opacity-50">Tarix mavjud emas</span>
+                          <span className="text-xs italic opacity-50">{t("Tarix mavjud emas")}</span>
                         </div>
                       )}
                     </div>
@@ -1538,9 +1538,9 @@ export default function DentalChart({
             <div className="bg-[#111827] rounded-[24px] p-8 relative z-10 max-h-[85vh] overflow-y-auto custom-scrollbar">
               <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-800">
                 <div>
-                  <h3 className="text-2xl font-black text-white">Yangi Muolaja</h3>
+                  <h3 className="text-2xl font-black text-white">{t("Yangi Muolaja")}</h3>
                   <p className="text-sm text-emerald-400 font-bold mt-1">
-                    Tish {selectedTooth ? ((['┐','└','┘','┌'].some(s => getNotationLabel(parseInt(selectedTooth), notation).includes(s))) ? '' : '#') + getNotationLabel(parseInt(selectedTooth), notation) : ''} {selectedSurface ? `— ${selectedSurface} yuzasi` : ''}
+                    {t("Tish")} {selectedTooth ? ((['┐','└','┘','┌'].some(s => getNotationLabel(parseInt(selectedTooth), notation).includes(s))) ? '' : '#') + getNotationLabel(parseInt(selectedTooth), notation) : ''} {selectedSurface ? `— ${selectedSurface} yuzasi` : ''}
                   </p>
                 </div>
                 <button onClick={() => setShowAddTreatment(false)} className="text-slate-500 hover:text-white bg-[#0a0f1d] hover:bg-rose-500/20 p-3 rounded-xl transition-colors border border-slate-800">
@@ -1559,22 +1559,22 @@ export default function DentalChart({
                       disabled={!selectedSurface}
                     />
                     <div>
-                      <div className="text-sm font-black text-white">Faqat tanlangan yuza uchun</div>
-                      <div className="text-xs text-slate-400 font-medium mt-1">Muolaja faqatgina tanlangan yuzaga ({selectedSurface || 'tanlanmagan'}) ta'sir qiladi.</div>
+                      <div className="text-sm font-black text-white">{t("Faqat tanlangan yuza uchun")}</div>
+                      <div className="text-xs text-slate-400 font-medium mt-1">{t("Muolaja faqatgina tanlangan yuzaga (")}{selectedSurface || 'tanlanmagan'}{t(") ta'sir qiladi.")}</div>
                     </div>
                   </label>
                 </div>
 
                 <div className="mt-6 mb-6">
                   <div className="flex items-center justify-between mb-3">
-                    <label className="block text-xs font-black text-slate-500 uppercase tracking-wider">Muolaja Katalogi (Xizmatni tanlang)</label>
-                    <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20">Standart Katalog</span>
+                    <label className="block text-xs font-black text-slate-500 uppercase tracking-wider">{t("Muolaja Katalogi (Xizmatni tanlang)")}</label>
+                    <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20">{t("Standart Katalog")}</span>
                   </div>
                   <div className="bg-[#0d1428] border border-[#1e2f50] rounded-2xl p-4 shadow-inner">
                     <div className="relative mb-4">
                       <input
                         type="text"
-                        placeholder="Katalogdan qidirish..."
+                        placeholder={t("Katalogdan qidirish...")}
                         value={catalogSearchQuery}
                         onChange={(e) => setCatalogSearchQuery(e.target.value)}
                         className="w-full bg-[#111a33] border border-[#263b65] text-xs font-bold text-slate-100 rounded-xl pl-9 pr-3.5 py-3 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all placeholder-slate-500"
@@ -1615,7 +1615,7 @@ export default function DentalChart({
                         });
 
                         if (results.length === 0) {
-                          return <div className="col-span-full py-6 text-center text-xs font-bold text-slate-500">Katalogda xizmat topilmadi</div>;
+                          return <div className="col-span-full py-6 text-center text-xs font-bold text-slate-500">{t("Katalogda xizmat topilmadi")}</div>;
                         }
 
                         return results.map((item, idX) => (
@@ -1631,7 +1631,7 @@ export default function DentalChart({
                           >
                             <span className="text-[9px] font-mono font-black text-emerald-500/70 uppercase tracking-widest block">{item.category}</span>
                             <span className="text-xs font-bold text-slate-100 leading-snug">{item.name}</span>
-                            <span className="text-[10px] font-black text-emerald-400 mt-1">{item.price.toLocaleString()} so'm</span>
+                            <span className="text-[10px] font-black text-emerald-400 mt-1">{item.price.toLocaleString()} {t("so'm")}</span>
                           </button>
                         ));
                       })()}
@@ -1641,20 +1641,20 @@ export default function DentalChart({
 
                 <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Holat / Tashxis</label>
+                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Holat / Tashxis")}</label>
                     <select 
                       value={newTreatment.condition}
                       onChange={e => setNewTreatment({...newTreatment, condition: e.target.value})}
                       className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner appearance-none"
                     >
-                      {CONDITIONS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                      {CONDITIONS.map(c => <option key={c.id} value={c.id}>{t(c.label)}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Muolaja nomi (Maxsus)</label>
+                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Muolaja nomi (Maxsus)")}</label>
                     <input 
                       type="text" 
-                      placeholder="Masalan: Maxsus davolash"
+                      placeholder={t("Masalan: Maxsus davolash")}
                       value={newTreatment.treatment}
                       onChange={e => setNewTreatment({...newTreatment, treatment: e.target.value})}
                       className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner"
@@ -1664,7 +1664,7 @@ export default function DentalChart({
 
                 <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Material</label>
+                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Material")}</label>
                     <input 
                       type="text" 
                       placeholder="Filtek Ultimate"
@@ -1674,7 +1674,7 @@ export default function DentalChart({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Tish Rangi (Shade)</label>
+                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Tish Rangi (Shade)")}</label>
                     <input 
                       type="text" 
                       placeholder="A2, A3..."
@@ -1687,7 +1687,7 @@ export default function DentalChart({
 
                 <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Davomiyligi (Daqiqa)</label>
+                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Davomiyligi (Daqiqa)")}</label>
                     <input 
                       type="number" 
                       value={newTreatment.duration}
@@ -1696,7 +1696,7 @@ export default function DentalChart({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Sana</label>
+                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Sana")}</label>
                     <input 
                       type="date" 
                       value={newTreatment.date}
@@ -1708,7 +1708,7 @@ export default function DentalChart({
 
                 <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Narxi (UZS)</label>
+                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Narxi (UZS)")}</label>
                     <div className="relative">
                       <input 
                         type="number" 
@@ -1721,7 +1721,7 @@ export default function DentalChart({
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Chegirma (%)</label>
+                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Chegirma (%)")}</label>
                     <input 
                       type="number" 
                       placeholder="0"
@@ -1734,7 +1734,7 @@ export default function DentalChart({
 
                 <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Shifokor</label>
+                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Shifokor")}</label>
                     <input 
                       type="text" 
                       defaultValue={doctorName || 'Dr. Shifokor'}
@@ -1743,10 +1743,10 @@ export default function DentalChart({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Assistent</label>
+                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Assistent")}</label>
                     <input 
                       type="text" 
-                      placeholder="Assistent ismi"
+                      placeholder={t("Assistent ismi")}
                       value={newTreatment.assistant}
                       onChange={e => setNewTreatment({...newTreatment, assistant: e.target.value})}
                       className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner"
@@ -1755,10 +1755,10 @@ export default function DentalChart({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Klinik Eslatma</label>
+                  <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Klinik Eslatma")}</label>
                   <textarea 
                     rows={4}
-                    placeholder="Batafsil ma'lumotlar..."
+                    placeholder={t("Batafsil ma'lumotlar...")}
                     value={newTreatment.notes}
                     onChange={e => setNewTreatment({...newTreatment, notes: e.target.value})}
                     className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-4 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner resize-none custom-scrollbar"
@@ -1770,14 +1770,14 @@ export default function DentalChart({
                     onClick={() => setShowAddTreatment(false)}
                     className="flex-1 py-4 bg-[#0a0f1d] border border-slate-700 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors"
                   >
-                    Bekor qilish
+                    {t("Bekor qilish")}
                   </button>
                   <button 
                     onClick={handleSaveTreatment}
                     disabled={!newTreatment.treatment}
                     className="flex-[2] py-4 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black rounded-xl transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-3 text-lg"
                   >
-                    <CheckCircle2 className="w-6 h-6" /> Saqlash va Tasdiqlash
+                    <CheckCircle2 className="w-6 h-6" /> {t("Saqlash va Tasdiqlash")}
                   </button>
                 </div>
               </div>
@@ -1793,9 +1793,9 @@ export default function DentalChart({
             <div className="bg-[#111827] rounded-[24px] p-8 relative z-10 max-h-[85vh] overflow-y-auto custom-scrollbar">
               <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-800">
                 <div>
-                  <h3 className="text-2xl font-black text-white">Tishni Tahrirlash</h3>
+                  <h3 className="text-2xl font-black text-white">{t("Tishni Tahrirlash")}</h3>
                   <p className="text-sm text-emerald-400 font-bold mt-1">
-                    Tish {selectedTooth ? ((['┐','└','┘','┌'].some(s => getNotationLabel(parseInt(selectedTooth), notation).includes(s))) ? '' : '#') + getNotationLabel(parseInt(selectedTooth), notation) : ''}
+                    {t("Tish")} {selectedTooth ? ((['┐','└','┘','┌'].some(s => getNotationLabel(parseInt(selectedTooth), notation).includes(s))) ? '' : '#') + getNotationLabel(parseInt(selectedTooth), notation) : ''}
                   </p>
                 </div>
                 <button onClick={() => setShowEditTooth(false)} className="text-slate-500 hover:text-white bg-[#0a0f1d] hover:bg-rose-500/20 p-3 rounded-xl transition-colors border border-slate-800">
@@ -1806,47 +1806,47 @@ export default function DentalChart({
               <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Holat</label>
+                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Holat")}</label>
                     <select 
                       value={editToothData.condition || 'Healthy'}
                       onChange={e => setEditToothData({...editToothData, condition: e.target.value})}
                       className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner appearance-none"
                     >
                       {CONDITIONS.map(c => (
-                        <option key={c.id} value={c.id}>{c.label}</option>
+                        <option key={c.id} value={c.id}>{t(c.label)}</option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Material</label>
+                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Material")}</label>
                     <input 
                       type="text" 
-                      placeholder="Plomba materiali..."
+                      placeholder={t("Plomba materiali...")}
                       value={editToothData.material || ''}
                       onChange={e => setEditToothData({...editToothData, material: e.target.value})}
                       className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Qimirlashi (Mobility)</label>
+                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Qimirlashi (Mobility)")}</label>
                     <select 
                       value={editToothData.mobility || ''}
                       onChange={e => setEditToothData({...editToothData, mobility: e.target.value})}
                       className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner appearance-none"
                     >
-                      <option value="">Yo'q</option>
-                      <option value="I daraja">I daraja</option>
-                      <option value="II daraja">II daraja</option>
-                      <option value="III daraja">III daraja</option>
+                      <option value="">{t("Yo'q")}</option>
+                      <option value="I daraja">{t("I daraja")}</option>
+                      <option value="II daraja">{t("II daraja")}</option>
+                      <option value="III daraja">{t("III daraja")}</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Ildiz kanallari</label>
+                    <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Ildiz kanallari")}</label>
                     <input 
                       type="number" 
                       min="0"
                       max="4"
-                      placeholder="Kanallar soni"
+                      placeholder={t("Kanallar soni")}
                       value={editToothData.rootCanals || ''}
                       onChange={e => setEditToothData({...editToothData, rootCanals: parseInt(e.target.value) || undefined})}
                       className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-3.5 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner"
@@ -1859,7 +1859,7 @@ export default function DentalChart({
                           <div className="w-5 h-5 border-2 border-slate-600 rounded bg-[#0a0f1d] peer-checked:bg-rose-500 peer-checked:border-rose-500 transition-colors"></div>
                           <CheckCircle2 className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" strokeWidth={3} />
                         </div>
-                        <span className="text-sm font-bold text-slate-300 group-hover:text-white transition-colors">Qonash (Bleeding)</span>
+                        <span className="text-sm font-bold text-slate-300 group-hover:text-white transition-colors">{t("Qonash (Bleeding)")}</span>
                      </label>
                      <label className="flex items-center gap-3 cursor-pointer group">
                         <div className="relative flex items-center justify-center w-5 h-5">
@@ -1867,16 +1867,16 @@ export default function DentalChart({
                           <div className="w-5 h-5 border-2 border-slate-600 rounded bg-[#0a0f1d] peer-checked:bg-amber-500 peer-checked:border-amber-500 transition-colors"></div>
                           <CheckCircle2 className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" strokeWidth={3} />
                         </div>
-                        <span className="text-sm font-bold text-slate-300 group-hover:text-white transition-colors">Yiringlash (Suppuration)</span>
+                        <span className="text-sm font-bold text-slate-300 group-hover:text-white transition-colors">{t("Yiringlash (Suppuration)")}</span>
                      </label>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">Qo'shimcha izoh</label>
+                  <label className="block text-xs font-black text-slate-500 mb-2 uppercase tracking-wider">{t("Qo'shimcha izoh")}</label>
                   <textarea 
                     rows={4}
-                    placeholder="Batafsil ma'lumotlar..."
+                    placeholder={t("Batafsil ma'lumotlar...")}
                     value={editToothData.notes || ''}
                     onChange={e => setEditToothData({...editToothData, notes: e.target.value})}
                     className="w-full bg-[#0a0f1d] border border-slate-700 rounded-xl px-4 py-4 text-sm font-bold text-white outline-none focus:border-emerald-500 transition-colors shadow-inner resize-none custom-scrollbar"
@@ -1888,13 +1888,13 @@ export default function DentalChart({
                     onClick={() => setShowEditTooth(false)}
                     className="flex-1 py-4 bg-[#0a0f1d] border border-slate-700 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors"
                   >
-                    Bekor qilish
+                    {t("Bekor qilish")}
                   </button>
                   <button 
                     onClick={handleSaveEditTooth}
                     className="flex-[2] py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-xl transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-3 text-lg"
                   >
-                    <CheckCircle2 className="w-6 h-6" /> Saqlash
+                    <CheckCircle2 className="w-6 h-6" /> {t("Saqlash")}
                   </button>
                 </div>
               </div>
@@ -1910,9 +1910,9 @@ export default function DentalChart({
              <div className="bg-[#111827] rounded-[24px] p-8 relative z-10 flex flex-col h-[80vh]">
                 <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
                   <div>
-                    <h3 className="text-2xl font-black text-white">Rentgen Tasvirlari</h3>
+                    <h3 className="text-2xl font-black text-white">{t("Rentgen Tasvirlari")}</h3>
                     <p className="text-sm text-emerald-400 font-bold mt-1">
-                      Tish {selectedTooth ? ((['┐','└','┘','┌'].some(s => getNotationLabel(parseInt(selectedTooth), notation).includes(s))) ? '' : '#') + getNotationLabel(parseInt(selectedTooth), notation) : ''}
+                      {t("Tish")} {selectedTooth ? ((['┐','└','┘','┌'].some(s => getNotationLabel(parseInt(selectedTooth), notation).includes(s))) ? '' : '#') + getNotationLabel(parseInt(selectedTooth), notation) : ''}
                     </p>
                   </div>
                   <button onClick={() => setShowXRay(false)} className="text-slate-500 hover:text-white bg-[#0a0f1d] hover:bg-rose-500/20 p-3 rounded-xl transition-colors border border-slate-800">
@@ -1922,13 +1922,13 @@ export default function DentalChart({
 
                 <div className="flex-1 bg-[#0a0f1d] rounded-2xl border border-slate-800 flex flex-col items-center justify-center gap-4">
                    <ImageIcon className="w-16 h-16 text-slate-700 opacity-50" />
-                   <p className="text-slate-500 font-medium text-lg">Bu tish uchun rentgen tasvirlari yuklanmagan.</p>
+                   <p className="text-slate-500 font-medium text-lg">{t("Bu tish uchun rentgen tasvirlari yuklanmagan.")}</p>
                    {!readOnly && (
                      <label className="px-6 py-3 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded-xl font-bold border border-blue-500/20 transition-all flex items-center gap-2 mt-4 cursor-pointer">
-                       <Plus className="w-5 h-5" /> Tasvir yuklash
+                       <Plus className="w-5 h-5" /> {t("Tasvir yuklash")}
                        <input type="file" accept="image/*" className="hidden" onChange={(e) => {
                          if (e.target.files && e.target.files.length > 0) {
-                           alert("Rentgen tasviri muvaffaqiyatli yuklandi (Simulyatsiya)");
+                           alert(t("Rentgen tasviri muvaffaqiyatli yuklandi (Simulyatsiya)"));
                          }
                        }} />
                      </label>

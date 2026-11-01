@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, Lock, LogIn, ShieldAlert, User } from 'lucide-react';
 import type { Language } from '../../translations';
 import { getWelcomeCopy } from './translations';
+import { createTranslator } from '../../utils/translate';
 import DStomaLogo from './DStomaLogo';
 import LanguageSelector from './LanguageSelector';
 
@@ -38,6 +39,7 @@ export default function UnifiedLoginScreen({
   onGoRegister,
 }: Props) {
   const c = getWelcomeCopy(language);
+  const t = createTranslator(language);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -82,7 +84,7 @@ export default function UnifiedLoginScreen({
             className="welcome-fade-in flex items-center gap-1.5 text-sm font-semibold text-slate-400 transition-colors hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
-            {language === 'uz' ? 'Orqaga' : language === 'ru' ? 'Назад' : 'Back'}
+            {t('Orqaga')}
           </button>
           <div className="welcome-fade-in shrink-0" style={{ animationDelay: '100ms' }}>
             <LanguageSelector language={language} setLanguage={setLanguage} label={c.languageLabel} />
@@ -107,28 +109,24 @@ export default function UnifiedLoginScreen({
           >
             <div className="mb-6 text-center">
               <h1 className="text-2xl font-extrabold text-white sm:text-[26px]">
-                {language === 'uz' ? 'Xush kelibsiz' : language === 'ru' ? 'Добро пожаловать' : 'Welcome back'}
+                {t('Xush kelibsiz')}
               </h1>
               <p className="mt-2 text-sm text-slate-400">
-                {language === 'uz'
-                  ? 'Login va parolingizni kiriting — tizim sizni avtomatik tanib, o’z panelingizga yo’naltiradi.'
-                  : language === 'ru'
-                  ? 'Введите логин и пароль — система сама определит вашу роль и откроет нужную панель.'
-                  : 'Enter your login and password — the system recognizes your account and opens the right panel.'}
+                {t('Login va parolingizni kiriting — tizim sizni avtomatik tanib, o’z panelingizga yo’naltiradi.')}
               </p>
             </div>
 
             {error && (
               <div className="mb-5 flex items-center gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-xs font-medium text-rose-300">
                 <ShieldAlert className="h-4 w-4 shrink-0" />
-                <span>{error}</span>
+                <span>{t(error)}</span>
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-cyan-400">
-                  {language === 'uz' ? 'Login' : language === 'ru' ? 'Логин' : 'Login'}
+                  {t('Login')}
                 </label>
                 <div className="relative">
                   <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -138,7 +136,7 @@ export default function UnifiedLoginScreen({
                     autoFocus
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder={language === 'uz' ? 'Login yoki kod' : language === 'ru' ? 'Логин или код' : 'Login or code'}
+                    placeholder={t('Login yoki kod')}
                     className="w-full rounded-xl border border-[#0d213d] bg-[#020814] py-3 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-600 shadow-inner transition-all hover:border-cyan-500/40 focus:border-cyan-500 focus:outline-none"
                   />
                 </div>
@@ -146,7 +144,7 @@ export default function UnifiedLoginScreen({
 
               <div>
                 <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-cyan-400">
-                  {language === 'uz' ? 'Parol' : language === 'ru' ? 'Пароль' : 'Password'}
+                  {t('Parol')}
                 </label>
                 <div className="relative">
                   <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -171,17 +169,7 @@ export default function UnifiedLoginScreen({
                 }}
               >
                 <LogIn className="h-4 w-4" />
-                {submitting
-                  ? language === 'uz'
-                    ? 'Tekshirilmoqda...'
-                    : language === 'ru'
-                    ? 'Проверка...'
-                    : 'Checking...'
-                  : language === 'uz'
-                  ? 'Tizimga kirish'
-                  : language === 'ru'
-                  ? 'Войти'
-                  : 'Log in'}
+                {submitting ? t('Tekshirilmoqda...') : t('Tizimga kirish')}
               </button>
             </form>
 
@@ -190,11 +178,7 @@ export default function UnifiedLoginScreen({
               onClick={onGoRegister}
               className="mt-5 w-full text-center text-xs font-semibold text-slate-400 transition-colors hover:text-cyan-300"
             >
-              {language === 'uz'
-                ? 'Hisobingiz yo’qmi? '
-                : language === 'ru'
-                ? 'Нет аккаунта? '
-                : "Don't have an account? "}
+              {t('Hisobingiz yo’qmi?')}{' '}
               <span className="text-cyan-400">{c.register}</span>
             </button>
           </div>

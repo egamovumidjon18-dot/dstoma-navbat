@@ -241,7 +241,7 @@ export default function TreatmentHistory({ patientId, patientName, language, sta
                         </div>
                         {hasWarning && (
                           <div className="mt-3 text-xs text-amber-400 flex items-center gap-1.5 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
-                            <AlertTriangle className="w-3.5 h-3.5" /> O'tgan 6 oy ichida ushbu tishda muolaja qilingan.
+                            <AlertTriangle className="w-3.5 h-3.5" /> {t("O'tgan 6 oy ichida ushbu tishda muolaja qilingan.")}
                           </div>
                         )}
                       </div>
@@ -276,10 +276,10 @@ export default function TreatmentHistory({ patientId, patientName, language, sta
                           {checkWarnings(item.toothId, item.createdAt) && <AlertTriangle className="w-3.5 h-3.5 text-amber-500 inline-block ml-2" />}
                         </td>
                         <td className="px-6 py-4 text-slate-400">{item.doctorName}</td>
-                        <td className="px-6 py-4 font-mono text-slate-300">{item.price.toLocaleString()} so'm</td>
+                        <td className="px-6 py-4 font-mono text-slate-300">{item.price.toLocaleString()} {t("so'm")}</td>
                         <td className="px-6 py-4 text-right">
                           <button className="text-emerald-500 hover:text-emerald-400 text-sm font-bold flex items-center justify-end gap-1 w-full">
-                            Batafsil <ChevronRight className="w-4 h-4" />
+                            {t("Batafsil")} <ChevronRight className="w-4 h-4" />
                           </button>
                         </td>
                       </tr>
@@ -302,13 +302,13 @@ export default function TreatmentHistory({ patientId, patientName, language, sta
             </button>
             <div>
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                Muolaja tafsilotlari
+                {t("Muolaja tafsilotlari")}
               </h3>
               <p className="text-sm text-slate-500">{new Date(selectedRecord.createdAt).toLocaleString()}</p>
             </div>
             <div className="ml-auto">
               <span className="text-xs font-bold bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-full border border-emerald-500/20">
-                Bajarilgan
+                {t("Bajarilgan")}
               </span>
             </div>
           </div>
@@ -334,7 +334,7 @@ export default function TreatmentHistory({ patientId, patientName, language, sta
                   </div>
                   <div>
                     <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t("Narx")}</span>
-                    <p className="text-lg font-mono text-emerald-400 font-bold">{selectedRecord.price.toLocaleString()} so'm</p>
+                    <p className="text-lg font-mono text-emerald-400 font-bold">{selectedRecord.price.toLocaleString()} {t("so'm")}</p>
                   </div>
                 </div>
 
@@ -344,7 +344,7 @@ export default function TreatmentHistory({ patientId, patientName, language, sta
                     <div>
                       <h5 className="text-sm font-bold text-amber-400 mb-1">{t("Takroriy muolaja ogohlantirishi")}</h5>
                       <p className="text-xs text-amber-500/80">
-                        Ushbu tishda so'nggi 6 oy ichida boshqa muolajalar ham bajarilgan. Bu holat tishning surunkali muammosini ko'rsatishi mumkin.
+                        {t("Ushbu tishda so'nggi 6 oy ichida boshqa muolajalar ham bajarilgan. Bu holat tishning surunkali muammosini ko'rsatishi mumkin.")}
                       </p>
                     </div>
                   </div>
@@ -361,7 +361,7 @@ export default function TreatmentHistory({ patientId, patientName, language, sta
                     </div>
                     <LinkIcon className="w-4 h-4 text-slate-600 group-hover:text-emerald-500 transition-colors" />
                   </div>
-                  <p className="text-xs text-slate-500">Ushbu sana bo'yicha 1 ta OPG rentgen tasviri topildi.</p>
+                  <p className="text-xs text-slate-500">{t("Ushbu sana bo'yicha 1 ta OPG rentgen tasviri topildi.")}</p>
                 </div>
 
                 <div className="bg-[#0a0f1d] rounded-2xl border border-slate-800 p-5 hover:border-emerald-500/50 transition-colors cursor-pointer group">
@@ -372,7 +372,7 @@ export default function TreatmentHistory({ patientId, patientName, language, sta
                     </div>
                     <LinkIcon className="w-4 h-4 text-slate-600 group-hover:text-emerald-500 transition-colors" />
                   </div>
-                  <p className="text-xs text-slate-500">Tish holati: {selectedRecord.treatment.includes('Plomba') ? 'Plomba qilingan' : 'Kanal davolangan'}</p>
+                  <p className="text-xs text-slate-500">{t("Tish holati:")} {selectedRecord.treatment.includes('Plomba') ? t("Plomba qilingan") : t("Kanal davolangan")}</p>
                 </div>
 
                 <div className="bg-[#0a0f1d] rounded-2xl border border-slate-800 p-5 hover:border-emerald-500/50 transition-colors cursor-pointer group">
@@ -383,7 +383,7 @@ export default function TreatmentHistory({ patientId, patientName, language, sta
                     </div>
                     <LinkIcon className="w-4 h-4 text-slate-600 group-hover:text-emerald-500 transition-colors" />
                   </div>
-                  <p className="text-xs text-slate-500">Jarayon davomida olingan 2 ta fotosurat.</p>
+                  <p className="text-xs text-slate-500">{t("Jarayon davomida olingan 2 ta fotosurat.")}</p>
                 </div>
               </div>
             </div>
@@ -392,7 +392,7 @@ export default function TreatmentHistory({ patientId, patientName, language, sta
             <div className="w-full lg:w-[350px]">
               <div className="bg-[#0a0f1d] rounded-2xl border border-slate-800 p-6 sticky top-6">
                  <h4 className="font-bold text-white mb-6 border-b border-slate-800 pb-4 flex items-center gap-2">
-                   <FileText className="w-4 h-4 text-emerald-500" /> Kvitansiya
+                   <FileText className="w-4 h-4 text-emerald-500" /> {t("Kvitansiya")}
                  </h4>
                  
                  <div className="space-y-4 mb-6">
@@ -415,12 +415,12 @@ export default function TreatmentHistory({ patientId, patientName, language, sta
                  <div className="border-t border-slate-800 pt-4 mb-8 space-y-2">
                    <div className="flex justify-between items-center">
                      <span className="font-bold text-slate-300">{t("Jami to'langan:")}</span>
-                     <span className="font-black text-xl text-emerald-400 font-mono">{(selectedBalance?.paid ?? 0).toLocaleString()} so'm</span>
+                     <span className="font-black text-xl text-emerald-400 font-mono">{(selectedBalance?.paid ?? 0).toLocaleString()} {t("so'm")}</span>
                    </div>
                    {!!selectedBalance?.debt && (
                      <div className="flex justify-between items-center">
                        <span className="font-bold text-slate-300">{t("Qarz")}</span>
-                       <span className="font-black text-lg text-amber-400 font-mono">{selectedBalance.debt.toLocaleString()} so'm</span>
+                       <span className="font-black text-lg text-amber-400 font-mono">{selectedBalance.debt.toLocaleString()} {t("so'm")}</span>
                      </div>
                    )}
                  </div>

@@ -223,7 +223,7 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
         createdAt: new Date().toISOString(),
       };
       await setDoc(doc(db, `patients/${patientId}/treatmentPlans`, planId), planItem);
-      alert("Davolash rejasiga qo'shildi.");
+      alert(t("Davolash rejasiga qo'shildi."));
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `patients/${patientId}/treatmentPlans`);
     } finally {
@@ -457,7 +457,7 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
                 }}
                 className="w-full h-full flex items-center justify-center"
               >
-                <img src={selectedXRay.url} alt="X-Ray View" className="max-w-full max-h-full object-contain" />
+                <img src={selectedXRay.url} alt={t("X-Ray View")} className="max-w-full max-h-full object-contain" />
               </div>
             </div>
 
@@ -470,13 +470,13 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
                   className="w-full py-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
                 >
                   <Brain className="w-5 h-5" /> 
-                  {isAnalyzing ? "Tahlil qilinmoqda..." : analysis ? "AI Tahlil Yakunlandi" : "AI Tahlilni Boshlash"}
+                  {isAnalyzing ? t("Tahlil qilinmoqda...") : analysis ? t("AI Tahlil Yakunlandi") : t("AI Tahlilni Boshlash")}
                 </button>
               </div>
 
               {requiresPremium && (
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-center space-y-1.5">
-                  <p className="text-sm font-bold text-amber-400">🔒 AI Yordamchi — Premium xizmat</p>
+                  <p className="text-sm font-bold text-amber-400">{t("🔒 AI Yordamchi — Premium xizmat")}</p>
                   <p className="text-xs text-slate-400">{t("Bepul sinov muddati tugagan. Davom etish uchun klinika Premium obunaga o'tishi kerak.")}</p>
                 </div>
               )}
@@ -512,14 +512,14 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
                                  disabled={isSavingFinding === finding.id}
                                  className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors disabled:opacity-50"
                                >
-                                 Chartga qo'shish
+                                 {t("Chartga qo'shish")}
                                </button>
                                <button
                                  onClick={() => handleAddFindingToPlan(finding)}
                                  disabled={isSavingFinding === finding.id}
                                  className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors disabled:opacity-50"
                                >
-                                 Rejaga qo'shish
+                                 {t("Rejaga qo'shish")}
                                </button>
                             </div>
                           </div>
@@ -533,13 +533,13 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
                       onClick={handleApproveAnalysis}
                       className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-1.5"
                     >
-                      <Check className="w-4 h-4" /> Tasdiqlash
+                      <Check className="w-4 h-4" /> {t("Tasdiqlash")}
                     </button>
                     <button
                       onClick={handleRejectAnalysis}
                       className="flex-1 py-2 bg-[#111827] hover:bg-rose-500/20 text-rose-400 border border-slate-800 hover:border-rose-500/50 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-1.5"
                     >
-                      <Ban className="w-4 h-4" /> Rad etish
+                      <Ban className="w-4 h-4" /> {t("Rad etish")}
                     </button>
                   </div>
                 </div>
@@ -550,7 +550,7 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
                   onClick={() => exportXrayReportPdf(patientName, selectedXRay, analysis)}
                   className="w-full py-2.5 bg-[#111827] hover:bg-[#1f2937] text-white border border-slate-800 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors"
                 >
-                  <FileText className="w-4 h-4" /> PDF Hisobot
+                  <FileText className="w-4 h-4" /> {t("PDF Hisobot")}
                 </button>
               </div>
             </div>
@@ -562,7 +562,7 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
         <div className="flex flex-col h-full">
           <div className="flex justify-between items-center mb-4 bg-[#0a0f1d] p-3 rounded-xl border border-slate-800">
             <button onClick={() => setActiveView('viewer')} className="flex items-center gap-2 text-slate-400 hover:text-white px-3 py-1.5 rounded-lg transition-colors">
-              <ChevronLeft className="w-4 h-4" /> Ortga qaytish
+              <ChevronLeft className="w-4 h-4" /> {t("Ortga qaytish")}
             </button>
             <h4 className="text-white font-bold">{t("Taqqoslash Rejimi")}</h4>
             <div className="w-24"></div>
@@ -570,14 +570,14 @@ export default function XRayCenter({ patientId, clinicId, patientName, doctorNam
           
           <div className="flex-1 flex gap-4 min-h-0">
             <div className="flex-1 flex flex-col gap-2">
-              <div className="bg-[#111827] p-2 rounded-lg text-center text-xs font-bold text-slate-400">Joriy: {new Date(selectedXRay.date).toLocaleDateString()}</div>
+              <div className="bg-[#111827] p-2 rounded-lg text-center text-xs font-bold text-slate-400">{t("Joriy:")} {new Date(selectedXRay.date).toLocaleDateString()}</div>
               <div className="flex-1 bg-[#0a0f1d] rounded-2xl border border-slate-800 overflow-hidden flex items-center justify-center">
                 <img src={selectedXRay.url} className="max-w-full max-h-full object-contain" />
               </div>
             </div>
             <div className="flex-1 flex flex-col gap-2">
                <div className="bg-[#111827] p-2 rounded-lg text-center text-xs font-bold text-slate-400 flex justify-between items-center">
-                 <span>Solishtirilayotgan: {new Date(compareXRay.date).toLocaleDateString()}</span>
+                 <span>{t("Solishtirilayotgan:")} {new Date(compareXRay.date).toLocaleDateString()}</span>
                  <select 
                    className="bg-[#020712] border border-slate-700 rounded px-2 py-0.5"
                    onChange={(e) => {

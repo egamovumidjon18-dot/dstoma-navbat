@@ -809,7 +809,7 @@ export default function DirectorDashboard({
               {t("⚠️ OYLIK TO'LOV MUDDATI BO'YICHA ESLATMA")}
             </h3>
             <p className="text-xs text-slate-700 mt-1">
-              {language === 'uz' ? 'Sizning' : t("sizning obuna statusingiz filial uchun")} <strong>{clinicNameStr}</strong>: <span className="font-bold underline text-amber-900">{isSuspended ? t("To'xtatilgan ❌") : isTrial ? t("1 haftalik bepul trial (sinov) muddatida 🎁") : t("Faol ✅")}</span>.
+              {language === 'uz' ? t("Sizning") : t("sizning obuna statusingiz filial uchun")} <strong>{clinicNameStr}</strong>: <span className="font-bold underline text-amber-900">{isSuspended ? t("To'xtatilgan ❌") : isTrial ? t("1 haftalik bepul trial (sinov) muddatida 🎁") : t("Faol ✅")}</span>.
               &nbsp;{t("To'g'ridan-to'g'ri to'lov muddati:")} <strong className="font-mono text-amber-900">{myClinic?.nextPaymentDate || t("belgilanmagan")}</strong> {daysDiff === null ? '' : daysDiff <= 0 ? `(${t("Kechikkan!")})` : `(${daysDiff} ${t("kun qoldi")})`}.
               &nbsp;{t("Oylik obuna narxi:")} <strong className="text-indigo-900 font-mono">{myClinic?.rentalPrice ? `${myClinic.rentalPrice.toLocaleString('uz-UZ')} ${t("so'm")}` : t("belgilanmagan")}</strong>.
             </p>
@@ -1051,18 +1051,18 @@ export default function DirectorDashboard({
             {/* Shifokorlar bugungi hisoboti (Tab 1 left part) */}
             <div className="lg:col-span-8 bg-white text-slate-800 rounded-3xl p-5 border border-slate-100/80 shadow-md">
               <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-widest mb-4 border-b border-slate-50 pb-2">
-                🩺 Shifokorlar bugungi ko'rsatkichlari
+                {t("🩺 Shifokorlar bugungi ko'rsatkichlari")}
               </h3>
 
               <div className="overflow-x-auto text-xs">
                 <table className="w-full min-w-[500px] text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50/70 text-slate-400 text-[10px] uppercase font-extrabold">
-                      <th className="px-4 py-2.5">Shifokor</th>
-                      <th className="px-4 py-2.5 text-center">Bemorlar</th>
-                      <th className="px-4 py-2.5 text-right">Bugungi daromad</th>
-                      <th className="px-4 py-2.5 text-center">Reyting</th>
-                      <th className="px-4 py-2.5 text-center">Amallar</th>
+                      <th className="px-4 py-2.5">{t("Shifokor")}</th>
+                      <th className="px-4 py-2.5 text-center">{t("Bemorlar")}</th>
+                      <th className="px-4 py-2.5 text-right">{t("Bugungi daromad")}</th>
+                      <th className="px-4 py-2.5 text-center">{t("Reyting")}</th>
+                      <th className="px-4 py-2.5 text-center">{t("Amallar")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
@@ -1079,7 +1079,7 @@ export default function DirectorDashboard({
                                 {doc.name}
                                 {link?.relationshipType === 'independent' && (
                                   <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-100">
-                                    🏠 Mustaqil
+                                    {t("🏠 Mustaqil")}
                                   </span>
                                 )}
                               </strong>
@@ -1089,19 +1089,19 @@ export default function DirectorDashboard({
                           {isRental ? (
                             <td colSpan={2} className="px-4 py-3.5 text-center">
                               <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full border border-slate-100">
-                                🔒 Ijara · {link?.rentPaymentStatus === 'paid' ? "To'langan" : 'To\'lanmagan'}
+                                {t("🔒 Ijara ·")} {link?.rentPaymentStatus === 'paid' ? t("To'langan") : t("To'lanmagan")}
                               </span>
                             </td>
                           ) : (
                             <>
                               <td className="px-4 py-3.5 text-center font-mono">
-                                {stats.completedCount} kishi / <span className="text-amber-600 font-bold">{stats.activeCount} kutmoqda</span>
+                                {stats.completedCount} {t("kishi /")} <span className="text-amber-600 font-bold">{stats.activeCount} {t("kutmoqda")}</span>
                               </td>
                               <td className="px-4 py-3.5 text-right font-mono text-blue-700">
                                 {stats.revenue.toLocaleString('uz-UZ')}.00 so'm
                                 {link?.relationshipType === 'revenue_share' && (
                                   <div className="text-[10px] text-emerald-600 font-bold">
-                                    Klinika ulushi: {Math.round(stats.revenue * (100 - (link.doctorRevenueSharePercent ?? 50)) / 100).toLocaleString('uz-UZ')} so'm
+                                    {t("Klinika ulushi:")} {Math.round(stats.revenue * (100 - (link.doctorRevenueSharePercent ?? 50)) / 100).toLocaleString('uz-UZ')} {t("so'm")}
                                   </div>
                                 )}
                               </td>
@@ -1131,7 +1131,7 @@ export default function DirectorDashboard({
                                 }}
                                 className="text-indigo-500 hover:text-indigo-600 font-extrabold underline cursor-pointer text-[11px]"
                               >
-                                🤝 Bog'lanish
+                                {t("🤝 Bog'lanish")}
                               </button>
                               <span className="text-slate-300">|</span>
                               <button
@@ -1162,10 +1162,10 @@ export default function DirectorDashboard({
                   </div>
                   <div>
                     <h3 className="text-[13px] font-black text-slate-900 uppercase tracking-widest leading-none mb-1">
-                      Katalog
+                      {t("Katalog")}
                     </h3>
                     <p className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5">
-                      Bugungi mashhur xizmatlar
+                      {t("Bugungi mashhur xizmatlar")}
                     </p>
                   </div>
                 </div>
@@ -1195,7 +1195,7 @@ export default function DirectorDashboard({
                   if (sortedCats.length === 0) {
                     return (
                       <div className="text-center py-10 text-slate-400 font-bold text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                        Xizmatlar mavjud emas
+                        {t("Xizmatlar mavjud emas")}
                       </div>
                     );
                   }
@@ -1229,13 +1229,13 @@ export default function DirectorDashboard({
                                 {translateMedicalText(srv.name, language)}
                               </span>
                               <span className={`font-mono px-2 py-1 rounded-lg flex-shrink-0 text-[10px] font-black ${srv.callCount > 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}>
-                                {srv.callCount} ta
+                                {srv.callCount} {t("ta")}
                               </span>
                             </div>
                             <div className="flex items-center justify-between pt-1 border-t border-slate-50 mt-1">
                               <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">ID: {srv.id.split('_').pop()}</span>
                               <span className="font-black text-indigo-600 text-[11px] font-mono bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100/50">
-                                {srv.price.toLocaleString('uz-UZ')} UZS
+                                {srv.price.toLocaleString('uz-UZ')} {t("UZS")}
                               </span>
                             </div>
                           </div>
@@ -1254,9 +1254,9 @@ export default function DirectorDashboard({
           <div id="bemorlar-baza" className="bg-white text-slate-800 rounded-3xl p-6 border border-slate-100/80 shadow-lg space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-[#0ea5e9]">👥 Bemorlar Ma'lumot BAZASI</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#0ea5e9]">{t("👥 Bemorlar Ma'lumot BAZASI")}</span>
                 <h3 className="text-base font-black text-slate-800 mt-1">
-                  Yangi va Jami Ro'yxatdan O'tganlar Tafsiloti
+                  {t("Yangi va Jami Ro'yxatdan O'tganlar Tafsiloti")}
                 </h3>
               </div>
 
@@ -1272,7 +1272,7 @@ export default function DirectorDashboard({
                         : 'text-slate-400 hover:text-slate-700'
                     }`}
                   >
-                    🌟 Yangi Ro'yxatdan O'tganlar ({clinicQueues.length} ta)
+                    {t("🌟 Yangi Ro'yxatdan O'tganlar (")}{clinicQueues.length} {t("ta)")}
                   </button>
                   <button
                     type="button"
@@ -1283,7 +1283,7 @@ export default function DirectorDashboard({
                         : 'text-slate-400 hover:text-slate-700'
                     }`}
                   >
-                    🗄️ Jami Ro'yxatbaza ({directoryPatients.length} kishi)
+                    {t("🗄️ Jami Ro'yxatbaza (")}{directoryPatients.length} {t("kishi)")}
                   </button>
                 </div>
                 
@@ -1295,14 +1295,14 @@ export default function DirectorDashboard({
                   }}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5" /> Qaytish
+                  <ArrowLeft className="w-3.5 h-3.5" /> {t("Qaytish")}
                 </button>
                 <button
                   type="button"
                   onClick={() => onLogout && onLogout()}
                   className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-100/50 text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2"
                 >
-                  <LogOut className="w-3.5 h-3.5" /> Chiqish
+                  <LogOut className="w-3.5 h-3.5" /> {t("Chiqish")}
                 </button>
               </div>
             </div>
@@ -1311,27 +1311,27 @@ export default function DirectorDashboard({
             {selectedPatientTab === 'yangi' ? (
               <div className="space-y-4">
                 <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl text-xs text-amber-800 leading-relaxed">
-                  💡 <strong>Bugun Navbatda Turgan Yangi Bemorlar:</strong> Ushbu ro'yxat bugun elektron chipta orqali yoki shaxsan kelib navbat olgan va klinikani ziyorat qilayotgan bemorlarni ko'rsatadi. Bu ma'lumotlar real-vaqt rejimida avtomatik ravishda yangilanadi.
+                  💡 <strong>{t("Bugun Navbatda Turgan Yangi Bemorlar:")}</strong> {t("Ushbu ro'yxat bugun elektron chipta orqali yoki shaxsan kelib navbat olgan va klinikani ziyorat qilayotgan bemorlarni ko'rsatadi. Bu ma'lumotlar real-vaqt rejimida avtomatik ravishda yangilanadi.")}
                 </div>
 
                 <div className="overflow-x-auto text-xs">
                   <table className="w-full min-w-[700px] text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50 text-slate-400 text-[10px] uppercase font-extrabold border-b border-slate-100">
-                        <th className="px-4 py-3"># Chipta</th>
-                        <th className="px-4 py-3">F.I.SH Ismi</th>
-                        <th className="px-4 py-3">Aloqa raqami</th>
-                        <th className="px-4 py-3">Biriktirilgan Shifokor</th>
-                        <th className="px-4 py-3">Xizmat va Yo'nalish</th>
-                        <th className="px-4 py-3">Holati</th>
-                        <th className="px-4 py-3 text-right">Reyting/Baho</th>
-                        <th className="px-4 py-3 text-center">Amallar</th>
+                        <th className="px-4 py-3">{t("# Chipta")}</th>
+                        <th className="px-4 py-3">{t("F.I.SH Ismi")}</th>
+                        <th className="px-4 py-3">{t("Aloqa raqami")}</th>
+                        <th className="px-4 py-3">{t("Biriktirilgan Shifokor")}</th>
+                        <th className="px-4 py-3">{t("Xizmat va Yo'nalish")}</th>
+                        <th className="px-4 py-3">{t("Holati")}</th>
+                        <th className="px-4 py-3 text-right">{t("Reyting/Baho")}</th>
+                        <th className="px-4 py-3 text-center">{t("Amallar")}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
                       {clinicQueues.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="text-center py-8 text-slate-400 font-medium">Bugun birorta ham yangi chipta olingani yo'q.</td>
+                          <td colSpan={8} className="text-center py-8 text-slate-400 font-medium">{t("Bugun birorta ham yangi chipta olingani yo'q.")}</td>
                         </tr>
                       ) : (
                         clinicQueues.map((item) => {
@@ -1348,7 +1348,7 @@ export default function DirectorDashboard({
                                     just today's — the badge used to say "Bugun Yangi" on every
                                     row regardless of age. */}
                                 {isToday(item) && (
-                                  <span className="text-[10px] font-mono text-emerald-600 uppercase tracking-wider bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100/55 inline-block">Bugun Yangi</span>
+                                  <span className="text-[10px] font-mono text-emerald-600 uppercase tracking-wider bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100/55 inline-block">{t("Bugun Yangi")}</span>
                                 )}
                               </td>
                               <td className="px-4 py-3 text-slate-500 font-mono">
@@ -1358,24 +1358,24 @@ export default function DirectorDashboard({
                                 {doc?.name || 'Nevizual/Boshqa'}
                               </td>
                               <td className="px-4 py-3 text-slate-600">
-                                {srv?.name || 'Ko\'rik'}
+                                {srv?.name || t("Ko'rik")}
                               </td>
                               <td className="px-4 py-3">
                                 {item.status === 'completed' ? (
                                   <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 rounded-lg text-[10px] font-extrabold border border-emerald-100/50 inline-flex items-center gap-1">
-                                    ✔ Davolangan
+                                    {t("✔ Davolangan")}
                                   </span>
                                 ) : item.status === 'cancelled' ? (
                                   <span className="px-2.5 py-1 bg-rose-50 text-rose-800 rounded-lg text-[10px] font-extrabold border border-rose-100/50 inline-flex items-center gap-1">
-                                    ✕ Bekor qilindi
+                                    {t("✕ Bekor qilindi")}
                                   </span>
                                 ) : item.status === 'in_progress' ? (
                                   <span className="px-2.5 py-1 bg-blue-50 text-blue-800 rounded-lg text-[10px] font-extrabold border border-blue-100/50 inline-flex items-center gap-1 animate-pulse font-sans">
-                                    🦷 Qabulda ◀
+                                    {t("🦷 Qabulda ◀")}
                                   </span>
                                 ) : (
                                   <span className="px-2.5 py-1 bg-amber-50 text-amber-800 rounded-lg text-[10px] font-extrabold border border-amber-100/50 inline-flex items-center gap-1">
-                                    ⏳ Kutmoqda
+                                    {t("⏳ Kutmoqda")}
                                   </span>
                                 )}
                               </td>
@@ -1385,14 +1385,14 @@ export default function DirectorDashboard({
                               <td className="px-4 py-3 text-center">
                                 <button
                                   onClick={() => {
-                                    if (window.confirm("Ushbu navbatni bekor qilmoqchimisiz?")) {
+                                    if (window.confirm(t("Ushbu navbatni bekor qilmoqchimisiz?"))) {
                                       onCancelQueue && onCancelQueue(item.id);
                                     }
                                   }}
                                   className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded shrink-0 text-[10px] font-extrabold uppercase transition-all"
-                                  title="Navbatni bekor qilish"
+                                  title={t("Navbatni bekor qilish")}
                                 >
-                                  Bekor qilish
+                                  {t("Bekor qilish")}
                                 </button>
                               </td>
                             </tr>
@@ -1407,10 +1407,10 @@ export default function DirectorDashboard({
               <div className="space-y-4">
                 <div className="p-4 bg-sky-500/5 border border-sky-500/10 rounded-2xl text-xs text-sky-800 leading-relaxed flex items-center justify-between gap-3 flex-wrap">
                   <div>
-                    💡 <strong>Klinika Passport Bemorlar BAZASI (CRM):</strong> Quyida klinika terminali, telefon va mobil ilova orqali bugungacha ro'yxatdan o'tgan barcha tarixiy va faol bemorlar bazasining sinxron tahlili keltirilgan.
+                    💡 <strong>{t("Klinika Passport Bemorlar BAZASI (CRM):")}</strong> {t("Quyida klinika terminali, telefon va mobil ilova orqali bugungacha ro'yxatdan o'tgan barcha tarixiy va faol bemorlar bazasining sinxron tahlili keltirilgan.")}
                   </div>
                   <div className="px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 font-mono font-bold text-[10.5px] rounded-lg">
-                    Jami ma'lumotlar hajmi: {totalRegisteredPatientsCount} ta bemor
+                    {t("Jami ma'lumotlar hajmi:")} {totalRegisteredPatientsCount} {t("ta bemor")}
                   </div>
                 </div>
 
@@ -1418,14 +1418,14 @@ export default function DirectorDashboard({
                   <table className="w-full min-w-[700px] text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50 text-slate-400 text-[10px] uppercase font-extrabold border-b border-slate-100">
-                        <th className="px-4 py-3">Bemor F.I.SH</th>
-                        <th className="px-4 py-3">ID / Passport</th>
-                        <th className="px-4 py-3">Aloqa raqami</th>
-                        <th className="px-4 py-3 text-center">Yosh</th>
-                        <th className="px-4 py-3 text-center font-mono">Tashriflar</th>
-                        <th className="px-4 py-3">Kim tavsiya qildi</th>
-                        <th className="px-4 py-3 text-right font-sans">Oxirgi qabul</th>
-                        <th className="px-4 py-3 text-center">Amallar</th>
+                        <th className="px-4 py-3">{t("Bemor F.I.SH")}</th>
+                        <th className="px-4 py-3">{t("ID / Passport")}</th>
+                        <th className="px-4 py-3">{t("Aloqa raqami")}</th>
+                        <th className="px-4 py-3 text-center">{t("Yosh")}</th>
+                        <th className="px-4 py-3 text-center font-mono">{t("Tashriflar")}</th>
+                        <th className="px-4 py-3">{t("Kim tavsiya qildi")}</th>
+                        <th className="px-4 py-3 text-right font-sans">{t("Oxirgi qabul")}</th>
+                        <th className="px-4 py-3 text-center">{t("Amallar")}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
@@ -1444,7 +1444,7 @@ export default function DirectorDashboard({
                             {pt.age !== null ? `${pt.age} yosh` : '—'}
                           </td>
                           <td className="px-4 py-3 text-center text-slate-500 font-mono font-bold">
-                            {pt.visitsCount} marta
+                            {pt.visitsCount} {t("marta")}
                           </td>
                           <td className="px-4 py-3 text-slate-500 text-[11px]">
                             {pt.referredBy}
@@ -1461,9 +1461,9 @@ export default function DirectorDashboard({
                               }}
                               disabled={!pt.id}
                               className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 disabled:opacity-40 disabled:cursor-not-allowed text-rose-600 border border-rose-200 rounded shrink-0 text-[10px] font-extrabold uppercase transition-all"
-                              title={pt.id ? "Tizimdan o'chirish" : "Ro'yxatdan o'tmagan (faqat navbat)"}
+                              title={pt.id ? t("Tizimdan o'chirish") : t("Ro'yxatdan o'tmagan (faqat navbat)")}
                             >
-                              O'chirish
+                              {t("O'chirish")}
                             </button>
                           </td>
                         </tr>
@@ -1539,14 +1539,14 @@ export default function DirectorDashboard({
         <div className="space-y-6">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-widest">
-              🧑‍⚕ Shifokorlar va Ularning Kunlik Analitikalari
+              {t("🧑‍⚕ Shifokorlar va Ularning Kunlik Analitikalari")}
             </h3>
 
             <button
               onClick={() => setShowAddDoctorForm(!showAddDoctorForm)}
               className="px-4 py-2 bg-[#0284c7] hover:bg-cyan-700 text-white rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
             >
-              <Plus className="w-4 h-4" /> Yangi Shifokor Profilini Yaratish
+              <Plus className="w-4 h-4" /> {t("Yangi Shifokor Profilini Yaratish")}
             </button>
           </div>
 
@@ -1561,36 +1561,36 @@ export default function DirectorDashboard({
           {showAddDoctorForm && (
             <div className="bg-slate-50 border border-slate-200 rounded-3xl p-5 max-w-2xl space-y-4">
               <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                🩺 Yangi Shifokor Qo'shish Shakli (CEO Onboarding)
+                {t("🩺 Yangi Shifokor Qo'shish Shakli (CEO Onboarding)")}
               </h4>
 
               <form onSubmit={handleCreateDoctorSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">To'liq ismi-sharifi (F.I.SH) *</label>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">{t("To'liq ismi-sharifi (F.I.SH) *")}</label>
                     <input
                       type="text"
                       required
                       value={newDocName}
                       onChange={(e) => setNewDocName(e.target.value)}
-                      placeholder="Masalan: Dr. Sardor Rustamov"
+                      placeholder={t("Masalan: Dr. Sardor Rustamov")}
                       className="w-full bg-white border border-slate-200 text-xs font-bold text-slate-800 rounded-xl px-4 py-2.5 focus:border-cyan-500 focus:outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Mutaxassisligi / Mutaxassislik Yo'nalishi</label>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">{t("Mutaxassisligi / Mutaxassislik Yo'nalishi")}</label>
                     <select
                       value={newDocSpecialty}
                       onChange={(e) => setNewDocSpecialty(e.target.value)}
                       className="w-full bg-white border border-slate-200 text-xs font-bold text-slate-800 rounded-xl px-4 py-2.5 focus:border-cyan-500"
                     >
-                      <option value="Stomatolog-ortoped">Stomatolog-ortoped</option>
-                      <option value="Xirurg-Stomatolog">Xirurg-Stomatolog</option>
-                      <option value="Bolalar Stomatologi">Bolalar Stomatologi</option>
-                      <option value="Estetik Salomatlik Bo'yicha Ekspert">Estetik Salomatlik Eksperti</option>
-                      <option value="Ortodont">Ortodont</option>
-                      <option value="Terapevt-Stomatolog">Terapevt-Stomatolog</option>
+                      <option value="Stomatolog-ortoped">{t("Stomatolog-ortoped")}</option>
+                      <option value="Xirurg-Stomatolog">{t("Xirurg-Stomatolog")}</option>
+                      <option value="Bolalar Stomatologi">{t("Bolalar Stomatologi")}</option>
+                      <option value="Estetik Salomatlik Bo'yicha Ekspert">{t("Estetik Salomatlik Eksperti")}</option>
+                      <option value="Ortodont">{t("Ortodont")}</option>
+                      <option value="Terapevt-Stomatolog">{t("Terapevt-Stomatolog")}</option>
                     </select>
                   </div>
                 </div>
@@ -1600,7 +1600,7 @@ export default function DirectorDashboard({
                     from the name and stays editable, since two doctors sharing one
                     would lock the second out of the panel entirely. */}
                 <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">Tizimga kirish logini</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">{t("Tizimga kirish logini")}</label>
                   <input
                     type="text"
                     value={newDocLogin}
@@ -1609,7 +1609,7 @@ export default function DirectorDashboard({
                     className="w-full bg-white border border-slate-200 text-xs font-bold text-slate-800 rounded-xl px-4 py-2.5 focus:border-cyan-500 focus:outline-none"
                   />
                   <p className="text-[10px] font-medium text-slate-400 mt-1">
-                    Bo'sh qoldirsangiz — ismdan avtomatik yaratiladi. Parol saqlangandan keyin bir marta ko'rsatiladi.
+                    {t("Bo'sh qoldirsangiz — ismdan avtomatik yaratiladi. Parol saqlangandan keyin bir marta ko'rsatiladi.")}
                   </p>
                 </div>
 
@@ -1619,7 +1619,7 @@ export default function DirectorDashboard({
                     onClick={() => { setShowAddDoctorForm(false); setNewDocLogin(''); }}
                     className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
                   >
-                    Bekor qilish
+                    {t("Bekor qilish")}
                   </button>
                   <button
                     type="submit"
@@ -1640,10 +1640,10 @@ export default function DirectorDashboard({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h4 className="text-xs font-black text-emerald-800 uppercase tracking-wider">
-                    🔑 {newDocCreds.name} — kirish ma'lumotlari
+                    🔑 {newDocCreds.name} {t("— kirish ma'lumotlari")}
                   </h4>
                   <p className="text-[11px] font-bold text-emerald-700/70 mt-1">
-                    Parol shu yerdan boshqa hech qayerda ko'rsatilmaydi — nusxa olib, shifokorga bering.
+                    {t("Parol shu yerdan boshqa hech qayerda ko'rsatilmaydi — nusxa olib, shifokorga bering.")}
                   </p>
                 </div>
                 <button
@@ -1656,11 +1656,11 @@ export default function DirectorDashboard({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3">
                 <div className="bg-white rounded-xl border border-emerald-200 px-3 py-2">
-                  <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Login</p>
+                  <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">{t("Login")}</p>
                   <p className="text-sm font-black text-slate-800 font-mono break-all">{newDocCreds.login}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-emerald-200 px-3 py-2">
-                  <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Parol</p>
+                  <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">{t("Parol")}</p>
                   <p className="text-sm font-black text-slate-800 font-mono break-all">{newDocCreds.pass}</p>
                 </div>
               </div>
@@ -1669,7 +1669,7 @@ export default function DirectorDashboard({
                 onClick={() => navigator.clipboard?.writeText(`Login: ${newDocCreds.login}\nParol: ${newDocCreds.pass}`)}
                 className="mt-3 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-black transition-colors"
               >
-                Nusxa olish
+                {t("Nusxa olish")}
               </button>
             </div>
           )}
@@ -1680,16 +1680,16 @@ export default function DirectorDashboard({
           {resetCredsFor && (
             <div className="bg-white border-2 border-amber-200 rounded-3xl p-5">
               <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider mb-1">
-                🔄 {resetCredsFor.name} — yangi login/parol
+                🔄 {resetCredsFor.name} {t("— yangi login/parol")}
               </h4>
               <p className="text-[11px] font-medium text-slate-500 mb-3">
-                Eski parolni ko'rib bo'lmaydi (u shifrlangan holda saqlanadi). Yangi parol yaratiladi va bir marta ko'rsatiladi.
+                {t("Eski parolni ko'rib bo'lmaydi (u shifrlangan holda saqlanadi). Yangi parol yaratiladi va bir marta ko'rsatiladi.")}
               </p>
               <input
                 type="text"
                 value={resetLogin}
                 onChange={(e) => setResetLogin(e.target.value)}
-                placeholder="Login"
+                placeholder={t("Login")}
                 className="w-full bg-white border border-slate-200 text-xs font-bold text-slate-800 rounded-xl px-4 py-2.5 focus:border-amber-500 focus:outline-none"
               />
               <div className="flex justify-end gap-2 mt-3">
@@ -1698,7 +1698,7 @@ export default function DirectorDashboard({
                   onClick={() => setResetCredsFor(null)}
                   className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
                 >
-                  Bekor qilish
+                  {t("Bekor qilish")}
                 </button>
                 <button
                   type="button"
@@ -1706,7 +1706,7 @@ export default function DirectorDashboard({
                   disabled={savingCreds || !resetLogin.trim()}
                   className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white rounded-xl text-xs font-black transition-all"
                 >
-                  {savingCreds ? '...' : 'Yangi parol yaratish'}
+                  {savingCreds ? '...' : t("Yangi parol yaratish")}
                 </button>
               </div>
             </div>
@@ -1727,7 +1727,7 @@ export default function DirectorDashboard({
                         {doc.name}
                         {link?.relationshipType === 'independent' && (
                           <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-100">
-                            🏠 Mustaqil
+                            {t("🏠 Mustaqil")}
                           </span>
                         )}
                       </h3>
@@ -1739,7 +1739,7 @@ export default function DirectorDashboard({
                         ) : (
                           <span className="text-slate-300 font-normal">—</span>
                         )}
-                        <span className="text-slate-400 text-[10px] font-normal font-mono">({doc.ratingCount || 0} sharhlar)</span>
+                        <span className="text-slate-400 text-[10px] font-normal font-mono">({doc.ratingCount || 0} {t("sharhlar)")}</span>
                       </div>
                     </div>
                   </div>
@@ -1747,23 +1747,23 @@ export default function DirectorDashboard({
                   {isRental ? (
                     <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-center mb-4">
                       <span className="text-xs font-bold text-slate-400">
-                        🔒 Ijara shartnomasi · {link?.rentPaymentStatus === 'paid' ? "to'langan" : "to'lanmagan"}
+                        {t("🔒 Ijara shartnomasi ·")} {link?.rentPaymentStatus === 'paid' ? t("to'langan") : t("to'lanmagan")}
                       </span>
                     </div>
                   ) : (
                     /* Numeric Grid (Screenshot 9 detail) */
                     <div className="grid grid-cols-3 gap-2.5 text-center mb-4">
                       <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                        <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider">Bugun</span>
-                        <strong className="text-xs font-bold text-slate-700 font-mono">{todayStats.completedCount} kishi</strong>
+                        <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider">{t("Bugun")}</span>
+                        <strong className="text-xs font-bold text-slate-700 font-mono">{todayStats.completedCount} {t("kishi")}</strong>
                       </div>
                       <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                        <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider">Haftalik</span>
-                        <strong className="text-xs font-bold text-slate-700 font-mono">{todayStats.completedThisWeek} kishi</strong>
+                        <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider">{t("Haftalik")}</span>
+                        <strong className="text-xs font-bold text-slate-700 font-mono">{todayStats.completedThisWeek} {t("kishi")}</strong>
                       </div>
                       <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                        <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider">Erkinligi</span>
-                        <strong className="text-xs font-bold text-emerald-600 font-sans">Faol ({doc.status === 'idle' ? 'bo\'sh' : doc.status === 'busy' ? 'band' : 'tushlikda'})</strong>
+                        <span className="text-[9px] text-slate-400 font-extrabold block uppercase tracking-wider">{t("Erkinligi")}</span>
+                        <strong className="text-xs font-bold text-emerald-600 font-sans">{t("Faol (")}{doc.status === 'idle' ? t("bo'sh") : doc.status === 'busy' ? t("band") : 'tushlikda'})</strong>
                       </div>
                     </div>
                   )}
@@ -1772,7 +1772,7 @@ export default function DirectorDashboard({
                     {/* Used to hardcode "🟢 Qabulga tayyor" regardless of doc.status —
                         a doctor who was busy or at lunch still showed as ready. */}
                     <span className="text-[10px] text-slate-400 font-bold">
-                      Status:{doc.status === 'idle' ? '🟢 Qabulga tayyor' : doc.status === 'busy' ? '🔴 Band' : '🟡 Tushlikda'}
+                      {t("Status:")}{doc.status === 'idle' ? t("🟢 Qabulga tayyor") : doc.status === 'busy' ? t("🔴 Band") : t("🟡 Tushlikda")}
                     </span>
                     <div className="flex items-center gap-3">
                       {/* A lost password cannot be looked up — it is stored
@@ -1786,14 +1786,14 @@ export default function DirectorDashboard({
                           }}
                           className="text-slate-400 hover:text-amber-600 text-xs font-extrabold hover:underline cursor-pointer"
                         >
-                          🔑 Login/parol
+                          {t("🔑 Login/parol")}
                         </button>
                       )}
                       <button
                         onClick={() => setActiveTab && setActiveTab('shifokor')}
                         className="text-blue-500 hover:text-blue-600 text-xs font-extrabold flex items-center gap-0.5 hover:underline cursor-pointer"
                       >
-                        Kabinetga o'tish <ChevronRight className="w-4 h-4" />
+                        {t("Kabinetga o'tish")} <ChevronRight className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -1813,7 +1813,7 @@ export default function DirectorDashboard({
             <div className="flex items-center gap-2">
               <span className="p-2 bg-[#111a33] border border-[#1e2f50] text-emerald-400 rounded-xl">🔧</span>
               <h3 className="text-sm font-bold text-slate-100 uppercase tracking-widest">
-                ⚙ Tibbiy Xizmatlar Katalogi va Narxlar Tahriri
+                {t("⚙ Tibbiy Xizmatlar Katalogi va Narxlar Tahriri")}
               </h3>
             </div>
             
@@ -1821,7 +1821,7 @@ export default function DirectorDashboard({
               onClick={() => setShowAddServiceForm(!showAddServiceForm)}
               className="px-4.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/20"
             >
-              ➕ {showAddServiceForm ? "Yopish" : "Yangi Xizmat Qo'shish"}
+              ➕ {showAddServiceForm ? t("Yopish") : t("Yangi Xizmat Qo'shish")}
             </button>
           </div>
 
@@ -1928,7 +1928,7 @@ export default function DirectorDashboard({
                               {t("Amaldagi narx:")}
                             </span>
                             <span className="text-xs font-black text-emerald-400 font-mono">
-                              {activePrice?.toLocaleString('uz-UZ')} <span className="text-[8px] uppercase">UZS</span>
+                              {activePrice?.toLocaleString('uz-UZ')} <span className="text-[8px] uppercase">{t("UZS")}</span>
                             </span>
                           </div>
                           <div className="flex items-center justify-end mt-1.5">
@@ -1944,7 +1944,7 @@ export default function DirectorDashboard({
                               {t("Tavsiya etilgan:")}
                             </span>
                             <span className="text-[10px] font-bold text-slate-400 font-mono">
-                              {item.price.toLocaleString('uz-UZ')} <span className="text-[8px] uppercase">UZS</span>
+                              {item.price.toLocaleString('uz-UZ')} <span className="text-[8px] uppercase">{t("UZS")}</span>
                             </span>
                           </div>
 
@@ -1960,7 +1960,7 @@ export default function DirectorDashboard({
                                 className="w-full bg-[#111a33] border border-[#263b65] focus:border-emerald-500 text-xs font-black text-emerald-400 rounded-xl pl-2 pr-8 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-center font-mono"
                                 placeholder={t("Narx")}
                               />
-                              <span className="absolute right-2.5 top-2.5 text-[7px] text-slate-500 font-bold uppercase">UZS</span>
+                              <span className="absolute right-2.5 top-2.5 text-[7px] text-slate-500 font-bold uppercase">{t("UZS")}</span>
                             </div>
 
                             <button
@@ -2030,7 +2030,7 @@ export default function DirectorDashboard({
                   <input
                     type="number"
                     required
-                    placeholder="Masalan: 350000"
+                    placeholder={t("Masalan: 350000")}
                     value={newServicePrice}
                     onChange={(e) => setNewServicePrice(e.target.value === '' ? '' : parseInt(e.target.value))}
                     className="w-full bg-[#111a33] border border-[#263b65] focus:border-emerald-500 text-xs font-black text-emerald-400 rounded-xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono placeholder-emerald-500/30 transition-all"
@@ -2177,7 +2177,7 @@ export default function DirectorDashboard({
                                 </h5>
                                 <div className="flex items-center gap-3">
                                   <span className="text-lg font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20 shadow-inner inline-block">
-                                    {srv.price.toLocaleString('uz-UZ')} <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-500/70">UZS</span>
+                                    {srv.price.toLocaleString('uz-UZ')} <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-500/70">{t("UZS")}</span>
                                   </span>
                                   <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider font-mono">
                                     ID: {srv.id}
@@ -2246,7 +2246,7 @@ export default function DirectorDashboard({
                   ? 'bg-amber-50 text-amber-600 border border-amber-100 animate-pulse' 
                   : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
               }`}>
-                Status: {isSuspended ? t("To'xtatilgan") : isTrial ? t("Sinov muddati") : t("Faol")}
+                {t("Status:")} {isSuspended ? t("To'xtatilgan") : isTrial ? t("Sinov muddati") : t("Faol")}
               </span>
             </div>
 
@@ -2349,7 +2349,7 @@ export default function DirectorDashboard({
                       <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-left space-y-1">
                         <div className="text-[10px] text-slate-400 flex justify-between">
                           <span>{t("Summa:")}</span>
-                          <span className="font-bold font-mono text-slate-800">{pendingApprovalInvoice.amount.toLocaleString()} UZS</span>
+                          <span className="font-bold font-mono text-slate-800">{pendingApprovalInvoice.amount.toLocaleString()} {t("UZS")}</span>
                         </div>
                         <div className="text-[10px] text-slate-400 flex justify-between">
                           <span>{t("Yuborilgan sana:")}</span>
@@ -2369,7 +2369,7 @@ export default function DirectorDashboard({
                     <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100 flex items-center gap-3">
                       <span className="text-lg">💡</span>
                       <p className="text-[11px] text-blue-800 leading-tight">
-                        <strong>Trial:</strong> {t("Har qanday ro'yxatdan o'tgan yangi klinika uchun 1 haftalik mutlaqo bepul sinov litsenziyasi avtomatik tarzda taqdim etilgan!")}
+                        <strong>{t("Trial:")}</strong> {t("Har qanday ro'yxatdan o'tgan yangi klinika uchun 1 haftalik mutlaqo bepul sinov litsenziyasi avtomatik tarzda taqdim etilgan!")}
                       </p>
                     </div>
 
@@ -2403,7 +2403,7 @@ export default function DirectorDashboard({
                       <th className="py-2.5">{t("Muddati")}</th>
                       <th className="py-2.5 text-right">{t("Summa (UZS)")}</th>
                       <th className="py-2.5">{t("To'langan sana")}</th>
-                      <th className="py-2.5 text-right">Status</th>
+                      <th className="py-2.5 text-right">{t("Status")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -2424,7 +2424,7 @@ export default function DirectorDashboard({
                           <td className="py-3 font-mono font-bold text-slate-800 text-[11px]">{pay.id}</td>
                           <td className="py-3 text-slate-600 font-medium font-mono">{pay.dueDate}</td>
                           <td className="py-3 text-right font-bold text-slate-800 font-mono">
-                            {pay.amount.toLocaleString()} UZS
+                            {pay.amount.toLocaleString()} {t("UZS")}
                           </td>
                           <td className="py-3 font-mono text-slate-500">
                             {pay.paymentDate || "—"}
@@ -2454,7 +2454,7 @@ export default function DirectorDashboard({
       {/* ----------------- FOOTER (SCREENSHOT 5) ----------------- */}
       <footer className="pt-8 border-t border-slate-200 mt-10">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 font-sans text-xs text-slate-400 font-semibold select-none pb-4">
-          <p>© 2025-2026 DStoma Clinic Boss Panel. {t("Barcha huquqlar himoyalangan.")}</p>
+          <p>{t("© 2025-2026 DStoma Clinic Boss Panel.")} {t("Barcha huquqlar himoyalangan.")}</p>
           <div className="flex items-center gap-1.5 text-slate-500">
             {t("Klinika hisoboti avtomatik tarzda shakllanadi.")}
           </div>
@@ -2470,9 +2470,9 @@ export default function DirectorDashboard({
                 <span className="text-3xl">🤝</span>
               </div>
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
-                {linkEditDoctor.name} — Klinika bilan bog'lanish
+                {linkEditDoctor.name} {t("— Klinika bilan bog'lanish")}
               </h3>
-              <p className="text-[11px] text-slate-500 mt-1">Ushbu shifokorning klinika bilan biznes kelishuvi turini belgilang</p>
+              <p className="text-[11px] text-slate-500 mt-1">{t("Ushbu shifokorning klinika bilan biznes kelishuvi turini belgilang")}</p>
             </div>
 
             <div className="flex gap-2">
@@ -2480,25 +2480,25 @@ export default function DirectorDashboard({
                 onClick={() => setLinkEditType('revenue_share')}
                 className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-colors ${linkEditType === 'revenue_share' ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-slate-50 text-slate-500 border-slate-200'}`}
               >
-                Ulush (foiz)
+                {t("Ulush (foiz)")}
               </button>
               <button
                 onClick={() => setLinkEditType('rental')}
                 className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-colors ${linkEditType === 'rental' ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-slate-50 text-slate-500 border-slate-200'}`}
               >
-                Ijara
+                {t("Ijara")}
               </button>
               <button
                 onClick={() => setLinkEditType('independent')}
                 className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-colors ${linkEditType === 'independent' ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-slate-50 text-slate-500 border-slate-200'}`}
               >
-                Mustaqil
+                {t("Mustaqil")}
               </button>
             </div>
 
             {linkEditType === 'revenue_share' ? (
               <div>
-                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">Shifokorning ulushi (%)</label>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t("Shifokorning ulushi (%)")}</label>
                 <input
                   type="number"
                   min={0}
@@ -2508,12 +2508,12 @@ export default function DirectorDashboard({
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-indigo-500"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Klinikaning ulushi: {Math.max(0, 100 - (Number(linkEditPercent) || 0))}%
+                  {t("Klinikaning ulushi:")} {Math.max(0, 100 - (Number(linkEditPercent) || 0))}%
                 </p>
               </div>
             ) : linkEditType === 'rental' ? (
               <div>
-                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">Oylik ijara to'lovi (so'm)</label>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t("Oylik ijara to'lovi (so'm)")}</label>
                 <input
                   type="number"
                   min={0}
@@ -2522,13 +2522,13 @@ export default function DirectorDashboard({
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-indigo-500"
                 />
                 <p className="text-[10px] text-slate-400 mt-2">
-                  Ijara modelida bu shifokorning daromadi va bemorlar soni Boshliq panelida ko'rsatilmaydi — to'liq maxfiy qoladi.
+                  {t("Ijara modelida bu shifokorning daromadi va bemorlar soni Boshliq panelida ko'rsatilmaydi — to'liq maxfiy qoladi.")}
                 </p>
               </div>
             ) : (
               <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3.5">
                 <p className="text-[11px] text-emerald-700 font-semibold leading-snug">
-                  🏠 Bu klinika ushbu shifokorning shaxsiy klinikasi — butun daromad unga tegishli, ulush yoki ijara yo'q.
+                  {t("🏠 Bu klinika ushbu shifokorning shaxsiy klinikasi — butun daromad unga tegishli, ulush yoki ijara yo'q.")}
                 </p>
               </div>
             )}
@@ -2538,7 +2538,7 @@ export default function DirectorDashboard({
                 onClick={() => setLinkEditDoctor(null)}
                 className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer"
               >
-                Bekor qilish
+                {t("Bekor qilish")}
               </button>
               <button
                 onClick={() => {
@@ -2560,7 +2560,7 @@ export default function DirectorDashboard({
                 }}
                 className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-md"
               >
-                Saqlash
+                {t("Saqlash")}
               </button>
             </div>
           </div>

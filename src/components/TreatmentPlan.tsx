@@ -622,7 +622,7 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
               }) : (
                 <tr>
                   <td colSpan={9} className="px-6 py-12 text-center text-slate-500">
-                    Muolaja rejasi hozircha bo'sh.
+                    {t("Muolaja rejasi hozircha bo'sh.")}
                   </td>
                 </tr>
               )}
@@ -826,7 +826,7 @@ export default function TreatmentPlan({ patientId, language, clinicId, doctorId,
                   disabled={!newItem.treatment}
                   className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors shadow-lg shadow-emerald-500/20"
                 >
-                  Saqlash
+                  {t("Saqlash")}
                 </button>
               </div>
             </div>
