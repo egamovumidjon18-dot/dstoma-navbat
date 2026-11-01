@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../services/firebase';
+import { collection } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType, onSnapshot } from '../services/firebase';
 import { getApiUrl } from '../services/api';
 import type { TreatmentCharge } from '../types';
 import { clinicBillingSummary, discountValue, type ClinicPatientBalance } from '../utils/treatmentBilling';

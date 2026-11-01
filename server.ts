@@ -408,22 +408,30 @@ if (!g._serverServices) {
 }
 
 // FIREBASE INIT
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, getDoc, runTransaction } from 'firebase/firestore';
+import { initFirebaseAdmin, createFirebaseToken, getFirestore, collection, getDocs, doc, setDoc, deleteDoc, getDoc, runTransaction } from './src/server/firebaseAdmin';
 import firebaseConfig from './firebase-applet-config.json';
 
 let fDb: any = null;
 try {
   if (firebaseConfig && firebaseConfig.projectId) {
-    const firebaseApp = initializeApp(firebaseConfig as any);
-    const dbId = (firebaseConfig as any).firestoreDatabaseId || "ai-studio-0d6fd32c-9664-44c9-b09f-9e98080e44ef";
-    fDb = getFirestore(firebaseApp, dbId);
-    console.log("🔥 Connected to Firebase Firestore", dbId);
+    const firebaseApp = initFirebaseAdmin(firebaseConfig.projectId);
+    if (firebaseApp) {
+      const dbId = (firebaseConfig as any).firestoreDatabaseId || "ai-studio-0d6fd32c-9664-44c9-b09f-9e98080e44ef";
+      fDb = getFirestore(firebaseApp, dbId);
+      console.log("🔥 Connected to Firebase Firestore", dbId);
+    } else if (process.env.NODE_ENV === "production") {
+      // Without a service account the server would silently fall back to the
+      // in-memory store below and lose every write on the next cold start.
+      throw new Error("FIREBASE_SERVICE_ACCOUNT is not set");
+    } else {
+      console.log("FIREBASE_SERVICE_ACCOUNT not set — using the in-memory store");
+    }
   } else {
     console.log("Firebase config not found or missing projectId");
   }
 } catch (error) {
   console.log("Firebase Init Error:", error);
+  if (process.env.NODE_ENV === "production") throw error;
 }
 
 // ASYNC DB HELPERS
@@ -1693,6 +1701,43 @@ app.post("/api/admin-impersonate", requireSuperAdmin, async (req, res) => {
     return res.json({ ok: true, doctor: safeDoctor, token });
   }
   return res.status(400).json({ ok: false, error: "Noto'g'ri rol" });
+});
+
+// Exchanges an app session (any role) for a Firebase custom token. The panels
+// that read and write Firestore directly (dental chart, X-rays, treatment plans,
+// materials, ...) sign in with it, and firestore.rules scopes them by these claims:
+// staff to their clinic(s) and their own patients, a patient to their own record.
+// Called after every login and on app start, so a doctor's clinic links are
+// re-read whenever the panel opens.
+app.get("/api/firebase-token", rateLimiter(30, 60 * 1000), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const auth = await getAuthContext(req);
+  let uid: string;
+  let claims: Record<string, unknown>;
+  if (auth.isSuperAdmin) {
+    uid = "superadmin";
+    claims = { sa: true };
+  } else if (auth.staff) {
+    const clinicIds = new Set<string>([auth.staff.clinicId]);
+    if (auth.staff.role === 'doctor' && auth.staff.doctorId) {
+      for (const l of (await getDoctorClinicLinks()) as any[]) {
+        if (l.doctorId === auth.staff.doctorId && l.status === 'active') clinicIds.add(l.clinicId);
+      }
+    }
+    uid = auth.staff.role === 'doctor' ? `doctor_${auth.staff.doctorId}` : `director_${auth.staff.clinicId}`;
+    claims = { role: auth.staff.role, clinicIds: [...clinicIds], ...(auth.staff.doctorId ? { doctorId: auth.staff.doctorId } : {}) };
+  } else if (auth.patient) {
+    uid = `patient_${auth.patient.patientId}`;
+    claims = { role: 'patient', patientId: auth.patient.patientId };
+  } else {
+    return res.status(401).json({ ok: false, error: "Sessiya topilmadi" });
+  }
+  try {
+    res.json({ ok: true, token: await createFirebaseToken(uid, claims) });
+  } catch (err) {
+    console.error("[Firebase] Custom token creation failed:", err);
+    res.status(503).json({ ok: false, error: "Firebase token yaratilmadi" });
+  }
 });
 
 // POST to update the active Telegram Bot Token dynamically across all doctor & patient devices

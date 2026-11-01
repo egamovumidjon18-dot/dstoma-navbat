@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { collection, onSnapshot, doc, setDoc, updateDoc, getDocs, query, where } from "firebase/firestore";
-import { db } from "../services/firebase";
+import { collection, doc, setDoc, updateDoc, getDocs, query, where } from "firebase/firestore";
+import { db, onSnapshot } from "../services/firebase";
 import PatientProfile from "./PatientProfile";
 import DentalChart from "./DentalChart";
 import TreatmentPlan, { TreatmentItem } from "./TreatmentPlan";

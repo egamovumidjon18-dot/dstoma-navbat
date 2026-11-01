@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clinic, Doctor, Service, QueueItem, Patient } from '../types';
 import { getApiUrl } from '../services/api';
+import { syncFirebaseAuth } from '../services/firebase';
 import { TRANSLATIONS, Language, translateMedicalText } from '../translations';
 import PatientPanel from './PatientPanel';
 import ClinicMap from './ClinicMap';
@@ -239,6 +240,7 @@ export default function ClientDashboard({
   const [patientToken, setPatientToken] = useState<string | null>(() =>
     typeof window === 'undefined' ? null : localStorage.getItem(PATIENT_TOKEN_KEY)
   );
+  useEffect(() => { syncFirebaseAuth(patientToken); }, [patientToken]);
   const patientAuthHeaders = (): Record<string, string> =>
     patientToken ? { Authorization: `Bearer ${patientToken}` } : {};
 

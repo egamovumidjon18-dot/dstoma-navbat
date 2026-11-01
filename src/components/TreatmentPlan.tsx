@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { db, OperationType, handleFirestoreError } from '../services/firebase';
+import { collection, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { db, OperationType, handleFirestoreError, onSnapshot } from '../services/firebase';
 import {
   FileText,
   Plus,

@@ -1,9 +1,62 @@
 rules_version = '2';
+
+// The server reaches Firestore through the Admin SDK, which bypasses these rules.
+// They only govern the browser, which signs in with a custom token from
+// GET /api/firebase-token carrying one of:
+//   { sa: true }                                        superadmin
+//   { role: 'director' | 'doctor', clinicIds, doctorId? } clinic staff
+//   { role: 'patient', patientId }                       patient
+// Everything not matched below (patients, sessions, clinics' own documents,
+// payments, admin, ...) is server-only.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isSuperAdmin() {
+      return signedIn() && request.auth.token.get('sa', false) == true;
+    }
+    function isStaff() {
+      return signedIn() && request.auth.token.get('role', '') in ['director', 'doctor'];
+    }
+    function staffOfClinic(clinicId) {
+      return isStaff() && clinicId in request.auth.token.get('clinicIds', []);
+    }
+    function patientData(pid) {
+      return get(/databases/$(database)/documents/patients/$(pid)).data;
+    }
+    // Same visibility as GET /api/patients: the patient is filed under one of the
+    // staff member's clinics, or the doctor is the patient's treating doctor.
+    function staffOfPatient(pid) {
+      return isStaff()
+        && exists(/databases/$(database)/documents/patients/$(pid))
+        && (patientData(pid).get('clinicId', '') in request.auth.token.get('clinicIds', [])
+          || (request.auth.token.role == 'doctor'
+            && patientData(pid).get('primaryDoctorId', '') == request.auth.token.get('doctorId', '')));
+    }
+    // A patient sees their own records and those of family members they manage.
+    function patientSelf(pid) {
+      return signedIn()
+        && request.auth.token.get('role', '') == 'patient'
+        && (request.auth.token.patientId == pid
+          || (exists(/databases/$(database)/documents/patients/$(pid))
+            && patientData(pid).get('managedBy', '') == request.auth.token.patientId));
+    }
+
+    // Dental chart, X-rays, photos, treatment plans, prescriptions.
+    match /patients/{pid}/{sub}/{rest=**} {
+      allow read: if isSuperAdmin() || staffOfPatient(pid) || patientSelf(pid);
+      allow write: if isSuperAdmin() || staffOfPatient(pid);
+    }
+
+    // Materials, material settings, stage templates, service recipes.
+    match /clinics/{clinicId}/{sub}/{rest=**} {
+      allow read, write: if isSuperAdmin() || staffOfClinic(clinicId);
+    }
+
+    // Cross-patient prescription listing (Prescriptions with no patientId).
+    match /{path=**}/prescriptions/{id} {
+      allow read: if isSuperAdmin();
     }
   }
 }
-

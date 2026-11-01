@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Clinic, Doctor, Service, QueueItem, SaaSPayment, DoctorClinicLink } from '../types';
 import { TRANSLATIONS, Language } from '../translations';
+import { syncFirebaseAuth } from '../services/firebase';
 
 // Director/doctor (and patient) sessions persist in localStorage so a device stays
 // logged in across browser restarts — "remember this device" was an explicit ask.
@@ -170,6 +171,9 @@ export function useAppState() {
   const staffTokenRef = useRef<string | null>(staffToken);
   useEffect(() => { superadminTokenRef.current = superadminToken; }, [superadminToken]);
   useEffect(() => { staffTokenRef.current = staffToken; }, [staffToken]);
+  // Keeps the Firebase sign-in (what firestore.rules check) on the same account as
+  // the app session; with neither token it falls back to a stored patient session.
+  useEffect(() => { syncFirebaseAuth(superadminToken || staffToken); }, [superadminToken, staffToken]);
 
   // Stateful SaaS Payments
   const [saasPayments, setSaasPayments] = useState<SaaSPayment[]>([]);
