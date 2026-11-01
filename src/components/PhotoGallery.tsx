@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, doc, getDoc, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
-import { db, OperationType, handleFirestoreError } from '../services/firebase';
+import { collection, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { db, OperationType, handleFirestoreError, onSnapshot } from '../services/firebase';
 import { useHistoryLayer } from '../hooks/useHistoryLayer';
 import { compressImage } from '../utils/imageCompressor';
 import {

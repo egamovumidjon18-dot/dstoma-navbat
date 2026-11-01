@@ -31,6 +31,7 @@ Ushbu platformalar Node.js serveringizni 24/7 uzluksiz ishlatadi va Telegram doi
 5. Atrof-muhit o'zgaruvchilarini (Environment Variables) sozlang:
    * `NODE_ENV` = `production`
    * `GEMINI_API_KEY` = *Sizning Google Gemini API kalitingiz*
+   * `FIREBASE_SERVICE_ACCOUNT` = *Firebase service account JSON fayli, bitta qatorda (pastdagi "Firebase xavfsizligi" bo'limiga qarang)*
    * `VITE_TELEGRAM_BOT_TOKEN` = *Sizning Telegram Bot tokeningiz (BotFather-dan olingan)*
    * `APP_URL` = *Tizim joylashtiriladigan sayt manzili (masalan: `https://dstoma.onrender.com`)*
 6. **Deploy** tugmasini bosing. Bo'ldi! Tizimingiz ham veb-sayt, ham bot uchun to'liq ishga tushadi.
@@ -94,3 +95,16 @@ APP_URL=https://sizning-saytingiz.com
 ---
 
 *Omad yor bo'lsin! Savollaringiz yoki qo'shimcha sozlomalaringiz bo'lsa, istalgan vaqtda yozib yuboring.*
+
+
+---
+
+## 🔒 Firebase xavfsizligi (majburiy)
+
+Server Firestore'ga **Admin SDK** orqali ulanadi, brauzer esa serverdan olingan Firebase token bilan kiradi. `firestore.rules` faqat shu tokenga ega foydalanuvchilarga, faqat o'z klinikasi va bemorlari ma'lumotlariga ruxsat beradi.
+
+1. **Service account kaliti:** Firebase console → Project settings → Service accounts → *Generate new private key*. Yuklangan JSON faylni bitta qatorga keltirib, `FIREBASE_SERVICE_ACCOUNT` muhit o'zgaruvchisiga qo'ying (Vercel/Render). Bu faylni hech qachon GitHub'ga yuklamang.
+2. **Authentication'ni yoqish:** Firebase console → Authentication → *Get started* (custom token bilan kirish uchun kerak, alohida provayder yoqish shart emas).
+3. **Qoidalarni joylash:** `npx firebase-tools deploy --only firestore:rules` (yoki `firestore.rules` mazmunini Firebase console → Firestore → Rules oynasiga qo'yib, *Publish* bosing).
+
+Tartib muhim: avval 1–2-qadamlar va yangi kodni deploy qiling, keyin qoidalarni joylang. Aks holda server bazaga ulana olmaydi.

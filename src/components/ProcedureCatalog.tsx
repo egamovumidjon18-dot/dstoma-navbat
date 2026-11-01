@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../services/firebase';
+import { collection } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType, onSnapshot } from '../services/firebase';
 import { ClipboardList, Search, Plus, Trash2, Package, Check, X, Edit2, AlertTriangle } from 'lucide-react';
 import { Language, translateMedicalText } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';

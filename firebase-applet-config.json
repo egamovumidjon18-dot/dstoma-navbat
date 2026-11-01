@@ -1,10 +1,10 @@
 {
-  "projectId": "sacred-ethos-2224x",
-  "appId": "1:706228110778:web:810cb7036a75af114f8983",
-  "apiKey": "AIzaSyA7P3qtPPQIn1mZ_xGrazTf1batJUGQVYE",
-  "authDomain": "sacred-ethos-2224x.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-0d6fd32c-9664-44c9-b09f-9e98080e44ef",
-  "storageBucket": "sacred-ethos-2224x.firebasestorage.app",
-  "messagingSenderId": "706228110778",
+  "projectId": "dstoma-ca27c",
+  "appId": "1:20814241206:web:40ec19cab7e8712dd03517",
+  "apiKey": "AIzaSyBttUI1dobVdv0NKB_a1XNFYpAzkKR3DjA",
+  "authDomain": "dstoma-ca27c.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "dstoma-ca27c.firebasestorage.app",
+  "messagingSenderId": "20814241206",
   "measurementId": ""
 }

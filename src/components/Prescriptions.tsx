@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, doc, onSnapshot, setDoc, deleteDoc, query, collectionGroup } from 'firebase/firestore';
-import { db, OperationType, handleFirestoreError } from '../services/firebase';
+import { collection, doc, setDoc, deleteDoc, query, collectionGroup } from 'firebase/firestore';
+import { db, OperationType, handleFirestoreError, onSnapshot } from '../services/firebase';
 import { exportPrescriptionPdf, printPrescriptionPdf, exportPrescriptionsListPdf } from '../utils/pdfExport';
 import {
   Pill,

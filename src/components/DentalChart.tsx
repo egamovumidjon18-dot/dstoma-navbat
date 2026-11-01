@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, doc, onSnapshot, setDoc, writeBatch } from 'firebase/firestore';
-import { db, OperationType, handleFirestoreError } from '../services/firebase';
+import { collection, doc, setDoc, writeBatch } from 'firebase/firestore';
+import { db, OperationType, handleFirestoreError, onSnapshot } from '../services/firebase';
 import { STANDARD_SERVICES_CATALOG } from './DirectorDashboard';
 import { Language, translateMedicalText } from '../translations';
 import { createTranslator, Dict } from '../utils/translate';
