@@ -104,7 +104,7 @@ export default function InstallAppBanner({ dark = false }: Props) {
           </p>
           <p className={`text-xs flex items-center gap-1 flex-wrap ${dark ? 'text-slate-300' : 'text-slate-600'}`}>
             {!isIOS && !deferredPrompt && <Menu className="w-3 h-3 shrink-0" />}
-            {hint}
+            {t(hint)}
           </p>
         </div>
       </div>
