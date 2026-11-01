@@ -174,8 +174,15 @@ export function useAppState() {
   // whatever they were (usually null) at that moment, even after a later login.
   const superadminTokenRef = useRef<string | null>(superadminToken);
   const staffTokenRef = useRef<string | null>(staffToken);
+  // Set by the polling effect below so a sign-in can trigger an immediate full
+  // reload. Without it, patients (fetched only on the 60s slow tick) stayed empty
+  // for up to a minute after a doctor or director logged in.
+  const reloadServerDataRef = useRef<(() => void) | null>(null);
   useEffect(() => { superadminTokenRef.current = superadminToken; }, [superadminToken]);
   useEffect(() => { staffTokenRef.current = staffToken; }, [staffToken]);
+  useEffect(() => {
+    if (staffToken || superadminToken) reloadServerDataRef.current?.();
+  }, [staffToken, superadminToken]);
   // Keeps the Firebase sign-in (what firestore.rules check) on the same account as
   // the app session; with neither token it falls back to a stored patient session.
   useEffect(() => { syncFirebaseAuth(superadminToken || staffToken); }, [superadminToken, staffToken]);
@@ -709,6 +716,7 @@ export function useAppState() {
       if (active) setIsAppLoading(false);
     };
     loadServerData(true);
+    reloadServerDataRef.current = () => { loadServerData(true); };
     // Queues only — the thing that actually changes minute to minute.
     const fastInt = setInterval(() => loadServerData(false), 4000);
     // Everything else, at a rate that matches how often it really changes.
