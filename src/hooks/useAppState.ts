@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Clinic, Doctor, Service, QueueItem, SaaSPayment, DoctorClinicLink } from '../types';
 import { TRANSLATIONS, Language } from '../translations';
 import { syncFirebaseAuth } from '../services/firebase';
+import { useLanguage, setStoredLanguage } from '../utils/language';
+import { createTranslator } from '../utils/translate';
 
 // Director/doctor (and patient) sessions persist in localStorage so a device stays
 // logged in across browser restarts — "remember this device" was an explicit ask.
@@ -85,7 +87,10 @@ export function useAppState() {
   }, [selectedClinic]);
 
   // 3-Language and Auth states
-  const [language, setLanguage] = useState<Language>('uz');
+  // Kept in utils/language.ts, which saves it to localStorage — this used to be
+  // plain state, so every reload snapped the interface back to Uzbek.
+  const language = useLanguage();
+  const setLanguage = setStoredLanguage;
   const [currentUser, setCurrentUser] = useState<{
     type: 'superadmin' | 'director' | 'doctor';
     id?: string;
@@ -498,7 +503,7 @@ export function useAppState() {
       }
     } catch (err: any) {
       setAuthError(err.message);
-      if (typeof window !== 'undefined') window.alert(`Kirishda xatolik: ${err.message}`);
+      if (typeof window !== 'undefined') window.alert(createTranslator(language)(err.message));
     }
   };
 
@@ -717,12 +722,13 @@ export function useAppState() {
 
   // Update URL metadata
   useEffect(() => {
+    const t = createTranslator(language);
     let title = "DStoma Queue - Multi-Tenant Elektron Navbat Tizimi";
     let desc = "Stomatologiya klinikalari uchun ko'p ijarachili (Multi-Tenant) elektron navbat va Google Maps integratsiyali aqlli boshqaruv tizimi. Samarqand, Buxoro, Toshkent.";
 
     if (activeTab === 'bemor') {
       if (selectedClinic) {
-        title = `${selectedClinic.name} - Onlayn Navbat Olish | DStoma Queue`;
+        title = `${selectedClinic.name} - ${t('Onlayn Navbat Olish | DStoma Queue')}`;
         desc = `${selectedClinic.name} filiali uchun elektron stomatologiya navbati olish sahifasi. Manzil: ${selectedClinic.address}. Telefon: ${selectedClinic.phone}. Onlayn navbat band qilish.`;
       } else {
         title = "Bemor Kabineti - Onlayn Elektron Navbat | DStoma Queue";
@@ -736,7 +742,7 @@ export function useAppState() {
       desc = "Klinika tarmog'i rahbarlari uchun global tahlillar, haftalik daromad xaritalari hamda filiallar bo'yicha tahliliy ko'rsatkichlar monitoringi.";
     }
 
-    document.title = title;
+    document.title = t(title);
 
     let metaDesc = document.querySelector('meta[name="description"]');
     if (!metaDesc) {
@@ -762,7 +768,7 @@ export function useAppState() {
     if (didWriteUrlRef.current) window.history.pushState({}, '', url);
     else window.history.replaceState({}, '', url);
     didWriteUrlRef.current = true;
-  }, [activeTab, selectedClinic]);
+  }, [activeTab, selectedClinic, language]);
 
   // Sync queues removed in favor of loadServerData sync
 

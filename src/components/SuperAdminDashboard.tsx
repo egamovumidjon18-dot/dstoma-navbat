@@ -104,8 +104,12 @@ export default function SuperAdminDashboard({
   onAdminImpersonate
 }: SuperAdminDashboardProps) {
 
-  const t = (key: keyof typeof TRANSLATIONS['uz']) => {
-    return TRANSLATIONS[language][key] || TRANSLATIONS['uz'][key] || String(key);
+  // Takes any string: besides the language-file keys, TRANSLATIONS also holds the
+  // shared interface phrases (translations/ui.ts), keyed by their Uzbek text.
+  const t = (key: string): string => {
+    const lang = TRANSLATIONS[language] as Record<string, string>;
+    const uz = TRANSLATIONS['uz'] as Record<string, string>;
+    return lang[key] || uz[key] || key;
   };
 
   // Local text-keyed translation helper for strings not in the global TRANSLATIONS dictionary
@@ -375,7 +379,7 @@ export default function SuperAdminDashboard({
         addLog(`Reklama Telegram orqali yuborildi: ${ad.title} (${data.sent}/${data.total} bemorga)`, 'success');
         triggerToast(`Yuborildi: ${data.sent}/${data.total} bemorga! 📤`);
       } else {
-        triggerToast("Xatolik: " + (data.error || 'Nomalum xato'));
+        triggerToast(t("Xato") + ": " + t(data.error || 'Nomalum xato'));
       }
     } catch (e: any) {
       triggerToast("Xatolik: " + e.message);
@@ -877,7 +881,7 @@ export default function SuperAdminDashboard({
         };
         const created = onAddClinic ? await onAddClinic(newClinic) : false;
         if (!created) {
-          triggerToast("Klinika saqlanmadi. Qayta urinib ko'ring.");
+          triggerToast(t("Klinika saqlanmadi. Qayta urinib ko'ring."));
           return;
         }
         clinicId = subdomain;
@@ -1021,7 +1025,7 @@ export default function SuperAdminDashboard({
       });
       const dryRunData = await dryRunRes.json();
       if (!dryRunRes.ok || !dryRunData.ok) {
-        setBackfillResult(`⚠️ ${dryRunData.error || 'Amal bajarilmadi.'}`);
+        setBackfillResult(`⚠️ ${t(dryRunData.error || 'Amal bajarilmadi.')}`);
         return;
       }
       if (dryRunData.updated === 0) {
@@ -1040,7 +1044,7 @@ export default function SuperAdminDashboard({
         setBackfillResult(`✅ ${data.updated} ta bemor biriktirildi (jami ${data.totalPatients} ta bemor tekshirildi).`);
         addLog(`Bemorlar shifokorlarga biriktirildi: ${data.updated} ta yangilandi`, 'success');
       } else {
-        setBackfillResult(`⚠️ ${data.error || 'Amal bajarilmadi.'}`);
+        setBackfillResult(`⚠️ ${t(data.error || 'Amal bajarilmadi.')}`);
       }
     } catch (err: any) {
       setBackfillResult(`⚠️ Tarmoq xatosi: ${err?.message || 'noma\'lum'}`);
@@ -1062,7 +1066,7 @@ export default function SuperAdminDashboard({
     }
     // Deletes by a fixed, hand-verified exact-id list (server-side), so this
     // can't touch a real patient — but a delete is still a delete.
-    if (!window.confirm("Test navbatlari va bemorlarini o'chirishni tasdiqlaysizmi?")) return;
+    if (!window.confirm(t("Test navbatlari va bemorlarini o'chirishni tasdiqlaysizmi?"))) return;
     setIsCleaningTestData(true);
     setCleanupResult(null);
     try {
@@ -1075,7 +1079,7 @@ export default function SuperAdminDashboard({
         setCleanupResult(`✅ ${data.deletedQueues} ta test navbat va ${data.deletedPatients} ta test bemor o'chirildi.`);
         addLog(`Test ma'lumotlar tozalandi: ${data.deletedQueues} navbat, ${data.deletedPatients} bemor`, 'success');
       } else {
-        setCleanupResult(`⚠️ ${data.error || 'Amal bajarilmadi.'}`);
+        setCleanupResult(`⚠️ ${t(data.error || 'Amal bajarilmadi.')}`);
       }
     } catch (err: any) {
       setCleanupResult(`⚠️ Tarmoq xatosi: ${err?.message || 'noma\'lum'}`);
@@ -1145,7 +1149,7 @@ export default function SuperAdminDashboard({
                 }`}
               >
                 <section.icon className="w-4 h-4 shrink-0" />
-                <span className="truncate">{section.label}</span>
+                <span className="truncate">{t(section.label)}</span>
                 {activeSection === section.id && <ChevronRight className="w-4 h-4 ml-auto shrink-0 opacity-60" />}
               </button>
             ))}
@@ -1180,7 +1184,7 @@ export default function SuperAdminDashboard({
             </span>
             <div className="text-base font-extrabold text-[#0284c7] font-mono mt-2 flex items-center gap-1">
               <span>{currentMRR.toLocaleString('uz-UZ')}</span>
-              <span className="text-[10px] text-slate-500 font-bold font-sans">so'm/oy</span>
+              <span className="text-[10px] text-slate-500 font-bold font-sans">{t("so'm/oy")}</span>
             </div>
           </div>
           <div className="p-3 bg-sky-50 text-sky-600 rounded-xl shadow-xs">
@@ -1194,7 +1198,7 @@ export default function SuperAdminDashboard({
               {t('totalDoctors')}
             </span>
             <div className="text-2xl font-black text-slate-800 font-mono mt-2">
-              {doctors.length} <span className="text-xs font-normal text-slate-400">nafar</span>
+              {doctors.length} <span className="text-xs font-normal text-slate-400">{t("nafar")}</span>
             </div>
           </div>
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl shadow-xs">
@@ -1208,7 +1212,7 @@ export default function SuperAdminDashboard({
               {t('totalPatients')}
             </span>
             <div className="text-2xl font-black text-slate-800 font-mono mt-2">
-              {totalPatients} <span className="text-xs font-normal text-slate-400">chipta</span>
+              {totalPatients} <span className="text-xs font-normal text-slate-400">{t("chipta")}</span>
             </div>
           </div>
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl shadow-xs">
@@ -1242,7 +1246,7 @@ export default function SuperAdminDashboard({
                   required
                   value={newClinicName}
                   onChange={(e) => setNewClinicName(e.target.value)}
-                  placeholder="Masalan: DStoma Toshkent"
+                  placeholder={t("Masalan: DStoma Toshkent")}
                   className="w-full bg-slate-50 text-xs font-semibold text-slate-800 border border-slate-200 rounded-xl px-4 py-2.5 focus:border-cyan-500 focus:outline-none transition-all placeholder:text-slate-400"
                 />
               </div>
@@ -1319,18 +1323,18 @@ export default function SuperAdminDashboard({
                     type="text"
                     value={newClinicAddress}
                     onChange={(e) => setNewClinicAddress(e.target.value)}
-                    placeholder="Masalan: Yunusobod, Toshkent shahri"
+                    placeholder={t("Masalan: Yunusobod, Toshkent shahri")}
                     className="w-full bg-slate-50 text-xs font-semibold text-slate-800 border border-slate-200 rounded-xl px-4 py-2.5 focus:border-cyan-500 focus:outline-none"
                   />
                   <input
                     type="url"
                     value={newClinicMapLink}
                     onChange={(e) => setNewClinicMapLink(e.target.value)}
-                    placeholder="Masalan: https://www.google.com/maps?q=41.311,69.24"
+                    placeholder={t("Masalan: https://www.google.com/maps?q=41.311,69.24")}
                     className="w-full bg-slate-50 text-xs font-semibold text-slate-800 border border-slate-200 rounded-xl px-4 py-2.5 focus:border-cyan-500 focus:outline-none font-mono placeholder:text-slate-400"
                   />
                   <p className="text-[9px] text-slate-400 font-semibold leading-normal">
-                    ℹ️ Istalgan Google Maps, Yandex Maps yoki OpenStreetMap havolasini kiriting. Ushbu havola mijoz xaritasida navigatsiya tugmasi bilan bog'lanib, to'liq integratsiyani amalga oshiradi.
+                    {t("ℹ️ Istalgan Google Maps, Yandex Maps yoki OpenStreetMap havolasini kiriting. Ushbu havola mijoz xaritasida navigatsiya tugmasi bilan bog'lanib, to'liq integratsiyani amalga oshiradi.")}
                   </p>
                 </div>
               </div>
@@ -1338,7 +1342,7 @@ export default function SuperAdminDashboard({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                 <div>
                   <label className="text-[10px] font-black text-slate-600 block mb-1 uppercase tracking-wide">
-                    Latitude (Kenglik) *
+                    {t("Latitude (Kenglik) *")}
                   </label>
                   <input
                     type="number"
@@ -1346,13 +1350,13 @@ export default function SuperAdminDashboard({
                     required
                     value={newClinicLat}
                     onChange={(e) => setNewClinicLat(e.target.value === '' ? '' : Number(e.target.value))}
-                    placeholder="Masalan: 41.311081"
+                    placeholder={t("Masalan: 41.311081")}
                     className="w-full bg-slate-50 text-xs font-semibold text-slate-800 border border-slate-200 rounded-xl px-4 py-2.5 focus:border-cyan-500 focus:outline-none"
                   />
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-slate-600 block mb-1 uppercase tracking-wide">
-                    Longitude (Uzunlik) *
+                    {t("Longitude (Uzunlik) *")}
                   </label>
                   <input
                     type="number"
@@ -1360,7 +1364,7 @@ export default function SuperAdminDashboard({
                     required
                     value={newClinicLng}
                     onChange={(e) => setNewClinicLng(e.target.value === '' ? '' : Number(e.target.value))}
-                    placeholder="Masalan: 69.240562"
+                    placeholder={t("Masalan: 69.240562")}
                     className="w-full bg-slate-50 text-xs font-semibold text-slate-800 border border-slate-200 rounded-xl px-4 py-2.5 focus:border-cyan-500 focus:outline-none"
                   />
                 </div>
@@ -1405,12 +1409,12 @@ export default function SuperAdminDashboard({
                       {t('ownerProvisionNotice')}
                     </p>
                     <div className="font-mono text-[11px] space-y-1.5 text-slate-200 bg-slate-950 p-3 rounded-xl border border-slate-900 select-all">
-                      <p><span className="text-slate-500">Filial:</span> {generatedCreds.clinicName}</p>
-                      <p><span className="text-slate-500">Havola:</span> {window.location.origin}/?clinic={generatedCreds.subdomain}</p>
-                      <p><span className="text-slate-500">Director:</span> {generatedCreds.ownerName}</p>
+                      <p><span className="text-slate-500">{t("Filial:")}</span> {generatedCreds.clinicName}</p>
+                      <p><span className="text-slate-500">{t("Havola:")}</span> {window.location.origin}/?clinic={generatedCreds.subdomain}</p>
+                      <p><span className="text-slate-500">{t("Director:")}</span> {generatedCreds.ownerName}</p>
                       <hr className="border-slate-800/60 my-2" />
-                      <p className="text-cyan-400 font-bold"><span className="text-slate-500">Login:</span> {generatedCreds.login}</p>
-                      <p className="text-emerald-400 font-bold"><span className="text-slate-500">Parol:</span> {generatedCreds.pass}</p>
+                      <p className="text-cyan-400 font-bold"><span className="text-slate-500">{t("Login:")}</span> {generatedCreds.login}</p>
+                      <p className="text-emerald-400 font-bold"><span className="text-slate-500">{t("Parol:")}</span> {generatedCreds.pass}</p>
                     </div>
                   </div>
 
@@ -1420,7 +1424,7 @@ export default function SuperAdminDashboard({
                   >
                     {copied ? (
                       <>
-                        <Check className="w-4 h-4" /> Nusxalandi!
+                        <Check className="w-4 h-4" /> {tL("Nusxalandi!")}
                       </>
                     ) : (
                       <>
@@ -1443,13 +1447,13 @@ export default function SuperAdminDashboard({
           <div className="bg-slate-900 text-slate-300 p-4.5 rounded-3xl border border-slate-800 space-y-3 shadow-md">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <span className="text-[9px] font-black uppercase tracking-widest text-[#06b6d4] font-mono">
-                ⚡ SYSTEM ACCESS LOGS (AUDIT)
+                {t("⚡ SYSTEM ACCESS LOGS (AUDIT)")}
               </span>
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             </div>
             <div className="space-y-2">
               {opsLogs.length === 0 ? (
-                <p className="text-[10px] font-mono text-slate-600 py-2">Ushbu sessiyada hali hech qanday amal bajarilmagan.</p>
+                <p className="text-[10px] font-mono text-slate-600 py-2">{t("Ushbu sessiyada hali hech qanday amal bajarilmagan.")}</p>
               ) : (
                 opsLogs.map(log => (
                   <div key={log.id} className="text-[10px] font-mono flex items-start gap-1.5">
@@ -1476,9 +1480,9 @@ export default function SuperAdminDashboard({
               <span className="text-xl">📊</span>
               <div>
                 <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">
-                  Muvaffaqiyatli SaaS Moliyaviy Prognostika
+                  {t("Muvaffaqiyatli SaaS Moliyaviy Prognostika")}
                 </h3>
-                <p className="text-[10px] text-slate-400 font-bold">Litsenziyalar va oylik tushumlarning aniq tahlili</p>
+                <p className="text-[10px] text-slate-400 font-bold">{t("Litsenziyalar va oylik tushumlarning aniq tahlili")}</p>
               </div>
             </div>
 
@@ -1486,13 +1490,13 @@ export default function SuperAdminDashboard({
               {/* Actual Financial Metrics Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
                 <div>
-                  <span className="text-[9px] text-slate-400 font-black uppercase block tracking-wider">Haqiqiy MRR (Oylik)</span>
+                  <span className="text-[9px] text-slate-400 font-black uppercase block tracking-wider">{t("Haqiqiy MRR (Oylik)")}</span>
                   <strong className="text-sm font-black text-slate-800 font-mono">
                     {currentMRR.toLocaleString('uz-UZ')} UZS
                   </strong>
                 </div>
                 <div>
-                  <span className="text-[9px] text-slate-400 font-black uppercase block tracking-wider">Mo'ljaldagi ARR (Yillik)</span>
+                  <span className="text-[9px] text-slate-400 font-black uppercase block tracking-wider">{t("Mo'ljaldagi ARR (Yillik)")}</span>
                   <strong className="text-sm font-black text-indigo-600 font-mono">
                     {(currentMRR * 12).toLocaleString('uz-UZ')} UZS
                   </strong>
@@ -1502,13 +1506,13 @@ export default function SuperAdminDashboard({
               {/* Trials conversion potential */}
               <div className="text-xs bg-cyan-50/50 border border-cyan-100 p-3 rounded-xl flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <span className="text-[9px] font-black text-cyan-800 uppercase tracking-wider block">Sinov (Trial) bosqichidagi potentsial convert</span>
+                  <span className="text-[9px] font-black text-cyan-800 uppercase tracking-wider block">{t("Sinov (Trial) bosqichidagi potentsial convert")}</span>
                   <p className="text-[11px] font-bold text-slate-700">
-                    {clinics.filter(c => c.subscriptionStatus === 'trial').length} ta klinika faol sinovda
+                    {clinics.filter(c => c.subscriptionStatus === 'trial').length} {t("ta klinika faol sinovda")}
                   </p>
                 </div>
                 <strong className="text-xs font-bold text-cyan-700 font-mono">
-                  +{clinics.filter(c => c.subscriptionStatus === 'trial').reduce((sum, c) => sum + (c.rentalPrice || 1200000), 0).toLocaleString('uz-UZ')} s/oy
+                  +{clinics.filter(c => c.subscriptionStatus === 'trial').reduce((sum, c) => sum + (c.rentalPrice || 1200000), 0).toLocaleString('uz-UZ')} {t("s/oy")}
                 </strong>
               </div>
               <div className="border-t border-slate-100 pt-3 space-y-3">
@@ -1521,7 +1525,7 @@ export default function SuperAdminDashboard({
                     <span className="text-slate-600">
                       {tL('Yangi kutilayotgan filiallar soni:')}
                     </span>
-                    <span className="text-slate-800 font-mono bg-slate-100 px-2 py-0.5 rounded">{simAddedClinics} ta</span>
+                    <span className="text-slate-800 font-mono bg-slate-100 px-2 py-0.5 rounded">{simAddedClinics} {t("ta")}</span>
                   </div>
                   <input
                     type="range"
@@ -1561,23 +1565,23 @@ export default function SuperAdminDashboard({
                 </span>
                 
                 <div className="flex items-center justify-between border-b border-slate-800/60 pb-1.5 text-xs">
-                  <span className="text-slate-300 font-medium">Rejalashtirilayotgan Qo'shimcha MRR:</span>
+                  <span className="text-slate-300 font-medium">{t("Rejalashtirilayotgan Qo'shimcha MRR:")}</span>
                   <span className="font-bold text-emerald-400 font-mono">
-                    +{(simAddedClinics * simPricePerClinic).toLocaleString('uz-UZ')} so'm
+                    +{(simAddedClinics * simPricePerClinic).toLocaleString('uz-UZ')} {t("so'm")}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between pt-1 text-xs">
-                  <span className="text-slate-300 font-medium">Kutilayotgan Jami MRR (Kelajakda):</span>
+                  <span className="text-slate-300 font-medium">{t("Kutilayotgan Jami MRR (Kelajakda):")}</span>
                   <span className="font-extrabold text-white font-mono">
-                    {(currentMRR + (simAddedClinics * simPricePerClinic)).toLocaleString('uz-UZ')} so'm/oy
+                    {(currentMRR + (simAddedClinics * simPricePerClinic)).toLocaleString('uz-UZ')} {t("so'm/oy")}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300 font-medium">Kutilayotgan Jami ARR (Yillik):</span>
+                  <span className="text-slate-300 font-medium">{t("Kutilayotgan Jami ARR (Yillik):")}</span>
                   <span className="font-black text-cyan-400 font-mono">
-                    {((currentMRR + (simAddedClinics * simPricePerClinic)) * 12).toLocaleString('uz-UZ')} so'm/yil
+                    {((currentMRR + (simAddedClinics * simPricePerClinic)) * 12).toLocaleString('uz-UZ')} {t("so'm/yil")}
                   </span>
                 </div>
               </div>
@@ -1591,16 +1595,16 @@ export default function SuperAdminDashboard({
                 <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">💵</span>
                 <div>
                   <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                     Oylik Obunalar va Haqiqiy Daromad
+                     {t("Oylik Obunalar va Haqiqiy Daromad")}
                   </h3>
                   <p className="text-[10px] text-slate-400 font-semibold leading-none mt-0.5">
-                    Tasdiqlangandan so'ng daromadga qo'shiladigan SaaS oqimi
+                    {t("Tasdiqlangandan so'ng daromadga qo'shiladigan SaaS oqimi")}
                   </p>
                 </div>
               </div>
 
               <span className="px-2.5 py-1 text-[9px] font-black bg-indigo-50 text-indigo-600 rounded-md uppercase font-mono tracking-wider">
-                SaaS Real Revenue
+                {t("SaaS Real Revenue")}
               </span>
             </div>
 
@@ -1614,13 +1618,13 @@ export default function SuperAdminDashboard({
                   <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-2xl p-4 flex items-center justify-between">
                     <div>
                       <span className="text-[10px] text-emerald-800 font-black uppercase tracking-wider block">
-                        JAMI TASDIQLANGAN HAQIQIY DAROMAD
+                        {t("JAMI TASDIQLANGAN HAQIQIY DAROMAD")}
                       </span>
                       <strong className="text-xl font-black text-emerald-950 font-mono block mt-1">
-                        {confirmedTotal.toLocaleString('uz-UZ')} so'm
+                        {confirmedTotal.toLocaleString('uz-UZ')} {t("so'm")}
                       </strong>
                       <span className="text-[10px] text-slate-500 mt-1 block font-semibold">
-                        Faqat rasman to'langan va siz tasdiqlagan obunalar yig'indisi.
+                        {t("Faqat rasman to'langan va siz tasdiqlagan obunalar yig'indisi.")}
                       </span>
                     </div>
                     <div className="text-3xl">💰</div>
@@ -1629,15 +1633,15 @@ export default function SuperAdminDashboard({
                   {/* Pending approvals section */}
                   <div className="space-y-2.5">
                     <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider flex items-center justify-between">
-                      <span>⏱️ Tasdiqlanish kutilayotgan oylik to'lovlar</span>
+                      <span>{t("⏱️ Tasdiqlanish kutilayotgan oylik to'lovlar")}</span>
                       <span className="bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[9px] rounded font-bold font-mono">
-                        {pendingPayments.length} ta faol so'rov
+                        {pendingPayments.length} {t("ta faol so'rov")}
                       </span>
                     </h4>
 
                     {pendingPayments.length === 0 ? (
                       <p className="text-xs text-slate-400 py-4 text-center font-medium bg-slate-50 border border-slate-100 rounded-xl">
-                        Kutilayotgan yangi oylik to'lov so'rovlari mavjud emas.
+                        {t("Kutilayotgan yangi oylik to'lov so'rovlari mavjud emas.")}
                       </p>
                     ) : (
                       <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
@@ -1651,14 +1655,14 @@ export default function SuperAdminDashboard({
                               <div>
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-xs font-black text-slate-800">
-                                    {associatedClinic ? associatedClinic.name : "Noma'lum Klinika"}
+                                    {associatedClinic ? associatedClinic.name : t("Noma'lum Klinika")}
                                   </span>
                                   <span className={`text-[9px] font-normal uppercase font-mono tracking-wider ${pay.paymentType === 'premium_upgrade' ? 'text-amber-600 font-black' : 'text-slate-400'}`}>
-                                    {pay.paymentType === 'premium_upgrade' ? '🤖 Premium AI so\'rovi' : 'Oylik obuna'}
+                                    {pay.paymentType === 'premium_upgrade' ? t("🤖 Premium AI so'rovi") : t("Oylik obuna")}
                                   </span>
                                 </div>
                                 <p className="text-[10px] text-slate-600 mt-1 font-semibold">
-                                  {pay.paymentType === 'premium_upgrade' ? 'So\'ralgan to\'lov' : 'Ijara'}: <strong className="font-mono text-indigo-950">{pay.amount.toLocaleString()} UZS</strong> | Yuborildi: <strong className="font-mono text-slate-700">{pay.dueDate}</strong>
+                                  {pay.paymentType === 'premium_upgrade' ? t("So'ralgan to'lov") : t("Ijara")}: <strong className="font-mono text-indigo-950">{pay.amount.toLocaleString()} UZS</strong> {t("| Yuborildi:")} <strong className="font-mono text-slate-700">{pay.dueDate}</strong>
                                 </p>
                               </div>
 
@@ -1677,7 +1681,7 @@ export default function SuperAdminDashboard({
                                 }}
                                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] rounded-lg transition-all shadow-sm shrink-0 active:scale-95 cursor-pointer"
                               >
-                                Tasdiqlash ✓
+                                {t("Tasdiqlash ✓")}
                               </button>
                             </div>
                           );
@@ -1703,19 +1707,17 @@ export default function SuperAdminDashboard({
                 <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">🧩</span>
                 <div>
                   <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                    Ma'lumotlar bazasi xizmati
+                    {t("Ma'lumotlar bazasi xizmati")}
                   </h3>
                   <p className="text-[10px] text-slate-400 font-semibold leading-none mt-0.5">
-                    Bemorlarni davolovchi shifokorlariga biriktirish
+                    {t("Bemorlarni davolovchi shifokorlariga biriktirish")}
                   </p>
                 </div>
               </div>
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-              O'zi ro'yxatdan o'tgan bemorlarga davolovchi shifokor avtomatik biriktirilmaydi.
-              Bu tugma har bir shunday bemorni <strong>oxirgi marta navbat olgan shifokoriga</strong> biriktiradi.
-              Xavfsiz: allaqachon to'g'ri biriktirilgan bemorlar o'zgarmaydi, istalgan vaqtda qayta bosish mumkin.
+              {t("O'zi ro'yxatdan o'tgan bemorlarga davolovchi shifokor avtomatik biriktirilmaydi. Bu tugma har bir shunday bemorni")} <strong>{t("oxirgi marta navbat olgan shifokoriga")}</strong> {t("biriktiradi. Xavfsiz: allaqachon to'g'ri biriktirilgan bemorlar o'zgarmaydi, istalgan vaqtda qayta bosish mumkin.")}
             </p>
 
             <button
@@ -1724,7 +1726,7 @@ export default function SuperAdminDashboard({
               disabled={isBackfilling}
               className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black rounded-xl shadow-md transition-all"
             >
-              {isBackfilling ? 'Bajarilmoqda...' : 'Bemorlarni shifokorlarga biriktirish'}
+              {isBackfilling ? 'Bajarilmoqda...' : t("Bemorlarni shifokorlarga biriktirish")}
             </button>
 
             {backfillResult && (
@@ -1741,20 +1743,17 @@ export default function SuperAdminDashboard({
                 <span className="p-1.5 bg-rose-50 text-rose-600 rounded-lg">🧹</span>
                 <div>
                   <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                    Test ma'lumotlarni tozalash
+                    {t("Test ma'lumotlarni tozalash")}
                   </h3>
                   <p className="text-[10px] text-slate-400 font-semibold leading-none mt-0.5">
-                    Tekshiruv vaqtida yaratilgan soxta yozuvlarni o'chirish
+                    {t("Tekshiruv vaqtida yaratilgan soxta yozuvlarni o'chirish")}
                   </p>
                 </div>
               </div>
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-              Dastur tekshiruvi paytida yaratilgan 5 ta soxta navbat va 2 ta soxta bemor yozuvini
-              (masalan "SYNC BOOKING TEST", "Bot Test Patient") o'chiradi. Aniq belgilangan
-              yozuvlargagina tegadi — haqiqiy bemorlarga hech qachon ta'sir qilmaydi.
-              Istalgan vaqtda qayta bosish mumkin (allaqachon o'chirilganlar o'tkazib yuboriladi).
+              {t("Dastur tekshiruvi paytida yaratilgan 5 ta soxta navbat va 2 ta soxta bemor yozuvini (masalan \"SYNC BOOKING TEST\", \"Bot Test Patient\") o'chiradi. Aniq belgilangan yozuvlargagina tegadi — haqiqiy bemorlarga hech qachon ta'sir qilmaydi. Istalgan vaqtda qayta bosish mumkin (allaqachon o'chirilganlar o'tkazib yuboriladi).")}
             </p>
 
             <button
@@ -1763,7 +1762,7 @@ export default function SuperAdminDashboard({
               disabled={isCleaningTestData}
               className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black rounded-xl shadow-md transition-all"
             >
-              {isCleaningTestData ? 'Bajarilmoqda...' : 'Test ma\'lumotlarni tozalash'}
+              {isCleaningTestData ? 'Bajarilmoqda...' : t("Test ma'lumotlarni tozalash")}
             </button>
 
             {cleanupResult && (
@@ -1780,17 +1779,17 @@ export default function SuperAdminDashboard({
                 <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">🛡️</span>
                 <div>
                   <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                    Superadmin Parol Sozlamalari
+                    {t("Superadmin Parol Sozlamalari")}
                   </h3>
                   <p className="text-[10px] text-slate-400 font-semibold leading-none mt-0.5">
-                    Superadmin panelga kirish login/parolini o'zgartirish
+                    {t("Superadmin panelga kirish login/parolini o'zgartirish")}
                   </p>
                 </div>
               </div>
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-              Yangi login/parolni kiritib saqlang. Ular faqat shu qurilmada saqlanadi — hech qanday pochtaga avtomatik xabar yuborilmaydi.
+              {t("Yangi login/parolni kiritib saqlang. Ular faqat shu qurilmada saqlanadi — hech qanday pochtaga avtomatik xabar yuborilmaydi.")}
             </p>
 
             <form onSubmit={async (e) => {
@@ -1808,7 +1807,7 @@ export default function SuperAdminDashboard({
               }
             }} className="space-y-4 pt-2">
               <div>
-                <label className="text-[9px] font-black text-slate-500 block mb-1 uppercase tracking-widest">JORIY PAROL *</label>
+                <label className="text-[9px] font-black text-slate-500 block mb-1 uppercase tracking-widest">{t("JORIY PAROL *")}</label>
                 <input
                   type="password"
                   required
@@ -1819,7 +1818,7 @@ export default function SuperAdminDashboard({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="text-[9px] font-black text-slate-500 block mb-1 uppercase tracking-widest">YANGI LOGIN *</label>
+                  <label className="text-[9px] font-black text-slate-500 block mb-1 uppercase tracking-widest">{t("YANGI LOGIN *")}</label>
                   <input
                     type="text"
                     required
@@ -1829,11 +1828,11 @@ export default function SuperAdminDashboard({
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] font-black text-slate-500 block mb-1 uppercase tracking-widest">YANGI PAROL *</label>
+                  <label className="text-[9px] font-black text-slate-500 block mb-1 uppercase tracking-widest">{t("YANGI PAROL *")}</label>
                   <input
                     type="password"
                     required
-                    placeholder="Kamida 6 xonali"
+                    placeholder={t("Kamida 6 xonali")}
                     value={newSuperadminPass}
                     onChange={(e) => setNewSuperadminPass(e.target.value)}
                     className="w-full bg-slate-50 text-xs font-black font-mono text-slate-800 border border-slate-200 rounded-lg px-3 py-2.5 focus:border-[#0284c7] focus:outline-none"
@@ -1845,7 +1844,7 @@ export default function SuperAdminDashboard({
                 type="submit"
                 className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs tracking-wider rounded-xl transition-all shadow-md active:scale-97 cursor-pointer flex items-center justify-center gap-1.5"
               >
-                <span>Malumotlarni O'zgartirish</span>
+                <span>{t("Malumotlarni O'zgartirish")}</span>
               </button>
             </form>
           </div>
@@ -1864,20 +1863,20 @@ export default function SuperAdminDashboard({
                   BILLING
                 </span>
                 <span className="text-[10px] font-black text-slate-400 tracking-wider font-mono">
-                  E'TIBOR TALAB QILADIGAN HOLATLAR
+                  {t("E'TIBOR TALAB QILADIGAN HOLATLAR")}
                 </span>
               </div>
               <Inbox className="w-4 h-4 text-[#ef4444]" />
             </div>
 
             <p className="text-[11px] text-slate-400 font-medium">
-              To'lov tasdiqlash kutayotgan, muddati o'tgan yoki obunasi to'xtatilgan klinikalar shu yerda ko'rinadi:
+              {t("To'lov tasdiqlash kutayotgan, muddati o'tgan yoki obunasi to'xtatilgan klinikalar shu yerda ko'rinadi:")}
             </p>
 
             <div className="space-y-2 mt-3 select-none">
               {billingNotifications.length === 0 ? (
                 <div className="py-6 text-center text-slate-500 text-xs font-mono">
-                  Hozircha e'tibor talab qiladigan holat yo'q
+                  {t("Hozircha e'tibor talab qiladigan holat yo'q")}
                 </div>
               ) : (
                 billingNotifications.map(item => (
@@ -1889,7 +1888,7 @@ export default function SuperAdminDashboard({
                       <span className={`font-bold font-mono ${
                         item.kind === 'danger' ? 'text-[#f87171]' : item.kind === 'warn' ? 'text-amber-400' : 'text-cyan-400'
                       }`}>
-                        {item.kind === 'danger' ? '⚠ Muddati o\'tgan' : item.kind === 'warn' ? '⏸ To\'xtatilgan' : 'ℹ Tasdiqlash kerak'}
+                        {item.kind === 'danger' ? t("⚠ Muddati o'tgan") : item.kind === 'warn' ? t("⏸ To'xtatilgan") : t("ℹ Tasdiqlash kerak")}
                       </span>
                       <span className="text-slate-500 font-mono">{item.time}</span>
                     </div>
@@ -1913,10 +1912,10 @@ export default function SuperAdminDashboard({
                 <span className="p-1.5 bg-purple-50 text-purple-600 rounded-lg"><Megaphone className="w-4 h-4" /></span>
                 <div>
                   <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                    Reklama Boshqaruvi
+                    {t("Reklama Boshqaruvi")}
                   </h3>
                   <p className="text-[10px] text-slate-400 font-semibold leading-none mt-0.5">
-                    Bemorlarga dastur va Telegram orqali ko'rsatiladigan reklamalar
+                    {t("Bemorlarga dastur va Telegram orqali ko'rsatiladigan reklamalar")}
                   </p>
                 </div>
               </div>
@@ -1924,7 +1923,7 @@ export default function SuperAdminDashboard({
                 onClick={() => setShowAddAdForm(v => !v)}
                 className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-[10px] rounded-lg transition-all shadow-sm active:scale-95 cursor-pointer flex items-center gap-1"
               >
-                <Plus className="w-3 h-3" /> {showAddAdForm ? 'Bekor qilish' : 'Yangi reklama'}
+                <Plus className="w-3 h-3" /> {showAddAdForm ? t("Bekor qilish") : t("Yangi reklama")}
               </button>
             </div>
 
@@ -1932,13 +1931,13 @@ export default function SuperAdminDashboard({
               <div className="p-4 bg-purple-50/50 border border-purple-100 rounded-2xl space-y-3">
                 <input
                   type="text"
-                  placeholder="Sarlavha *"
+                  placeholder={t("Sarlavha *")}
                   value={newAdTitle}
                   onChange={(e) => setNewAdTitle(e.target.value)}
                   className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-purple-400"
                 />
                 <textarea
-                  placeholder="Matn (ixtiyoriy)"
+                  placeholder={t("Matn (ixtiyoriy)")}
                   value={newAdBody}
                   onChange={(e) => setNewAdBody(e.target.value)}
                   rows={2}
@@ -1946,7 +1945,7 @@ export default function SuperAdminDashboard({
                 />
                 <input
                   type="text"
-                  placeholder="Havola (ixtiyoriy, masalan https://...)"
+                  placeholder={t("Havola (ixtiyoriy, masalan https://...)")}
                   value={newAdLinkUrl}
                   onChange={(e) => setNewAdLinkUrl(e.target.value)}
                   className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:border-purple-400"
@@ -1956,14 +1955,14 @@ export default function SuperAdminDashboard({
                     onClick={() => adImageInputRef.current?.click()}
                     className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:bg-slate-50"
                   >
-                    🖼️ Rasm yuklash
+                    {t("🖼️ Rasm yuklash")}
                   </button>
                   <input ref={adImageInputRef} type="file" accept="image/*" onChange={handleAdImageUpload} className="hidden" />
                   {newAdImageUrl && <img src={newAdImageUrl} alt="preview" className="h-10 w-10 object-cover rounded-lg border border-slate-200" />}
                 </div>
 
                 <div>
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Qayerda ko'rinsin?</label>
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">{t("Qayerda ko'rinsin?")}</label>
                   <div className="flex flex-wrap gap-3">
                     {[
                       { id: 'web_home', label: 'Bosh sahifa banneri' },
@@ -1976,7 +1975,7 @@ export default function SuperAdminDashboard({
                           checked={newAdPlacements.includes(opt.id)}
                           onChange={(e) => setNewAdPlacements(prev => e.target.checked ? [...prev, opt.id] : prev.filter(p => p !== opt.id))}
                         />
-                        {opt.label}
+                        {t(opt.label)}
                       </label>
                     ))}
                   </div>
@@ -1984,17 +1983,17 @@ export default function SuperAdminDashboard({
 
                 <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 cursor-pointer">
                   <input type="checkbox" checked={newAdTelegramEnabled} onChange={(e) => setNewAdTelegramEnabled(e.target.checked)} />
-                  Telegram navbat xabarlariga ham qo'shilsin
+                  {t("Telegram navbat xabarlariga ham qo'shilsin")}
                 </label>
 
                 <div>
-                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Maqsadli klinika</label>
+                  <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">{t("Maqsadli klinika")}</label>
                   <select
                     value={newAdClinicId}
                     onChange={(e) => setNewAdClinicId(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-purple-400"
                   >
-                    <option value="">Barcha klinikalar (platforma bo'ylab)</option>
+                    <option value="">{t("Barcha klinikalar (platforma bo'ylab)")}</option>
                     {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
@@ -2003,7 +2002,7 @@ export default function SuperAdminDashboard({
                   onClick={handleCreateAd}
                   className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs rounded-xl transition-all shadow-md active:scale-97 cursor-pointer"
                 >
-                  Reklamani yaratish
+                  {t("Reklamani yaratish")}
                 </button>
               </div>
             )}
@@ -2011,7 +2010,7 @@ export default function SuperAdminDashboard({
             <div className="space-y-2">
               {ads.length === 0 ? (
                 <p className="text-xs text-slate-400 py-4 text-center font-medium bg-slate-50 border border-slate-100 rounded-xl">
-                  Hozircha reklama yaratilmagan.
+                  {t("Hozircha reklama yaratilmagan.")}
                 </p>
               ) : (
                 ads.map(ad => (
@@ -2022,7 +2021,7 @@ export default function SuperAdminDashboard({
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs font-black text-slate-800">{ad.title}</span>
                           <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${ad.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
-                            {ad.status === 'active' ? 'Faol' : "To'xtatilgan"}
+                            {ad.status === 'active' ? t("Faol") : t("To'xtatilgan")}
                           </span>
                         </div>
                         <p className="text-[10px] text-slate-500 mt-0.5">
@@ -2036,17 +2035,17 @@ export default function SuperAdminDashboard({
                         <button
                           onClick={() => handleBroadcastAd(ad)}
                           disabled={broadcastingAdId === ad.id}
-                          title="Telegram orqali darhol yuborish"
+                          title={t("Telegram orqali darhol yuborish")}
                           className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-[10px] font-black flex items-center gap-1 disabled:opacity-50"
                         >
-                          <Send className="w-3 h-3" /> {broadcastingAdId === ad.id ? '...' : 'Yuborish'}
+                          <Send className="w-3 h-3" /> {broadcastingAdId === ad.id ? '...' : t("Yuborish")}
                         </button>
                       )}
                       <button
                         onClick={() => handleToggleAdStatus(ad)}
                         className="px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-lg text-[10px] font-black"
                       >
-                        {ad.status === 'active' ? "To'xtatish" : 'Faollashtirish'}
+                        {ad.status === 'active' ? t("To'xtatish") : t("Faollashtirish")}
                       </button>
                       <button
                         onClick={() => handleDeleteAd(ad)}
@@ -2074,7 +2073,7 @@ export default function SuperAdminDashboard({
                 <span className="p-1.5 bg-blue-50 text-[#2563eb] rounded-lg">🤖</span>
                 <div>
                   <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                    Telegram Bot Sozlamalari
+                    {t("Telegram Bot Sozlamalari")}
                   </h3>
                   <p className="text-[10px] text-slate-400 font-semibold leading-none mt-0.5">
                     @dstoma_bot integratsiya tizimi va token boshqaruvi
@@ -2082,12 +2081,12 @@ export default function SuperAdminDashboard({
                 </div>
               </div>
               <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 border border-emerald-100 text-[9px] font-black uppercase tracking-widest rounded text-center">
-                TELEGRAM ACTIVE
+                {t("TELEGRAM ACTIVE")}
               </span>
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-              Bemorlar navbat olganda yoki shifokor qabulga chaqirganda real vaqtda telegram xabarini yuborish uchun <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700 font-mono text-[10px]">@dstoma_bot</code> API tokenini integratsiya qiling.
+              {t("Bemorlar navbat olganda yoki shifokor qabulga chaqirganda real vaqtda telegram xabarini yuborish uchun")} <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700 font-mono text-[10px]">@dstoma_bot</code> {t("API tokenini integratsiya qiling.")}
             </p>
 
             <form onSubmit={async (e) => {
@@ -2109,7 +2108,7 @@ export default function SuperAdminDashboard({
               }
             }} className="space-y-3.5 pt-1">
               <div>
-                <label className="text-[9px] font-black text-slate-500 block mb-1 uppercase tracking-widest">BEMOR BOTI TOKENI *</label>
+                <label className="text-[9px] font-black text-slate-500 block mb-1 uppercase tracking-widest">{t("BEMOR BOTI TOKENI *")}</label>
                 <input
                   type="password"
                   placeholder="7514931393:AAFFZJ-fFf9hV4gA-S..."
@@ -2119,7 +2118,7 @@ export default function SuperAdminDashboard({
                 />
               </div>
               <div>
-                <label className="text-[9px] font-black text-slate-500 block mb-1 uppercase tracking-widest">SHIFOKOR BOTI TOKENI</label>
+                <label className="text-[9px] font-black text-slate-500 block mb-1 uppercase tracking-widest">{t("SHIFOKOR BOTI TOKENI")}</label>
                 <input
                   type="password"
                   placeholder="7514931393:AAFFZJ-fFf9hV4gA-S..."
@@ -2132,18 +2131,18 @@ export default function SuperAdminDashboard({
                 type="submit"
                 className="w-full px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-extrabold text-xs tracking-wider rounded-xl transition-all shadow-sm uppercase cursor-pointer"
               >
-                Saqlash ✓
+                {t("Saqlash ✓")}
               </button>
               <p className="text-[9px] text-slate-400 font-semibold">
-                Tokenlar faqat serverda saqlanadi — brauzer xotirasiga hech qachon yozilmaydi.
+                {t("Tokenlar faqat serverda saqlanadi — brauzer xotirasiga hech qachon yozilmaydi.")}
               </p>
             </form>
 
             {/* Vercel Webhook Setup Section */}
             <div className="bg-[#f0f9ff] rounded-2xl p-4 border border-blue-100 space-y-3">
-              <strong className="text-[10px] uppercase font-black tracking-widest text-blue-600 block">🧭 Vercel (Serverless) Webhook Sozlash</strong>
+              <strong className="text-[10px] uppercase font-black tracking-widest text-blue-600 block">{t("🧭 Vercel (Serverless) Webhook Sozlash")}</strong>
               <p className="text-[11px] text-slate-600 leading-relaxed font-semibold">
-                Agarda platformangiz Vercel serverless tizimida bo'lsa, Telegram bot yangiliklarni qabul qilishi uchun unga saytning webhook manzilini yuklash kerak:
+                {t("Agarda platformangiz Vercel serverless tizimida bo'lsa, Telegram bot yangiliklarni qabul qilishi uchun unga saytning webhook manzilini yuklash kerak:")}
               </p>
               <button
                 type="button"
@@ -2209,7 +2208,7 @@ export default function SuperAdminDashboard({
                       addLog(`Telegram Webhook muvaffaqiyatli bog'landi: ${data.webhook_url}`, 'success');
                       setTimeout(() => checkWebhookStatusFunc(cleanToken), 1000);
                     } else {
-                      triggerToast(`Xatolik: ${data.error || 'Webhook sozlanmadi'}`);
+                      triggerToast(`${t("Xato")}: ${t(data.error || 'Webhook sozlanmadi')}`);
                     }
                   } catch (err: any) {
                     triggerToast(`Bog'lanishda xatolik yuz berdi: ${err.message || err}`);
@@ -2217,13 +2216,13 @@ export default function SuperAdminDashboard({
                 }}
                 className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs tracking-wider rounded-xl transition-all shadow-sm shrink-0 uppercase cursor-pointer"
               >
-                Telegram Webhook-ni Avtomatik Sozlash ⚡
+                {t("Telegram Webhook-ni Avtomatik Sozlash ⚡")}
               </button>
 
               {/* Webhook Status Diagnostic Area */}
               <div className="bg-slate-100 rounded-xl p-3 border border-slate-200 space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black tracking-wider text-slate-500 uppercase">🔍 Webhook Diagnostikasi</span>
+                  <span className="text-[10px] font-black tracking-wider text-slate-500 uppercase">{t("🔍 Webhook Diagnostikasi")}</span>
                   <div className="flex gap-1.5">
                     <button
                       onClick={fetchDebugLogsFunc}
@@ -2231,7 +2230,7 @@ export default function SuperAdminDashboard({
                       disabled={fetchingDebug}
                       className="px-2 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded text-[9px] font-black transition cursor-pointer"
                     >
-                      {fetchingDebug ? "Yuklanmoqda..." : "Kiruvchi Loglar 📜"}
+                      {fetchingDebug ? t("Yuklanmoqda...") : t("Kiruvchi Loglar 📜")}
                     </button>
                     <button
                       onClick={async () => {
@@ -2246,7 +2245,7 @@ export default function SuperAdminDashboard({
                       disabled={checkingStatus}
                       className="px-2 py-1 bg-slate-200 hover:bg-slate-300 rounded text-[9px] font-bold text-slate-700 transition cursor-pointer"
                     >
-                      {checkingStatus ? "Tekshirilmoqda..." : "Holatni Yangilash 🔄"}
+                      {checkingStatus ? t("Tekshirilmoqda...") : t("Holatni Yangilash 🔄")}
                     </button>
                   </div>
                 </div>
@@ -2254,56 +2253,56 @@ export default function SuperAdminDashboard({
                 {webhookStatus ? (
                   <div className="text-[10px] space-y-1 bg-white p-2 rounded border border-slate-100 font-mono text-slate-700 leading-normal">
                     <div className="flex justify-between border-b pb-1 font-sans font-bold">
-                      <span>Telegram Holati:</span>
+                      <span>{t("Telegram Holati:")}</span>
                       <span className={webhookStatus.ok ? "text-green-600" : "text-rose-600"}>
-                        {webhookStatus.ok ? "Ulangan 🟢" : "Muammo bor 🔴"}
+                        {webhookStatus.ok ? t("Ulangan 🟢") : t("Muammo bor 🔴")}
                       </span>
                     </div>
                     {webhookStatus.result ? (
                       <>
                         <div className="break-all font-semibold"><span className="text-slate-400">Webhook URL:</span> <span className="text-blue-600">{webhookStatus.result.url || "O'RNATILMAGAN ❌"}</span></div>
-                        <div><span className="text-slate-400">Kutilayotgan xabarlar (Pending):</span> <span className="font-bold text-amber-600">{webhookStatus.result.pending_update_count} ta</span></div>
+                        <div><span className="text-slate-400">{t("Kutilayotgan xabarlar (Pending):")}</span> <span className="font-bold text-amber-600">{webhookStatus.result.pending_update_count} {t("ta")}</span></div>
                         {webhookStatus.result.last_error_message ? (
                           <div className="bg-rose-50 text-rose-600 p-1.5 rounded border border-rose-100 mt-1 font-sans text-[10px]">
-                            <div className="font-bold flex items-center gap-1">⚠️ Telegram xabar yubora olmadi:</div>
+                            <div className="font-bold flex items-center gap-1">{t("⚠️ Telegram xabar yubora olmadi:")}</div>
                             <div className="mt-0.5 whitespace-pre-wrap leading-relaxed break-words font-mono text-[9px] font-semibold">{webhookStatus.result.last_error_message}</div>
                             {webhookStatus.result.last_error_date && (
-                              <div className="text-[8px] text-rose-400 mt-1">Sana: {new Date(webhookStatus.result.last_error_date * 1000).toLocaleString('uz-UZ')}</div>
+                              <div className="text-[8px] text-rose-400 mt-1">{t("Sana:")} {new Date(webhookStatus.result.last_error_date * 1000).toLocaleString('uz-UZ')}</div>
                             )}
                           </div>
                         ) : (
-                          <div className="text-green-600 font-sans font-bold text-[9px] flex items-center gap-1 mt-1">✅ Hech qanday xatolik qayd etilmagan (Telegram muvaffaqiyatli bog'landi).</div>
+                          <div className="text-green-600 font-sans font-bold text-[9px] flex items-center gap-1 mt-1">{t("✅ Hech qanday xatolik qayd etilmagan (Telegram muvaffaqiyatli bog'landi).")}</div>
                         )}
                       </>
                     ) : (
-                      <div className="text-rose-500 font-bold">{webhookStatus.description || "Tafsilotlar olinmadi"}</div>
+                      <div className="text-rose-500 font-bold">{webhookStatus.description || t("Tafsilotlar olinmadi")}</div>
                     )}
                   </div>
                 ) : (
-                  <p className="text-[9px] text-slate-400 font-semibold italic text-center">So'nggi diagnostika ma'lumotlarini olish uchun "Holatni Yangilash" tugmasini bosing</p>
+                  <p className="text-[9px] text-slate-400 font-semibold italic text-center">{t("So'nggi diagnostika ma'lumotlarini olish uchun \"Holatni Yangilash\" tugmasini bosing")}</p>
                 )}
 
                 {/* Webhook live incoming stream logs */}
                 {debugLogs.length > 0 ? (
                   <div className="space-y-1.5 pt-2 border-t border-slate-200">
-                    <strong className="text-[9px] text-[#4f46e5] font-extrabold uppercase tracking-wide block">📥 Serverga kelgan so'nggi Telegram so'rovlari:</strong>
+                    <strong className="text-[9px] text-[#4f46e5] font-extrabold uppercase tracking-wide block">{t("📥 Serverga kelgan so'nggi Telegram so'rovlari:")}</strong>
                     <div className="max-h-48 overflow-y-auto space-y-1.5">
                       {debugLogs.map((log: any, idx: number) => (
                         <div key={idx} className="bg-white p-2 rounded-lg border border-slate-200 font-mono text-[9px] space-y-1">
                           <div className="flex justify-between items-center text-[8px] text-slate-400 font-sans">
                             <span>{new Date(log.timestamp).toLocaleTimeString('uz-UZ')}</span>
                             <span className={`px-1 rounded font-bold uppercase ${log.success ? "bg-green-50 text-green-600" : "bg-rose-50 text-rose-600"}`}>
-                              {log.success ? "Muvaffaqiyatli" : "Xato"}
+                              {log.success ? t("Muvaffaqiyatli") : t("Xato")}
                             </span>
                           </div>
                           {log.error && (
                             <div className="text-rose-600 font-sans font-bold text-[9px] bg-rose-50 p-1 rounded">
-                              ⚠️ Muammo: {log.error}
+                              {t("⚠️ Muammo:")} {log.error}
                             </div>
                           )}
                           {log.tokenProcessed && (
                             <div className="text-[8px] text-slate-400">
-                              <span className="font-bold font-sans">Ishlatilgan Token:</span> {log.tokenProcessed}
+                              <span className="font-bold font-sans">{t("Ishlatilgan Token:")}</span> {log.tokenProcessed}
                             </div>
                           )}
                           {log.body ? (
@@ -2311,7 +2310,7 @@ export default function SuperAdminDashboard({
                               <span className="font-bold font-sans text-slate-400">Payload:</span> {JSON.stringify(log.body, null, 1)}
                             </div>
                           ) : (
-                            <div className="text-slate-400">[Bo'sh tana / Body empty]</div>
+                            <div className="text-slate-400">{t("[Bo'sh tana / Body empty]")}</div>
                           )}
                         </div>
                       ))}
@@ -2324,24 +2323,24 @@ export default function SuperAdminDashboard({
                       type="button"
                       className="text-[9px] text-indigo-600 font-bold hover:underline"
                     >
-                      📥 Serverdagi kiruvchi so'rovlar logini yuklash
+                      {t("📥 Serverdagi kiruvchi so'rovlar logini yuklash")}
                     </button>
                   </div>
                 )}
               </div>
 
               <p className="text-[9px] text-slate-400 font-semibold leading-normal">
-                Faol Vercel Webhook havolasi: <code className="bg-white/80 px-1 border border-slate-100 rounded font-mono text-[9px] text-[#2563eb]">{window.location.origin}/api/telegram-webhook?token={telegramToken ? telegramToken.slice(0, 15) + "..." : "TOKEN"}</code>
+                {t("Faol Vercel Webhook havolasi:")} <code className="bg-white/80 px-1 border border-slate-100 rounded font-mono text-[9px] text-[#2563eb]">{window.location.origin}/api/telegram-webhook?token={telegramToken ? telegramToken.slice(0, 15) + "..." : "TOKEN"}</code>
               </p>
             </div>
 
             {/* Test Notification Section */}
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
-              <strong className="text-[10px] uppercase font-black tracking-widest text-slate-500 block">⚡ Bot Integratsiyasini Test Qilish</strong>
+              <strong className="text-[10px] uppercase font-black tracking-widest text-slate-500 block">{t("⚡ Bot Integratsiyasini Test Qilish")}</strong>
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="ID raqam (masalan, 57896431)"
+                  placeholder={t("ID raqam (masalan, 57896431)")}
                   id="test_telegram_chat_id"
                   className="flex-1 bg-white text-xs font-bold font-mono text-slate-800 border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none"
                 />
@@ -2379,11 +2378,11 @@ export default function SuperAdminDashboard({
                   }}
                   className="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-[10px] tracking-wide rounded-xl transition-all shadow-sm shrink-0 cursor-pointer"
                 >
-                  Test Xabar Yuborish ➔
+                  {t("Test Xabar Yuborish ➔")}
                 </button>
               </div>
               <p className="text-[9px] text-slate-400 font-semibold leading-normal">
-                Test yuborishdan oldin Telegramda <a href="https://t.me/dstoma_bot" target="_blank" rel="noreferrer" className="text-cyan-600 underline font-extrabold">@dstoma_bot</a> botiga o'tib <code className="bg-white px-1 border border-slate-200 rounded font-mono text-[9px] font-bold text-slate-700">/start</code> bosilganiga ishonch hosil qiling.
+                {t("Test yuborishdan oldin Telegramda")} <a href="https://t.me/dstoma_bot" target="_blank" rel="noreferrer" className="text-cyan-600 underline font-extrabold">@dstoma_bot</a> {t("botiga o'tib")} <code className="bg-white px-1 border border-slate-200 rounded font-mono text-[9px] font-bold text-slate-700">/start</code> {t("bosilganiga ishonch hosil qiling.")}
               </p>
             </div>
           </div>
@@ -2408,7 +2407,7 @@ export default function SuperAdminDashboard({
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Klinika qidirish..."
+                  placeholder={t("Klinika qidirish...")}
                   value={searchClinicTerm}
                   onChange={(e) => setSearchClinicTerm(e.target.value)}
                   className="bg-slate-50 text-[11px] border border-slate-200 rounded-lg pl-7 pr-3 py-1 text-slate-700 font-medium focus:outline-none focus:border-cyan-500"
@@ -2418,7 +2417,7 @@ export default function SuperAdminDashboard({
             </div>
 
             <p className="text-xs text-slate-500">
-              {t('ownerProvisionNotice')} Siz birgina tugma orqali har bir stomatologiya klinikasining kirish hisobini, login va parolini o'zgartirishingiz hamda daxlsiz qulflash amallarini bajarishingiz mumkin.
+              {t('ownerProvisionNotice')} {t("Siz birgina tugma orqali har bir stomatologiya klinikasining kirish hisobini, login va parolini o'zgartirishingiz hamda daxlsiz qulflash amallarini bajarishingiz mumkin.")}
             </p>
 
             <div className="space-y-4 mt-3">
@@ -2442,7 +2441,7 @@ export default function SuperAdminDashboard({
                           </span>
                         </div>
                         <p className="text-[10px] text-slate-400 font-bold mt-1.5">
-                          Rahbar/CEO: <span className="text-slate-700">{clinic.ownerName || "Kiritilmagan"}</span> | Oylik litsenziya: <span className="text-slate-800 font-mono font-bold">{fee.toLocaleString('uz-UZ')} so'm</span>
+                          {t("Rahbar/CEO:")} <span className="text-slate-700">{clinic.ownerName || t("Kiritilmagan")}</span> {t("| Oylik litsenziya:")} <span className="text-slate-800 font-mono font-bold">{fee.toLocaleString('uz-UZ')} {t("so'm")}</span>
                         </p>
                       </div>
 
@@ -2455,14 +2454,14 @@ export default function SuperAdminDashboard({
                         <button
                           onClick={() => setClinicToEdit(clinic)}
                           className="p-1 px-2.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 rounded text-[10px] font-bold shadow-sm transition-all"
-                          title="Tahrirlash"
+                          title={t("Tahrirlash")}
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => setClinicToDelete(clinic)}
                           className="p-1 px-2.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded text-[10px] font-bold shadow-sm transition-all"
-                          title="O'chirish"
+                          title={t("O'chirish")}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -2495,13 +2494,13 @@ export default function SuperAdminDashboard({
                         <div className="space-y-3">
                           <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 mb-1">
                             <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest font-mono flex items-center gap-1">
-                              <KeyRound className="w-3.5 h-3.5 text-indigo-500" /> Tahrirlash: {clinic.name}
+                              <KeyRound className="w-3.5 h-3.5 text-indigo-500" /> {t("Tahrirlash:")} {clinic.name}
                             </span>
                             <button 
                               onClick={() => setEditingClinicId(null)}
                               className="text-slate-400 hover:text-slate-600 text-xs"
                             >
-                              Bekor qilish
+                              {t("Bekor qilish")}
                             </button>
                           </div>
                           
@@ -2516,12 +2515,12 @@ export default function SuperAdminDashboard({
                               />
                             </div>
                             <div>
-                              <label className="text-[9px] font-black text-slate-500 block mb-1">YANGI PAROL</label>
+                              <label className="text-[9px] font-black text-slate-500 block mb-1">{t("YANGI PAROL")}</label>
                               <input
                                 type="text"
                                 value={clinicPassVal}
                                 onChange={(e) => setClinicPassVal(e.target.value)}
-                                placeholder="Xavfsizlik uchun yangi parol kiriting"
+                                placeholder={t("Xavfsizlik uchun yangi parol kiriting")}
                                 className="w-full bg-slate-50 text-[11px] font-bold font-mono text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:border-[#06b6d4] focus:outline-none"
                               />
                             </div>
@@ -2536,9 +2535,9 @@ export default function SuperAdminDashboard({
                                 setClinicPassVal(defaultPass);
                               }}
                               className="p-1 px-2.5 text-[9px] bg-slate-100 text-slate-600 font-bold rounded-md hover:bg-slate-200"
-                              title="Tizim tomonidan tasodifiy hisob ma'lumotlarini o'rnatish"
+                              title={t("Tizim tomonidan tasodifiy hisob ma'lumotlarini o'rnatish")}
                             >
-                              Tasodifiy generatsiya
+                              {t("Tasodifiy generatsiya")}
                             </button>
                             <button
                               onClick={() => handleSaveClinicCredsSubmit(clinic.id)}
@@ -2566,7 +2565,7 @@ export default function SuperAdminDashboard({
                                 type="button"
                                 onClick={() => toggleRevealed(clinic.id)}
                                 className="p-1 text-slate-400 hover:text-slate-600 rounded bg-slate-50 hover:bg-slate-100"
-                                title={revealedIds[clinic.id] ? "Parolni yashirish" : "Parolni ko'rsatish"}
+                                title={revealedIds[clinic.id] ? t("Parolni yashirish") : t("Parolni ko'rsatish")}
                               >
                                 {revealedIds[clinic.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                               </button>
@@ -2577,9 +2576,9 @@ export default function SuperAdminDashboard({
                             <button
                               onClick={() => setClinicToEdit(clinic)}
                               className="px-2.5 py-1 text-indigo-600 hover:text-indigo-800 rounded bg-indigo-50 hover:bg-indigo-100 text-[10px] font-black cursor-pointer flex items-center gap-1"
-                              title="Klinika ma'lumotlarini o'zgartirish"
+                              title={t("Klinika ma'lumotlarini o'zgartirish")}
                             >
-                              ⚙️ Tahrirlash
+                              {t("⚙️ Tahrirlash")}
                             </button>
                             <button
                               onClick={() => {
@@ -2591,7 +2590,7 @@ export default function SuperAdminDashboard({
                                 handleCopyGeneric(`Login: ${clinic.login || `ceo_${clinic.subdomain}`} | Parol: ${pw}`);
                               }}
                               className="p-1 text-slate-400 hover:text-slate-600 rounded bg-slate-50 hover:bg-slate-100"
-                              title="Nusxalash"
+                              title={t("Nusxalash")}
                             >
                               <Copy className="w-3.5 h-3.5" />
                             </button>
@@ -2605,15 +2604,15 @@ export default function SuperAdminDashboard({
                               <button
                                 onClick={() => onAdminImpersonate('director', clinic.id)}
                                 className="px-2.5 py-1 text-violet-600 hover:text-violet-800 rounded bg-violet-50 hover:bg-violet-100 text-[10px] font-black cursor-pointer flex items-center gap-1"
-                                title="O'z parolisiz Direktor panelga kirish"
+                                title={t("O'z parolisiz Direktor panelga kirish")}
                               >
-                                👑 Direktor sifatida kirish
+                                {t("👑 Direktor sifatida kirish")}
                               </button>
                             )}
                             <button
                               onClick={() => setClinicToDelete(clinic)}
                               className="px-2.5 py-1 text-rose-600 hover:text-rose-800 rounded bg-rose-50 hover:bg-rose-100 text-[10px] font-black cursor-pointer flex items-center gap-1"
-                              title="Klinikani butunlay o'chirish"
+                              title={t("Klinikani butunlay o'chirish")}
                             >
                               🗑️ {tL("O'chirish")}
                             </button>
@@ -2633,13 +2632,13 @@ export default function SuperAdminDashboard({
       {activeSection === 'group-report' && (
         <div className="space-y-4">
           <div className="bg-white rounded-3xl p-5 border border-slate-100/80 shadow-xs">
-            <h3 className="text-sm font-black text-slate-800 mb-1">Guruh hisoboti</h3>
+            <h3 className="text-sm font-black text-slate-800 mb-1">{t("Guruh hisoboti")}</h3>
             <p className="text-xs text-slate-400 mb-4">
-              Bir egaga tegishli bir nechta filial "Klinikalar" bo'limida bir xil "Guruh nomi" bilan belgilansa, shu yerda jamlangan holda ko'rinadi.
+              {t("Bir egaga tegishli bir nechta filial \"Klinikalar\" bo'limida bir xil \"Guruh nomi\" bilan belgilansa, shu yerda jamlangan holda ko'rinadi.")}
             </p>
             {clinicGroups.length === 0 ? (
               <p className="text-sm text-slate-400 py-8 text-center">
-                Hozircha hech qanday klinika guruhga biriktirilmagan. "Klinikalar" bo'limida bir klinikani tahrirlab, "Guruh nomi" maydonini to'ldiring.
+                {t("Hozircha hech qanday klinika guruhga biriktirilmagan. \"Klinikalar\" bo'limida bir klinikani tahrirlab, \"Guruh nomi\" maydonini to'ldiring.")}
               </p>
             ) : (
               <div className="space-y-4">
@@ -2649,23 +2648,23 @@ export default function SuperAdminDashboard({
                       <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
                         <Layers className="w-3.5 h-3.5 text-cyan-600" /> {g.groupId}
                       </h4>
-                      <span className="text-[10px] font-bold text-slate-400">{g.clinics.length} ta filial</span>
+                      <span className="text-[10px] font-bold text-slate-400">{g.clinics.length} {t("ta filial")}</span>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
                       <div className="bg-white p-3 rounded-xl border border-slate-100">
-                        <span className="text-[9px] text-slate-400 font-black uppercase block">Oylik to'lov (jami)</span>
-                        <strong className="text-sm font-black text-slate-800 font-mono">{g.totalRentalPrice.toLocaleString('uz-UZ')} so'm</strong>
+                        <span className="text-[9px] text-slate-400 font-black uppercase block">{t("Oylik to'lov (jami)")}</span>
+                        <strong className="text-sm font-black text-slate-800 font-mono">{g.totalRentalPrice.toLocaleString('uz-UZ')} {t("so'm")}</strong>
                       </div>
                       <div className="bg-white p-3 rounded-xl border border-slate-100">
-                        <span className="text-[9px] text-slate-400 font-black uppercase block">Faol bemorlar</span>
+                        <span className="text-[9px] text-slate-400 font-black uppercase block">{t("Faol bemorlar")}</span>
                         <strong className="text-sm font-black text-slate-800 font-mono">{g.totalActivePatients}</strong>
                       </div>
                       <div className="bg-white p-3 rounded-xl border border-slate-100">
-                        <span className="text-[9px] text-slate-400 font-black uppercase block">Shifokorlar</span>
+                        <span className="text-[9px] text-slate-400 font-black uppercase block">{t("Shifokorlar")}</span>
                         <strong className="text-sm font-black text-slate-800 font-mono">{g.totalDoctors}</strong>
                       </div>
                       <div className="bg-white p-3 rounded-xl border border-slate-100">
-                        <span className="text-[9px] text-slate-400 font-black uppercase block">Bajarilgan qabullar</span>
+                        <span className="text-[9px] text-slate-400 font-black uppercase block">{t("Bajarilgan qabullar")}</span>
                         <strong className="text-sm font-black text-slate-800 font-mono">{g.totalCompletedVisits}</strong>
                       </div>
                     </div>
@@ -2701,7 +2700,7 @@ export default function SuperAdminDashboard({
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="Shifokor qidirish..."
+                    placeholder={t("Shifokor qidirish...")}
                     value={searchDoctorTerm}
                     onChange={(e) => setSearchDoctorTerm(e.target.value)}
                     className="bg-slate-50 text-[11px] border border-slate-200 rounded-lg pl-7 pr-3 py-1 text-slate-700 font-medium focus:outline-none focus:border-cyan-500"
@@ -2713,7 +2712,7 @@ export default function SuperAdminDashboard({
                   className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wide flex items-center gap-1 transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  Qo'shish
+                  {t("Qo'shish")}
                 </button>
                 {/* For onboarding a whole staffing list (an Excel export, a
                     paper roster) at once instead of one doctor at a time. */}
@@ -2722,13 +2721,13 @@ export default function SuperAdminDashboard({
                   className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wide flex items-center gap-1 transition-colors"
                 >
                   <Copy className="w-3.5 h-3.5" />
-                  Ommaviy qo'shish
+                  {t("Ommaviy qo'shish")}
                 </button>
               </div>
             </div>
 
             <p className="text-xs text-slate-500">
-              Shifokorlarning shaxsiy kabinetga kirish hisoblari hamda ularning parollari mutlaqo ushbu bo'limda belgilanadi. Shifokorlar o'zlarining kabinetiga joriy login-parollar orqali kirib navbatlarni boshqara oladilar.
+              {t("Shifokorlarning shaxsiy kabinetga kirish hisoblari hamda ularning parollari mutlaqo ushbu bo'limda belgilanadi. Shifokorlar o'zlarining kabinetiga joriy login-parollar orqali kirib navbatlarni boshqara oladilar.")}
             </p>
 
             <div className="divide-y divide-slate-100">
@@ -2756,7 +2755,7 @@ export default function SuperAdminDashboard({
                         <div className="space-y-0.5">
                           <h4 className="text-xs font-black text-slate-800 leading-tight">{doc.name}</h4>
                           <span className="text-[10px] text-slate-400 font-bold block">
-                            Specialty: <span className="text-slate-600">{doc.specialty}</span> | Filial: <span className="text-[#06b6d4] font-mono text-[9px] font-black uppercase bg-cyan-950/10 px-1.5 py-0.5 rounded">{doc.clinicId}</span>
+                            {t("Specialty:")} <span className="text-slate-600">{doc.specialty}</span> {t("| Filial:")} <span className="text-[#06b6d4] font-mono text-[9px] font-black uppercase bg-cyan-950/10 px-1.5 py-0.5 rounded">{doc.clinicId}</span>
                           </span>
                         </div>
                       </div>
@@ -2771,14 +2770,14 @@ export default function SuperAdminDashboard({
                         <button
                           onClick={() => setDoctorToEditDetails(doc)}
                           className="p-1 px-2.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 rounded text-[10px] font-bold shadow-sm transition-all"
-                          title="Tahrirlash"
+                          title={t("Tahrirlash")}
                         >
                           <Pencil className="w-3 h-3" />
                         </button>
                         <button
                           onClick={() => setDoctorToDelete(doc)}
                           className="p-1 px-2.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded text-[10px] font-bold shadow-sm transition-all"
-                          title="O'chirish"
+                          title={t("O'chirish")}
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
@@ -2791,10 +2790,10 @@ export default function SuperAdminDashboard({
                         <div className="space-y-3">
                           <div className="flex items-center justify-between border-b border-slate-200/60 pb-1">
                             <span className="text-[9px] font-black text-indigo-700 tracking-wider uppercase font-mono flex items-center gap-1">
-                              <KeyRound className="w-3 h-3 text-indigo-500" /> Tahrirlash: {doc.name}
+                              <KeyRound className="w-3 h-3 text-indigo-500" /> {t("Tahrirlash:")} {doc.name}
                             </span>
                             <button onClick={() => setEditingDoctorId(null)} className="text-slate-400 hover:text-slate-600 text-[10px]">
-                              Bekor qilish
+                              {t("Bekor qilish")}
                             </button>
                           </div>
 
@@ -2809,12 +2808,12 @@ export default function SuperAdminDashboard({
                               />
                             </div>
                             <div>
-                              <label className="text-[9px] font-black text-slate-500 block mb-0.5">YANGI PAROL</label>
+                              <label className="text-[9px] font-black text-slate-500 block mb-0.5">{t("YANGI PAROL")}</label>
                               <input
                                 type="text"
                                 value={doctorPassVal}
                                 onChange={(e) => setDoctorPassVal(e.target.value)}
-                                placeholder="Xavfsizlik uchun yangi parol kiriting"
+                                placeholder={t("Xavfsizlik uchun yangi parol kiriting")}
                                 className="w-full bg-white text-[11px] font-bold font-mono text-slate-800 border border-slate-200 rounded-lg px-2.5 py-1 focus:border-[#06b6d4] focus:outline-none"
                               />
                             </div>
@@ -2830,13 +2829,13 @@ export default function SuperAdminDashboard({
                               }}
                               className="text-[9px] font-semibold text-slate-500 px-2 py-0.5 rounded bg-white border border-slate-200"
                             >
-                              Avto-generatsiya
+                              {t("Avto-generatsiya")}
                             </button>
                             <button
                               onClick={() => handleSaveDoctorCredsSubmit(doc.id)}
                               className="text-[9px] font-black text-white px-3 py-1 bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded flex items-center gap-1"
                             >
-                              <Save className="w-3 h-3 text-cyan-400" /> Saqlash
+                              <Save className="w-3 h-3 text-cyan-400" /> {t("Saqlash")}
                             </button>
                           </div>
                         </div>
@@ -2858,7 +2857,7 @@ export default function SuperAdminDashboard({
                                 type="button"
                                 onClick={() => toggleRevealed(doc.id)}
                                 className="p-1 text-slate-400 hover:text-slate-600 rounded bg-slate-50 hover:bg-slate-100"
-                                title={revealedIds[doc.id] ? "Parolni yashirish" : "Parolni ko'rsatish"}
+                                title={revealedIds[doc.id] ? t("Parolni yashirish") : t("Parolni ko'rsatish")}
                               >
                                 {revealedIds[doc.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                               </button>
@@ -2882,14 +2881,14 @@ export default function SuperAdminDashboard({
                             <button
                               onClick={() => setDoctorToEditDetails(doc)}
                               className="p-1 px-2 text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded text-[10px] font-black cursor-pointer transition-colors"
-                              title="Ism, mutaxassislik va filialni o'zgartirish (parol bu yerda emas)"
+                              title={t("Ism, mutaxassislik va filialni o'zgartirish (parol bu yerda emas)")}
                             >
                               {tL("Ma'lumotlarini tahrirlash")}
                             </button>
                             <button
                               onClick={() => handleUpdateDoctorCredsClick(doc)}
                               className="p-1 px-2.5 bg-cyan-50 hover:bg-cyan-100 text-cyan-700 text-[10px] font-black rounded"
-                              title="Login va parolni o'zgartirish shu yerda"
+                              title={t("Login va parolni o'zgartirish shu yerda")}
                             >
                               {t('resetCreds')}
                             </button>
@@ -2897,15 +2896,15 @@ export default function SuperAdminDashboard({
                               <button
                                 onClick={() => onAdminImpersonate('doctor', doc.id)}
                                 className="p-1 px-2.5 text-violet-600 hover:text-violet-800 rounded bg-violet-50 hover:bg-violet-100 text-[10px] font-black cursor-pointer"
-                                title="O'z parolisiz Shifokor panelga kirish"
+                                title={t("O'z parolisiz Shifokor panelga kirish")}
                               >
-                                👑 Shifokor sifatida kirish
+                                {t("👑 Shifokor sifatida kirish")}
                               </button>
                             )}
                             <button
                               onClick={() => setDoctorToDelete(doc)}
                               className="px-2.5 py-1 text-rose-600 hover:text-rose-800 rounded bg-rose-50 hover:bg-rose-100 text-[10px] font-black cursor-pointer flex items-center gap-1 animate-fade-in"
-                              title="Shifokorni butunlay o'chirish"
+                              title={t("Shifokorni butunlay o'chirish")}
                             >
                               🗑️ {tL("O'chirish")}
                             </button>
@@ -2934,7 +2933,7 @@ export default function SuperAdminDashboard({
             <div className="absolute right-0 top-0 w-32 h-32 pointer-events-none opacity-25 bg-[radial-gradient(circle,rgba(6,182,212,0.15),transparent_70%)]"></div>
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
               <span className="text-[10px] font-extrabold text-cyan-400 tracking-widest uppercase flex items-center gap-1.5 font-mono">
-                🔓 Hisob ma'lumotlari
+                {t("🔓 Hisob ma'lumotlari")}
               </span>
               <button onClick={() => setJustSetCredential(null)} className="text-slate-500 hover:text-slate-300 p-1">
                 <X className="w-4 h-4" />
@@ -2942,14 +2941,14 @@ export default function SuperAdminDashboard({
             </div>
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
               <p className="text-[11px] text-amber-300 font-semibold leading-snug">
-                ⚠️ Bu login-parolni tegishli shaxsga yetkazing. Keyinroq ham ro'yxatdagi 👁 belgisini bosib qayta ko'rishingiz mumkin.
+                {t("⚠️ Bu login-parolni tegishli shaxsga yetkazing. Keyinroq ham ro'yxatdagi 👁 belgisini bosib qayta ko'rishingiz mumkin.")}
               </p>
             </div>
             <div className="font-mono text-[11px] space-y-1.5 text-slate-200 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800 select-all">
               <p className="text-slate-400">{justSetCredential.label}</p>
               <hr className="border-slate-800/60 my-2" />
-              <p className="text-cyan-400 font-bold"><span className="text-slate-500">Login:</span> {justSetCredential.login}</p>
-              <p className="text-emerald-400 font-bold"><span className="text-slate-500">Parol:</span> {justSetCredential.pass}</p>
+              <p className="text-cyan-400 font-bold"><span className="text-slate-500">{t("Login:")}</span> {justSetCredential.login}</p>
+              <p className="text-emerald-400 font-bold"><span className="text-slate-500">{t("Parol:")}</span> {justSetCredential.pass}</p>
             </div>
             <button
               onClick={() => {
@@ -2958,7 +2957,7 @@ export default function SuperAdminDashboard({
               }}
               className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-700 active:scale-95 text-white font-extrabold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5"
             >
-              <Copy className="w-4 h-4" /> Nusxalash
+              <Copy className="w-4 h-4" /> {t("Nusxalash")}
             </button>
           </div>
         </div>
@@ -2971,7 +2970,7 @@ export default function SuperAdminDashboard({
             {/* Modal Header */}
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
               <h3 className="text-xs font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
-                📝 Klinika Tafsilotlarini Tahrirlash
+                {t("📝 Klinika Tafsilotlarini Tahrirlash")}
               </h3>
               <button 
                 onClick={() => setClinicToEdit(null)} 
@@ -2994,7 +2993,7 @@ export default function SuperAdminDashboard({
               
               <div>
                 <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
-                  Klinika Nomi *
+                  {t("Klinika Nomi *")}
                 </label>
                 <input
                   type="text"
@@ -3008,7 +3007,7 @@ export default function SuperAdminDashboard({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
-                    Subdomen (subdomain) *
+                    {t("Subdomen (subdomain) *")}
                   </label>
                   <input
                     type="text"
@@ -3020,7 +3019,7 @@ export default function SuperAdminDashboard({
                 </div>
                 <div>
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
-                    Rahbar (CEO) ismi *
+                    {t("Rahbar (CEO) ismi *")}
                   </label>
                   <input
                     type="text"
@@ -3035,7 +3034,7 @@ export default function SuperAdminDashboard({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
-                    Telefon raqami
+                    {t("Telefon raqami")}
                   </label>
                   <input
                     type="text"
@@ -3046,7 +3045,7 @@ export default function SuperAdminDashboard({
                 </div>
                 <div>
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
-                    Oylik Ijara summasi (UZS) *
+                    {t("Oylik Ijara summasi (UZS) *")}
                   </label>
                   <input
                     type="number"
@@ -3060,12 +3059,12 @@ export default function SuperAdminDashboard({
 
               <div>
                 <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
-                  Klinika Manzili (Xaritaga ulanish linki) *
+                  {t("Klinika Manzili (Xaritaga ulanish linki) *")}
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Masalan: https://google.com/maps/..."
+                  placeholder={t("Masalan: https://google.com/maps/...")}
                   value={clinicToEdit.mapLink || ""}
                   onChange={(e) => setClinicToEdit({ ...clinicToEdit, mapLink: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] text-slate-800 font-bold focus:outline-none focus:border-cyan-500"
@@ -3074,24 +3073,24 @@ export default function SuperAdminDashboard({
 
               <div>
                 <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
-                  Guruh nomi (ixtiyoriy)
+                  {t("Guruh nomi (ixtiyoriy)")}
                 </label>
                 <input
                   type="text"
-                  placeholder="Masalan: Ismoilov filiallari"
+                  placeholder={t("Masalan: Ismoilov filiallari")}
                   value={clinicToEdit.groupId || ""}
                   onChange={(e) => setClinicToEdit({ ...clinicToEdit, groupId: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold focus:outline-none focus:border-cyan-500"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Bir egaga tegishli bir nechta filialga BIR XIL nom bering — "Guruh hisoboti" bo'limida jamlanib ko'rsatiladi.
+                  {t("Bir egaga tegishli bir nechta filialga BIR XIL nom bering — \"Guruh hisoboti\" bo'limida jamlanib ko'rsatiladi.")}
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
-                    Latitude (Kenglik) *
+                    {t("Latitude (Kenglik) *")}
                   </label>
                   <input
                     type="number"
@@ -3104,7 +3103,7 @@ export default function SuperAdminDashboard({
                 </div>
                 <div>
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
-                    Longitude (Uzunlik) *
+                    {t("Longitude (Uzunlik) *")}
                   </label>
                   <input
                     type="number"
@@ -3120,7 +3119,7 @@ export default function SuperAdminDashboard({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
-                    Navbatdagi to'lov muddati
+                    {t("Navbatdagi to'lov muddati")}
                   </label>
                   <input
                     type="date"
@@ -3131,7 +3130,7 @@ export default function SuperAdminDashboard({
                 </div>
                 <div>
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
-                    Klinika Logotipi (Emoji)
+                    {t("Klinika Logotipi (Emoji)")}
                   </label>
                   <input
                     type="text"
@@ -3144,15 +3143,15 @@ export default function SuperAdminDashboard({
 
               <div>
                 <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1">
-                  Obuna darajasi
+                  {t("Obuna darajasi")}
                 </label>
                 <select
                   value={clinicToEdit.subscriptionTier || 'basic'}
                   onChange={(e) => setClinicToEdit({ ...clinicToEdit, subscriptionTier: e.target.value as 'basic' | 'premium' })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold focus:outline-none focus:border-cyan-500"
                 >
-                  <option value="basic">Basic (AI'siz)</option>
-                  <option value="premium">Premium (AI Yordamchi bilan)</option>
+                  <option value="basic">{t("Basic (AI'siz)")}</option>
+                  <option value="premium">{t("Premium (AI Yordamchi bilan)")}</option>
                 </select>
               </div>
 
@@ -3162,13 +3161,13 @@ export default function SuperAdminDashboard({
                   onClick={() => setClinicToEdit(null)}
                   className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer transition-all active:scale-95"
                 >
-                  Bekor qilish
+                  {t("Bekor qilish")}
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2.5 bg-[#0284c7] hover:bg-cyan-700 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer active:scale-95 flex items-center gap-1"
                 >
-                  <Save className="w-4 h-4 text-cyan-200" /> Saqlash ✓
+                  <Save className="w-4 h-4 text-cyan-200" /> {t("Saqlash ✓")}
                 </button>
               </div>
             </form>
@@ -3287,7 +3286,7 @@ export default function SuperAdminDashboard({
             <form onSubmit={handleCreateDoctorSubmit} className="space-y-4">
               <div>
                 <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">
-                  Ism Familiya *
+                  {t("Ism Familiya *")}
                 </label>
                 <input
                   type="text"
@@ -3299,20 +3298,20 @@ export default function SuperAdminDashboard({
               </div>
               <div>
                 <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">
-                  Mutaxassislik *
+                  {t("Mutaxassislik *")}
                 </label>
                 <input
                   type="text"
                   required
                   value={newDoctorSpecialty}
-                  placeholder="masalan: Stomatolog-Terapevt"
+                  placeholder={t("masalan: Stomatolog-Terapevt")}
                   onChange={(e) => setNewDoctorSpecialty(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
                 />
               </div>
               <div>
                 <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">
-                  Klinika / Filial *
+                  {t("Klinika / Filial *")}
                 </label>
                 <select
                   required
@@ -3320,7 +3319,7 @@ export default function SuperAdminDashboard({
                   onChange={(e) => setNewDoctorClinicId(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
                 >
-                  <option value="" disabled>Klinikani tanlang</option>
+                  <option value="" disabled>{t("Klinikani tanlang")}</option>
                   {clinics.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
@@ -3351,14 +3350,14 @@ export default function SuperAdminDashboard({
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4">
           <div className="bg-white text-slate-800 rounded-3xl p-6 max-w-2xl w-full max-h-[92vh] overflow-y-auto border border-slate-100 shadow-2xl space-y-4">
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest text-center border-b border-slate-100 pb-2">
-              Shifokorlarni ommaviy qo'shish
+              {t("Shifokorlarni ommaviy qo'shish")}
             </h3>
 
             {!bulkResults ? (
               <>
                 <div>
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1.5">
-                    Klinika
+                    {t("Klinika")}
                   </label>
                   <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl mb-2 w-fit">
                     <button
@@ -3368,7 +3367,7 @@ export default function SuperAdminDashboard({
                         bulkClinicMode === 'existing' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'
                       }`}
                     >
-                      Mavjud klinika
+                      {t("Mavjud klinika")}
                     </button>
                     <button
                       type="button"
@@ -3377,7 +3376,7 @@ export default function SuperAdminDashboard({
                         bulkClinicMode === 'new' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'
                       }`}
                     >
-                      Yangi klinika
+                      {t("Yangi klinika")}
                     </button>
                   </div>
                   {bulkClinicMode === 'existing' ? (
@@ -3386,7 +3385,7 @@ export default function SuperAdminDashboard({
                       onChange={(e) => setBulkClinicId(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
                     >
-                      <option value="">Klinikani tanlang</option>
+                      <option value="">{t("Klinikani tanlang")}</option>
                       {clinics.map((c) => (
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
@@ -3397,11 +3396,11 @@ export default function SuperAdminDashboard({
                         type="text"
                         value={bulkNewClinicName}
                         onChange={(e) => setBulkNewClinicName(e.target.value)}
-                        placeholder="Klinika nomi"
+                        placeholder={t("Klinika nomi")}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
                       />
                       <p className="text-[10px] font-medium text-slate-400 mt-1">
-                        Manzil, telefon va narx keyinroq "Klinikalar" bo'limida to'ldiriladi — hoziroq standart qiymatlar bilan yaratiladi.
+                        {t("Manzil, telefon va narx keyinroq \"Klinikalar\" bo'limida to'ldiriladi — hoziroq standart qiymatlar bilan yaratiladi.")}
                       </p>
                     </>
                   )}
@@ -3409,10 +3408,10 @@ export default function SuperAdminDashboard({
 
                 <div>
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1.5">
-                    Shifokorlar ro'yxati
+                    {t("Shifokorlar ro'yxati")}
                   </label>
                   <p className="text-[10px] font-medium text-slate-400 mb-1.5">
-                    Har bir qatorda bitta shifokor: ism va mutaxassislik orasida Tab yoki kamida 2 ta bo'shliq. Qatorlarni o'zingiz tahrirlashingiz, qo'shishingiz yoki o'chirishingiz mumkin.
+                    {t("Har bir qatorda bitta shifokor: ism va mutaxassislik orasida Tab yoki kamida 2 ta bo'shliq. Qatorlarni o'zingiz tahrirlashingiz, qo'shishingiz yoki o'chirishingiz mumkin.")}
                   </p>
                   <textarea
                     value={bulkDoctorText}
@@ -3421,7 +3420,7 @@ export default function SuperAdminDashboard({
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-indigo-500"
                   />
                   <p className="text-[10px] font-bold text-slate-400 mt-1">
-                    {bulkDoctorText.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#')).length} ta qator
+                    {bulkDoctorText.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#')).length} {t("ta qator")}
                   </p>
                 </div>
 
@@ -3431,7 +3430,7 @@ export default function SuperAdminDashboard({
                     onClick={() => setShowBulkAddDoctorModal(false)}
                     className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer"
                   >
-                    Bekor qilish
+                    {t("Bekor qilish")}
                   </button>
                   <button
                     type="button"
@@ -3439,23 +3438,23 @@ export default function SuperAdminDashboard({
                     disabled={bulkImporting}
                     className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-black rounded-xl cursor-pointer shadow-md"
                   >
-                    {bulkImporting ? 'Qo\'shilmoqda...' : "Barchasini qo'shish"}
+                    {bulkImporting ? t("Qo'shilmoqda...") : t("Barchasini qo'shish")}
                   </button>
                 </div>
               </>
             ) : (
               <>
                 <p className="text-xs font-bold text-slate-600 text-center">
-                  {bulkResults.filter((r) => r.ok).length} / {bulkResults.length} shifokor muvaffaqiyatli qo'shildi.
-                  {' '}Har bir parol faqat shu yerda ko'rsatiladi — nusxa oling yoki yuklab oling.
+                  {bulkResults.filter((r) => r.ok).length} / {bulkResults.length} {t("shifokor muvaffaqiyatli qo'shildi.")}
+                  {' '}{t("Har bir parol faqat shu yerda ko'rsatiladi — nusxa oling yoki yuklab oling.")}
                 </p>
                 <div className="border border-slate-100 rounded-xl overflow-hidden">
                   <table className="w-full text-[11px]">
                     <thead className="bg-slate-50">
                       <tr className="text-left text-slate-400 font-black uppercase tracking-wide">
-                        <th className="px-3 py-2">Ism</th>
-                        <th className="px-3 py-2">Login</th>
-                        <th className="px-3 py-2">Parol</th>
+                        <th className="px-3 py-2">{t("Ism")}</th>
+                        <th className="px-3 py-2">{t("Login")}</th>
+                        <th className="px-3 py-2">{t("Parol")}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -3483,21 +3482,21 @@ export default function SuperAdminDashboard({
                     className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer flex items-center gap-1.5"
                   >
                     <Copy className="w-3.5 h-3.5" />
-                    Nusxalash
+                    {t("Nusxalash")}
                   </button>
                   <button
                     type="button"
                     onClick={exportBulkResultsTxt}
                     className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black rounded-xl cursor-pointer"
                   >
-                    Faylga yuklab olish
+                    {t("Faylga yuklab olish")}
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowBulkAddDoctorModal(false)}
                     className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl cursor-pointer shadow-md"
                   >
-                    Yopish
+                    {t("Yopish")}
                   </button>
                 </div>
               </>
@@ -3531,7 +3530,7 @@ export default function SuperAdminDashboard({
             }} className="space-y-4">
               <div>
                 <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">
-                  Ism Familiya *
+                  {t("Ism Familiya *")}
                 </label>
                 <input
                   type="text"
@@ -3543,7 +3542,7 @@ export default function SuperAdminDashboard({
               </div>
               <div>
                 <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">
-                  Mutaxassislik *
+                  {t("Mutaxassislik *")}
                 </label>
                 <input
                   type="text"
@@ -3555,7 +3554,7 @@ export default function SuperAdminDashboard({
               </div>
               <div>
                 <label className="text-[10px] font-extrabold text-slate-400 uppercase block mb-1">
-                  Klinika / Filial *
+                  {t("Klinika / Filial *")}
                 </label>
                 <select
                   required
@@ -3563,7 +3562,7 @@ export default function SuperAdminDashboard({
                   onChange={(e) => setDoctorToEditDetails({ ...doctorToEditDetails, clinicId: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
                 >
-                  <option value="" disabled>Klinikani tanlang</option>
+                  <option value="" disabled>{t("Klinikani tanlang")}</option>
                   {clinics.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}

@@ -675,7 +675,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                       {clinic.ratingCount ? (
                         <>★ {clinic.rating} <span className="text-slate-500 font-normal">({clinic.ratingCount})</span></>
                       ) : (
-                        <span className="text-slate-500 font-normal normal-case">Hali baho yo'q</span>
+                        <span className="text-slate-500 font-normal normal-case">{t("Hali baho yo'q")}</span>
                       )}
                     </span>
                   </div>
@@ -694,10 +694,10 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                         referrerPolicy="no-referrer"
                         rel="noopener noreferrer"
                         className="text-cyan-400 hover:text-cyan-300 font-black flex items-center gap-0.5 text-[8.5px] uppercase shrink-0 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-500/20"
-                        title="Link"
+                        title={t("Link")}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        📍 Link <ExternalLink className="w-2.5 h-2.5" />
+                        {t("📍 Link")} <ExternalLink className="w-2.5 h-2.5" />
                       </a>
                     )}
                   </h4>
@@ -709,7 +709,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                   <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-[#1e3256]/30 text-slate-400">
                     <span className="font-semibold text-slate-300 flex items-center gap-1 bg-[#10b981]/5 px-2 py-0.5 rounded border border-[#10b981]/15">
                       <Navigation className="text-emerald-400 w-3 h-3" />
-                      {t('distanceFromYou')}: <strong className="text-emerald-400">{clinic.distance} km</strong>
+                      {t('distanceFromYou')}: <strong className="text-emerald-400">{clinic.distance} {t("km")}</strong>
                     </span>
                     <span className="flex items-center gap-0.5 font-bold text-[10px] text-emerald-400 uppercase">
                       <Activity className="w-3 h-3 text-emerald-400 animate-pulse" />
@@ -872,7 +872,7 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
             <div className="space-y-1.5 pt-1.5 border-t border-[#1e3256]/30">
               <div className="flex items-center justify-between text-[11px] font-semibold text-slate-300">
                 <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> {selectedClinic.phone}</span>
-                <span className="text-emerald-400 font-black">{getDistance(userLat, userLng, selectedClinic.lat, selectedClinic.lng)} km</span>
+                <span className="text-emerald-400 font-black">{getDistance(userLat, userLng, selectedClinic.lat, selectedClinic.lng)} {t("km")}</span>
               </div>
               <div className="grid grid-cols-2 gap-1.5 text-center">
                 <a

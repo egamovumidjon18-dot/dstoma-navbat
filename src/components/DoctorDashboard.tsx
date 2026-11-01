@@ -1502,7 +1502,7 @@ export default function DoctorDashboard({
     if (!text || !text.trim()) return;
     const recipients = clinicPatients.filter((p) => p.telegramChatId);
     if (recipients.length === 0) {
-      window.alert("Telegram ulangan bemorlar topilmadi.");
+      window.alert(t("Telegram ulangan bemorlar topilmadi."));
       return;
     }
     setIsSendingBulkTelegram(true);
@@ -1513,7 +1513,7 @@ export default function DoctorDashboard({
         body: JSON.stringify({ chatIds: recipients.map((p) => p.telegramChatId), text: text.trim() }),
       });
       const data = await res.json();
-      window.alert(data.ok ? `${data.sent} / ${data.total} bemorga xabar yuborildi.` : `Xatolik: ${data.error || 'Nomalum xato'}`);
+      window.alert(data.ok ? `${data.sent} / ${data.total} bemorga xabar yuborildi.` : `${t("Xato")}: ${t(data.error || 'Nomalum xato')}`);
     } catch (e: any) {
       window.alert(`Xatolik: ${e.message}`);
     } finally {
@@ -1985,7 +1985,7 @@ export default function DoctorDashboard({
         setReminders((prev) => prev.map((r) => (r.id === id ? { ...r, status, sentAt: status === 'sent' ? new Date().toISOString() : r.sentAt } : r)));
       } else {
         const data = await res.json().catch(() => ({}));
-        window.alert(data.error || t("xatolik yuz berdi"));
+        window.alert(data.error ? t(data.error) : t("xatolik yuz berdi"));
       }
     } catch (err) {
       console.warn("[DoctorDashboard] Failed to update reminder:", err);
@@ -2336,7 +2336,7 @@ export default function DoctorDashboard({
                   DStoma
                 </h1>
                 <p className="text-[9px] text-slate-400 font-bold tracking-[0.2em] uppercase">
-                  Navbati
+                  {t("Navbati")}
                 </p>
               </div>
             )}
@@ -2548,7 +2548,7 @@ export default function DoctorDashboard({
                   </div>
                   <div className="mt-3 flex flex-col">
                     <span className="text-2xl font-black text-slate-800">
-                      {dailyRevenue.toLocaleString('uz-UZ').replace(/,/g, ' ')} <span className="text-sm">so'm</span>
+                      {dailyRevenue.toLocaleString('uz-UZ').replace(/,/g, ' ')} <span className="text-sm">{t("so'm")}</span>
                     </span>
                   </div>
                 </div>
@@ -2748,10 +2748,10 @@ export default function DoctorDashboard({
                                     q.status === 'cancelled' ? 'text-rose-600 bg-rose-50' :
                                     'text-amber-600 bg-amber-50'
                                   }`}>
-                                    {q.status === 'in_progress' ? 'Qabulda' :
-                                     q.status === 'scheduled' ? 'Belgilangan' :
-                                     q.status === 'completed' ? 'Yakunlangan' :
-                                     q.status === 'cancelled' ? 'Bekor qilindi' : 'Kutmoqda'}
+                                    {q.status === 'in_progress' ? t("Qabulda") :
+                                     q.status === 'scheduled' ? t("Belgilangan") :
+                                     q.status === 'completed' ? t("Yakunlangan") :
+                                     q.status === 'cancelled' ? t("Bekor qilindi") : t("Kutmoqda")}
                                   </span>
                                   {q.status === 'pending' || q.status === 'scheduled' ? (
                                     <>
@@ -2929,7 +2929,7 @@ export default function DoctorDashboard({
                                   .filter((i) => i.status !== "Cancelled")
                                   .reduce((sum, i) => sum + (i.price || 0), 0)
                                   .toLocaleString()}{" "}
-                                so'm
+                                {t("so'm")}
                               </td>
                             </tr>
                           </tfoot>
@@ -4106,7 +4106,7 @@ export default function DoctorDashboard({
                           {patientStats.totalRevenue.toLocaleString()}
                         </span>
                         <span className="text-[10px] font-bold text-slate-500">
-                          so'm
+                          {t("so'm")}
                         </span>
                       </div>
                     </div>
@@ -4123,7 +4123,7 @@ export default function DoctorDashboard({
                           {t("bemorlar ro'yxati")}
                         </h3>
                         <span className="text-xs font-semibold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full">
-                          {filteredClinicPatients.length.toLocaleString()} bemor
+                          {filteredClinicPatients.length.toLocaleString()} {t("bemor")}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -4329,7 +4329,7 @@ export default function DoctorDashboard({
                     {/* Pagination */}
                     <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
                       <span className="text-slate-500 font-medium">
-                        {filteredClinicPatients.length} / {filteredClinicPatients.length} bemor
+                        {filteredClinicPatients.length} / {filteredClinicPatients.length} {t("bemor")}
                       </span>
                       <div className="flex items-center gap-2">
                         <button className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-600 text-white font-bold">
@@ -4523,7 +4523,7 @@ export default function DoctorDashboard({
                             {t("o'rtacha muolaja narxi")}
                           </span>
                           <span className="font-bold text-slate-800">
-                            {patientStats.totalVisits > 0 ? Math.round(patientStats.totalRevenue / patientStats.totalVisits).toLocaleString() : 0} so'm
+                            {patientStats.totalVisits > 0 ? Math.round(patientStats.totalRevenue / patientStats.totalVisits).toLocaleString() : 0} {t("so'm")}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
@@ -5313,7 +5313,7 @@ export default function DoctorDashboard({
                               className="text-left border border-slate-200 hover:border-purple-400 hover:bg-purple-50 rounded-xl px-3 py-2.5 transition-colors"
                             >
                               <p className="text-xs font-bold text-slate-800 leading-snug line-clamp-2">{translateMedicalText(s.name, language || 'uz')}</p>
-                              <p className="text-[11px] font-black text-purple-600 mt-1">{Number(s.price).toLocaleString()} so'm</p>
+                              <p className="text-[11px] font-black text-purple-600 mt-1">{Number(s.price).toLocaleString()} {t("so'm")}</p>
                             </button>
                           ))}
                         </div>

@@ -205,7 +205,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
   const [isLinkingToChart, setIsLinkingToChart] = useState(false);
   const handleLinkToChart = async (photo: Photo) => {
     if (!photo.toothNumber) {
-      alert("Bu foto uchun tish raqami kiritilmagan. Avval fotoni tahrirlab tish raqamini kiriting.");
+      alert(t("Bu foto uchun tish raqami kiritilmagan. Avval fotoni tahrirlab tish raqamini kiriting."));
       return;
     }
     setIsLinkingToChart(true);
@@ -322,7 +322,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
               onClick={() => { setActiveView('gallery'); setSelectedPhoto(null); setComparePair(null); }}
               className="flex items-center gap-2 px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-white border border-slate-800 rounded-xl text-sm font-bold transition-colors"
             >
-              <ChevronLeft className="w-4 h-4" /> Ortga qaytish
+              <ChevronLeft className="w-4 h-4" /> {t("Ortga qaytish")}
             </button>
           )}
         </div>
@@ -358,7 +358,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
           {pairs.length > 0 && !searchTerm && filterCategory === 'All' && (
             <div className="mb-8">
               <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <SplitSquareHorizontal className="w-4 h-4" /> Oldin va Keyin
+                <SplitSquareHorizontal className="w-4 h-4" /> {t("Oldin va Keyin")}
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {pairs.map(pair => {
@@ -431,7 +431,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
                             <p className="text-white font-bold text-sm">{new Date(photo.date).toLocaleDateString()}</p>
                             {photo.toothNumber && (
                               <p className="text-xs text-emerald-400 font-bold flex items-center gap-1 mt-1">
-                                Tish: {photo.toothNumber}
+                                {t("Tish:")} {photo.toothNumber}
                               </p>
                             )}
                           </div>
@@ -479,7 +479,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
                     <div className="flex gap-2">
                        <span className="text-[10px] font-bold bg-[#111827] text-slate-300 px-2 py-1 rounded-md">{photo.category}</span>
                        {photo.toothNumber && (
-                         <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded-md border border-emerald-500/20">Tish: {photo.toothNumber}</span>
+                         <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded-md border border-emerald-500/20">{t("Tish:")} {photo.toothNumber}</span>
                        )}
                     </div>
                   </div>
@@ -500,7 +500,7 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
                </span>
                {selectedPhoto.toothNumber && (
                  <span className="bg-emerald-500/80 backdrop-blur-sm text-white text-xs font-bold px-3 py-1.5 rounded-lg border border-emerald-500">
-                   Tish: {selectedPhoto.toothNumber}
+                   {t("Tish:")} {selectedPhoto.toothNumber}
                  </span>
                )}
             </div>
@@ -533,13 +533,13 @@ export default function PhotoGallery({ patientId, patientName, doctorName, langu
                 disabled={isLinkingToChart}
                 className="w-full py-2.5 bg-[#111827] hover:bg-[#1f2937] text-white rounded-xl text-sm font-bold border border-slate-800 transition-colors flex justify-center items-center gap-2 disabled:opacity-50"
               >
-                <Tag className="w-4 h-4" /> {isLinkingToChart ? "Bog'lanmoqda..." : "Dental Chartga bog'lash"}
+                <Tag className="w-4 h-4" /> {isLinkingToChart ? t("Bog'lanmoqda...") : t("Dental Chartga bog'lash")}
               </button>
               <button 
                 onClick={() => handleDelete(selectedPhoto.id)}
                 className="w-full py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl text-sm font-bold border border-rose-500/20 transition-colors flex justify-center items-center gap-2"
               >
-                <Trash2 className="w-4 h-4" /> O'chirish
+                <Trash2 className="w-4 h-4" /> {t("O'chirish")}
               </button>
             </div>
           </div>

@@ -524,7 +524,7 @@ export default function PatientPanel({
 
         {/* Profile Info */}
         <div className="px-6 py-4 flex items-center gap-3">
-          <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(decodeLegacyEntities(patient?.fullName) || t('bemor'))}&background=0D8ABC&color=fff`} alt="Profile" className="w-12 h-12 rounded-full object-cover" />
+          <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(decodeLegacyEntities(patient?.fullName) || t('bemor'))}&background=0D8ABC&color=fff`} alt={t("Profile")} className="w-12 h-12 rounded-full object-cover" />
           <div>
             <h3 className="font-bold text-sm text-slate-900">{decodeLegacyEntities(patient?.fullName) || t('bemor')}</h3>
             <p className="text-xs text-slate-500 font-medium">{decodeLegacyEntities(patient?.phone) || '+998 -- --- -- --'}</p>
@@ -1061,7 +1061,7 @@ export default function PatientPanel({
                   <Bot size={20} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-sm">AI Yordamchi</h3>
+                  <h3 className="font-bold text-slate-900 text-sm">{t("AI Yordamchi")}</h3>
                   <p className="text-[11px] text-slate-500">{t("tish sog'lig'i bo'yicha savol bering yoki rasm yuboring")}</p>
                 </div>
               </div>

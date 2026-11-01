@@ -304,7 +304,7 @@ export default function ClientDashboard({
     if (currentUser && !patientToken) {
       setCurrentUser(null);
       setActiveSubView('login');
-      showToast("Xavfsizlik yangilandi — iltimos, qaytadan kiring.", "error");
+      showToast(t("Xavfsizlik yangilandi — iltimos, qaytadan kiring."), "error");
     }
     // Intentionally runs only on mount: mid-session logout would fight the
     // login flow, which sets the token and the user in the same tick.
@@ -470,7 +470,7 @@ export default function ClientDashboard({
         body: JSON.stringify(newPatient)
       });
       if (!res.ok) {
-        showToast("Ro'yxatdan o'tishda xatolik yuz berdi. Qayta urinib ko'ring.", "error");
+        showToast(t("Ro'yxatdan o'tishda xatolik yuz berdi. Qayta urinib ko'ring."), "error");
         return;
       }
       // The server generates loginCode (registration no longer collects a
@@ -479,7 +479,7 @@ export default function ClientDashboard({
       savedPatient = await res.json();
     } catch (err) {
       console.warn("[ClientDashboard] Backend sync for patient registration failed", err);
-      showToast("Tarmoqqa ulanishda xatolik. Qayta urinib ko'ring.", "error");
+      showToast(t("Tarmoqqa ulanishda xatolik. Qayta urinib ko'ring."), "error");
       return;
     }
 
@@ -513,7 +513,7 @@ export default function ClientDashboard({
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!passport || !password) {
-      showToast("Iltimos, login kodingiz va parolingizni kiriting", "error");
+      showToast(t("Iltimos, login kodingiz va parolingizni kiriting"), "error");
       return;
     }
 
@@ -543,11 +543,11 @@ export default function ClientDashboard({
         showToast(t("Kabinetga muvaffaqiyatli kirdingiz!"));
         setActiveSubView('cabinet');
       } else {
-        showToast("Login yoki parol noto'g'ri. Hisobingiz yo'q bo'lsa, 'Ro'yxatdan o'tish' orqali yarating.", "error");
+        showToast(t("Login yoki parol noto'g'ri. Hisobingiz yo'q bo'lsa, 'Ro'yxatdan o'tish' orqali yarating."), "error");
       }
     } catch (err) {
       console.warn("[ClientDashboard] Patient login failed", err);
-      showToast("Tarmoqqa ulanishda xatolik yuz berdi. Qayta urinib ko'ring.", "error");
+      showToast(t("Tarmoqqa ulanishda xatolik yuz berdi. Qayta urinib ko'ring."), "error");
     }
   };
 
@@ -560,7 +560,7 @@ export default function ClientDashboard({
     // olish" entry point means a stale booking form left open in another tab
     // still can't slip a second ticket through.
     if (myActiveQueue) {
-      showToast("Sizda allaqachon faol navbat mavjud. Yangisini olishdan oldin uni bekor qiling.", "error");
+      showToast(t("Sizda allaqachon faol navbat mavjud. Yangisini olishdan oldin uni bekor qiling."), "error");
       setActiveSubView('cabinet');
       return;
     }
@@ -570,7 +570,7 @@ export default function ClientDashboard({
     const clinic = clinics.find(c => c.id === bookingClinicId);
     const doc = doctors.find(d => d.id === bookingDoctorId && d.clinicId === bookingClinicId);
     if (!clinic || !doc) {
-      showToast("Iltimos, avval klinikani va shifokorni tanlang!", "error");
+      showToast(t("Iltimos, avval klinikani va shifokorni tanlang!"), "error");
       return;
     }
 
@@ -604,7 +604,7 @@ export default function ClientDashboard({
     // already exists). Saying "booked!" and then quietly removing the ticket
     // is worse than saying why.
     if (result && result.ok === false) {
-      showToast(result.error || "Navbat olishda xatolik yuz berdi.", "error");
+      showToast(t(result.error || "Navbat olishda xatolik yuz berdi."), "error");
       return;
     }
 
@@ -629,7 +629,7 @@ export default function ClientDashboard({
   const handleJoinWaitlist = async (doctorId: string) => {
     const chatId = currentUser?.telegramChatId || telegramIdInput;
     if (!chatId) {
-      showToast("Xabar olish uchun Sozlamalarda Telegram ID'ingizni ulang.", "error");
+      showToast(t("Xabar olish uchun Sozlamalarda Telegram ID'ingizni ulang."), "error");
       return;
     }
     try {
@@ -645,10 +645,10 @@ export default function ClientDashboard({
         }),
       });
       if (!res.ok) throw new Error('Waitlist join rejected');
-      showToast("Bo'sh joy chiqsa, sizga Telegram orqali xabar beramiz!");
+      showToast(t("Bo'sh joy chiqsa, sizga Telegram orqali xabar beramiz!"));
     } catch (err) {
       console.warn('[ClientDashboard] Waitlist join failed', err);
-      showToast("Kutish ro'yxatiga qo'shishda xatolik yuz berdi.", "error");
+      showToast(t("Kutish ro'yxatiga qo'shishda xatolik yuz berdi."), "error");
     }
   };
 
@@ -702,9 +702,9 @@ export default function ClientDashboard({
             <div className="w-14 h-14 mx-auto bg-emerald-100 rounded-2xl flex items-center justify-center mb-4">
               <CheckCircle2 className="w-7 h-7 text-emerald-600" />
             </div>
-            <h3 className="text-base font-black text-slate-900 mb-1.5">Muvaffaqiyatli ro'yxatdan o'tdingiz!</h3>
+            <h3 className="text-base font-black text-slate-900 mb-1.5">{t("Muvaffaqiyatli ro'yxatdan o'tdingiz!")}</h3>
             <p className="text-xs text-slate-500 font-semibold mb-4">
-              Kabinetga kirish uchun quyidagi kodni saqlab qo'ying — bu kod parolingiz bilan birga kerak bo'ladi.
+              {t("Kabinetga kirish uchun quyidagi kodni saqlab qo'ying — bu kod parolingiz bilan birga kerak bo'ladi.")}
             </p>
             <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl py-4 mb-5">
               <p className="text-2xl font-black text-slate-900 tracking-[0.3em] font-mono">{justRegisteredCode}</p>
@@ -713,7 +713,7 @@ export default function ClientDashboard({
               onClick={() => setJustRegisteredCode(null)}
               className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white text-xs font-black uppercase tracking-wider rounded-2xl transition-all"
             >
-              Tushunarli, davom etish
+              {t("Tushunarli, davom etish")}
             </button>
           </div>
         </div>
@@ -741,9 +741,9 @@ export default function ClientDashboard({
           <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-5 border-b border-slate-100 text-center relative">
             <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center justify-center gap-2">
               <UserPlus2 className="w-5 h-5 text-indigo-600" />
-              Bemor Ma'lumotlari
+              {t("Bemor Ma'lumotlari")}
             </h2>
-            <p className="text-[10px] text-slate-400 font-semibold mt-1">Iltimos, elektron kartangizni ochish uchun formulani to'ldiring</p>
+            <p className="text-[10px] text-slate-400 font-semibold mt-1">{t("Iltimos, elektron kartangizni ochish uchun formulani to'ldiring")}</p>
           </div>
 
           {/* Body Form — deliberately just name + password. Passport, phone,
@@ -757,14 +757,14 @@ export default function ClientDashboard({
             {/* Full Name */}
             <div>
               <label className="text-xs font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
-                Ism va familiya *
+                {t("Ism va familiya *")}
               </label>
               <input
                 type="text"
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Masalan: Umidjon Egamov"
+                placeholder={t("Masalan: Umidjon Egamov")}
                 className="w-full bg-slate-50/70 text-xs font-semibold text-slate-800 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 focus:outline-none transition-all placeholder:text-slate-400"
               />
             </div>
@@ -772,14 +772,14 @@ export default function ClientDashboard({
             {/* Password */}
             <div>
               <label className="text-xs font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
-                Parol *
+                {t("Parol *")}
               </label>
               <input
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Xavfsiz parol kiriting"
+                placeholder={t("Xavfsiz parol kiriting")}
                 className="w-full bg-slate-50/70 text-xs font-semibold text-slate-800 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 focus:outline-none transition-all placeholder:text-slate-400"
               />
             </div>
@@ -787,19 +787,19 @@ export default function ClientDashboard({
             {/* Referral tracking */}
             <div>
               <label className="text-xs font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
-                Sizni kim tavsiya qildi? (ixtiyoriy)
+                {t("Sizni kim tavsiya qildi? (ixtiyoriy)")}
               </label>
               <input
                 type="text"
                 value={referredBy}
                 onChange={(e) => setReferredBy(e.target.value)}
-                placeholder="Masalan: do'stim Aziz, Instagram..."
+                placeholder={t("Masalan: do'stim Aziz, Instagram...")}
                 className="w-full bg-slate-50/70 text-xs font-semibold text-slate-800 border border-slate-200 rounded-xl px-4 py-3 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/25 focus:outline-none transition-all placeholder:text-slate-400"
               />
             </div>
 
             <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-              Telefon, pasport va boshqa ma'lumotlarni kabinetingizga kirgandan so'ng, "Sozlamalar" bo'limida to'ldirasiz.
+              {t("Telefon, pasport va boshqa ma'lumotlarni kabinetingizga kirgandan so'ng, \"Sozlamalar\" bo'limida to'ldirasiz.")}
             </p>
 
             {/* Submit Action Buttons exactly formatted as Screenshot 2 */}
@@ -808,7 +808,7 @@ export default function ClientDashboard({
                 type="submit"
                 className="flex-1 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-lg shadow-indigo-100/50 cursor-pointer transition-all text-center"
               >
-                Muvaffaqiyatli Ro'yxatdan o'tish
+                {t("Muvaffaqiyatli Ro'yxatdan o'tish")}
               </button>
               
               <button
@@ -816,7 +816,7 @@ export default function ClientDashboard({
                 onClick={() => setActiveSubView('home')}
                 className="px-6 py-3.5 border border-slate-200 hover:bg-slate-50 active:scale-95 text-slate-500 hover:text-slate-700 text-xs font-bold rounded-2xl cursor-pointer transition-all"
               >
-                Orqaga
+                {t("Orqaga")}
               </button>
             </div>
           </form>
@@ -831,10 +831,10 @@ export default function ClientDashboard({
           <div className="bg-gradient-to-r from-slate-50 to-slate-100 px-6 py-5 border-b border-slate-100 text-center">
             <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center justify-center gap-2">
               <LogIn className="w-5 h-5 text-cyan-600" />
-              Bemor Kabinetiga Kirish
+              {t("Bemor Kabinetiga Kirish")}
             </h2>
             <p className="text-[10px] text-slate-400 font-semibold mt-1">
-              Ro'yxatdan o'tishda olgan kodingiz (yoki pasportingiz) va parolingizni kiriting
+              {t("Ro'yxatdan o'tishda olgan kodingiz (yoki pasportingiz) va parolingizni kiriting")}
             </p>
           </div>
 
@@ -843,7 +843,7 @@ export default function ClientDashboard({
             {/* Login code (or, for older accounts, passport) */}
             <div>
               <label className="text-xs font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
-                Login kodi (yoki pasport) *
+                {t("Login kodi (yoki pasport) *")}
               </label>
               <input
                 type="text"
@@ -858,7 +858,7 @@ export default function ClientDashboard({
             {/* Password */}
             <div>
               <label className="text-xs font-black text-slate-700 block mb-1.5 uppercase tracking-wide">
-                Parol *
+                {t("Parol *")}
               </label>
               <input
                 type="password"
@@ -876,7 +876,7 @@ export default function ClientDashboard({
                 type="submit"
                 className="flex-1 py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-95 text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-lg shadow-cyan-950/20 cursor-pointer transition-all text-center"
               >
-                Tizimga kirish
+                {t("Tizimga kirish")}
               </button>
               
               <button
@@ -884,14 +884,14 @@ export default function ClientDashboard({
                 onClick={() => setActiveSubView('home')}
                 className="px-6 py-3.5 border border-slate-200 hover:bg-slate-50 active:scale-95 text-slate-500 hover:text-slate-700 text-xs font-bold rounded-2xl cursor-pointer transition-all"
               >
-                Orqaga
+                {t("Orqaga")}
               </button>
             </div>
 
             {/* Link to Register */}
             <div className="text-center pt-2">
               <p className="text-[11px] font-semibold text-slate-500">
-                Klinikada shaxsiy kartangiz yo'qmi?{" "}
+                {t("Klinikada shaxsiy kartangiz yo'qmi?")}{" "}
                 <button
                   type="button"
                   onClick={() => {
@@ -904,7 +904,7 @@ export default function ClientDashboard({
                   }}
                   className="text-cyan-600 font-extrabold hover:underline"
                 >
-                  Yangi bemor ro'yxatdan o'tish
+                  {t("Yangi bemor ro'yxatdan o'tish")}
                 </button>
               </p>
             </div>
@@ -1176,7 +1176,7 @@ export default function ClientDashboard({
             // One active ticket per patient — send them to their existing
             // ticket instead of a wizard that would just get rejected on submit.
             if (myActiveQueue) {
-              showToast("Sizda allaqachon faol navbat mavjud. Yangisini olishdan oldin uni bekor qiling.", "error");
+              showToast(t("Sizda allaqachon faol navbat mavjud. Yangisini olishdan oldin uni bekor qiling."), "error");
               return;
             }
             // No pre-fill: the wizard opens on the map and only shows a
@@ -1286,13 +1286,13 @@ export default function ClientDashboard({
       {/* ----------------- FOOTER (SCREENSHOT 1) ----------------- */}
       <footer className="pt-8 border-t border-slate-200 mt-10">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 font-sans text-xs text-slate-400 font-semibold select-none pb-4">
-          <p>© 2025-2026 DStoma Queue. Barcha huquqlar himoyalangan.</p>
+          <p>{t("© 2025-2026 DStoma Queue. Barcha huquqlar himoyalangan.")}</p>
           <p className="flex items-center gap-1.5 text-slate-500">
-            Sizning sog'lig'ingiz biz uchun muhim ❤️
+            {t("Sizning sog'lig'ingiz biz uchun muhim ❤️")}
           </p>
           <div className="flex items-center gap-2">
             <RefreshCw className="w-3.5 h-3.5 text-cyan-500 animate-spin" />
-            <span>Avtomatik yangilanmoqda 3 soniya</span>
+            <span>{t("Avtomatik yangilanmoqda 3 soniya")}</span>
           </div>
         </div>
       </footer>

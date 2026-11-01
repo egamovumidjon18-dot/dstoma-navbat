@@ -1,6 +1,8 @@
 import React from 'react';
 import { Star, MapPin, Users, ArrowRight } from 'lucide-react';
 import { Clinic } from '../types';
+import { createTranslator } from '../utils/translate';
+import { useLanguage } from '../utils/language';
 
 interface ClinicCardProps {
   clinic: Clinic;
@@ -12,6 +14,7 @@ interface ClinicCardProps {
 // page. Clinic has no photo field, so the visual anchor is its logo/emoji in a
 // colored tile rather than a placeholder photo implying a feature that isn't there.
 const ClinicCard: React.FC<ClinicCardProps> = ({ clinic, distanceKm, onBook }) => {
+  const t = createTranslator(useLanguage());
   const hasRatings = (clinic.ratingCount || 0) > 0;
 
   return (
@@ -29,11 +32,11 @@ const ClinicCard: React.FC<ClinicCardProps> = ({ clinic, distanceKm, onBook }) =
         <div className="flex items-center gap-3 mt-1.5">
           <span className="flex items-center gap-1 text-[11px] font-bold text-amber-400">
             <Star className="w-3 h-3 fill-amber-400" />
-            {hasRatings ? clinic.rating.toFixed(1) : "Yangi"}
+            {hasRatings ? clinic.rating.toFixed(1) : t("Yangi")}
             {hasRatings && <span className="text-slate-500 font-medium">({clinic.ratingCount})</span>}
           </span>
           {typeof distanceKm === 'number' && (
-            <span className="text-[11px] font-bold text-cyan-400">{distanceKm.toFixed(1)} km</span>
+            <span className="text-[11px] font-bold text-cyan-400">{distanceKm.toFixed(1)} {t("km")}</span>
           )}
           <span className="flex items-center gap-1 text-[11px] text-slate-500">
             <Users className="w-3 h-3" />
@@ -46,7 +49,7 @@ const ClinicCard: React.FC<ClinicCardProps> = ({ clinic, distanceKm, onBook }) =
         onClick={onBook}
         className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-[#04120c] text-xs font-black rounded-xl transition-colors group-hover:gap-2"
       >
-        Navbat <ArrowRight className="w-3.5 h-3.5" />
+        {t("Navbat")} <ArrowRight className="w-3.5 h-3.5" />
       </button>
     </div>
   );

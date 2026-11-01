@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, Building2, CheckCircle2, Copy, Phone, Send, ShieldAlert, User } from 'lucide-react';
 import type { Language } from '../../translations';
 import { getWelcomeCopy } from './translations';
+import { createTranslator } from '../../utils/translate';
 import DStomaLogo from './DStomaLogo';
 import LanguageSelector from './LanguageSelector';
 
@@ -107,10 +108,113 @@ const copy = {
     helpTitle: 'Questions or problems',
     helpBody: 'Reach out directly any time:',
   },
+  kk: {
+    title: 'Клиникаңызды тіркеңіз',
+    sub: 'Үш дерек — және клиника панелі дайын. Содан кейін дәрігерлеріңізді өзіңіз қосасыз.',
+    clinic: 'Клиника атауы',
+    clinicPh: 'Мысалы: Smile Dental',
+    owner: 'Басшының аты-жөні',
+    ownerPh: 'Мысалы: Әзіз Кәрімов',
+    phone: 'Телефон нөміріңіз',
+    address: 'Мекенжай (міндетті емес)',
+    addressPh: 'Қала, көше',
+    submit: 'Тіркелу',
+    submitting: 'Жасалуда...',
+    haveAccount: 'Аккаунтыңыз бар ма?',
+    login: 'Кіру',
+    doneTitle: 'Клиникаңыз дайын!',
+    doneSub: 'Төмендегі логин мен құпиясөзді сақтаңыз — құпиясөз қайта көрсетілмейді.',
+    loginLabel: 'Логин',
+    passLabel: 'Құпиясөз',
+    copy: 'Көшіру',
+    copied: 'Көшірілді',
+    enter: 'Панельге кіру',
+    nextTitle: 'Келесі қадам',
+    nextBody: 'Панельде "Дәрігерлер" бөліміне өтіп, дәрігерлеріңізді қосыңыз — әрқайсысына логин мен құпиясөз автоматты түрде жасалады.',
+    helpTitle: 'Сұрақ немесе мәселе болса',
+    helpBody: 'Кез келген уақытта тікелей хабарласыңыз:',
+  },
+  ky: {
+    title: 'Клиникаңызды каттаңыз',
+    sub: 'Үч маалымат — жана клиника панели даяр. Андан кийин дарыгерлериңизди өзүңүз кошосуз.',
+    clinic: 'Клиниканын аталышы',
+    clinicPh: 'Мисалы: Smile Dental',
+    owner: 'Жетекчинин аты-жөнү',
+    ownerPh: 'Мисалы: Азиз Каримов',
+    phone: 'Телефон номериңиз',
+    address: 'Дарек (милдеттүү эмес)',
+    addressPh: 'Шаар, көчө',
+    submit: 'Катталуу',
+    submitting: 'Түзүлүүдө...',
+    haveAccount: 'Аккаунтуңуз барбы?',
+    login: 'Кирүү',
+    doneTitle: 'Клиникаңыз даяр!',
+    doneSub: 'Төмөнкү логин менен сырсөздү сактап коюңуз — сырсөз кайра көрсөтүлбөйт.',
+    loginLabel: 'Логин',
+    passLabel: 'Сырсөз',
+    copy: 'Көчүрүү',
+    copied: 'Көчүрүлдү',
+    enter: 'Панелге кирүү',
+    nextTitle: 'Кийинки кадам',
+    nextBody: 'Панелде "Дарыгерлер" бөлүмүнө өтүп, дарыгерлериңизди кошуңуз — ар бирине логин жана сырсөз автоматтык түрдө түзүлөт.',
+    helpTitle: 'Суроо же көйгөй болсо',
+    helpBody: 'Каалаган убакта түз байланышыңыз:',
+  },
+  tg: {
+    title: 'Клиникаи худро сабт кунед',
+    sub: 'Се маълумот — ва панели клиника тайёр аст. Баъд духтурони худро худатон илова мекунед.',
+    clinic: 'Номи клиника',
+    clinicPh: 'Масалан: Smile Dental',
+    owner: 'Ному насаби роҳбар',
+    ownerPh: 'Масалан: Азиз Каримов',
+    phone: 'Рақами телефони шумо',
+    address: 'Суроға (ихтиёрӣ)',
+    addressPh: 'Шаҳр, кӯча',
+    submit: 'Бақайдгирӣ',
+    submitting: 'Сохта мешавад...',
+    haveAccount: 'Ҳисоб доред?',
+    login: 'Ворид шудан',
+    doneTitle: 'Клиникаи шумо тайёр аст!',
+    doneSub: 'Логин ва пароли зеринро нигоҳ доред — парол дигар нишон дода намешавад.',
+    loginLabel: 'Логин',
+    passLabel: 'Парол',
+    copy: 'Нусха гирифтан',
+    copied: 'Нусха гирифта шуд',
+    enter: 'Ворид шудан ба панел',
+    nextTitle: 'Қадами навбатӣ',
+    nextBody: 'Дар панел ба бахши "Духтурон" гузаред ва духтурони худро илова кунед — барои ҳар кадом логин ва парол худкор сохта мешавад.',
+    helpTitle: 'Агар савол ё мушкил бошад',
+    helpBody: 'Ҳар вақт мустақиман тамос гиред:',
+  },
+  tk: {
+    title: 'Klinikaňyzy hasaba alyň',
+    sub: 'Üç maglumat — we klinika paneli taýýar. Soňra lukmanlaryňyzy özüňiz goşarsyňyz.',
+    clinic: 'Klinikanyň ady',
+    clinicPh: 'Mysal üçin: Smile Dental',
+    owner: 'Ýolbaşçynyň F.A.A.',
+    ownerPh: 'Mysal üçin: Aziz Karimow',
+    phone: 'Telefon belgiňiz',
+    address: 'Salgy (hökmany däl)',
+    addressPh: 'Şäher, köçe',
+    submit: 'Hasaba durmak',
+    submitting: 'Döredilýär...',
+    haveAccount: 'Hasabyňyz barmy?',
+    login: 'Girmek',
+    doneTitle: 'Klinikaňyz taýýar!',
+    doneSub: 'Aşakdaky login we açar sözi saklaň — açar söz gaýtadan görkezilmez.',
+    loginLabel: 'Login',
+    passLabel: 'Açar söz',
+    copy: 'Göçürmek',
+    copied: 'Göçürildi',
+    enter: 'Panele girmek',
+    nextTitle: 'Indiki ädim',
+    nextBody: 'Panelde "Lukmanlar" bölümine geçip, lukmanlaryňyzy goşuň — her birine login we açar söz awtomatik döredilýär.',
+    helpTitle: 'Sorag ýa-da mesele bolsa',
+    helpBody: 'Islendik wagt göni habarlaşyň:',
+  },
 };
 
-const pick = (language: Language) =>
-  language === 'ru' ? copy.ru : language === 'uz' ? copy.uz : copy.en;
+const pick = (language: Language) => copy[language] ?? copy.en;
 
 export default function ClinicSignupScreen({
   language,
@@ -122,6 +226,7 @@ export default function ClinicSignupScreen({
 }: Props) {
   const c = getWelcomeCopy(language);
   const L = pick(language);
+  const t = createTranslator(language);
 
   const [name, setName] = useState('');
   const [ownerName, setOwnerName] = useState('');
@@ -240,7 +345,7 @@ export default function ClinicSignupScreen({
             className="welcome-fade-in flex items-center gap-1.5 text-sm font-semibold text-slate-400 transition-colors hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
-            {language === 'uz' ? 'Orqaga' : language === 'ru' ? 'Назад' : 'Back'}
+            {t('Orqaga')}
           </button>
           <div className="welcome-fade-in shrink-0" style={{ animationDelay: '100ms' }}>
             <LanguageSelector language={language} setLanguage={setLanguage} label={c.languageLabel} />
@@ -276,7 +381,7 @@ export default function ClinicSignupScreen({
                 {error && (
                   <div className="mb-5 flex items-center gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-xs font-medium text-rose-300">
                     <ShieldAlert className="h-4 w-4 shrink-0" />
-                    <span>{error}</span>
+                    <span>{t(error)}</span>
                   </div>
                 )}
 

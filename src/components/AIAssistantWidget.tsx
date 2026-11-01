@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import { Bot, Sparkles, ChevronRight, Activity, Plus } from 'lucide-react';
 import { Patient } from '../types';
 import { decodeLegacyEntities } from '../utils/textFormat';
+import { createTranslator } from '../utils/translate';
+import { useLanguage } from '../utils/language';
 
 export default function AIAssistantWidget({ patientId, patient }: { patientId: string | number; patient?: Patient }) {
+  const t = createTranslator(useLanguage());
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<null | any>(null);
   const [noData, setNoData] = useState(false);
@@ -45,11 +48,11 @@ export default function AIAssistantWidget({ patientId, patient }: { patientId: s
       
       <div className="flex items-center justify-between mb-4 relative z-10">
         <h4 className="font-bold text-indigo-100 text-base flex items-center gap-2">
-          <Bot className="w-5 h-5 text-indigo-400" /> AI Diagnostika Yordamchisi
+          <Bot className="w-5 h-5 text-indigo-400" /> {t("AI Diagnostika Yordamchisi")}
         </h4>
         {!result && !analyzing && !noData && (
           <button onClick={analyze} className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-xs font-bold transition-all shadow-md flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5" /> Tahlil qilish
+            <Sparkles className="w-3.5 h-3.5" /> {t("Tahlil qilish")}
           </button>
         )}
       </div>
@@ -57,7 +60,7 @@ export default function AIAssistantWidget({ patientId, patient }: { patientId: s
       {analyzing && (
         <div className="py-8 flex flex-col items-center justify-center text-indigo-300 relative z-10">
           <Activity className="w-8 h-8 animate-pulse text-indigo-400 mb-3" />
-          <p className="text-sm font-medium animate-pulse">Bemor tarixini tahlil qilmoqda...</p>
+          <p className="text-sm font-medium animate-pulse">{t("Bemor tarixini tahlil qilmoqda...")}</p>
         </div>
       )}
 
@@ -65,11 +68,10 @@ export default function AIAssistantWidget({ patientId, patient }: { patientId: s
         <div className="py-6 flex flex-col items-center justify-center text-center text-indigo-200/70 relative z-10">
           <Bot className="w-8 h-8 mb-2 opacity-50" />
           <p className="text-xs">
-            Ushbu bemor uchun hali AI tish diagnostikasi amalga oshirilmagan.
-            Tahlil qilish uchun "Dental Chart" bo'limidan foydalaning.
+            {t("Ushbu bemor uchun hali AI tish diagnostikasi amalga oshirilmagan. Tahlil qilish uchun \"Dental Chart\" bo'limidan foydalaning.")}
           </p>
           <button onClick={() => setNoData(false)} className="mt-3 text-xs text-indigo-400 hover:text-indigo-300 font-medium">
-            Yopish
+            {t("Yopish")}
           </button>
         </div>
       )}
@@ -88,7 +90,7 @@ export default function AIAssistantWidget({ patientId, patient }: { patientId: s
           ))}
 
           <div>
-            <h5 className="text-xs font-bold text-indigo-300 uppercase tracking-wider mb-2">Tavsiya etilgan qadamlar:</h5>
+            <h5 className="text-xs font-bold text-indigo-300 uppercase tracking-wider mb-2">{t("Tavsiya etilgan qadamlar:")}</h5>
             <div className="space-y-2">
               {result.recommendations.map((rec: string, i: number) => (
                 <div key={i} className="flex items-start gap-2 bg-slate-900/40 p-2.5 rounded-lg border border-slate-700 hover:border-indigo-500/40 transition-colors group cursor-pointer">
@@ -106,7 +108,7 @@ export default function AIAssistantWidget({ patientId, patient }: { patientId: s
           
           <div className="pt-2 flex justify-end">
              <button onClick={() => setResult(null)} className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition-colors">
-               Qayta tahlil qilish <ChevronRight className="w-3 h-3" />
+               {t("Qayta tahlil qilish")} <ChevronRight className="w-3 h-3" />
              </button>
           </div>
         </div>

@@ -178,7 +178,7 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
 
   const handleSendTelegram = async (p: Prescription) => {
     if (!patientTelegramChatId) {
-      alert("Bemor Telegram botga ulanmagan.");
+      alert(t("Bemor Telegram botga ulanmagan."));
       return;
     }
     setIsSendingTelegram(p.id);
@@ -192,13 +192,13 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
       });
       const data = await res.json();
       if (data.ok && data.sent > 0) {
-        alert("Retsept Telegram orqali yuborildi.");
+        alert(t("Retsept Telegram orqali yuborildi."));
       } else {
-        alert("Yuborib bo'lmadi.");
+        alert(t("Yuborib bo'lmadi."));
       }
     } catch (error) {
       console.error('Telegram send failed', error);
-      alert("Yuborib bo'lmadi.");
+      alert(t("Yuborib bo'lmadi."));
     } finally {
       setIsSendingTelegram(null);
     }
@@ -298,7 +298,7 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                     <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-md mb-2 inline-block">
                       {new Date(p.date).toLocaleDateString()}
                     </span>
-                    <h4 className="font-bold text-white line-clamp-1">{p.diagnosis || "Umumiy retsept"}</h4>
+                    <h4 className="font-bold text-white line-clamp-1">{p.diagnosis || t("Umumiy retsept")}</h4>
                   </div>
                   <button 
                     onClick={(e) => { e.stopPropagation(); handleDelete(p.id); }}
@@ -309,12 +309,12 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                 </div>
 
                 <div className="flex items-center gap-2 text-sm text-slate-400 mb-4">
-                  <Pill className="w-4 h-4" /> {p.medications.length} ta dori
+                  <Pill className="w-4 h-4" /> {p.medications.length} {t("ta dori")}
                 </div>
 
                 <div className="mt-auto pt-4 border-t border-slate-800 flex justify-between items-center">
                   <span className={`text-xs font-bold ${p.status === 'Active' ? 'text-blue-400' : 'text-slate-500'}`}>
-                    {p.status === 'Active' ? 'Faol (Qabul qilinmoqda)' : 'Yakunlangan'}
+                    {p.status === 'Active' ? t("Faol (Qabul qilinmoqda)") : t("Yakunlangan")}
                   </span>
                   <div className="flex gap-2">
                     <button
@@ -362,7 +362,7 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
             <div className="bg-[#0a0f1d] p-6 rounded-2xl border border-slate-800">
               <div className="flex justify-between items-center mb-6">
                 <h4 className="font-bold text-white text-lg flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-emerald-500" /> Yangi Retsept
+                  <FileText className="w-5 h-5 text-emerald-500" /> {t("Yangi Retsept")}
                 </h4>
                 <button onClick={() => setShowForm(false)} className="text-slate-500 hover:text-white transition-colors">
                   <X className="w-5 h-5" />
@@ -383,7 +383,7 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                     <button 
                       type="button"
                       title={t("Ovozli kiritish (Voice to text)")}
-                      onClick={() => alert("Ovozli kiritish funksiyasi ishga tushirildi")}
+                      onClick={() => alert(t("Ovozli kiritish funksiyasi ishga tushirildi"))}
                       className="px-4 bg-[#111827] border border-slate-700 hover:border-indigo-500 hover:text-indigo-400 text-slate-400 rounded-xl transition-colors flex items-center justify-center"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
@@ -400,13 +400,13 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                       onClick={() => setShowAiRecommendations(true)}
                       className="text-xs font-bold bg-indigo-500/10 text-indigo-400 px-3 py-1.5 rounded-lg border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors flex items-center gap-1"
                     >
-                      <BrainCircuit className="w-3.5 h-3.5" /> AI Tavsiya
+                      <BrainCircuit className="w-3.5 h-3.5" /> {t("AI Tavsiya")}
                     </button>
                     <button 
                       onClick={() => setShowTemplates(!showTemplates)}
                       className="text-xs font-bold bg-[#111827] text-emerald-400 px-3 py-1.5 rounded-lg border border-slate-700 hover:border-emerald-500 transition-colors"
                     >
-                      Shablonlar
+                      {t("Shablonlar")}
                     </button>
                   </div>
                 </div>
@@ -437,7 +437,7 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                         <BrainCircuit className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
                         <div>
                           <h6 className="font-bold text-indigo-300 text-sm mb-1">{t("AI Assistant Tahlili")}</h6>
-                          <p className="text-xs text-indigo-200/70 mb-3">Bemorning oxirgi muolajasi "Periodontit (36-tish)" asosida quyidagi preparatlar tavsiya etiladi:</p>
+                          <p className="text-xs text-indigo-200/70 mb-3">{t("Bemorning oxirgi muolajasi \"Periodontit (36-tish)\" asosida quyidagi preparatlar tavsiya etiladi:")}</p>
                           <div className="space-y-2">
                             <div className="flex justify-between items-center bg-[#020712]/50 p-2 rounded-lg border border-indigo-500/10">
                               <div>
@@ -518,7 +518,7 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                     disabled={!currentMed.name}
                     className="w-full py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-bold text-sm transition-colors"
                   >
-                    Dorini ro'yxatga qo'shish
+                    {t("Dorini ro'yxatga qo'shish")}
                   </button>
                 </div>
 
@@ -557,14 +557,14 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                   onClick={() => setShowForm(false)}
                   className="flex-1 py-3 bg-[#111827] hover:bg-[#1f2937] text-white font-bold rounded-xl transition-colors border border-slate-800"
                  >
-                   Bekor qilish
+                   {t("Bekor qilish")}
                  </button>
                  <button 
                   onClick={handleSavePrescription}
                   disabled={!formData.medications?.length}
                   className="flex-[2] py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors shadow-lg shadow-emerald-500/20"
                  >
-                   Retseptni Saqlash
+                   {t("Retseptni Saqlash")}
                  </button>
               </div>
             </div>
@@ -579,7 +579,7 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                 onClick={() => setSelectedPrescription(null)}
                 className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
               >
-                <X className="w-5 h-5" /> Yopish
+                <X className="w-5 h-5" /> {t("Yopish")}
               </button>
               <div className="flex gap-2">
                  <button
@@ -593,13 +593,13 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                    onClick={() => printPrescriptionPdf(patientName, selectedPrescription)}
                    className="flex items-center gap-2 px-4 py-2 bg-[#111827] hover:bg-[#1f2937] text-emerald-400 border border-slate-800 rounded-xl text-sm font-bold transition-colors"
                  >
-                   <Printer className="w-4 h-4" /> Chop etish
+                   <Printer className="w-4 h-4" /> {t("Chop etish")}
                  </button>
                  <button
                    onClick={() => exportPrescriptionPdf(patientName, selectedPrescription)}
                    className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-emerald-500/20"
                  >
-                   <Download className="w-4 h-4" /> PDF Yuklash
+                   <Download className="w-4 h-4" /> {t("PDF Yuklash")}
                  </button>
               </div>
            </div>
@@ -620,7 +620,7 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
              <div className="flex justify-between mb-8 text-sm">
                 <div>
                   <p className="text-slate-500 mb-1">{t("Bemor:")}</p>
-                  <p className="font-bold text-lg">{/* We don't have patient name here easily without prop, fallback to text */} Bemor ID: {patientId}</p>
+                  <p className="font-bold text-lg">{/* We don't have patient name here easily without prop, fallback to text */} {t("Bemor ID:")} {patientId}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-slate-500 mb-1">{t("Sana:")}</p>
