@@ -995,12 +995,10 @@ function verifyPassword(plain: string, stored: any): boolean {
   return storedStr.trim() === String(plain).trim();
 }
 
-// Doctor/clinic login credentials are day-to-day operational passwords the SuperAdmin
-// (the single trusted account owner) routinely needs to look up and hand out — unlike
-// scrypt's one-way hash, they're stored with REVERSIBLE encryption (AES-256-GCM) so the
-// SuperAdmin panel can always show the real current value behind a show/hide toggle,
-// instead of permanently hiding it the moment it's saved. Patient and SuperAdmin-own
-// passwords are unaffected and keep using the one-way scrypt hash above.
+// Doctor/clinic passwords used to be stored with reversible AES-256-GCM encryption
+// so the SuperAdmin could look them up. They're one-way hashed now, like every
+// other password; decryption is kept only so a not-yet-migrated "enc:" password
+// still verifies once, at which point the login handler re-saves it hashed.
 const CREDENTIALS_ENCRYPTION_KEY = crypto.scryptSync(
   process.env.CREDENTIALS_ENCRYPTION_KEY || "dstoma-default-creds-key-change-in-prod-env",
   "dstoma-creds-salt",
@@ -1016,13 +1014,6 @@ const LEGACY_CREDENTIALS_ENCRYPTION_KEY = crypto.scryptSync(
   "dstoma-creds-salt",
   32
 );
-function encryptCredential(plain: string): string {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", CREDENTIALS_ENCRYPTION_KEY, iv);
-  const encrypted = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `enc:${iv.toString("hex")}:${tag.toString("hex")}:${encrypted.toString("hex")}`;
-}
 function isEncryptedCredential(stored: any): boolean {
   return typeof stored === "string" && stored.startsWith("enc:");
 }
@@ -1046,6 +1037,11 @@ function decryptCredential(stored: string): string | null {
 // Returns the RAW stored password value (hashed "scrypt:..." for migrated accounts,
 // or plaintext for legacy/never-changed ones) — callers must use verifyPassword(),
 // never compare with `===` directly.
+// "demo123" only outside production. In production, without ADMIN_PASS and before a
+// password has been saved from the panel, superadmin sign-in is simply refused —
+// it used to fall back to "demo123" there too.
+const DEV_ADMIN_PASS = process.env.NODE_ENV === "production" ? "" : "demo123";
+
 async function getAdminCreds() {
   if (fDb) {
     try {
@@ -1065,7 +1061,7 @@ async function getAdminCreds() {
   }
   return {
     login: (globalThis as any)._serverAdminLogin || process.env.ADMIN_USER || "superadmin",
-    password: (globalThis as any)._serverAdminPassword || process.env.ADMIN_PASS || "demo123"
+    password: (globalThis as any)._serverAdminPassword || process.env.ADMIN_PASS || DEV_ADMIN_PASS
   };
 }
 async function saveAdminCreds(login: string, pass: string, alreadyHashed = false) {
@@ -1284,7 +1280,7 @@ app.get("/api/telegram-config", requireSuperAdmin, async (req, res) => {
 
 const gAdmin = globalThis as any;
 if (!gAdmin.superadminLogin) gAdmin.superadminLogin = process.env.ADMIN_USER || "superadmin";
-if (!gAdmin.superadminPassword) gAdmin.superadminPassword = process.env.ADMIN_PASS || "demo123";
+if (!gAdmin.superadminPassword) gAdmin.superadminPassword = process.env.ADMIN_PASS || DEV_ADMIN_PASS;
 
 // POST endpoint for secure superadmin login to prevent plain text password on client-side
 app.post("/api/admin-login", rateLimiter(5, 60 * 1000), async (req, res) => {
@@ -1333,8 +1329,10 @@ app.post("/api/director-login", rateLimiter(5, 60 * 1000), async (req, res) => {
   if (!matched) {
     return res.status(401).json({ ok: false, error: "Login yoki parol noto'g'ri" });
   }
-  if (!isHashedPassword(matched.password) && !isEncryptedCredential(matched.password)) {
-    await saveClinic({ id: matched.id, password: encryptCredential(password) });
+  // Plaintext and reversibly-encrypted passwords from older versions are
+  // replaced with a one-way hash the first time they're used.
+  if (!isHashedPassword(matched.password)) {
+    await saveClinic({ id: matched.id, password: hashPassword(password) });
   }
   const { password: _pw, ...safeClinic } = matched;
   const token = crypto.randomBytes(32).toString("hex");
@@ -1361,8 +1359,8 @@ app.post("/api/doctor-login", rateLimiter(5, 60 * 1000), async (req, res) => {
   if (!clinicStillExists) {
     return res.status(401).json({ ok: false, error: "Klinikangiz faol emas. Administrator bilan bog'laning." });
   }
-  if (!isHashedPassword(matched.password) && !isEncryptedCredential(matched.password)) {
-    await saveDoctor({ id: matched.id, password: encryptCredential(password) } as any);
+  if (!isHashedPassword(matched.password)) {
+    await saveDoctor({ id: matched.id, password: hashPassword(password) } as any);
   }
   const { password: _pw, ...safeDoctor } = matched;
   const token = crypto.randomBytes(32).toString("hex");
@@ -1481,18 +1479,11 @@ app.post("/api/telegram-login", rateLimiter(10, 60 * 1000), async (req, res) => 
 // below deliberately omit passwords.
 app.get("/api/admin/credentials", requireSuperAdmin, async (req, res) => {
   const [allClinics, allDoctors] = await Promise.all([getClinics(), getDoctors()]);
-  // Reversibly-encrypted passwords are decrypted here so the SuperAdmin panel can show
-  // the real current value (behind its own show/hide toggle). A leftover one-way
-  // scrypt hash (from before this account's password was last reset) can't be
-  // recovered — it's passed through as-is and the panel shows it as hidden.
-  const revealed = (list: any[]) => list.map((item) => {
-    if (item.password && isEncryptedCredential(item.password)) {
-      const dec = decryptCredential(item.password);
-      if (dec !== null) return { ...item, password: dec };
-    }
-    return item;
-  });
-  res.json({ clinics: revealed(allClinics), doctors: revealed(allDoctors) });
+  // Passwords are never returned: staff passwords are stored as one-way hashes
+  // and shown only once, when they're created or reset. (This endpoint used to
+  // decrypt and return every clinic's and doctor's current password.)
+  const withoutPassword = (list: any[]) => list.map(({ password, ...item }) => item);
+  res.json({ clinics: withoutPassword(allClinics), doctors: withoutPassword(allDoctors) });
 });
 
 // Materializes a charge for every pre-existing treatment plan item, so
@@ -2730,7 +2721,7 @@ app.post("/api/clinics", async (req, res) => {
     clinicToSave.aiTrialStartDate = existing?.aiTrialStartDate || new Date().toISOString();
   }
   if (clinicToSave.password && !isHashedPassword(clinicToSave.password) && !isEncryptedCredential(clinicToSave.password)) {
-    clinicToSave.password = encryptCredential(clinicToSave.password);
+    clinicToSave.password = hashPassword(clinicToSave.password);
   }
   await saveClinic(clinicToSave);
   const { password: _pw, ...safeClinicToSave } = clinicToSave;
@@ -2836,7 +2827,7 @@ app.post("/api/doctors", async (req, res) => {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   if (doc.password && !isHashedPassword(doc.password) && !isEncryptedCredential(doc.password)) {
-    doc.password = encryptCredential(doc.password);
+    doc.password = hashPassword(doc.password);
   }
   await saveDoctor(doc);
   const { password: _pw, ...safeDoc } = doc;
@@ -3330,7 +3321,7 @@ app.post("/api/clinic-signup", rateLimiter(5, 60 * 60 * 1000), async (req, res) 
     subscriptionTier: 'basic',
     ownerName,
     login,
-    password: encryptCredential(password),
+    password: hashPassword(password),
     aiTrialStartDate: now,
     createdAt: now,
     selfRegistered: true,
