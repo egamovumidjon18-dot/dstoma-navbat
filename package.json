@@ -1,7 +1,7 @@
 {
-  "name": "react-example",
+  "name": "dstoma",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "engines": {
     "node": "24.x"
@@ -14,7 +14,9 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "icons": "node scripts/generate-icons.js",
+    "seed:demo": "tsx scripts/seed-demo.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

@@ -2356,10 +2356,10 @@ export default function DoctorDashboard({
             {sidebarExpanded && (
               <div className="overflow-hidden whitespace-nowrap">
                 <h2 className="font-bold text-[13px] leading-tight text-white mb-0.5 truncate max-w-[150px]">
-                  {currentDoctor?.name || "Dr. Asilbek Xolmirzayev"}
+                  {currentDoctor?.name}
                 </h2>
                 <p className="text-[11px] text-slate-400 leading-tight">
-                  {t("Stomatolog-ortoped")}
+                  {currentDoctor?.specialty ? t(currentDoctor.specialty) : ''}
                 </p>
                 <div className="flex items-center gap-1.5 mt-1">
                   <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -2394,7 +2394,7 @@ export default function DoctorDashboard({
                 {t("klinika rejimi")}
               </span>
               <div className="flex items-center justify-between text-white text-xs font-semibold cursor-pointer">
-                <span>Smile Dentistry</span>
+                <span className="truncate">{effectiveClinic?.name}</span>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
               </div>
             </div>
@@ -4018,6 +4018,7 @@ export default function DoctorDashboard({
                 doctorId={currentDoctor?.id}
                 staffToken={staffToken}
                 language={language}
+                clinic={effectiveClinic}
               />
             ) : (
               <div className="space-y-6">
@@ -4639,6 +4640,7 @@ export default function DoctorDashboard({
                   doctorName={currentDoctor?.name}
                   patientTelegramChatId={clinicPatients.find((p) => p.id === selectedPatientId)?.telegramChatId}
                   language={language}
+                  clinic={effectiveClinic}
                 />
               </div>
             ) : (

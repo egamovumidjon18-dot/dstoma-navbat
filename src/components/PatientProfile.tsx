@@ -44,6 +44,7 @@ interface PatientProfileProps {
   doctorId?: string;
   staffToken?: string | null;
   language?: Language;
+  clinic?: { name?: string; address?: string; phone?: string };
 }
 
 type PatientProfileDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
@@ -150,6 +151,7 @@ export default function PatientProfile({
   doctorId,
   staffToken,
   language,
+  clinic,
 }: PatientProfileProps) {
   const localLang: keyof PatientProfileDictEntry | null =
     (language === "ru" || language === "en" || language === "kk" || language === "ky" || language === "tg" || language === "tk")
@@ -1237,6 +1239,7 @@ export default function PatientProfile({
                   patientName={patient?.fullName}
                   patientTelegramChatId={patient?.telegramChatId}
                   language={language}
+                  clinic={clinic}
                 />
               </div>
             )}

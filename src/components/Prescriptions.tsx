@@ -91,7 +91,9 @@ const MEDICATION_TEMPLATES = [
   { name: 'Xlorgeksidin', dosage: '0.05%', frequency: 'Kuniga 2-3 marta chayiladi', duration: '5-7 kun', notes: 'Muolajadan so\'ng og\'iz bo\'shlig\'ini chayish uchun.' },
 ];
 
-export default function Prescriptions({ patientId, patientName, doctorName, patientTelegramChatId, language }: { patientId?: string; patientName?: string; doctorName?: string; patientTelegramChatId?: string; language?: Language }) {
+// `clinic` heads the printed prescription. It used to show a made-up Tashkent
+// address and phone number on every clinic's prescriptions.
+export default function Prescriptions({ patientId, patientName, doctorName, patientTelegramChatId, language, clinic }: { patientId?: string; patientName?: string; doctorName?: string; patientTelegramChatId?: string; language?: Language; clinic?: { name?: string; address?: string; phone?: string } }) {
   const t = createTranslator(language, PRESCRIPTIONS_TRANSLATIONS);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -608,19 +610,23 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
            <div className="flex-1 bg-white p-8 md:p-12 rounded-2xl overflow-y-auto custom-scrollbar text-slate-800 max-w-3xl mx-auto w-full">
              <div className="flex justify-between items-start border-b-2 border-emerald-500 pb-6 mb-6">
                 <div>
-                  <h1 className="text-3xl font-black text-slate-900 mb-1">DStoma<span className="text-emerald-500">{t("Navbati")}</span></h1>
+                  {clinic?.name ? (
+                    <h1 className="text-3xl font-black text-slate-900 mb-1">{clinic.name}</h1>
+                  ) : (
+                    <h1 className="text-3xl font-black text-slate-900 mb-1">DStoma<span className="text-emerald-500">{t("Navbati")}</span></h1>
+                  )}
                   <p className="text-sm text-slate-500">{t("Zamonaviy stomatologiya klinikasi")}</p>
                 </div>
                 <div className="text-right text-sm text-slate-600">
-                  <p>Manzil: Toshkent sh., Chilonzor tumani</p>
-                  <p>Tel: +998 (90) 123-45-67</p>
+                  {clinic?.address && <p>{clinic.address}</p>}
+                  {clinic?.phone && <p>{clinic.phone}</p>}
                 </div>
              </div>
 
              <div className="flex justify-between mb-8 text-sm">
                 <div>
                   <p className="text-slate-500 mb-1">{t("Bemor:")}</p>
-                  <p className="font-bold text-lg">{/* We don't have patient name here easily without prop, fallback to text */} {t("Bemor ID:")} {patientId}</p>
+                  <p className="font-bold text-lg">{patientName || `${t("Bemor ID:")} ${patientId}`}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-slate-500 mb-1">{t("Sana:")}</p>
