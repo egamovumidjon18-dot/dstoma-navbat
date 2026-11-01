@@ -8,7 +8,7 @@
 // The functions below mirror the subset of the browser SDK's modular API that
 // server.ts uses (collection, doc, getDocs, getDoc, setDoc, deleteDoc,
 // runTransaction, and snap.exists() as a method), so the call sites stay as they are.
-import { initializeApp, cert, applicationDefault, getApps, type App } from 'firebase-admin/app';
+import { initializeApp, cert, getApps, type App } from 'firebase-admin/app';
 import { getFirestore as adminFirestore, type Firestore, type DocumentReference, type DocumentSnapshot } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 
@@ -24,7 +24,10 @@ export function initFirebaseAdmin(projectId: string): App | null {
   if (raw) {
     adminApp = initializeApp({ credential: cert(JSON.parse(raw)), projectId });
   } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    adminApp = initializeApp({ credential: applicationDefault(), projectId });
+    // cert() rather than applicationDefault(): with the key itself the custom
+    // tokens are signed locally instead of through the IAM Credentials API,
+    // which a fresh project does not have enabled.
+    adminApp = initializeApp({ credential: cert(process.env.GOOGLE_APPLICATION_CREDENTIALS), projectId });
   }
   return adminApp;
 }

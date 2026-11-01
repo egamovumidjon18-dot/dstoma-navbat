@@ -416,7 +416,7 @@ try {
   if (firebaseConfig && firebaseConfig.projectId) {
     const firebaseApp = initFirebaseAdmin(firebaseConfig.projectId);
     if (firebaseApp) {
-      const dbId = (firebaseConfig as any).firestoreDatabaseId || "ai-studio-0d6fd32c-9664-44c9-b09f-9e98080e44ef";
+      const dbId = (firebaseConfig as any).firestoreDatabaseId || "(default)";
       fDb = getFirestore(firebaseApp, dbId);
       console.log("🔥 Connected to Firebase Firestore", dbId);
     } else if (process.env.NODE_ENV === "production") {

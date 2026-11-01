@@ -105,6 +105,6 @@ Server Firestore'ga **Admin SDK** orqali ulanadi, brauzer esa serverdan olingan 
 
 1. **Service account kaliti:** Firebase console → Project settings → Service accounts → *Generate new private key*. Yuklangan JSON faylni bitta qatorga keltirib, `FIREBASE_SERVICE_ACCOUNT` muhit o'zgaruvchisiga qo'ying (Vercel/Render). Bu faylni hech qachon GitHub'ga yuklamang.
 2. **Authentication'ni yoqish:** Firebase console → Authentication → *Get started* (custom token bilan kirish uchun kerak, alohida provayder yoqish shart emas).
-3. **Qoidalarni joylash:** `npx firebase-tools deploy --only firestore:rules` (yoki `firestore.rules` mazmunini Firebase console → Firestore → Rules oynasiga qo'yib, *Publish* bosing — `ai-studio-…` nomli ma'lumotlar bazasini tanlashni unutmang).
+3. **Qoidalarni joylash:** `npx firebase-tools deploy --only firestore:rules` (yoki `firestore.rules` mazmunini Firebase console → Firestore → Rules oynasiga qo'yib, *Publish* bosing).
 
 Tartib muhim: avval 1–2-qadamlar va yangi kodni deploy qiling, keyin qoidalarni joylang. Aks holda server bazaga ulana olmaydi.
