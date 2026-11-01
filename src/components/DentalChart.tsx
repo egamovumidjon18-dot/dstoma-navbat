@@ -515,8 +515,31 @@ export default function DentalChart({
   const [paintCondition, setPaintCondition] = useState<string | null>(null);
   const [pendingPaintChanges, setPendingPaintChanges] = useState<Record<string, ToothData>>({});
   const [isSavingPaint, setIsSavingPaint] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiResult, setAiResult] = useState<any>(null);
+  const [toothXRays, setToothXRays] = useState<Array<{ id: string; url: string; type: string; date: string }>>([]);
+
+  // The X-ray dialog lists the images from the X-ray center whose `teeth`
+  // include the selected tooth. It used to be a placeholder whose upload
+  // button only showed a "(simulation)" alert.
+  useEffect(() => {
+    if (!showXRay || !patientId || !selectedTooth) return;
+    const unsub = onSnapshot(
+      collection(db, `patients/${patientId}/xrays`),
+      (snapshot) => {
+        const list: Array<{ id: string; url: string; type: string; date: string }> = [];
+        snapshot.forEach((d) => {
+          const x = d.data() as any;
+          if (x.url && Array.isArray(x.teeth) && x.teeth.map(String).includes(String(selectedTooth))) {
+            list.push({ id: d.id, url: x.url, type: x.type || 'X-ray', date: x.date });
+          }
+        });
+        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setToothXRays(list);
+      },
+      (error) => handleFirestoreError(error, OperationType.GET, `patients/${patientId}/xrays`)
+    );
+    return () => { unsub(); setToothXRays([]); };
+  }, [showXRay, patientId, selectedTooth]);
 
   useEffect(() => {
     if (!patientId) return;
@@ -727,47 +750,38 @@ export default function DentalChart({
   };
 
 
+  // Rule-based risk assessment of the selected tooth from its recorded
+  // conditions. It used to pose as an AI diagnosis, with a fake "thinking" delay
+  // and made-up confidence scores; it is labelled for what it is now.
   const runAiAnalysis = () => {
-    setIsAnalyzing(true);
-    setTimeout(() => {
-      setIsAnalyzing(false);
-      if (!selectedTooth || !currentToothData) {
-        setAiResult({
-          findings: [],
-          recommendations: "Tish tanlanmagan. Tahlil uchun odontogrammadan tish tanlang.",
-          riskLevel: "Noma'lum"
-        });
-        return;
-      }
+    if (!selectedTooth || !currentToothData) {
+      setAiResult({ findings: [], recommendations: t("Tish tanlanmagan. Baholash uchun odontogrammadan tish tanlang."), riskLevel: "Noma'lum" });
+      return;
+    }
 
-      const conditions = currentToothData.conditions || (currentToothData.condition ? [currentToothData.condition] : ['Healthy']);
-      const surfaceConditions = Object.values(currentToothData.surfaces || {}).filter(Boolean);
-      const allConditions = [...conditions, ...surfaceConditions];
+    const conditions = currentToothData.conditions || (currentToothData.condition ? [currentToothData.condition] : ['Healthy']);
+    const surfaceConditions = Object.values(currentToothData.surfaces || {}).filter(Boolean);
+    const allConditions = [...conditions, ...surfaceConditions];
 
-      const hasSerious = allConditions.some(c => 
-        ['Deep Caries', 'Pulpitis', 'Periodontitis', 'Apical Lesion'].includes(c as string)
-      );
-      const hasModerate = allConditions.some(c => 
-        ['Initial Caries', 'Root Canal Started', 'Mobility'].includes(c as string)
-      );
+    const hasSerious = allConditions.some(c =>
+      ['Deep Caries', 'Pulpitis', 'Periodontitis', 'Apical Lesion'].includes(c as string)
+    );
+    const hasModerate = allConditions.some(c =>
+      ['Initial Caries', 'Root Canal Started', 'Mobility'].includes(c as string)
+    );
 
-      const riskLevel = hasSerious ? "Yuqori" : hasModerate ? "O'rta" : "Past";
-      const confidence = hasSerious ? 91 : hasModerate ? 78 : 95;
+    const numStr = getNotationLabel(parseInt(selectedTooth), notation);
+    const advice = hasSerious
+      ? "Zudlik bilan davolash tavsiya etiladi. Kechiktirish asoratlarni kuchaytirishi mumkin."
+      : hasModerate
+      ? "Yaqin orada nazorat va davolash kerak."
+      : "Hozircha sog'lom ko'rinish. Muntazam nazorat davom ettirilsin.";
 
-      const numStr = getNotationLabel(parseInt(selectedTooth), notation);
-      const mainCond = conditions[0] || 'Healthy';
-      const recommendations = hasSerious
-        ? `${numStr}-tish: Zudlik bilan davolash tavsiya etiladi. Holat: ${CONDITIONS.find(c => c.id === mainCond)?.label}. Kechiktirish asoratlarni kuchaytirishi mumkin.`
-        : hasModerate
-        ? `${numStr}-tish: Yaqin orada nazorat va davolash kerak. Holat: ${CONDITIONS.find(c => c.id === mainCond)?.label}.`
-        : `${numStr}-tish: Hozircha sog'lom ko'rinish. Muntazam nazorat davom ettirilsin.`;
-
-      setAiResult({
-        findings: [{ tooth: selectedTooth, condition: mainCond, confidence }],
-        recommendations,
-        riskLevel
-      });
-    }, 1800);
+    setAiResult({
+      findings: [{ tooth: selectedTooth, condition: conditions[0] || 'Healthy' }],
+      recommendations: `${t("Tish")} ${numStr}: ${t(advice)}`,
+      riskLevel: hasSerious ? "Yuqori" : hasModerate ? "O'rta" : "Past",
+    });
   };
 
   const handleSaveEditTooth = async () => {
@@ -1445,26 +1459,21 @@ export default function DentalChart({
                        </div>
                     </div>
 
-                    {/* AI Diagnostika (Compact) */}
+                    {/* Risk assessment (Compact) */}
                     <div className="flex flex-col gap-3 shrink-0 w-[280px] border-r border-slate-800 pr-6">
                        <div className="flex items-center justify-between">
                          <div className="flex items-center gap-2 text-indigo-400">
                            <Brain className="w-5 h-5" />
-                           <span className="text-sm font-black uppercase tracking-wider">{t("AI Diagnostika")}</span>
+                           <span className="text-sm font-black uppercase tracking-wider">{t("Xavf baholash")}</span>
                          </div>
-                         {!aiResult && !isAnalyzing && (
+                         {!aiResult && (
                            <button onClick={runAiAnalysis} className="text-xs bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 px-3 py-1.5 rounded-md font-bold transition-all border border-indigo-500/30">
-                             {t("Tahlil")}
+                             {t("Baholash")}
                            </button>
                          )}
                        </div>
                        
-                       {isAnalyzing ? (
-                         <div className="flex flex-col items-center justify-center h-full gap-3 mt-2">
-                           <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                           <span className="text-sm font-bold text-indigo-400 animate-pulse">{t("Tahlil qilinmoqda...")}</span>
-                         </div>
-                       ) : aiResult ? (
+                       {aiResult ? (
                          <div className="flex flex-col gap-2 mt-2 h-full overflow-y-auto custom-scrollbar text-sm pb-2">
                             <div className={`flex items-start gap-2 p-3 rounded-lg border ${
                               aiResult.riskLevel === 'Yuqori' ? 'bg-rose-500/10 text-rose-300 border-rose-500/20' : 
@@ -1473,7 +1482,7 @@ export default function DentalChart({
                             }`}>
                               <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
                               <div className="flex flex-col gap-1">
-                                <span className="font-bold text-xs uppercase opacity-75">{t("Xavf darajasi:")} {aiResult.riskLevel}</span>
+                                <span className="font-bold text-xs uppercase opacity-75">{t("Xavf darajasi:")} {t(aiResult.riskLevel)}</span>
                                 <span className="leading-tight">{CONDITIONS.find(c => c.id === aiResult.findings[0]?.condition)?.label || t("Sog'lom")}</span>
                               </div>
                             </div>
@@ -1484,7 +1493,7 @@ export default function DentalChart({
                          </div>
                        ) : (
                          <div className="flex items-center justify-center h-full text-sm text-slate-500 text-center italic mt-2 leading-relaxed bg-white/5 rounded-xl border border-white/5 p-4">
-                           {t("Sun'iy intellekt orqali tashxis qo'yish uchun tahlilni boshlang")}
+                           {t("Tanlangan tishning qayd etilgan holati bo'yicha xavf darajasini baholang")}
                          </div>
                        )}
                     </div>
@@ -1903,7 +1912,7 @@ export default function DentalChart({
         </div>
       )}
 
-      {/* X-Ray Placeholder Dialog */}
+      {/* X-rays covering the selected tooth (uploaded in the X-ray center) */}
       {showXRay && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020712]/90 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-[#0a0f1d] rounded-[32px] border border-slate-700 shadow-2xl w-full max-w-4xl p-2 relative overflow-hidden">
@@ -1920,20 +1929,27 @@ export default function DentalChart({
                   </button>
                 </div>
 
-                <div className="flex-1 bg-[#0a0f1d] rounded-2xl border border-slate-800 flex flex-col items-center justify-center gap-4">
-                   <ImageIcon className="w-16 h-16 text-slate-700 opacity-50" />
-                   <p className="text-slate-500 font-medium text-lg">{t("Bu tish uchun rentgen tasvirlari yuklanmagan.")}</p>
-                   {!readOnly && (
-                     <label className="px-6 py-3 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded-xl font-bold border border-blue-500/20 transition-all flex items-center gap-2 mt-4 cursor-pointer">
-                       <Plus className="w-5 h-5" /> {t("Tasvir yuklash")}
-                       <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                         if (e.target.files && e.target.files.length > 0) {
-                           alert(t("Rentgen tasviri muvaffaqiyatli yuklandi (Simulyatsiya)"));
-                         }
-                       }} />
-                     </label>
-                   )}
-                </div>
+                {toothXRays.length > 0 ? (
+                  <div className="flex-1 overflow-y-auto custom-scrollbar grid grid-cols-1 sm:grid-cols-2 gap-4 content-start">
+                    {toothXRays.map((x) => (
+                      <a key={x.id} href={x.url} target="_blank" rel="noreferrer" className="block bg-[#0a0f1d] rounded-2xl border border-slate-800 overflow-hidden hover:border-blue-500/40 transition-colors">
+                        <img src={x.url} alt={x.type} className="w-full h-56 object-contain bg-black" />
+                        <div className="flex items-center justify-between px-4 py-3 text-sm">
+                          <span className="font-bold text-blue-300">{x.type}</span>
+                          <span className="text-slate-500">{new Date(x.date).toLocaleDateString()}</span>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex-1 bg-[#0a0f1d] rounded-2xl border border-slate-800 flex flex-col items-center justify-center gap-4 text-center px-6">
+                     <ImageIcon className="w-16 h-16 text-slate-700 opacity-50" />
+                     <p className="text-slate-500 font-medium text-lg">{t("Bu tish uchun rentgen tasvirlari yuklanmagan.")}</p>
+                     {!readOnly && (
+                       <p className="text-slate-600 text-sm">{t("Rentgen tasvirlarini bemor kartasidagi \"Rentgenlar\" bo'limida yuklang va tishni belgilang.")}</p>
+                     )}
+                  </div>
+                )}
              </div>
           </div>
         </div>

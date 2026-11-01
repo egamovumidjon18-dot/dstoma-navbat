@@ -13,7 +13,6 @@ import {
   Trash2,
   Calendar,
   Clock,
-  BrainCircuit,
   X,
   AlertCircle
 } from 'lucide-react';
@@ -110,7 +109,6 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
 
   const [currentMed, setCurrentMed] = useState<Partial<Medication>>({});
   const [showTemplates, setShowTemplates] = useState(false);
-  const [showAiRecommendations, setShowAiRecommendations] = useState(false);
 
   useEffect(() => {
     if (patientId) {
@@ -399,12 +397,6 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                   <h5 className="font-bold text-white">{t("Dorilar ro'yxati")}</h5>
                   <div className="flex gap-2">
                     <button 
-                      onClick={() => setShowAiRecommendations(true)}
-                      className="text-xs font-bold bg-indigo-500/10 text-indigo-400 px-3 py-1.5 rounded-lg border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors flex items-center gap-1"
-                    >
-                      <BrainCircuit className="w-3.5 h-3.5" /> {t("AI Tavsiya")}
-                    </button>
-                    <button 
                       onClick={() => setShowTemplates(!showTemplates)}
                       className="text-xs font-bold bg-[#111827] text-emerald-400 px-3 py-1.5 rounded-lg border border-slate-700 hover:border-emerald-500 transition-colors"
                     >
@@ -429,38 +421,6 @@ export default function Prescriptions({ patientId, patientName, doctorName, pati
                   </div>
                 )}
                 
-                {/* AI Dropdown Placeholder */}
-                {showAiRecommendations && (
-                   <div className="mb-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl p-4 relative">
-                      <button onClick={() => setShowAiRecommendations(false)} className="absolute top-2 right-2 text-indigo-500 hover:text-indigo-300">
-                        <X className="w-4 h-4" />
-                      </button>
-                      <div className="flex gap-3 items-start">
-                        <BrainCircuit className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-                        <div>
-                          <h6 className="font-bold text-indigo-300 text-sm mb-1">{t("AI Assistant Tahlili")}</h6>
-                          <p className="text-xs text-indigo-200/70 mb-3">{t("Bemorning oxirgi muolajasi \"Periodontit (36-tish)\" asosida quyidagi preparatlar tavsiya etiladi:")}</p>
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-center bg-[#020712]/50 p-2 rounded-lg border border-indigo-500/10">
-                              <div>
-                                <p className="font-bold text-white text-xs">Amoksiklav 625 mg</p>
-                                <p className="text-[10px] text-slate-500">{t("Antibakterial terapiya")}</p>
-                              </div>
-                              <button onClick={() => applyTemplate(MEDICATION_TEMPLATES[0])} className="text-[10px] bg-indigo-500 text-white px-2 py-1 rounded">{t("Qo'shish")}</button>
-                            </div>
-                            <div className="flex justify-between items-center bg-[#020712]/50 p-2 rounded-lg border border-indigo-500/10">
-                              <div>
-                                <p className="font-bold text-white text-xs">Nimesil</p>
-                                <p className="text-[10px] text-slate-500">{t("Yallig'lanishga qarshi va og'riqsizlantiruvchi")}</p>
-                              </div>
-                              <button onClick={() => applyTemplate(MEDICATION_TEMPLATES[1])} className="text-[10px] bg-indigo-500 text-white px-2 py-1 rounded">{t("Qo'shish")}</button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                   </div>
-                )}
-
                 {/* Add Medication Form */}
                 <div className="bg-[#111827] border border-slate-800 rounded-xl p-4 mb-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">

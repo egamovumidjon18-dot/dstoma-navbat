@@ -14,7 +14,6 @@ import XRayCenter from "./XRayCenter";
 import TreatmentHistory from "./TreatmentHistory";
 import PhotoGallery from "./PhotoGallery";
 import Prescriptions from "./Prescriptions";
-import AIAssistantWidget from "./AIAssistantWidget";
 import {
   ArrowLeft,
   User,
@@ -1092,7 +1091,6 @@ export default function PatientProfile({
           <div className={`flex-1 flex flex-col overflow-y-auto bg-slate-50/30 ${activeTab === "chart" ? "p-0" : "p-6"}`}>
             {activeTab === "general" && (
               <div className="space-y-6">
-                <AIAssistantWidget patientId={patientId} patient={patient} />
                 <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
                   <h4 className="font-bold text-slate-800 text-base mb-4 flex items-center gap-2">
                     <User className="w-4 h-4 text-emerald-500" /> {t("shaxsiy ma'lumotlar")}
