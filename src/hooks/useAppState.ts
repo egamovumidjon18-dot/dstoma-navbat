@@ -321,6 +321,7 @@ export function useAppState() {
     setAuthError(null);
     const userLower = authUsername.trim();
     const passLower = authPassword.trim();
+    let rateLimited = false;
 
     try {
       // 1. Superadmin
@@ -329,6 +330,7 @@ export function useAppState() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: userLower, password: passLower })
       });
+      if (adminLoginRes.status === 429) rateLimited = true;
       if (adminLoginRes.ok) {
         const data = await adminLoginRes.json();
         const session = { type: 'superadmin' as const, name: t('clinicOwner') };
@@ -349,6 +351,7 @@ export function useAppState() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: userLower, password: passLower })
       });
+      if (directorLoginRes.status === 429) rateLimited = true;
       if (directorLoginRes.ok) {
         const data = await directorLoginRes.json();
         const matchedClinic = data.clinic;
@@ -372,6 +375,7 @@ export function useAppState() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: userLower, password: passLower })
       });
+      if (doctorLoginRes.status === 429) rateLimited = true;
       if (doctorLoginRes.ok) {
         const data = await doctorLoginRes.json();
         const matchedDoctor = data.doctor;
@@ -399,6 +403,7 @@ export function useAppState() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ loginId: userLower.toUpperCase(), password: passLower })
       });
+      if (patientLoginRes.status === 429) rateLimited = true;
       if (patientLoginRes.ok) {
         const data = await patientLoginRes.json();
         if (typeof window !== 'undefined') {
@@ -415,7 +420,9 @@ export function useAppState() {
       return null;
     }
 
-    setAuthError(t('credIncorrect'));
+    // A 429 from any of the attempts means we were rate-limited, not that the
+    // password was wrong — say so instead of "incorrect credentials".
+    setAuthError(rateLimited ? createTranslator(language)("Juda ko'p urinish. Bir daqiqadan so'ng qayta urinib ko'ring.") : t('credIncorrect'));
     return null;
   };
 

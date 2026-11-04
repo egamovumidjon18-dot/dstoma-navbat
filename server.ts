@@ -224,24 +224,26 @@ async function isAuthorizedForClinic(req: any, clinicId: string | undefined, all
 }
 
 // A LIGHTWEIGHT RATE-LIMITER TO DEFEND AGAINST BRUTE FORCE ATTACKS & SPAM
-const ipLimits = new Map<string, { count: number; resetTime: number }>();
-function rateLimiter(maxRequests: number, windowMs: number) {
+// Each limiter keeps its own counters. They used to share one table keyed by IP
+// alone, so every limited request from a clinic's network (payments, bookings,
+// logins) counted against every other limit, and one sign-in through the unified
+// login screen — which tries the admin, director, doctor and patient endpoints
+// in turn — used up most of the 5-per-minute login budget by itself.
+// `keyOf` narrows the bucket further; the login endpoints key on IP + username,
+// so colleagues behind one router don't lock each other out.
+function rateLimiter(maxRequests: number, windowMs: number, keyOf?: (req: any) => string) {
+  const limits = new Map<string, { count: number; resetTime: number }>();
   return (req: any, res: any, next: any) => {
     const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown_ip";
+    const key = keyOf ? `${ip}|${keyOf(req)}` : String(ip);
     const now = Date.now();
-    const record = ipLimits.get(ip);
-    
-    if (!record) {
-      ipLimits.set(ip, { count: 1, resetTime: now + windowMs });
+    const record = limits.get(key);
+
+    if (!record || now > record.resetTime) {
+      limits.set(key, { count: 1, resetTime: now + windowMs });
       return next();
     }
-    
-    if (now > record.resetTime) {
-      record.count = 1;
-      record.resetTime = now + windowMs;
-      return next();
-    }
-    
+
     record.count++;
     if (record.count > maxRequests) {
       return res.status(429).json({
@@ -252,6 +254,7 @@ function rateLimiter(maxRequests: number, windowMs: number) {
     next();
   };
 }
+const byLoginName = (req: any) => String(req.body?.username ?? req.body?.loginId ?? req.body?.passportSerial ?? "").trim().toLowerCase();
 
 // XSS SANITIZATION HELPER
 // Strips angle brackets to prevent HTML tag injection. Does NOT HTML-entity-encode
@@ -1283,7 +1286,7 @@ if (!gAdmin.superadminLogin) gAdmin.superadminLogin = process.env.ADMIN_USER || 
 if (!gAdmin.superadminPassword) gAdmin.superadminPassword = process.env.ADMIN_PASS || DEV_ADMIN_PASS;
 
 // POST endpoint for secure superadmin login to prevent plain text password on client-side
-app.post("/api/admin-login", rateLimiter(5, 60 * 1000), async (req, res) => {
+app.post("/api/admin-login", rateLimiter(5, 60 * 1000, byLoginName), async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ ok: false, error: "Username and password are required" });
@@ -1319,7 +1322,7 @@ app.post("/api/admin-update-creds", rateLimiter(3, 60 * 1000), requireSuperAdmin
 // POST endpoint for secure director (clinic owner) login — verifies against real clinic
 // records server-side so the client never needs to receive the full clinics list with
 // plaintext passwords just to compare them locally.
-app.post("/api/director-login", rateLimiter(5, 60 * 1000), async (req, res) => {
+app.post("/api/director-login", rateLimiter(5, 60 * 1000, byLoginName), async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ ok: false, error: "Login va parol talab qilinadi" });
@@ -1341,7 +1344,7 @@ app.post("/api/director-login", rateLimiter(5, 60 * 1000), async (req, res) => {
 });
 
 // POST endpoint for secure doctor login — same rationale as /api/director-login.
-app.post("/api/doctor-login", rateLimiter(5, 60 * 1000), async (req, res) => {
+app.post("/api/doctor-login", rateLimiter(5, 60 * 1000, byLoginName), async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ ok: false, error: "Login va parol talab qilinadi" });
@@ -1369,7 +1372,7 @@ app.post("/api/doctor-login", rateLimiter(5, 60 * 1000), async (req, res) => {
 });
 
 // POST endpoint for secure patient login (passport serial + password) — same rationale.
-app.post("/api/patient-login", rateLimiter(10, 60 * 1000), async (req, res) => {
+app.post("/api/patient-login", rateLimiter(10, 60 * 1000, byLoginName), async (req, res) => {
   // loginId accepts either: the loginCode issued at registration (current
   // flow, since passport is no longer collected up front) or a passportSerial
   // (older accounts that do have one, from before this change). passportSerial
@@ -3628,7 +3631,7 @@ async function checkAndConsumeAiUsage(clinicId: string): Promise<boolean> {
 
 // In-memory per-chat daily cap for the Telegram patient bot's free-text AI chat,
 // which has no resolvable clinicId to hang a per-clinic cap off of. Same Map-based
-// style as the ipLimits table inside rateLimiter() below. Resets naturally when a
+// style as the counters inside rateLimiter() above. Resets naturally when a
 // serverless instance recycles — this is an abuse guard, not a hard billing ledger.
 const chatAiUsage = new Map<string, { count: number; date: string }>();
 function checkAndConsumeChatAiUsage(chatId: number | string): boolean {
