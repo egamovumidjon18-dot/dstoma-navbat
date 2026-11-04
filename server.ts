@@ -217,7 +217,7 @@ async function isAuthorizedForClinic(req: any, clinicId: string | undefined, all
     // clinic (payment receipts, reminders, ...) 401'd, even though they
     // genuinely belong there. Same root cause as the /api/patients and
     // /api/queues fix above, just reached through the shared auth helper.
-    const links = await getDoctorClinicLinks();
+    const links = await cachedList("doctorClinicLinks", getDoctorClinicLinks);
     return (links as any[]).some((l) => l.doctorId === auth.staff!.doctorId && l.clinicId === clinicId && l.status === 'active');
   }
   return false;
@@ -437,6 +437,27 @@ try {
   if (process.env.NODE_ENV === "production") throw error;
 }
 
+// Short-lived cache for the full-collection reads behind the polled GET endpoints.
+// Every open panel polls /api/queues every 4 s and the other lists every minute,
+// and each poll read the whole collection from Firestore; with a few clinics
+// online that was most of the bill. Within LIST_TTL_MS one server instance now
+// answers all of them from one read. Write paths keep reading fresh (getQueues()
+// etc. directly), so a booking still checks the real slot, and every save or
+// delete below drops that collection's cache entry.
+const LIST_TTL_MS = 5000;
+const listCache = new Map<string, { at: number; data: Promise<any[]> }>();
+function cachedList<T>(name: string, load: () => Promise<T[]>): Promise<T[]> {
+  const hit = listCache.get(name);
+  if (hit && Date.now() - hit.at < LIST_TTL_MS) return hit.data as Promise<T[]>;
+  const data = load();
+  listCache.set(name, { at: Date.now(), data });
+  data.catch(() => listCache.delete(name));
+  return data;
+}
+function invalidateList(name: string) {
+  listCache.delete(name);
+}
+
 // ASYNC DB HELPERS
 async function getPatients(): Promise<Patient[]> {
   if (fDb) {
@@ -446,6 +467,7 @@ async function getPatients(): Promise<Patient[]> {
   return g._patientsDb || [];
 }
 async function savePatient(p: Patient) {
+  invalidateList("patients");
   // Hash at the data layer so every caller is protected — not just the HTTP endpoints
   // that remembered to hash before calling this (the Telegram bot registration flow
   // used to call this directly with a plaintext password).
@@ -458,6 +480,7 @@ async function savePatient(p: Patient) {
     // any doctor/patient edit built by spreading that copy (very common — diagnoses,
     // visit notes, allergies, etc.) would otherwise silently wipe the patient's password.
     await setDoc(doc(fDb, "patients", p.id!), clean, { merge: true });
+    invalidateList("patients");
   } else {
     if (!g._patientsDb) g._patientsDb = [];
     const idx = g._patientsDb.findIndex((x: any) => x.id === p.id);
@@ -466,7 +489,9 @@ async function savePatient(p: Patient) {
   }
 }
 async function deletePatient(id: string) {
+  invalidateList("patients");
   if (fDb) await deleteDoc(doc(fDb, "patients", id));
+  invalidateList("patients");
   if (g._patientsDb) g._patientsDb = g._patientsDb.filter((x: any) => x.id !== id);
 }
 async function getQueues(): Promise<QueueItem[]> {
@@ -477,6 +502,7 @@ async function getQueues(): Promise<QueueItem[]> {
   return g._queuesDb || [];
 }
 async function saveQueue(q: QueueItem) {
+  invalidateList("queues");
   // Firestore's setDoc rejects any field whose value is explicitly `undefined`
   // (e.g. a queue item that never had appointmentDate/appointmentTime set, then
   // gets spread into an update object) — strip those keys before writing.
@@ -486,6 +512,7 @@ async function saveQueue(q: QueueItem) {
   }
   if (fDb) {
     await setDoc(doc(fDb, "queues", q.id!), clean);
+    invalidateList("queues");
   } else {
     if (!g._queuesDb) g._queuesDb = [];
     const idx = g._queuesDb.findIndex((x: any) => x.id === q.id);
@@ -494,8 +521,10 @@ async function saveQueue(q: QueueItem) {
   }
 }
 async function deleteQueue(id: string) {
+  invalidateList("queues");
   if (fDb) await deleteDoc(doc(fDb, "queues", id));
   else if (g._queuesDb) g._queuesDb = g._queuesDb.filter((x: any) => x.id !== id);
+  invalidateList("queues");
 }
 
 // Draws consumables down from the warehouse when a procedure is finished, using
@@ -631,6 +660,7 @@ async function getClinics() {
   return g._serverClinics || [];
 }
 async function saveClinic(c: any) {
+  invalidateList("clinics");
   const clean = stripUndefined(c);
   // merge:true — the client's copy of a clinic has sensitive fields (password) stripped
   // out for security before it ever reaches the browser, so a plain overwrite here would
@@ -642,9 +672,12 @@ async function saveClinic(c: any) {
     if (idx >= 0) g._serverClinics[idx] = { ...g._serverClinics[idx], ...clean };
     else g._serverClinics.push(clean);
   }
+  invalidateList("clinics");
 }
 async function deleteClinic(id: string) {
+  invalidateList("clinics");
   if (fDb) await deleteDoc(doc(fDb, "clinics", id));
+  invalidateList("clinics");
   if (g._serverClinics) g._serverClinics = g._serverClinics.filter((x:any) => x.id !== id);
 }
 async function getDoctors() {
@@ -655,6 +688,7 @@ async function getDoctors() {
   return g._serverDoctors || [];
 }
 async function saveDoctor(c: any) {
+  invalidateList("doctors");
   const clean = stripUndefined(c);
   // merge:true — same rationale as saveClinic: the client's copy has `password` stripped
   // out of GET /api/doctors, so an overwrite would wipe it on any partial-field edit.
@@ -665,9 +699,12 @@ async function saveDoctor(c: any) {
     if (idx >= 0) g._serverDoctors[idx] = { ...g._serverDoctors[idx], ...clean };
     else g._serverDoctors.push(clean);
   }
+  invalidateList("doctors");
 }
 async function deleteDoctor(id: string) {
+  invalidateList("doctors");
   if (fDb) await deleteDoc(doc(fDb, "doctors", id));
+  invalidateList("doctors");
   if (g._serverDoctors) g._serverDoctors = g._serverDoctors.filter((x:any) => x.id !== id);
 }
 
@@ -708,6 +745,7 @@ async function getDoctorClinicLinks() {
   return g._serverDoctorClinicLinks || [];
 }
 async function saveDoctorClinicLink(c: any) {
+  invalidateList("doctorClinicLinks");
   const clean = stripUndefined(c);
   if (fDb) await setDoc(doc(fDb, "doctorClinicLinks", clean.id), clean);
   else {
@@ -715,9 +753,12 @@ async function saveDoctorClinicLink(c: any) {
     g._serverDoctorClinicLinks = g._serverDoctorClinicLinks.filter((x:any) => x.id !== clean.id);
     g._serverDoctorClinicLinks.push(clean);
   }
+  invalidateList("doctorClinicLinks");
 }
 async function deleteDoctorClinicLink(id: string) {
+  invalidateList("doctorClinicLinks");
   if (fDb) await deleteDoc(doc(fDb, "doctorClinicLinks", id));
+  invalidateList("doctorClinicLinks");
   if (g._serverDoctorClinicLinks) g._serverDoctorClinicLinks = g._serverDoctorClinicLinks.filter((x:any) => x.id !== id);
 }
 
@@ -864,6 +905,7 @@ async function getServices() {
   return g._serverServices || [];
 }
 async function saveService(c: any) {
+  invalidateList("services");
   const clean = stripUndefined(c);
   if (fDb) await setDoc(doc(fDb, "services", clean.id), clean);
   else {
@@ -871,9 +913,12 @@ async function saveService(c: any) {
     g._serverServices = g._serverServices.filter((x:any) => x.id !== clean.id);
     g._serverServices.push(clean);
   }
+  invalidateList("services");
 }
 async function deleteService(id: string) {
+  invalidateList("services");
   if (fDb) await deleteDoc(doc(fDb, "services", id));
+  invalidateList("services");
   if (g._serverServices) g._serverServices = g._serverServices.filter((x:any) => x.id !== id);
 }
 
@@ -936,6 +981,7 @@ async function getPayments() {
   return g._serverPayments || [];
 }
 async function savePayment(c: any) {
+  invalidateList("payments");
   const clean = stripUndefined(c);
   if (fDb) await setDoc(doc(fDb, "payments", clean.id), clean);
   else {
@@ -943,6 +989,7 @@ async function savePayment(c: any) {
     g._serverPayments = g._serverPayments.filter((x:any) => x.id !== clean.id);
     g._serverPayments.push(clean);
   }
+  invalidateList("payments");
 }
 async function getReports() {
   if (fDb) {
@@ -1968,7 +2015,7 @@ const stripMedical = (p: any) => {
 app.get("/api/patients", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   const auth = await getAuthContext(req);
-  const allPatients = await getPatients();
+  const allPatients = await cachedList("patients", getPatients);
 
   if (auth.isSuperAdmin) {
     return res.json(allPatients.map(stripPassword));
@@ -2045,7 +2092,7 @@ app.get("/api/payments", async (req, res) => {
   if (!auth.isSuperAdmin && !auth.staff) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
-  const all = await getPayments();
+  const all = await cachedList("payments", getPayments);
   res.json(auth.isSuperAdmin ? all : all.filter((p: any) => p.clinicId === auth.staff!.clinicId));
 });
 app.post("/api/payments", rateLimiter(30, 60 * 1000), async (req, res) => {
@@ -2180,7 +2227,7 @@ app.post("/api/patients", rateLimiter(30, 60 * 1000), async (req, res) => {
 app.get("/api/queues", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   const auth = await getAuthContext(req);
-  const all = await getQueues();
+  const all = await cachedList("queues", getQueues);
 
   if (auth.isSuperAdmin) return res.json(all);
   if (auth.staff) {
@@ -2670,7 +2717,7 @@ app.get("/api/clinics", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
-  const [allClinics, allQueues] = await Promise.all([getClinics(), getQueues()]);
+  const [allClinics, allQueues] = await Promise.all([cachedList("clinics", getClinics), cachedList("queues", getQueues)]);
   // Public listing (powers the anonymous patient booking page) — never ship the login
   // password. geminiApiKey is stripped too: all AI usage now bills against the single
   // platform-wide key (see getGeminiApiKey), so clinics no longer configure their own
@@ -2749,7 +2796,7 @@ app.get("/api/doctors", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
-  const [docs, allQueues] = await Promise.all([getDoctors(), getQueues()]);
+  const [docs, allQueues] = await Promise.all([cachedList("doctors", getDoctors), cachedList("queues", getQueues)]);
   const mapped = docs.map((d: any) => {
     // rating is derived live from real patient feedback (QueueItem.rating), the
     // same way GET /api/clinics already computes Clinic.rating — never a stored/
@@ -2859,7 +2906,7 @@ app.delete("/api/patients/:id", async (req, res) => {
 
 app.get("/api/doctor-clinic-links", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-  res.json(await getDoctorClinicLinks());
+  res.json(await cachedList("doctorClinicLinks", getDoctorClinicLinks));
 });
 
 app.post("/api/doctor-clinic-links", async (req, res) => {
@@ -3452,7 +3499,7 @@ app.get("/api/cron/appointment-reminders", async (req, res) => {
 
 app.get("/api/services", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-  res.json(await getServices());
+  res.json(await cachedList("services", getServices));
 });
 
 app.post("/api/services", async (req, res) => {
