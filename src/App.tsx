@@ -254,10 +254,10 @@ export default function App() {
             <span className="text-[26px] inline-block animate-float-glow group-hover:scale-125 group-hover:-rotate-12 transition-transform duration-400">🦷</span>
             <div className="group-hover:translate-x-1 transition-transform duration-300">
               <span className="font-display font-black text-lg tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 via-cyan-400 to-indigo-400">
-                DStoma Queue
+                DStoma
               </span>
               <span className="text-[8px] block -mt-1 font-mono text-cyan-500 font-bold tracking-widest uppercase">
-                Smart Dental AI Portal
+                {createTranslator(language)("Stomatologiya klinikalari platformasi")}
               </span>
             </div>
           </div>

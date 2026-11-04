@@ -1,6 +1,6 @@
 export const ru = {
-  appTitle: "DStoma Очередь",
-  appSubtitle: "Профессиональная электронная очередь и мультиарендная панель SaaS для сетей стоматологий",
+  appTitle: "DStoma",
+  appSubtitle: "Онлайн-запись и управление для стоматологических клиник",
   bemorTab: "Кабинет Пациента",
   shifokorTab: "Панель Врача",
   boshliqTab: "Панель Директора",
@@ -85,8 +85,8 @@ export const ru = {
   updateBtn: "Обновить",
 
   // SuperAdmin Dashboard
-  superadminHeader: "Глобальный центр Суперадминистратора SaaS",
-  superadminSubtitle: "Идеальный командный пункт владельца мультиарендной системы управления стоматологиями DStoma.",
+  superadminHeader: "Панель владельца платформы",
+  superadminSubtitle: "Клиники, подписки и доходы по всей платформе.",
   mrr: "Ежемесячный глобальный доход (MRR):",
   totalClinics: "Всего клиник в системе",
   totalPatients: "Всего пациентов и билетов",

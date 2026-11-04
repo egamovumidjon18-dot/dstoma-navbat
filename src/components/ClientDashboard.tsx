@@ -1286,7 +1286,7 @@ export default function ClientDashboard({
       {/* ----------------- FOOTER (SCREENSHOT 1) ----------------- */}
       <footer className="pt-8 border-t border-slate-200 mt-10">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 font-sans text-xs text-slate-400 font-semibold select-none pb-4">
-          <p>{t("© 2025-2026 DStoma Queue. Barcha huquqlar himoyalangan.")}</p>
+          <p>{t("© 2025-2026 DStoma. Barcha huquqlar himoyalangan.")}</p>
           <p className="flex items-center gap-1.5 text-slate-500">
             {t("Sizning sog'lig'ingiz biz uchun muhim ❤️")}
           </p>

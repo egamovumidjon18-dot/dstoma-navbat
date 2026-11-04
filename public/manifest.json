@@ -1,7 +1,7 @@
 {
-  "name": "DStoma Queue",
+  "name": "DStoma",
   "short_name": "DStoma",
-  "description": "Stomatologiya elektron navbat tizimi",
+  "description": "Online booking and practice management for dental clinics",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#020712",

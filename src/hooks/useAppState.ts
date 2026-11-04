@@ -738,22 +738,22 @@ export function useAppState() {
   // Update URL metadata
   useEffect(() => {
     const t = createTranslator(language);
-    let title = "DStoma Queue - Multi-Tenant Elektron Navbat Tizimi";
+    let title = "DStoma - Stomatologiya klinikalari platformasi";
     let desc = "Stomatologiya klinikalari uchun ko'p ijarachili (Multi-Tenant) elektron navbat va Google Maps integratsiyali aqlli boshqaruv tizimi. Samarqand, Buxoro, Toshkent.";
 
     if (activeTab === 'bemor') {
       if (selectedClinic) {
-        title = `${selectedClinic.name} - ${t('Onlayn Navbat Olish | DStoma Queue')}`;
+        title = `${selectedClinic.name} - ${t('Onlayn Navbat Olish | DStoma')}`;
         desc = `${selectedClinic.name} filiali uchun elektron stomatologiya navbati olish sahifasi. Manzil: ${selectedClinic.address}. Telefon: ${selectedClinic.phone}. Onlayn navbat band qilish.`;
       } else {
-        title = "Bemor Kabineti - Onlayn Elektron Navbat | DStoma Queue";
+        title = "Bemor Kabineti - Onlayn Elektron Navbat | DStoma";
         desc = "Shifokor ko'rigiga onlayn navbat olish, shaxsiy chiptalar statusini kuzatib borish va shifokorlar reytingini baholash sahifasi.";
       }
     } else if (activeTab === 'shifokor') {
-      title = "Shifokor Konsultatsiya Paneli | DStoma Queue";
+      title = "Shifokor Konsultatsiya Paneli | DStoma";
       desc = "Shifokorlar va stomatologlar uchun faol bemorlar navbatini boshqarish, chaqirish, konsultatsiyani yakunlash va kunlik daromadlarni tahlil qilish tizimi.";
     } else if (activeTab === 'boshliq') {
-      title = "Manager & Director Dashboard - Boshliq Bo'limi | DStoma Queue";
+      title = "Klinika rahbari paneli | DStoma";
       desc = "Klinika tarmog'i rahbarlari uchun global tahlillar, haftalik daromad xaritalari hamda filiallar bo'yicha tahliliy ko'rsatkichlar monitoringi.";
     }
 

@@ -255,7 +255,7 @@ export default function DirectorDashboard({
 
     type LocalDictEntry = { ru: string; en: string; kk: string; ky: string; tg: string; tk: string };
     const dict: Record<string, LocalDictEntry> = {
-      "boshqaruv markazi": { ru: "Центр управления", en: "Control Center", kk: "Басқару орталығы", ky: "Башкаруу борбору", tg: "Маркази идоракунӣ", tk: "Dolandyryş merkezi" },
+      "boshqaruv markazi": { ru: "Обзор", en: "Overview", kk: "Шолу", ky: "Жалпы көрүнүш", tg: "Шарҳ", tk: "Umumy syn" },
       "chipta": { ru: "Талон", en: "Ticket", kk: "Талон", ky: "Талон", tg: "Чипта", tk: "Bilet" },
       "klinika havolasi": { ru: "Ссылка на клинику", en: "Clinic link", kk: "Клиника сілтемесі", ky: "Клиника шилтемеси", tg: "Пайванди клиника", tk: "Klinika salgysy" },
       "uzs": { ru: "UZS", en: "UZS", kk: "UZS", ky: "UZS", tg: "UZS", tk: "UZS" },
@@ -311,7 +311,7 @@ export default function DirectorDashboard({
       "Erkak": { ru: "Мужчина", en: "Male", kk: "Ер адам", ky: "Эркек", tg: "Мард", tk: "Erkek" },
       "Ayol": { ru: "Женщина", en: "Female", kk: "Әйел", ky: "Аял", tg: "Зан", tk: "Zenan" },
       "Samarqand Filiali Boshqaruv Markazi": { ru: "Центр Управления Самаркандским Филиалом", en: "Samarkand Branch Management HQ", kk: "Самарқанд Филиалы Басқару Орталығы", ky: "Самарканд Филиалын Башкаруу Борбору", tg: "Маркази Идоракунии Филиали Самарқанд", tk: "Samarkant Şahamçasynyň Dolandyryş Merkezi" },
-      "Sizga bog'langan klinika tarmog'ini masofadan analitika va biznes mantiqi yordamida boshqaring.": { ru: "Управляйте филиалом вашей клиники с помощью удаленной аналитики и бизнес-логики.", en: "Manage your linked clinic branch ecosystem with remote analytical intelligence.", kk: "Сізге байланысты клиника желісін аналитика мен қызмет бағалары арқылы басқарыңыз.", ky: "Сизге байланыштуу клиника тармагын аналитика жана кызмат баалары менен башкарыңыз.", tg: "Шабакаи клиникаи ба шумо алоқамандро бо ёрии таҳлил ва нархномаи хизматрасонӣ идора кунед.", tk: "Size baglanyşykly klinika ulgamyny analitika we hyzmat bahalary bilen dolandyryň." },
+      "Klinikangiz daromadi, qabullari va shifokorlari — bir ekranda.": { ru: "Выручка, приёмы и врачи вашей клиники — на одном экране.", en: "Revenue, appointments and staff for your clinic at a glance.", kk: "Клиникаңыздың табысы, қабылдаулары мен дәрігерлері — бір экранда.", ky: "Клиникаңыздын кирешеси, кабыл алуулары жана дарыгерлери — бир экранда.", tg: "Даромад, қабулҳо ва духтурони клиникаи шумо — дар як экран.", tk: "Klinikaňyzyň girdejisi, kabullary we lukmanlary — bir ekranda." },
       "obuna": { ru: "подписка", en: "subscription", kk: "жазылым", ky: "жазылуу", tg: "обуна", tk: "abuna" },
       "sozlamalar": { ru: "настройки", en: "settings", kk: "баптаулар", ky: "жөндөөлөр", tg: "танзимот", tk: "sazlamalar" },
       "shifokorlar": { ru: "врачи", en: "doctors", kk: "дәрігерлер", ky: "дарыгерлер", tg: "духтурон", tk: "lukmanlar" },
@@ -780,7 +780,7 @@ export default function DirectorDashboard({
           <h1 className="text-xl sm:text-2xl font-black mt-2 tracking-tight font-display">
             {clinicNameStr === "Samarqand Filiali" ? t("Samarqand Filiali Boshqaruv Markazi") : `${clinicNameStr} ${t("Boshqaruv Markazi")}`} — {new Date().toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}
           </h1>
-          <p className="text-xs text-indigo-200/75 mt-1 font-semibold leading-relaxed">{t("Sizga bog'langan klinika tarmog'ini masofadan analitika va biznes mantiqi yordamida boshqaring.")}</p>
+          <p className="text-xs text-indigo-200/75 mt-1 font-semibold leading-relaxed">{t("Klinikangiz daromadi, qabullari va shifokorlari — bir ekranda.")}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 z-10 shrink-0">
@@ -2454,7 +2454,7 @@ export default function DirectorDashboard({
       {/* ----------------- FOOTER (SCREENSHOT 5) ----------------- */}
       <footer className="pt-8 border-t border-slate-200 mt-10">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 font-sans text-xs text-slate-400 font-semibold select-none pb-4">
-          <p>{t("© 2025-2026 DStoma Clinic Boss Panel.")} {t("Barcha huquqlar himoyalangan.")}</p>
+          <p>© 2025-2026 DStoma. {t("Barcha huquqlar himoyalangan.")}</p>
           <div className="flex items-center gap-1.5 text-slate-500">
             {t("Klinika hisoboti avtomatik tarzda shakllanadi.")}
           </div>

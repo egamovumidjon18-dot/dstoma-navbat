@@ -1,6 +1,6 @@
 export const en = {
-  appTitle: "DStoma Queue",
-  appSubtitle: "Professional electronic queue and multi-tenant SaaS control operations dashboard for dental networks",
+  appTitle: "DStoma",
+  appSubtitle: "Online booking and practice management for dental clinics",
   bemorTab: "Patient Hub",
   shifokorTab: "Doctor Panel",
   boshliqTab: "Manager Panel",
@@ -85,8 +85,8 @@ export const en = {
   updateBtn: "Update Catalog",
 
   // SuperAdmin Dashboard
-  superadminHeader: "SaaS Owner Global Command Suite",
-  superadminSubtitle: "The Ultimate management headquarters for the creator and owner of the DStoma Multi-Tenant system.",
+  superadminHeader: "Platform owner panel",
+  superadminSubtitle: "Clinics, subscriptions and revenue across the whole platform.",
   mrr: "Global Monthly Recurring Revenue (MRR):",
   totalClinics: "Registered Clinic Tenants",
   totalPatients: "Total Tickets Ever Created",
