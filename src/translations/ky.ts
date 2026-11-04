@@ -1,6 +1,6 @@
 export const ky = {
-  appTitle: "DStoma Кезек",
-  appSubtitle: "Стоматология тармактары үчүн кесипкөй электрондук кезек жана мульти-ижарачы SaaS башкаруу панели",
+  appTitle: "DStoma",
+  appSubtitle: "Стоматологиялык клиникалар үчүн онлайн кезек жана башкаруу системасы",
   bemorTab: "Бейтап Кабинети",
   shifokorTab: "Дарыгер Панели",
   boshliqTab: "Директор Панели",
@@ -85,8 +85,8 @@ export const ky = {
   updateBtn: "Жаңылоо",
 
   // SuperAdmin Dashboard
-  superadminHeader: "Суперадмин SaaS Глобалдык Борбору",
-  superadminSubtitle: "Мульти-ижарачы DStoma башкаруу тутумунун ээсинин мыкты башкаруу борбору.",
+  superadminHeader: "Платформа ээсинин панели",
+  superadminSubtitle: "Бүт платформа боюнча клиникалар, жазылуулар жана киреше.",
   mrr: "Глобалдык Айлык Киреше (MRR):",
   totalClinics: "Тутумдагы бардык клиникалар",
   totalPatients: "Жалпы бейтаптар жана билеттер",

@@ -519,7 +519,7 @@ export default function PatientPanel({
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white text-xl font-bold">
             🦷
           </div>
-          <span className="text-xl font-black text-slate-900 tracking-tight">DStoma<br/><span className="text-sm font-semibold text-blue-600">NAVBATI</span></span>
+          <span className="text-xl font-black text-slate-900 tracking-tight">DStoma</span>
         </div>
 
         {/* Profile Info */}

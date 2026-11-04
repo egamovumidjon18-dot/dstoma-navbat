@@ -154,24 +154,10 @@ export default function SuperAdminDashboard({
     return text;
   };
 
-  // /api/clinics and /api/doctors never include passwords (security). This component
-  // fetches the real values separately, using the superadmin session token, purely for
-  // its own "view/copy credentials" feature.
-  const [credentialPasswords, setCredentialPasswords] = useState<{ clinics: Record<string, string>; doctors: Record<string, string> }>({ clinics: {}, doctors: {} });
-  React.useEffect(() => {
-    if (!superadminToken) return;
-    fetch('/api/admin/credentials', { headers: { Authorization: `Bearer ${superadminToken}` } })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (!data) return;
-        const clinicMap: Record<string, string> = {};
-        (data.clinics || []).forEach((c: any) => { if (c.password) clinicMap[c.id] = c.password; });
-        const doctorMap: Record<string, string> = {};
-        (data.doctors || []).forEach((d: any) => { if (d.password) doctorMap[d.id] = d.password; });
-        setCredentialPasswords({ clinics: clinicMap, doctors: doctorMap });
-      })
-      .catch(err => console.warn('Could not load credential details', err));
-  }, [superadminToken, clinics.length, doctors.length]);
+  // Staff passwords are stored as one-way hashes and can't be read back; the only
+  // plaintext the panel ever has is one it just set (justSetPasswords below). This
+  // used to be filled from /api/admin/credentials, which decrypted every password.
+  const credentialPasswords: { clinics: Record<string, string>; doctors: Record<string, string> } = { clinics: {}, doctors: {} };
 
   // Local States for creating clinic
   const [newClinicName, setNewClinicName] = useState('');
@@ -475,8 +461,7 @@ export default function SuperAdminDashboard({
   // masked with dots until the eye icon is toggled on for that row.
   const getDisplayPassword = (id: string, source: Record<string, string>): string => {
     const known = justSetPasswords[id] || source[id];
-    if (!known) return superadminToken ? '...' : "Ko'rish uchun qayta kiring";
-    if (isHashedPw(known)) return '🔒 Yashiringan (qayta tiklang)';
+    if (!known || isHashedPw(known)) return t('🔒 Yashiringan (qayta tiklang)');
     if (!revealedIds[id]) return '•'.repeat(Math.min(Math.max(known.length, 6), 10));
     return known;
   };
@@ -2584,7 +2569,7 @@ export default function SuperAdminDashboard({
                               onClick={() => {
                                 const pw = getCopyablePassword(clinic.id, credentialPasswords.clinics);
                                 if (!pw) {
-                                  triggerToast("Parol xavfsizlik uchun yashiringan — avval \"Kalitni qayta tiklash\" orqali yangi parol o'rnating.");
+                                  triggerToast(t("Parol xavfsizlik uchun yashiringan — avval \"Kalitni qayta tiklash\" orqali yangi parol o'rnating."));
                                   return;
                                 }
                                 handleCopyGeneric(`Login: ${clinic.login || `ceo_${clinic.subdomain}`} | Parol: ${pw}`);
@@ -2869,7 +2854,7 @@ export default function SuperAdminDashboard({
                               onClick={() => {
                                 const pw = getCopyablePassword(doc.id, credentialPasswords.doctors);
                                 if (!pw) {
-                                  triggerToast("Parol xavfsizlik uchun yashiringan — avval \"Kalitni qayta tiklash\" orqali yangi parol o'rnating.");
+                                  triggerToast(t("Parol xavfsizlik uchun yashiringan — avval \"Kalitni qayta tiklash\" orqali yangi parol o'rnating."));
                                   return;
                                 }
                                 handleCopyGeneric(`Shifokor: ${doc.name} | Login: ${doc.login || (doc.name || 'Doc').split(' ')[0].toLowerCase()} | Password: ${pw}`);

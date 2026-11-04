@@ -13,7 +13,7 @@ interface ClinicMapProps {
 
 export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, language, userLocationRef }: ClinicMapProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'google' | 'vector' | 'leaflet' | 'dgis'>('google');
+  const [activeTab, setActiveTab] = useState<'google' | 'leaflet' | 'dgis'>('google');
   
   // Use the provided ref to persist location across tab changes, or fallback to a local ref
   const fallbackRef = useRef({ lat: 39.6542, lng: 66.9597, status: 'idle' as const, initialized: false });
@@ -826,16 +826,6 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
             <span>🗺️</span> <span className="hidden sm:inline">OSM Map</span><span className="inline sm:hidden">OSM</span> <span className={leafletLoaded && activeTab === 'leaflet' ? "w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping ml-0.5" : "hidden"}></span>
           </button>
           
-          <button
-            onClick={() => setActiveTab('vector')}
-            className={`px-2.5 py-1.5 text-[9px] sm:text-[10px] font-black uppercase rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
-              activeTab === 'vector'
-                ? 'bg-emerald-500 text-slate-950 font-black shadow-lg'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <span>📟</span> <span className="hidden sm:inline">High-Tech HUD</span><span className="inline sm:hidden">HUD Map</span>
-          </button>
           
           <button
             onClick={() => setActiveTab('dgis')}
@@ -912,132 +902,6 @@ export default function ClinicMap({ clinics, selectedClinic, onSelectClinic, lan
                 </strong>{' '}
                 {t('googleMapDescLabel')}
               </span>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 2: Vector fallback style map of Uzbekistan */}
-        {activeTab === 'vector' && (
-          <div className="w-full h-full bg-[#050a18] flex flex-col justify-between p-6 overflow-hidden relative border border-[#1e2e4b] rounded-b-2xl">
-            {/* Grid Pattern Background */}
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f1c35_1px,transparent_1px),linear-gradient(to_bottom,#0f1c35_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-70"></div>
-
-            {/* Title & Stats HUD Overlay */}
-            <div className="relative z-10 flex items-start justify-between select-none">
-              <div className="space-y-1">
-                <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[9px] font-black rounded-md font-mono uppercase tracking-widest">
-                  🛸 DStoma Region Network Hub
-                </span>
-                <h4 className="text-xs font-black text-slate-100 uppercase tracking-wider font-display text-left">
-                  {t('uzbekistanNeonMapLabel')}
-                </h4>
-                <p className="text-[10px] text-slate-400 font-semibold leading-relaxed max-w-sm text-left">
-                  {t('vectorMapDescLabel')}
-                </p>
-              </div>
-
-              {/* Status HUD indicator */}
-              <div className="bg-[#0b101e]/90 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-[9px] font-mono font-bold text-emerald-400 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                <span>{t('syncAllNodesLabel')}</span>
-              </div>
-            </div>
-
-            {/* High-Tech Constellation SVG Map */}
-            <div className="relative flex-1 w-full flex items-center justify-center py-2 select-none z-10">
-              <div className="relative w-full max-w-[580px] h-[310px] bg-[#0c1328]/50 border border-[#233355]/40 rounded-3xl p-4 flex items-center justify-center overflow-hidden">
-                <div className="absolute w-[440px] h-[440px] border border-[#1b2b4d]/40 rounded-full animate-spin" style={{ animationDuration: '40s' }} />
-                <div className="absolute w-[240px] h-[240px] border border-dashed border-[#1ea5e9]/10 rounded-full animate-spin" style={{ animationDuration: '24s', animationDirection: 'reverse' }} />
-
-                <svg viewBox="0 0 600 320" className="w-full h-full relative z-10 filter drop-shadow-[0_0_15px_rgba(16,185,129,0.15)]">
-                  <text x="15" y="25" fill="#384f73" fontSize="8" fontFamily="monospace">41.2995° N, 69.2401° E</text>
-                  <text x="15" y="305" fill="#384f73" fontSize="8" fontFamily="monospace">GRID PROJ: MERCATOR CYBER</text>
-                  
-                  {/* Cyber Gradient map contour */}
-                  <path
-                    d="M 50,180 L 110,120 L 160,130 L 190,110 L 250,150 L 300,140 L 330,80 L 410,95 L 450,135 L 500,130 L 520,155 L 490,185 L 440,195 L 410,230 L 350,225 L 300,245 L 230,220 L 190,235 L 140,215 L 80,225 Z"
-                    fill="url(#uzCyberGradient)"
-                    stroke="#10b981"
-                    strokeWidth="1.8"
-                    strokeLinejoin="round"
-                    className="opacity-75 stroke-[1.8px]"
-                  />
-
-                  {/* Nodes link definitions */}
-                  <defs>
-                    <radialGradient id="uzCyberGradient" cx="50%" cy="50%" r="50%">
-                      <stop offset="0%" stopColor="#047857" stopOpacity="0.15" />
-                      <stop offset="100%" stopColor="#020617" stopOpacity="0.4" />
-                    </radialGradient>
-                    <linearGradient id="laserLine" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#10b981" />
-                      <stop offset="50%" stopColor="#ec4899" />
-                      <stop offset="100%" stopColor="#06b6d4" />
-                    </linearGradient>
-                  </defs>
-
-                  {/* Pulsing lines */}
-                  <path d="M 170,190 Q 230,195 290,215" fill="none" stroke="url(#laserLine)" strokeWidth="2" strokeDasharray="8 6" className="animate-pulse" />
-                  <path d="M 290,215 Q 360,165 430,125" fill="none" stroke="url(#laserLine)" strokeWidth="2" strokeDasharray="6 4" className="animate-pulse" />
-
-                  {/* BUXORO */}
-                  <g
-                    onClick={() => {
-                      const c = clinics.find((cl) => cl.id === 'buxoro');
-                      if (c) onSelectClinic(c);
-                    }}
-                    className="cursor-pointer group select-none"
-                  >
-                    <circle cx="170" cy="190" r="14" fill="#ec4899" fillOpacity="0.12" className="animate-ping" style={{ animationDuration: '3s' }} />
-                    <circle cx="170" cy="190" r="7" fill={selectedClinic?.id === 'buxoro' ? '#ec4899' : '#1e293b'} stroke="#ec4899" strokeWidth="2" className="group-hover:scale-125 transition-all" />
-                    <text x="170" y="172" textAnchor="middle" fill="#ec4899" fontSize="10" fontWeight="bold" fontFamily="sans-serif">Buxoro Node</text>
-                  </g>
-
-                  {/* SAMARQAND */}
-                  <g
-                    onClick={() => {
-                      const c = clinics.find((cl) => cl.id === 'samarqand');
-                      if (c) onSelectClinic(c);
-                    }}
-                    className="cursor-pointer group select-none"
-                  >
-                    <circle cx="290" cy="215" r="16" fill="#10b981" fillOpacity="0.15" className="animate-ping" style={{ animationDuration: '4s' }} />
-                    <circle cx="290" cy="215" r="8" fill={selectedClinic?.id === 'samarqand' ? '#10b981' : '#1e293b'} stroke="#10b981" strokeWidth="2.5" className="group-hover:scale-125 transition-all" />
-                    <text x="290" y="196" textAnchor="middle" fill="#10b981" fontSize="11" fontWeight="extrabold" fontFamily="sans-serif">Samarqand Area</text>
-                  </g>
-
-                  {/* TOSHKENT */}
-                  <g
-                    onClick={() => {
-                      const c = clinics.find((cl) => cl.id === 'toshkent');
-                      if (c) onSelectClinic(c);
-                    }}
-                    className="cursor-pointer group select-none"
-                  >
-                    <circle cx="430" cy="125" r="15" fill="#06b6d4" fillOpacity="0.15" className="animate-ping" style={{ animationDuration: '2.5s' }} />
-                    <circle cx="430" cy="125" r="8" fill={selectedClinic?.id === 'toshkent' ? '#06b6d4' : '#1e293b'} stroke="#06b6d4" strokeWidth="2" className="group-hover:scale-125 transition-all" />
-                    <text x="430" y="107" textAnchor="middle" fill="#06b6d4" fontSize="10" fontWeight="bold" fontFamily="sans-serif">Toshkent HQ</text>
-                  </g>
-
-                  {/* Real user tracking location indicator overlay */}
-                  <g transform={`translate(${((userLng - 56) / (73.1 - 56)) * 600}, ${((45.5 - userLat) / (45.5 - 37.1)) * 300})`}>
-                    <rect x="-65" y="-12" width="130" height="15" rx="3" fill="#ef4444" fillOpacity="0.2" stroke="#ef4444" strokeWidth="0.5" />
-                    <circle cx="0" cy="-4" r="3" fill="#ef4444" className="animate-ping" />
-                    <text x="0" y="-1" textAnchor="middle" fill="#fca5a5" fontSize="6.5" fontWeight="black" fontFamily="monospace" letterSpacing="0.8">
-                      {t('yourLocationLabel')}
-                    </text>
-                  </g>
-                </svg>
-              </div>
-            </div>
-
-            {/* Bottom guide info banner */}
-            <div className="relative z-10 flex items-center gap-3 bg-[#0b1022]/90 p-4 border border-[#1e2e4b] rounded-2xl text-slate-300 text-[11px] shadow-md text-left">
-              <span className="p-1.5 bg-slate-800/65 text-yellow-500 rounded-lg shrink-0 text-sm">⚡</span>
-              <p className="font-semibold leading-relaxed">
-                <strong className="text-white text-[11.5px]">{t('cyberHudLabel')}</strong>{' '}
-                {t('cyberHudDescLabel')}
-              </p>
             </div>
           </div>
         )}

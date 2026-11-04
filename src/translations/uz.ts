@@ -1,6 +1,6 @@
 export const uz = {
-  appTitle: "DStoma Queue",
-  appSubtitle: "Stomatologiya tarmoqlari uchun professional elektron navbat va multi-tenant SaaS boshqaruv paneli",
+  appTitle: "DStoma",
+  appSubtitle: "Stomatologiya klinikalari uchun onlayn navbat va boshqaruv tizimi",
   bemorTab: "Bemor Kabineti",
   shifokorTab: "Shifokor Paneli",
   boshliqTab: "Boss Dashboard",
@@ -85,8 +85,8 @@ export const uz = {
   updateBtn: "Yangilash",
 
   // SuperAdmin Dashboard (AMENDED TO COPE WITH USER REQUEST FOR EXTREME SLEEKNESS & CREDENTIAL MANAGING)
-  superadminHeader: "Superadmin SaaS Global Markazi",
-  superadminSubtitle: "Ko'p ijarachili (Multi-tenant) DStoma boshqaruv tizimi egasining mukammal boshqaruv bosh qarorgohi.",
+  superadminHeader: "Platforma egasi paneli",
+  superadminSubtitle: "Butun platforma bo'yicha klinikalar, obunalar va daromad.",
   mrr: "Global Oylik Tushum (MRR):",
   totalClinics: "Tizimdagi jami klinikalar",
   totalPatients: "Umumiy bemorlar va chiptalar",

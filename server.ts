@@ -217,31 +217,33 @@ async function isAuthorizedForClinic(req: any, clinicId: string | undefined, all
     // clinic (payment receipts, reminders, ...) 401'd, even though they
     // genuinely belong there. Same root cause as the /api/patients and
     // /api/queues fix above, just reached through the shared auth helper.
-    const links = await getDoctorClinicLinks();
+    const links = await cachedList("doctorClinicLinks", getDoctorClinicLinks);
     return (links as any[]).some((l) => l.doctorId === auth.staff!.doctorId && l.clinicId === clinicId && l.status === 'active');
   }
   return false;
 }
 
 // A LIGHTWEIGHT RATE-LIMITER TO DEFEND AGAINST BRUTE FORCE ATTACKS & SPAM
-const ipLimits = new Map<string, { count: number; resetTime: number }>();
-function rateLimiter(maxRequests: number, windowMs: number) {
+// Each limiter keeps its own counters. They used to share one table keyed by IP
+// alone, so every limited request from a clinic's network (payments, bookings,
+// logins) counted against every other limit, and one sign-in through the unified
+// login screen — which tries the admin, director, doctor and patient endpoints
+// in turn — used up most of the 5-per-minute login budget by itself.
+// `keyOf` narrows the bucket further; the login endpoints key on IP + username,
+// so colleagues behind one router don't lock each other out.
+function rateLimiter(maxRequests: number, windowMs: number, keyOf?: (req: any) => string) {
+  const limits = new Map<string, { count: number; resetTime: number }>();
   return (req: any, res: any, next: any) => {
     const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown_ip";
+    const key = keyOf ? `${ip}|${keyOf(req)}` : String(ip);
     const now = Date.now();
-    const record = ipLimits.get(ip);
-    
-    if (!record) {
-      ipLimits.set(ip, { count: 1, resetTime: now + windowMs });
+    const record = limits.get(key);
+
+    if (!record || now > record.resetTime) {
+      limits.set(key, { count: 1, resetTime: now + windowMs });
       return next();
     }
-    
-    if (now > record.resetTime) {
-      record.count = 1;
-      record.resetTime = now + windowMs;
-      return next();
-    }
-    
+
     record.count++;
     if (record.count > maxRequests) {
       return res.status(429).json({
@@ -252,6 +254,7 @@ function rateLimiter(maxRequests: number, windowMs: number) {
     next();
   };
 }
+const byLoginName = (req: any) => String(req.body?.username ?? req.body?.loginId ?? req.body?.passportSerial ?? "").trim().toLowerCase();
 
 // XSS SANITIZATION HELPER
 // Strips angle brackets to prevent HTML tag injection. Does NOT HTML-entity-encode
@@ -434,6 +437,27 @@ try {
   if (process.env.NODE_ENV === "production") throw error;
 }
 
+// Short-lived cache for the full-collection reads behind the polled GET endpoints.
+// Every open panel polls /api/queues every 4 s and the other lists every minute,
+// and each poll read the whole collection from Firestore; with a few clinics
+// online that was most of the bill. Within LIST_TTL_MS one server instance now
+// answers all of them from one read. Write paths keep reading fresh (getQueues()
+// etc. directly), so a booking still checks the real slot, and every save or
+// delete below drops that collection's cache entry.
+const LIST_TTL_MS = 5000;
+const listCache = new Map<string, { at: number; data: Promise<any[]> }>();
+function cachedList<T>(name: string, load: () => Promise<T[]>): Promise<T[]> {
+  const hit = listCache.get(name);
+  if (hit && Date.now() - hit.at < LIST_TTL_MS) return hit.data as Promise<T[]>;
+  const data = load();
+  listCache.set(name, { at: Date.now(), data });
+  data.catch(() => listCache.delete(name));
+  return data;
+}
+function invalidateList(name: string) {
+  listCache.delete(name);
+}
+
 // ASYNC DB HELPERS
 async function getPatients(): Promise<Patient[]> {
   if (fDb) {
@@ -443,6 +467,7 @@ async function getPatients(): Promise<Patient[]> {
   return g._patientsDb || [];
 }
 async function savePatient(p: Patient) {
+  invalidateList("patients");
   // Hash at the data layer so every caller is protected — not just the HTTP endpoints
   // that remembered to hash before calling this (the Telegram bot registration flow
   // used to call this directly with a plaintext password).
@@ -455,6 +480,7 @@ async function savePatient(p: Patient) {
     // any doctor/patient edit built by spreading that copy (very common — diagnoses,
     // visit notes, allergies, etc.) would otherwise silently wipe the patient's password.
     await setDoc(doc(fDb, "patients", p.id!), clean, { merge: true });
+    invalidateList("patients");
   } else {
     if (!g._patientsDb) g._patientsDb = [];
     const idx = g._patientsDb.findIndex((x: any) => x.id === p.id);
@@ -463,7 +489,9 @@ async function savePatient(p: Patient) {
   }
 }
 async function deletePatient(id: string) {
+  invalidateList("patients");
   if (fDb) await deleteDoc(doc(fDb, "patients", id));
+  invalidateList("patients");
   if (g._patientsDb) g._patientsDb = g._patientsDb.filter((x: any) => x.id !== id);
 }
 async function getQueues(): Promise<QueueItem[]> {
@@ -474,6 +502,7 @@ async function getQueues(): Promise<QueueItem[]> {
   return g._queuesDb || [];
 }
 async function saveQueue(q: QueueItem) {
+  invalidateList("queues");
   // Firestore's setDoc rejects any field whose value is explicitly `undefined`
   // (e.g. a queue item that never had appointmentDate/appointmentTime set, then
   // gets spread into an update object) — strip those keys before writing.
@@ -483,6 +512,7 @@ async function saveQueue(q: QueueItem) {
   }
   if (fDb) {
     await setDoc(doc(fDb, "queues", q.id!), clean);
+    invalidateList("queues");
   } else {
     if (!g._queuesDb) g._queuesDb = [];
     const idx = g._queuesDb.findIndex((x: any) => x.id === q.id);
@@ -491,8 +521,10 @@ async function saveQueue(q: QueueItem) {
   }
 }
 async function deleteQueue(id: string) {
+  invalidateList("queues");
   if (fDb) await deleteDoc(doc(fDb, "queues", id));
   else if (g._queuesDb) g._queuesDb = g._queuesDb.filter((x: any) => x.id !== id);
+  invalidateList("queues");
 }
 
 // Draws consumables down from the warehouse when a procedure is finished, using
@@ -628,6 +660,7 @@ async function getClinics() {
   return g._serverClinics || [];
 }
 async function saveClinic(c: any) {
+  invalidateList("clinics");
   const clean = stripUndefined(c);
   // merge:true — the client's copy of a clinic has sensitive fields (password) stripped
   // out for security before it ever reaches the browser, so a plain overwrite here would
@@ -639,9 +672,12 @@ async function saveClinic(c: any) {
     if (idx >= 0) g._serverClinics[idx] = { ...g._serverClinics[idx], ...clean };
     else g._serverClinics.push(clean);
   }
+  invalidateList("clinics");
 }
 async function deleteClinic(id: string) {
+  invalidateList("clinics");
   if (fDb) await deleteDoc(doc(fDb, "clinics", id));
+  invalidateList("clinics");
   if (g._serverClinics) g._serverClinics = g._serverClinics.filter((x:any) => x.id !== id);
 }
 async function getDoctors() {
@@ -652,6 +688,7 @@ async function getDoctors() {
   return g._serverDoctors || [];
 }
 async function saveDoctor(c: any) {
+  invalidateList("doctors");
   const clean = stripUndefined(c);
   // merge:true — same rationale as saveClinic: the client's copy has `password` stripped
   // out of GET /api/doctors, so an overwrite would wipe it on any partial-field edit.
@@ -662,9 +699,12 @@ async function saveDoctor(c: any) {
     if (idx >= 0) g._serverDoctors[idx] = { ...g._serverDoctors[idx], ...clean };
     else g._serverDoctors.push(clean);
   }
+  invalidateList("doctors");
 }
 async function deleteDoctor(id: string) {
+  invalidateList("doctors");
   if (fDb) await deleteDoc(doc(fDb, "doctors", id));
+  invalidateList("doctors");
   if (g._serverDoctors) g._serverDoctors = g._serverDoctors.filter((x:any) => x.id !== id);
 }
 
@@ -705,6 +745,7 @@ async function getDoctorClinicLinks() {
   return g._serverDoctorClinicLinks || [];
 }
 async function saveDoctorClinicLink(c: any) {
+  invalidateList("doctorClinicLinks");
   const clean = stripUndefined(c);
   if (fDb) await setDoc(doc(fDb, "doctorClinicLinks", clean.id), clean);
   else {
@@ -712,9 +753,12 @@ async function saveDoctorClinicLink(c: any) {
     g._serverDoctorClinicLinks = g._serverDoctorClinicLinks.filter((x:any) => x.id !== clean.id);
     g._serverDoctorClinicLinks.push(clean);
   }
+  invalidateList("doctorClinicLinks");
 }
 async function deleteDoctorClinicLink(id: string) {
+  invalidateList("doctorClinicLinks");
   if (fDb) await deleteDoc(doc(fDb, "doctorClinicLinks", id));
+  invalidateList("doctorClinicLinks");
   if (g._serverDoctorClinicLinks) g._serverDoctorClinicLinks = g._serverDoctorClinicLinks.filter((x:any) => x.id !== id);
 }
 
@@ -861,6 +905,7 @@ async function getServices() {
   return g._serverServices || [];
 }
 async function saveService(c: any) {
+  invalidateList("services");
   const clean = stripUndefined(c);
   if (fDb) await setDoc(doc(fDb, "services", clean.id), clean);
   else {
@@ -868,9 +913,12 @@ async function saveService(c: any) {
     g._serverServices = g._serverServices.filter((x:any) => x.id !== clean.id);
     g._serverServices.push(clean);
   }
+  invalidateList("services");
 }
 async function deleteService(id: string) {
+  invalidateList("services");
   if (fDb) await deleteDoc(doc(fDb, "services", id));
+  invalidateList("services");
   if (g._serverServices) g._serverServices = g._serverServices.filter((x:any) => x.id !== id);
 }
 
@@ -933,6 +981,7 @@ async function getPayments() {
   return g._serverPayments || [];
 }
 async function savePayment(c: any) {
+  invalidateList("payments");
   const clean = stripUndefined(c);
   if (fDb) await setDoc(doc(fDb, "payments", clean.id), clean);
   else {
@@ -940,6 +989,7 @@ async function savePayment(c: any) {
     g._serverPayments = g._serverPayments.filter((x:any) => x.id !== clean.id);
     g._serverPayments.push(clean);
   }
+  invalidateList("payments");
 }
 async function getReports() {
   if (fDb) {
@@ -995,12 +1045,10 @@ function verifyPassword(plain: string, stored: any): boolean {
   return storedStr.trim() === String(plain).trim();
 }
 
-// Doctor/clinic login credentials are day-to-day operational passwords the SuperAdmin
-// (the single trusted account owner) routinely needs to look up and hand out — unlike
-// scrypt's one-way hash, they're stored with REVERSIBLE encryption (AES-256-GCM) so the
-// SuperAdmin panel can always show the real current value behind a show/hide toggle,
-// instead of permanently hiding it the moment it's saved. Patient and SuperAdmin-own
-// passwords are unaffected and keep using the one-way scrypt hash above.
+// Doctor/clinic passwords used to be stored with reversible AES-256-GCM encryption
+// so the SuperAdmin could look them up. They're one-way hashed now, like every
+// other password; decryption is kept only so a not-yet-migrated "enc:" password
+// still verifies once, at which point the login handler re-saves it hashed.
 const CREDENTIALS_ENCRYPTION_KEY = crypto.scryptSync(
   process.env.CREDENTIALS_ENCRYPTION_KEY || "dstoma-default-creds-key-change-in-prod-env",
   "dstoma-creds-salt",
@@ -1016,13 +1064,6 @@ const LEGACY_CREDENTIALS_ENCRYPTION_KEY = crypto.scryptSync(
   "dstoma-creds-salt",
   32
 );
-function encryptCredential(plain: string): string {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", CREDENTIALS_ENCRYPTION_KEY, iv);
-  const encrypted = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `enc:${iv.toString("hex")}:${tag.toString("hex")}:${encrypted.toString("hex")}`;
-}
 function isEncryptedCredential(stored: any): boolean {
   return typeof stored === "string" && stored.startsWith("enc:");
 }
@@ -1046,6 +1087,11 @@ function decryptCredential(stored: string): string | null {
 // Returns the RAW stored password value (hashed "scrypt:..." for migrated accounts,
 // or plaintext for legacy/never-changed ones) — callers must use verifyPassword(),
 // never compare with `===` directly.
+// "demo123" only outside production. In production, without ADMIN_PASS and before a
+// password has been saved from the panel, superadmin sign-in is simply refused —
+// it used to fall back to "demo123" there too.
+const DEV_ADMIN_PASS = process.env.NODE_ENV === "production" ? "" : "demo123";
+
 async function getAdminCreds() {
   if (fDb) {
     try {
@@ -1065,7 +1111,7 @@ async function getAdminCreds() {
   }
   return {
     login: (globalThis as any)._serverAdminLogin || process.env.ADMIN_USER || "superadmin",
-    password: (globalThis as any)._serverAdminPassword || process.env.ADMIN_PASS || "demo123"
+    password: (globalThis as any)._serverAdminPassword || process.env.ADMIN_PASS || DEV_ADMIN_PASS
   };
 }
 async function saveAdminCreds(login: string, pass: string, alreadyHashed = false) {
@@ -1284,10 +1330,10 @@ app.get("/api/telegram-config", requireSuperAdmin, async (req, res) => {
 
 const gAdmin = globalThis as any;
 if (!gAdmin.superadminLogin) gAdmin.superadminLogin = process.env.ADMIN_USER || "superadmin";
-if (!gAdmin.superadminPassword) gAdmin.superadminPassword = process.env.ADMIN_PASS || "demo123";
+if (!gAdmin.superadminPassword) gAdmin.superadminPassword = process.env.ADMIN_PASS || DEV_ADMIN_PASS;
 
 // POST endpoint for secure superadmin login to prevent plain text password on client-side
-app.post("/api/admin-login", rateLimiter(5, 60 * 1000), async (req, res) => {
+app.post("/api/admin-login", rateLimiter(5, 60 * 1000, byLoginName), async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ ok: false, error: "Username and password are required" });
@@ -1323,7 +1369,7 @@ app.post("/api/admin-update-creds", rateLimiter(3, 60 * 1000), requireSuperAdmin
 // POST endpoint for secure director (clinic owner) login — verifies against real clinic
 // records server-side so the client never needs to receive the full clinics list with
 // plaintext passwords just to compare them locally.
-app.post("/api/director-login", rateLimiter(5, 60 * 1000), async (req, res) => {
+app.post("/api/director-login", rateLimiter(5, 60 * 1000, byLoginName), async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ ok: false, error: "Login va parol talab qilinadi" });
@@ -1333,8 +1379,10 @@ app.post("/api/director-login", rateLimiter(5, 60 * 1000), async (req, res) => {
   if (!matched) {
     return res.status(401).json({ ok: false, error: "Login yoki parol noto'g'ri" });
   }
-  if (!isHashedPassword(matched.password) && !isEncryptedCredential(matched.password)) {
-    await saveClinic({ id: matched.id, password: encryptCredential(password) });
+  // Plaintext and reversibly-encrypted passwords from older versions are
+  // replaced with a one-way hash the first time they're used.
+  if (!isHashedPassword(matched.password)) {
+    await saveClinic({ id: matched.id, password: hashPassword(password) });
   }
   const { password: _pw, ...safeClinic } = matched;
   const token = crypto.randomBytes(32).toString("hex");
@@ -1343,7 +1391,7 @@ app.post("/api/director-login", rateLimiter(5, 60 * 1000), async (req, res) => {
 });
 
 // POST endpoint for secure doctor login — same rationale as /api/director-login.
-app.post("/api/doctor-login", rateLimiter(5, 60 * 1000), async (req, res) => {
+app.post("/api/doctor-login", rateLimiter(5, 60 * 1000, byLoginName), async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ ok: false, error: "Login va parol talab qilinadi" });
@@ -1361,8 +1409,8 @@ app.post("/api/doctor-login", rateLimiter(5, 60 * 1000), async (req, res) => {
   if (!clinicStillExists) {
     return res.status(401).json({ ok: false, error: "Klinikangiz faol emas. Administrator bilan bog'laning." });
   }
-  if (!isHashedPassword(matched.password) && !isEncryptedCredential(matched.password)) {
-    await saveDoctor({ id: matched.id, password: encryptCredential(password) } as any);
+  if (!isHashedPassword(matched.password)) {
+    await saveDoctor({ id: matched.id, password: hashPassword(password) } as any);
   }
   const { password: _pw, ...safeDoctor } = matched;
   const token = crypto.randomBytes(32).toString("hex");
@@ -1371,7 +1419,7 @@ app.post("/api/doctor-login", rateLimiter(5, 60 * 1000), async (req, res) => {
 });
 
 // POST endpoint for secure patient login (passport serial + password) — same rationale.
-app.post("/api/patient-login", rateLimiter(10, 60 * 1000), async (req, res) => {
+app.post("/api/patient-login", rateLimiter(10, 60 * 1000, byLoginName), async (req, res) => {
   // loginId accepts either: the loginCode issued at registration (current
   // flow, since passport is no longer collected up front) or a passportSerial
   // (older accounts that do have one, from before this change). passportSerial
@@ -1481,18 +1529,11 @@ app.post("/api/telegram-login", rateLimiter(10, 60 * 1000), async (req, res) => 
 // below deliberately omit passwords.
 app.get("/api/admin/credentials", requireSuperAdmin, async (req, res) => {
   const [allClinics, allDoctors] = await Promise.all([getClinics(), getDoctors()]);
-  // Reversibly-encrypted passwords are decrypted here so the SuperAdmin panel can show
-  // the real current value (behind its own show/hide toggle). A leftover one-way
-  // scrypt hash (from before this account's password was last reset) can't be
-  // recovered — it's passed through as-is and the panel shows it as hidden.
-  const revealed = (list: any[]) => list.map((item) => {
-    if (item.password && isEncryptedCredential(item.password)) {
-      const dec = decryptCredential(item.password);
-      if (dec !== null) return { ...item, password: dec };
-    }
-    return item;
-  });
-  res.json({ clinics: revealed(allClinics), doctors: revealed(allDoctors) });
+  // Passwords are never returned: staff passwords are stored as one-way hashes
+  // and shown only once, when they're created or reset. (This endpoint used to
+  // decrypt and return every clinic's and doctor's current password.)
+  const withoutPassword = (list: any[]) => list.map(({ password, ...item }) => item);
+  res.json({ clinics: withoutPassword(allClinics), doctors: withoutPassword(allDoctors) });
 });
 
 // Materializes a charge for every pre-existing treatment plan item, so
@@ -1974,7 +2015,7 @@ const stripMedical = (p: any) => {
 app.get("/api/patients", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   const auth = await getAuthContext(req);
-  const allPatients = await getPatients();
+  const allPatients = await cachedList("patients", getPatients);
 
   if (auth.isSuperAdmin) {
     return res.json(allPatients.map(stripPassword));
@@ -2051,7 +2092,7 @@ app.get("/api/payments", async (req, res) => {
   if (!auth.isSuperAdmin && !auth.staff) {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
-  const all = await getPayments();
+  const all = await cachedList("payments", getPayments);
   res.json(auth.isSuperAdmin ? all : all.filter((p: any) => p.clinicId === auth.staff!.clinicId));
 });
 app.post("/api/payments", rateLimiter(30, 60 * 1000), async (req, res) => {
@@ -2186,7 +2227,7 @@ app.post("/api/patients", rateLimiter(30, 60 * 1000), async (req, res) => {
 app.get("/api/queues", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   const auth = await getAuthContext(req);
-  const all = await getQueues();
+  const all = await cachedList("queues", getQueues);
 
   if (auth.isSuperAdmin) return res.json(all);
   if (auth.staff) {
@@ -2676,7 +2717,7 @@ app.get("/api/clinics", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
-  const [allClinics, allQueues] = await Promise.all([getClinics(), getQueues()]);
+  const [allClinics, allQueues] = await Promise.all([cachedList("clinics", getClinics), cachedList("queues", getQueues)]);
   // Public listing (powers the anonymous patient booking page) — never ship the login
   // password. geminiApiKey is stripped too: all AI usage now bills against the single
   // platform-wide key (see getGeminiApiKey), so clinics no longer configure their own
@@ -2730,7 +2771,7 @@ app.post("/api/clinics", async (req, res) => {
     clinicToSave.aiTrialStartDate = existing?.aiTrialStartDate || new Date().toISOString();
   }
   if (clinicToSave.password && !isHashedPassword(clinicToSave.password) && !isEncryptedCredential(clinicToSave.password)) {
-    clinicToSave.password = encryptCredential(clinicToSave.password);
+    clinicToSave.password = hashPassword(clinicToSave.password);
   }
   await saveClinic(clinicToSave);
   const { password: _pw, ...safeClinicToSave } = clinicToSave;
@@ -2755,7 +2796,7 @@ app.get("/api/doctors", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
-  const [docs, allQueues] = await Promise.all([getDoctors(), getQueues()]);
+  const [docs, allQueues] = await Promise.all([cachedList("doctors", getDoctors), cachedList("queues", getQueues)]);
   const mapped = docs.map((d: any) => {
     // rating is derived live from real patient feedback (QueueItem.rating), the
     // same way GET /api/clinics already computes Clinic.rating — never a stored/
@@ -2836,7 +2877,7 @@ app.post("/api/doctors", async (req, res) => {
     return res.status(401).json({ ok: false, error: "Ruxsat yo'q" });
   }
   if (doc.password && !isHashedPassword(doc.password) && !isEncryptedCredential(doc.password)) {
-    doc.password = encryptCredential(doc.password);
+    doc.password = hashPassword(doc.password);
   }
   await saveDoctor(doc);
   const { password: _pw, ...safeDoc } = doc;
@@ -2865,7 +2906,7 @@ app.delete("/api/patients/:id", async (req, res) => {
 
 app.get("/api/doctor-clinic-links", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-  res.json(await getDoctorClinicLinks());
+  res.json(await cachedList("doctorClinicLinks", getDoctorClinicLinks));
 });
 
 app.post("/api/doctor-clinic-links", async (req, res) => {
@@ -3330,7 +3371,7 @@ app.post("/api/clinic-signup", rateLimiter(5, 60 * 60 * 1000), async (req, res) 
     subscriptionTier: 'basic',
     ownerName,
     login,
-    password: encryptCredential(password),
+    password: hashPassword(password),
     aiTrialStartDate: now,
     createdAt: now,
     selfRegistered: true,
@@ -3458,7 +3499,7 @@ app.get("/api/cron/appointment-reminders", async (req, res) => {
 
 app.get("/api/services", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-  res.json(await getServices());
+  res.json(await cachedList("services", getServices));
 });
 
 app.post("/api/services", async (req, res) => {
@@ -3637,7 +3678,7 @@ async function checkAndConsumeAiUsage(clinicId: string): Promise<boolean> {
 
 // In-memory per-chat daily cap for the Telegram patient bot's free-text AI chat,
 // which has no resolvable clinicId to hang a per-clinic cap off of. Same Map-based
-// style as the ipLimits table inside rateLimiter() below. Resets naturally when a
+// style as the counters inside rateLimiter() above. Resets naturally when a
 // serverless instance recycles — this is an abuse guard, not a hard billing ledger.
 const chatAiUsage = new Map<string, { count: number; date: string }>();
 function checkAndConsumeChatAiUsage(chatId: number | string): boolean {

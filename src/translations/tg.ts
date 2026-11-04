@@ -1,6 +1,6 @@
 export const tg = {
-  appTitle: "DStoma Навбат",
-  appSubtitle: "Барои шабакаҳои стоматология навбати электронии касбӣ ва панели идоракунии SaaS-и бисёрмуштарӣ",
+  appTitle: "DStoma",
+  appSubtitle: "Навбати онлайн ва идоракунӣ барои клиникаҳои стоматологӣ",
   bemorTab: "Кабинети Бемор",
   shifokorTab: "Файли Духтур",
   boshliqTab: "Файли Директор",
@@ -85,8 +85,8 @@ export const tg = {
   updateBtn: "Навсозӣ",
 
   // SuperAdmin Dashboard
-  superadminHeader: "Маркази Ҷаҳонии Суперадмини SaaS",
-  superadminSubtitle: "Маркази идоракунии беҳтарини соҳиби низоми идоракунии бисёрмуштариёни DStoma.",
+  superadminHeader: "Панели соҳиби платформа",
+  superadminSubtitle: "Клиникаҳо, обунаҳо ва даромад дар тамоми платформа.",
   mrr: "Даромади моҳонаи ҷаҳонӣ (MRR):",
   totalClinics: "Ҳамаи клиникаҳо дар низом",
   totalPatients: "Ҳамаи беморон ва чиптаҳо",

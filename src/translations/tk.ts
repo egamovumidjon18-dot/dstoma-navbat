@@ -1,6 +1,6 @@
 export const tk = {
-  appTitle: "DStoma Nobat",
-  appSubtitle: "Diş bejeriş ulgamlary üçin hünärmen elektron nobat we köp-kärendeçi SaaS dolandyryş paneli",
+  appTitle: "DStoma",
+  appSubtitle: "Stomatologiýa klinikalary üçin onlaýn nobat we dolandyryş ulgamy",
   bemorTab: "Näsag Kabineti",
   shifokorTab: "Lukman Paneli",
   boshliqTab: "Direktor Paneli",
@@ -85,8 +85,8 @@ export const tk = {
   updateBtn: "Täzelemek",
 
   // SuperAdmin Dashboard
-  superadminHeader: "Superadmin SaaS Global Merkezi",
-  superadminSubtitle: "Köp-kärendeçi DStoma dolandyryş ulgamynyň eýesiniň kämil dolandyryş baş edarasy.",
+  superadminHeader: "Platforma eýesiniň paneli",
+  superadminSubtitle: "Tutuş platforma boýunça klinikalar, abunalar we girdeji.",
   mrr: "Global Aýlyk Girdeji (MRR):",
   totalClinics: "Ulgamdaky ähli klinikalar",
   totalPatients: "Jemi näsaglar we petekler",

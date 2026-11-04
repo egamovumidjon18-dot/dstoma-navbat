@@ -29,7 +29,7 @@ It is live at [dstoma.online](https://dstoma.online).
   per-surface conditions, mobility, root canals, bleeding, notes)
 - Treatment plans with multi-visit stages and per-stage billing
 - X-ray center and before/after photo gallery, linked to teeth
-- AI analysis of the dental chart and X-rays (Gemini, Premium)
+- AI X-ray analysis (Gemini, Premium) and a rule-based risk assessment per tooth
 - Prescriptions with templates, PDF export and sending via Telegram
 - Material stock per doctor with automatic deduction per procedure
 - Finance: charges, payments, debts, receipts; personal statistics
@@ -83,9 +83,12 @@ About 36,000 lines of TypeScript in `src/` plus ~6,000 in `server.ts`.
 - `firestore.rules` scope direct browser access: staff see only their clinic's data
   and their own patients; patients see only their own records (read-only); everything
   else (patients list, sessions, payments, credentials) is server-only.
-- Passwords are hashed; clinic/doctor credentials shown to admins are encrypted at rest.
-- Rate limiting on login and AI endpoints; Telegram Mini App sign-in verifies the
-  Telegram signature.
+- Every password is stored as a one-way hash. Staff passwords are shown once, when
+  they're created or reset, and can't be read back by anyone.
+- Login rate limiting per account and IP, plus limits on AI and write endpoints;
+  Telegram Mini App sign-in verifies the Telegram signature.
+- The polled list endpoints are served from a 5-second per-instance cache, so
+  Firestore reads don't grow with the number of open screens.
 
 ## Getting started
 
@@ -106,8 +109,8 @@ and other Firestore-backed panels need a real project.
 | Variable | Required | Purpose |
 |---|---|---|
 | `FIREBASE_SERVICE_ACCOUNT` | yes (production) | Service-account JSON on one line |
-| `ADMIN_USER`, `ADMIN_PASS` | yes | Initial superadmin login (change it in the panel afterwards) |
-| `CREDENTIALS_ENCRYPTION_KEY` | yes | Key for encrypting stored staff credentials |
+| `ADMIN_USER`, `ADMIN_PASS` | yes | Initial superadmin login (change it in the panel afterwards). In production there is no default password. |
+| `CREDENTIALS_ENCRYPTION_KEY` | only when upgrading | Lets staff passwords saved by older versions verify once before they're re-hashed |
 | `GEMINI_API_KEY` | for AI | Google Gemini API key |
 | `TELEGRAM_BOT_TOKEN`, `DOCTOR_BOT_TOKEN` | for Telegram | Patient and doctor bot tokens |
 | `APP_URL` | yes | Public URL, used for links and the Telegram webhook |

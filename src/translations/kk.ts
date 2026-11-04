@@ -1,6 +1,6 @@
 export const kk = {
-  appTitle: "DStoma Кезек",
-  appSubtitle: "Стоматология желілері үшін кәсіби электронды кезек және мульти-жалдаушы SaaS басқару панелі",
+  appTitle: "DStoma",
+  appSubtitle: "Стоматологиялық клиникаларға арналған онлайн кезек және басқару жүйесі",
   bemorTab: "Пациент Кабинеті",
   shifokorTab: "Дәрігер Панелі",
   boshliqTab: "Директор Панелі",
@@ -85,8 +85,8 @@ export const kk = {
   updateBtn: "Жаңарту",
 
   // SuperAdmin Dashboard
-  superadminHeader: "Суперәкімші SaaS Жаһандық Орталығы",
-  superadminSubtitle: "Мульти-жалдаушы DStoma басқару жүйесі иесінің мінсіз басқару қарауылханасы.",
+  superadminHeader: "Платформа иесінің панелі",
+  superadminSubtitle: "Бүкіл платформа бойынша клиникалар, жазылымдар және табыс.",
   mrr: "Жаһандық Айлық Табыс (MRR):",
   totalClinics: "Жүйедегі барлық клиникалар",
   totalPatients: "Жалпы пациенттер мен билеттер",
