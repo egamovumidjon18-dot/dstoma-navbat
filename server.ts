@@ -5901,7 +5901,37 @@ async function startServer() {
     
     // Launch Telegram Smart Polling bot service asynchronously
     startTelegramBot();
+    startReminderScheduler();
   });
+}
+
+// Day-before appointment reminders. On Vercel this is a platform cron job
+// (vercel.json); on a long-lived server it runs from here instead, once a day at
+// REMINDER_HOUR_UTC (default 3 = 08:00 in Tashkent, matching the old cron). It calls
+// the same endpoint over loopback, so the logic stays in one place. Safe to run more
+// than once a day, or again after a restart: the endpoint skips anything that already
+// has reminderSentAt.
+function startReminderScheduler() {
+  if (process.env.VERCEL || process.env.DISABLE_REMINDER_SCHEDULER === "1") return;
+  const hourUtc = Number(process.env.REMINDER_HOUR_UTC ?? 3);
+  let lastRunDay = "";
+  const tick = async () => {
+    const now = new Date();
+    const day = now.toISOString().slice(0, 10);
+    if (now.getUTCHours() < hourUtc || lastRunDay === day) return;
+    lastRunDay = day;
+    try {
+      const headers: Record<string, string> = {};
+      if (process.env.CRON_SECRET) headers.Authorization = `Bearer ${process.env.CRON_SECRET}`;
+      const res = await fetch(`http://127.0.0.1:${PORT}/api/cron/appointment-reminders`, { headers });
+      console.log(`[Reminders] ${day}: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
+    } catch (err) {
+      lastRunDay = ""; // try again on the next tick
+      console.error("[Reminders] run failed:", err);
+    }
+  };
+  setInterval(tick, 10 * 60 * 1000);
+  setTimeout(tick, 30 * 1000);
 }
 
 // Registers (or re-registers) a bot's Telegram webhook to point at this deployment's

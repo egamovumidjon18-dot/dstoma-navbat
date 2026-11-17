@@ -1,0 +1,34 @@
+# Render Blueprint: one always-on web service built from the Dockerfile.
+# New → Blueprint on render.com, pick this repo, then fill in the variables marked
+# "sync: false" (Render asks for them; they are never stored in git).
+#
+# An always-on instance is needed: the Telegram bots poll for messages and the
+# daily appointment reminders run from inside the server. Free instances sleep
+# when idle (check Render's current pricing page for the exact rules).
+services:
+  - type: web
+    name: dstoma
+    runtime: docker
+    region: frankfurt # near the Firestore database (eur3)
+    plan: starter
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: APP_URL
+        value: https://www.dstoma.online
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+      - key: ADMIN_USER
+        value: superadmin
+      - key: ADMIN_PASS
+        sync: false
+      - key: CREDENTIALS_ENCRYPTION_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: DOCTOR_BOT_TOKEN
+        sync: false
+      - key: REMINDER_HOUR_UTC
+        value: "3"
