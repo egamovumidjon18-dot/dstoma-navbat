@@ -1,4 +1,4 @@
-# Render Blueprint: one always-on web service built from the Dockerfile.
+# Render Blueprint: one web service built from the Dockerfile.
 # New → Blueprint on render.com, pick this repo, then fill in the variables marked
 # "sync: false" (Render asks for them; they are never stored in git).
 #
