@@ -6,7 +6,7 @@ Ushbu loyiha **React (Vite)** va **Node.js (Express)** texnologiyalarida to'liq 
 
 ## 🚀 Render'ga joylash (Vercel o'rniga) — tavsiya etiladi
 
-Vercel Hobby tarifi CPU limiti oshgani uchun deploy'larni to'xtatgan edi. Render'da ilova oddiy doimiy server sifatida ishlaydi: Telegram botlar polling bilan ishlaydi, kundalik eslatmalarni (har kuni 08:00 Toshkent vaqti) server o'zi yuboradi.
+Vercel Hobby tarifi CPU limiti oshgani uchun deploy'larni to'xtatgan edi. Render'da ilova oddiy server sifatida ishlaydi: Telegram botlar polling bilan ishlaydi, kundalik eslatmalarni (har kuni 08:00 Toshkent vaqti) server o'zi yuboradi. Bepul tarifda server uxlab qolishi mumkin, quyidagi izohga qarang.
 
 **1. Tayyorgarlik (sizdan)**
 - **Yangi Firebase kaliti:** Firebase console → `dstoma-ca27c` → Project settings → Service accounts → *Generate new private key*. Vercel'dagi qiymatni ko'ra olmaysiz (u "Secret" turida saqlangan). Eski kalitni shu sahifadan o'chiring, ayniqsa skrinshotda ko'ringan `d117df43…` ni. JSON faylni bitta qatorga keltirib saqlang.
@@ -33,7 +33,12 @@ Hosting ko'chgach Vercel loyihasini o'chiring yoki to'xtating. Pauza tugagach u 
 - Telegram botga `/start` yuboring.
 - Firebase console → Authentication → Settings → Authorized domains'ga `dstoma.online` va `www.dstoma.online` ni qo'shing (kirishda xato bo'lsa).
 
-Narx: `render.yaml` da `plan: starter` yozilgan, chunki doimiy ishlaydigan instans kerak. Joriy narxni Render'ning narxlar sahifasidan tekshiring. Bepul instanslar bo'sh turganda uxlaydi, bu botlar va eslatmalar uchun mos emas.
+**Bepul tarif (`plan: free`) haqida — rasmiy hujjatga ko'ra:**
+- Server **15 daqiqa so'rovsiz qolsa uxlaydi**, uyg'onishi taxminan 1 daqiqa. Uxlab turganda Telegram botlar va kundalik eslatmalar ishlamaydi.
+- Oyiga **750 soat** bepul. Bir oy 744 soat, ya'ni bitta servis uzluksiz ishlasa ham sig'adi. Soat tugasa servis oy oxirigacha to'xtatiladi.
+- Uxlatmaslik uchun bepul **uptime monitor** (masalan UptimeRobot) ochib, saytingizni har 5 daqiqada so'rating. Render hujjatida bunga ruxsat ham, taqiq ham yozilmagan; monitor soatlarni sarflaydi, lekin 750 ga sig'adi.
+- Fayl tizimi har qayta ishga tushganda tozalanadi (bizga zarar yo'q, hammasi Firestore'da). Render xohlagan paytda servisni qayta ishga tushirishi mumkin.
+- Doimiy kundalik ishlatiladigan klinika uchun pullik `starter` tarifiga o'ting: `render.yaml` da `plan: starter`.
 
 ---
 

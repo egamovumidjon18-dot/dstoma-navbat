@@ -2,15 +2,18 @@
 # New → Blueprint on render.com, pick this repo, then fill in the variables marked
 # "sync: false" (Render asks for them; they are never stored in git).
 #
-# An always-on instance is needed: the Telegram bots poll for messages and the
-# daily appointment reminders run from inside the server. Free instances sleep
-# when idle (check Render's current pricing page for the exact rules).
+# Runs on Render's free plan (no payment method needed to start; check Render's
+# current docs). Free instances spin down after 15 minutes without inbound traffic
+# and take about a minute to wake, and while one sleeps the Telegram bots and the
+# daily reminders stop. To keep it awake, have a free uptime monitor request the
+# site every 5 minutes (see DEPLOYMENT.md). For a clinic in daily use, change
+# `plan` to `starter` (paid, always on).
 services:
   - type: web
     name: dstoma
     runtime: docker
     region: frankfurt # near the Firestore database (eur3)
-    plan: starter
+    plan: free
     healthCheckPath: /
     autoDeploy: true
     envVars:
