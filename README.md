@@ -134,7 +134,10 @@ Use a separate project for demos — never your production database.
 
 - **Vercel:** connect the repo; `vercel.json` routes `/api/*` to the Express app and
   schedules the daily reminder job. Set the environment variables above.
-- **Any Node host (Render, Railway, VPS):** `npm run build && npm start`.
+- **Render:** `render.yaml` is a ready Blueprint (Docker, always-on instance); step-by-step
+  in [DEPLOYMENT.md](DEPLOYMENT.md).
+- **Any Node or Docker host (Railway, Fly.io, VPS):** `npm run build && npm start`, or the
+  included `Dockerfile`. A long-lived server runs the Telegram bots and the daily reminders itself.
 - **Firestore rules:** `npx firebase-tools deploy --only firestore:rules`
 - **Android:** `npm run cap:sync`, then build in Android Studio.
 

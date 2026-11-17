@@ -4,6 +4,39 @@ Ushbu loyiha **React (Vite)** va **Node.js (Express)** texnologiyalarida to'liq 
 
 ---
 
+## 🚀 Render'ga joylash (Vercel o'rniga) — tavsiya etiladi
+
+Vercel Hobby tarifi CPU limiti oshgani uchun deploy'larni to'xtatgan edi. Render'da ilova oddiy doimiy server sifatida ishlaydi: Telegram botlar polling bilan ishlaydi, kundalik eslatmalarni (har kuni 08:00 Toshkent vaqti) server o'zi yuboradi.
+
+**1. Tayyorgarlik (sizdan)**
+- **Yangi Firebase kaliti:** Firebase console → `dstoma-ca27c` → Project settings → Service accounts → *Generate new private key*. Vercel'dagi qiymatni ko'ra olmaysiz (u "Secret" turida saqlangan). Eski kalitni shu sahifadan o'chiring, ayniqsa skrinshotda ko'ringan `d117df43…` ni. JSON faylni bitta qatorga keltirib saqlang.
+- **`ADMIN_PASS`:** superadmin paroli (production'da standart parol yo'q).
+- **`CREDENTIALS_ENCRYPTION_KEY`:** Vercel → Settings → Environment Variables'da qiymatini ko'ring va nusxalang. Ko'rinmasa, eski xodim parollari tekshirilmaydi va ularga SuperAdmin paneli orqali yangi parol berish kerak bo'ladi.
+- `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `DOCTOR_BOT_TOKEN`: Vercel'dagi qiymatlar. Telegram tokenlari Firestore'da ham saqlanadi (SuperAdmin → Telegram bot), shuning uchun ular bo'sh qolsa ham bot ishlashi mumkin.
+
+**2. Render'da**
+1. [render.com](https://render.com) → ro'yxatdan o'ting → GitHub'ni ulang → **New → Blueprint** → `dstoma-navbat` repozitoriyasini tanlang. Render `render.yaml` ni o'qiydi.
+2. `sync: false` qilingan o'zgaruvchilarni (yuqoridagi qiymatlarni) kiriting → **Apply**.
+3. Build 5–10 daqiqa oladi. Tugagach `https://dstoma-xxxx.onrender.com` ochilishi, tizimga kirish ishlashi kerak.
+4. Log'larda `Listening live`, `running in production` va `[Telegram Bot] Launching...` yozuvlari bo'lishi kerak.
+
+**3. Domen**
+1. Render → servis → **Settings → Custom Domains** → `www.dstoma.online` va `dstoma.online` ni qo'shing.
+2. Domen registratoringizda DNS yozuvlarini Render ko'rsatgan qiymatlarga o'zgartiring (Vercel'ga ishora qilgan yozuvlarni almashtiring). Tarqalishi bir necha daqiqadan bir necha soatgacha.
+3. Render domen uchun HTTPS sertifikatini o'zi beradi.
+
+**4. Vercel'ni o'chirish (muhim)**
+Hosting ko'chgach Vercel loyihasini o'chiring yoki to'xtating. Pauza tugagach u Telegram webhook'ini o'ziga qaytarib oladi va Render'dagi bot bilan tortishib qoladi.
+
+**5. Tekshirish ro'yxati**
+- Direktor, shifokor va bemor sifatida kirib ko'ring.
+- Telegram botga `/start` yuboring.
+- Firebase console → Authentication → Settings → Authorized domains'ga `dstoma.online` va `www.dstoma.online` ni qo'shing (kirishda xato bo'lsa).
+
+Narx: `render.yaml` da `plan: starter` yozilgan, chunki doimiy ishlaydigan instans kerak. Joriy narxni Render'ning narxlar sahifasidan tekshiring. Bepul instanslar bo'sh turganda uxlaydi, bu botlar va eslatmalar uchun mos emas.
+
+---
+
 ## 📌 Muhim: Telegram Bot va Serverless Ssenariylari
 
 Loyihangizda **Telegram Bot** xizmati mavjud. Chatbot foydalanuvchilar kelgan buyruqlarini eshitishi uchun ikki xil usul bor:
