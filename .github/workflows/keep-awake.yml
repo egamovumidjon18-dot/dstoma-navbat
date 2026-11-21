@@ -2,7 +2,8 @@
 # Render puts a free web service to sleep after 15 minutes without inbound traffic;
 # while it sleeps the Telegram bots and the daily reminders stop.
 #
-# Pings the site every 10 minutes from 02:00 to 19:59 UTC (07:00-00:59 in Tashkent).
+# Pings the site every 10 minutes (at :03, :13, ...; GitHub drops many jobs queued
+# exactly on the hour) from 02:00 to 19:59 UTC (07:00-00:59 in Tashkent).
 # That is 18 h a day, about 560 of the workspace's 750 free hours a month, leaving room
 # for other free services. Adjust the hours in `cron` for your time zone.
 #
@@ -13,7 +14,7 @@ name: Keep awake
 
 on:
   schedule:
-    - cron: "*/10 2-19 * * *"
+    - cron: "3-59/10 2-19 * * *"
   workflow_dispatch:
 
 permissions: {}
