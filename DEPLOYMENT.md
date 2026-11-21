@@ -36,7 +36,10 @@ Hosting ko'chgach Vercel loyihasini o'chiring yoki to'xtating. Pauza tugagach u 
 **Bepul tarif (`plan: free`) haqida — rasmiy hujjatga ko'ra:**
 - Server **15 daqiqa so'rovsiz qolsa uxlaydi**, uyg'onishi taxminan 1 daqiqa. Uxlab turganda Telegram botlar va kundalik eslatmalar ishlamaydi.
 - Oyiga **750 soat** bepul. Bir oy 744 soat, ya'ni bitta servis uzluksiz ishlasa ham sig'adi. Soat tugasa servis oy oxirigacha to'xtatiladi.
-- Uxlatmaslik uchun bepul **uptime monitor** (masalan UptimeRobot) ochib, saytingizni har 5 daqiqada so'rating. Render hujjatida bunga ruxsat ham, taqiq ham yozilmagan; monitor soatlarni sarflaydi, lekin 750 ga sig'adi.
+- Uxlatmaslik uchun repoda **`.github/workflows/keep-awake.yml`** bor: GitHub Actions saytni 02:00–19:59 UTC oralig'ida (Toshkent 07:00–00:59) har 10 daqiqada so'raydi. Kuniga 18 soat ≈ oyiga 560 soat, ya'ni 750 ning ichida va shu workspace'dagi boshqa bepul servislarga ham joy qoladi (750 soat butun workspace uchun umumiy). Kechasi server uxlaydi, ertalabki birinchi so'rov uyg'otadi; eslatmalar `reminderSentAt` tufayli takror yuborilmaydi.
+  - Manzilni o'zgartirish: GitHub → Settings → Secrets and variables → Actions → Variables → `KEEP_AWAKE_URL`.
+  - GitHub rejalashtirilgan ishlarni ba'zan kechiktiradi va repoga 60 kun commit bo'lmasa to'xtatadi (Actions sahifasida qayta yoqiladi).
+  - Pullik tarifga o'tsangiz bu faylni o'chiring.
 - Fayl tizimi har qayta ishga tushganda tozalanadi (bizga zarar yo'q, hammasi Firestore'da). Render xohlagan paytda servisni qayta ishga tushirishi mumkin.
 - Doimiy kundalik ishlatiladigan klinika uchun pullik `starter` tarifiga o'ting: `render.yaml` da `plan: starter`.
 

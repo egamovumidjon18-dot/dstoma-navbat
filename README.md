@@ -69,7 +69,7 @@ It is live at [dstoma.online](https://dstoma.online).
 | Database | Google Cloud Firestore |
 | Auth | Own sessions (hashed passwords, sliding expiry) + Firebase custom tokens for the browser |
 | AI | Google Gemini (`gemini-2.5-flash`) |
-| Hosting | Vercel (serverless function + static), or any Node host |
+| Hosting | Render (Docker), Vercel (serverless function + static), or any Node host |
 | Mobile | Capacitor 8 (Android) |
 | PDF | jsPDF |
 
@@ -134,8 +134,9 @@ Use a separate project for demos — never your production database.
 
 - **Vercel:** connect the repo; `vercel.json` routes `/api/*` to the Express app and
   schedules the daily reminder job. Set the environment variables above.
-- **Render:** `render.yaml` is a ready Blueprint (Docker, always-on instance); step-by-step
-  in [DEPLOYMENT.md](DEPLOYMENT.md).
+- **Render (current host):** `render.yaml` is a ready Blueprint (Docker, free plan); step-by-step
+  in [DEPLOYMENT.md](DEPLOYMENT.md). On the free plan the instance sleeps after 15 idle
+  minutes; `.github/workflows/keep-awake.yml` pings it every 10 minutes during the day.
 - **Any Node or Docker host (Railway, Fly.io, VPS):** `npm run build && npm start`, or the
   included `Dockerfile`. A long-lived server runs the Telegram bots and the daily reminders itself.
 - **Firestore rules:** `npx firebase-tools deploy --only firestore:rules`

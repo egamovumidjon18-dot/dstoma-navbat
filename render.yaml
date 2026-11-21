@@ -5,8 +5,8 @@
 # Runs on Render's free plan (no payment method needed to start; check Render's
 # current docs). Free instances spin down after 15 minutes without inbound traffic
 # and take about a minute to wake, and while one sleeps the Telegram bots and the
-# daily reminders stop. To keep it awake, have a free uptime monitor request the
-# site every 5 minutes (see DEPLOYMENT.md). For a clinic in daily use, change
+# daily reminders stop. .github/workflows/keep-awake.yml pings the site every 10
+# minutes during the day (see DEPLOYMENT.md). For a clinic in daily use, change
 # `plan` to `starter` (paid, always on).
 services:
   - type: web
