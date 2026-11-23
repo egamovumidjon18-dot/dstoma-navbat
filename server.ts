@@ -5902,7 +5902,33 @@ async function startServer() {
     // Launch Telegram Smart Polling bot service asynchronously
     startTelegramBot();
     startReminderScheduler();
+    startKeepAwake();
   });
+}
+
+// Render's free plan stops an instance after 15 minutes without inbound traffic, and
+// GitHub's scheduled keep-awake workflow fires only a few times a day. So on Render the
+// server requests its own public URL every 10 minutes during KEEP_AWAKE_UTC_HOURS
+// (default 2-19 = 07:00-00:59 in Tashkent; about 560 of the workspace's 750 free hours
+// a month). The request goes out through Render's edge, so it counts as inbound traffic.
+// Outside those hours the instance sleeps; the next visitor (or the GitHub workflow)
+// wakes it, and the pings carry on from there. Set KEEP_AWAKE=0 to turn this off, for
+// example on a paid plan.
+function startKeepAwake() {
+  const baseUrl = process.env.RENDER_EXTERNAL_URL;
+  if (!process.env.RENDER || !baseUrl || process.env.KEEP_AWAKE === "0") return;
+  const [from, to] = (process.env.KEEP_AWAKE_UTC_HOURS || "2-19").split("-").map(Number);
+  const inWindow = (hour: number) => (from <= to ? hour >= from && hour <= to : hour >= from || hour <= to);
+  const tick = async () => {
+    if (!inWindow(new Date().getUTCHours())) return;
+    try {
+      await fetch(`${baseUrl.replace(/\/$/, "")}/manifest.json`, { signal: AbortSignal.timeout(30_000) });
+    } catch (err) {
+      console.warn("[Keep-awake] ping failed:", err);
+    }
+  };
+  setInterval(tick, 10 * 60 * 1000);
+  console.log(`[Keep-awake] pinging ${baseUrl} every 10 min, ${from}:00-${to}:59 UTC`);
 }
 
 // Day-before appointment reminders. On Vercel this is a platform cron job

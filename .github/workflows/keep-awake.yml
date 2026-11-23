@@ -9,7 +9,9 @@
 #
 # Set the repository variable KEEP_AWAKE_URL (Settings → Secrets and variables →
 # Actions → Variables) to change the address; on a paid plan delete this file.
-# GitHub may run scheduled jobs late, and pauses them after 60 days without commits.
+# GitHub may run scheduled jobs hours late (in practice ~5 runs a day here), and pauses
+# them after 60 days without commits; server.ts pings itself (startKeepAwake) as the main
+# keep-awake, and this workflow only wakes the instance in the morning when it fires.
 name: Keep awake
 
 on:
